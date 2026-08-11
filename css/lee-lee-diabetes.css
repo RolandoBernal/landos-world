@@ -188,6 +188,39 @@
   font-size: 1rem;
 }
 
+.lee_lee_diabetes_event_grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lee_lee_diabetes_event_option {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--lee-lee-text);
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lee_lee_diabetes_event_option::after {
+  content: '›';
+  color: var(--lee-lee-accent);
+  font-size: 1.35rem;
+}
+
+.lee_lee_diabetes_event_option:focus-visible {
+  outline: 2px solid var(--lee-lee-soft);
+  outline-offset: 3px;
+}
+
 .lee_lee_diabetes_section_title {
   margin: 1.3rem 0 0.7rem;
   color: var(--lee-lee-soft);

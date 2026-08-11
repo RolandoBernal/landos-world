@@ -281,6 +281,74 @@ test('meal dose helper keeps the clinician-provided calculation unchanged', () =
   assert.equal(correction.suggestedTotalUnits, null);
 });
 
+test('carb entries do not change clinician-provided insulin guidance', () => {
+  const runtime = createTrackerRuntime();
+  const plan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    mealBaseUnits: 4,
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+    ],
+  };
+  const lowCarbMeal = { eventType: 'meal', type: 'Lunch', mealCarbs: 20 };
+  const highCarbMeal = { eventType: 'meal', type: 'Lunch', mealCarbs: 80 };
+  const lowCarbResult = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: lowCarbMeal.type,
+    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
+    insulinPlan: plan,
+  });
+  const highCarbResult = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: highCarbMeal.type,
+    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
+    insulinPlan: plan,
+  });
+
+  assert.equal(lowCarbResult.baseUnits, 4);
+  assert.equal(lowCarbResult.correctionUnits, 1);
+  assert.equal(lowCarbResult.suggestedTotalUnits, 5);
+  assert.deepEqual(highCarbResult, lowCarbResult);
+  assert.doesNotMatch(trackerSource, /insulin-to-carb|carb bolus|carbs\s*\/|carbs\s*÷/i);
+});
+
+test('meal and activity events render in today and reports with category fields', () => {
+  const reports = createTrackerReports();
+  const meal = record({
+    id: 'meal',
+    eventType: 'meal',
+    type: 'Lunch',
+    mealCarbs: 62,
+    mealDescription: 'Turkey sandwich, chips, apple',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T12:18:00.000Z',
+  });
+  const activity = record({
+    id: 'activity',
+    eventType: 'activity',
+    type: 'Exercise',
+    activityDescription: 'Bike ride',
+    activityDurationMinutes: 45,
+    activityIntensity: 'Moderate',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T16:30:00.000Z',
+  });
+
+  assert.deepEqual(reports.getTodaysActivityRecords([meal, activity], '2026-08-08').map((item) => item.id), ['activity', 'meal']);
+  assert.match(trackerSource, /Meal \/ Carbs/);
+  assert.match(trackerSource, /name="mealCarbs"/);
+  assert.match(trackerSource, /name="activityDurationMinutes"/);
+  assert.match(trackerSource, /Carbs are recorded for tracking only/);
+  assert.match(trackerSource, /<th scope="col">Carbs<\/th>/);
+  assert.match(trackerSource, /<th scope="col">Activity<\/th>/);
+});
+
 test('today activity helper returns only current-day active records newest first', () => {
   const reports = createTrackerReports();
   const today = reports.getTodaysActivityRecords([

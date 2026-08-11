@@ -172,6 +172,50 @@ test('backup validation normalizes records and deduplicates by record ID', () =>
   assert.equal(result.data.records[0].unknownFutureField, 'preserve me');
 });
 
+test('backup validation preserves meal and activity payload fields', () => {
+  const { storage } = createTracker();
+  const backup = {
+    appIdentifier: 'lando-world:lee-lees-tracker',
+    schemaVersion: 1,
+    records: [
+      sampleRecord({
+        id: 'meal-1',
+        eventType: 'meal',
+        type: 'Lunch',
+        bloodSugar: null,
+        insulinUnits: null,
+        mealCarbs: '62',
+        mealDescription: 'Turkey sandwich, chips, apple',
+        notes: 'Practice carb counting',
+      }),
+      sampleRecord({
+        id: 'activity-1',
+        eventType: 'activity',
+        type: 'Exercise',
+        bloodSugar: null,
+        insulinUnits: null,
+        activityDescription: 'Bike ride',
+        activityDurationMinutes: '45',
+        activityIntensity: 'Moderate',
+      }),
+    ],
+    settings: {},
+    insulinPlans: [],
+    metadata: {
+      createdAt: '2026-07-31T12:15:00.000Z',
+      updatedAt: '2026-07-31T12:15:00.000Z',
+    },
+  };
+
+  const result = storage.validateBackupPayload(backup);
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.data.records.find((item) => item.id === 'meal-1').mealCarbs, 62);
+  assert.equal(result.data.records.find((item) => item.id === 'meal-1').mealDescription, 'Turkey sandwich, chips, apple');
+  assert.equal(result.data.records.find((item) => item.id === 'activity-1').activityDurationMinutes, 45);
+  assert.equal(result.data.records.find((item) => item.id === 'activity-1').activityIntensity, 'Moderate');
+});
+
 test('failed stable-key writes keep the in-memory document available without clearing stored records', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({
