@@ -146,6 +146,38 @@ test('legacy shared meal base dose is replaced by current prescribed per-meal de
   assert.equal(stored.settings.targetRange, 'custom');
 });
 
+test('separate glucose and insulin event records normalize into the combined check workflow', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [
+        sampleRecord({ id: 'glucose-only', eventType: 'blood-glucose', type: 'Bedtime', bloodSugar: 145, insulinUnits: null }),
+        sampleRecord({ id: 'insulin-entry', eventType: 'insulin', type: 'Lunch', bloodSugar: 198, insulinUnits: 7 }),
+      ],
+      settings: {},
+      insulinPlans: [],
+      metadata: {
+        createdAt: '2026-07-31T12:15:00.000Z',
+        updatedAt: '2026-07-31T12:15:00.000Z',
+      },
+    }),
+  });
+
+  createTracker({ localStorage });
+
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  const glucose = stored.records.find((record) => record.id === 'glucose-only');
+  const insulin = stored.records.find((record) => record.id === 'insulin-entry');
+  assert.equal(glucose.eventType, 'check-insulin');
+  assert.equal(glucose.type, 'Bedtime');
+  assert.equal(glucose.bloodSugar, 145);
+  assert.equal(glucose.administeredInsulinUnits, null);
+  assert.equal(insulin.eventType, 'check-insulin');
+  assert.equal(insulin.type, 'Lunch');
+  assert.equal(insulin.bloodSugar, 198);
+  assert.equal(insulin.administeredInsulinUnits, 7);
+});
+
 test('hydration preserves an existing stable document instead of overwriting with empty defaults', () => {
   const documentPayload = {
     schemaVersion: 1,

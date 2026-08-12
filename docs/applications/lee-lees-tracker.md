@@ -1,6 +1,6 @@
 # Lee-Lee's Tracker
 
-Lee-Lee's Tracker is a local-first T1D event log inside Lando's World. It supports blood glucose, insulin, meal/carbohydrate, activity, and note records, with Supabase-backed shared records for a single shared family account used on Rolando's and Emily's devices.
+Lee-Lee's Tracker is a local-first T1D event log inside Lando's World. It supports a combined check/insulin workflow, meal/carbohydrate records, activity records, and notes, with Supabase-backed shared records for a single shared family account used on Rolando's and Emily's devices.
 
 ## Navigation
 
@@ -17,10 +17,12 @@ All sections read from the same normalized tracker document. Supabase is the aut
 
 Records now distinguish event category from context:
 
-- `eventType`: blood glucose, insulin, meal, activity, or note
+- `eventType`: check/insulin, meal, activity, or note
 - `type`: context or occasion, such as Breakfast, Lunch, Dinner, Bedtime, 2 AM, Correction, Snack, Exercise, or Other
 
-Meal records store carbohydrate grams and an optional meal description. Activity records store an optional activity description, duration in minutes, and Easy/Moderate/Hard intensity. These fields live on the same normalized record object and use the same create, edit, soft delete, restore, backup, sync, conflict, history, and export paths as older glucose and insulin records.
+The primary Add Event workflow is Check / Insulin. It captures context, blood glucose, dose guidance when applicable, insulin actually given, date/time, and notes in one cohesive flow. Valid check contexts are Breakfast, Lunch, Dinner, Bedtime, 2 AM, Correction, Snack, and Other. Older records created as separate blood-glucose or insulin events normalize into this combined check workflow without losing their values.
+
+Meal records store carbohydrate grams and an optional meal description. Meal contexts remain Breakfast, Lunch, Dinner, Snack, and Other. Activity records store an optional activity description, duration in minutes, and Easy/Moderate/Hard intensity. These fields live on the same normalized record object and use the same create, edit, soft delete, restore, backup, sync, conflict, history, and export paths as older glucose and insulin records.
 
 Carbs are informational/training-only in this version. They are not used in dose guidance, do not create a carb bolus, and do not imply an insulin-to-carbohydrate ratio. The current insulin guidance uses independently configurable clinician-provided meal bases: Breakfast 5 units, Lunch 6 units, and Dinner 6 units, plus the existing glucose correction table. Insulin-to-carb ratios, carb-based meal bolus calculations, food photos, and AI-assisted carb estimation are intentionally deferred.
 
@@ -184,7 +186,7 @@ Insulin Dose Guidance stores the active insulin plan in the tracker document. Br
 - Lunch: 6 units
 - Dinner: 6 units
 
-Glucose correction ranges are configured separately and are added to the meal-specific base dose. Non-meal contexts such as Bedtime, 2 AM, Correction, Snack, Exercise, and Other do not receive Breakfast/Lunch/Dinner meal bases.
+Glucose correction ranges are configured separately and are added to the meal-specific base dose. Non-meal check contexts such as Bedtime, 2 AM, Correction, Snack, and Other do not receive Breakfast/Lunch/Dinner meal bases.
 
 The following settings intentionally remain local to each device:
 
