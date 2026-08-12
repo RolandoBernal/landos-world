@@ -327,6 +327,64 @@ test('meal dose helper keeps the clinician-provided calculation unchanged', () =
   assert.equal(correction.suggestedTotalUnits, null);
 });
 
+test('meal dose helper uses the open-ended 550 plus correction band', () => {
+  const runtime = createTrackerRuntime();
+  const insulinPlan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+      { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+      { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+      { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+      { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+      { minGlucose: 550, maxGlucose: null, correctionUnits: 6 },
+    ],
+  };
+  const timestamp = Date.parse('2026-08-01T12:00:00.000Z');
+  const breakfast549 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 549,
+    entryType: 'Breakfast',
+    recordTimestamp: timestamp,
+    insulinPlan,
+  });
+  const breakfast550 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 550,
+    entryType: 'Breakfast',
+    recordTimestamp: timestamp,
+    insulinPlan,
+  });
+  const lunch551 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 551,
+    entryType: 'Lunch',
+    recordTimestamp: timestamp,
+    insulinPlan,
+  });
+  const dinner700 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 700,
+    entryType: 'Dinner',
+    recordTimestamp: timestamp,
+    insulinPlan,
+  });
+
+  assert.equal(breakfast549.status, 'calculated');
+  assert.equal(breakfast549.correctionUnits, 5);
+  assert.equal(breakfast549.suggestedTotalUnits, 10);
+  assert.equal(breakfast549.matchedRange.minGlucose, 475);
+  assert.equal(breakfast549.matchedRange.maxGlucose, 549);
+  assert.equal(breakfast550.status, 'calculated');
+  assert.equal(breakfast550.correctionUnits, 6);
+  assert.equal(breakfast550.suggestedTotalUnits, 11);
+  assert.equal(breakfast550.matchedRange.minGlucose, 550);
+  assert.equal(breakfast550.matchedRange.maxGlucose, null);
+  assert.equal(lunch551.correctionUnits, 6);
+  assert.equal(lunch551.suggestedTotalUnits, 12);
+  assert.equal(dinner700.correctionUnits, 6);
+  assert.equal(dinner700.suggestedTotalUnits, 12);
+});
+
 test('carb entries do not change clinician-provided insulin guidance', () => {
   const runtime = createTrackerRuntime();
   const plan = {
@@ -386,6 +444,12 @@ test('settings UI exposes independent meal base dose controls', () => {
   assert.match(trackerSource, /\$\{escapeHtml\(type\)\} Base Dose/);
   assert.match(trackerSource, /name="\$\{escapeHtml\(type\.toLowerCase\(\)\)\}BaseUnits"/);
   assert.doesNotMatch(trackerSource, /name="mealBaseUnits" type="number"/);
+});
+
+test('settings correction table includes the editable open-ended 550 plus row', () => {
+  assert.match(trackerSource, /minGlucose: 550,\s*maxGlucose: null,\s*correctionUnits: 6/);
+  assert.match(trackerSource, /plan\.correctionRanges\.map\(renderRangeEditorRow\)/);
+  assert.match(trackerSource, /DEFAULT_INSULIN_PLAN\.correctionRanges\.map\(\(_, index\) => normalizeCorrectionRange/);
 });
 
 test('meal and activity events render in today and reports with category fields', () => {

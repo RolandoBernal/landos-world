@@ -146,6 +146,42 @@ test('legacy shared meal base dose is replaced by current prescribed per-meal de
   assert.equal(stored.settings.targetRange, 'custom');
 });
 
+test('stored current correction table is extended with the open-ended 550 plus range', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [],
+      settings: {},
+      insulinPlans: [{
+        id: 'current-plan-before-550-plus',
+        name: 'Current Plan Before 550 Plus',
+        effectiveFrom: '2026-07-31',
+        mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+        supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+        correctionRanges: [
+          { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+          { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+          { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+          { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+          { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+          { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+        ],
+      }],
+      metadata: {
+        createdAt: '2026-07-31T12:15:00.000Z',
+        updatedAt: '2026-07-31T12:15:00.000Z',
+      },
+    }),
+  });
+
+  createTracker({ localStorage });
+
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  const plan = stored.insulinPlans[0];
+  assert.deepEqual(plan.correctionRanges.at(-2), { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 });
+  assert.deepEqual(plan.correctionRanges.at(-1), { minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
+});
+
 test('separate glucose and insulin event records normalize into the combined check workflow', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({

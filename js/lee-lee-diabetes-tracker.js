@@ -82,6 +82,7 @@
     Lunch: 6,
     Dinner: 6,
   });
+  const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
     name: 'Current Meal Insulin Plan',
@@ -97,6 +98,7 @@
       { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
       { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
       { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+      { ...HIGH_GLUCOSE_CORRECTION_RANGE },
     ],
     notes: '',
     createdAt: new Date(`${DEFAULT_PLAN_EFFECTIVE_FROM}T00:00`).toISOString(),
@@ -347,6 +349,20 @@
     return { minGlucose, maxGlucose, correctionUnits };
   }
 
+  function ensureHighGlucoseCorrectionRange(correctionRanges) {
+    const ranges = Array.isArray(correctionRanges) ? correctionRanges : [];
+    const hasHighGlucoseRange = ranges.some((range) => (
+      (range.minGlucose == null || HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose >= range.minGlucose)
+      && range.maxGlucose == null
+    ));
+    if (hasHighGlucoseRange) return ranges;
+    const finalRange = ranges[ranges.length - 1];
+    if (finalRange?.maxGlucose === HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose - 1) {
+      return [...ranges, { ...HIGH_GLUCOSE_CORRECTION_RANGE }];
+    }
+    return ranges;
+  }
+
   function getMealBaseUnitsByType(plan = {}) {
     const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
       ? plan.mealBaseUnitsByType
@@ -373,6 +389,7 @@
     const correctionRanges = Array.isArray(plan.correctionRanges)
       ? plan.correctionRanges.map(normalizeCorrectionRange).filter(Boolean)
       : [];
+    const normalizedCorrectionRanges = ensureHighGlucoseCorrectionRange(correctionRanges);
     const supportedMealTypes = Array.isArray(plan.supportedMealTypes)
       ? plan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
@@ -387,7 +404,7 @@
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
-      correctionRanges: correctionRanges.length ? correctionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
+      correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
       createdAt: toIsoTimestamp(plan.createdAt, nowTimestamp),
       updatedAt: toIsoTimestamp(plan.updatedAt, nowTimestamp),
