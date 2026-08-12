@@ -22,7 +22,7 @@ Records now distinguish event category from context:
 
 Meal records store carbohydrate grams and an optional meal description. Activity records store an optional activity description, duration in minutes, and Easy/Moderate/Hard intensity. These fields live on the same normalized record object and use the same create, edit, soft delete, restore, backup, sync, conflict, history, and export paths as older glucose and insulin records.
 
-Carbs are informational/training-only in this version. They are not used in dose guidance, do not create a carb bolus, and do not imply an insulin-to-carbohydrate ratio. The current insulin guidance remains the clinician-provided 4-unit applicable-meal base plus the existing glucose correction table. Insulin-to-carb ratios, carb-based meal bolus calculations, food photos, and AI-assisted carb estimation are intentionally deferred.
+Carbs are informational/training-only in this version. They are not used in dose guidance, do not create a carb bolus, and do not imply an insulin-to-carbohydrate ratio. The current insulin guidance uses independently configurable clinician-provided meal bases: Breakfast 5 units, Lunch 6 units, and Dinner 6 units, plus the existing glucose correction table. Insulin-to-carb ratios, carb-based meal bolus calculations, food photos, and AI-assisted carb estimation are intentionally deferred.
 
 ## Authentication & Device Identity
 
@@ -177,6 +177,14 @@ Settings may optionally store patient and clinic fields for report headers:
 - Clinic phone
 
 These patient and clinic fields sync across signed-in devices after the user confirms shared-settings upload or saves them while signed in.
+
+Insulin Dose Guidance stores the active insulin plan in the tracker document. Breakfast, Lunch, and Dinner base doses are independent fields, and changing one does not change the others. Legacy plans with only the old shared meal base dose are normalized to the current prescribed defaults:
+
+- Breakfast: 5 units
+- Lunch: 6 units
+- Dinner: 6 units
+
+Glucose correction ranges are configured separately and are added to the meal-specific base dose. Non-meal contexts such as Bedtime, 2 AM, Correction, Snack, Exercise, and Other do not receive Breakfast/Lunch/Dinner meal bases.
 
 The following settings intentionally remain local to each device:
 
