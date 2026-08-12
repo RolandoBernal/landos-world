@@ -21,8 +21,7 @@
     `${PRE_REBRAND_KEY_PREFIX}_diabetes_insulin_plans_v1`,
   ];
   const EVENT_TYPE_DEFINITIONS = Object.freeze([
-    { type: 'blood-glucose', label: 'Blood Glucose', fields: ['bloodSugar', 'notes'], defaultContext: 'Other' },
-    { type: 'insulin', label: 'Insulin', fields: ['bloodSugar', 'insulinUnits', 'notes'], defaultContext: 'Breakfast' },
+    { type: 'check-insulin', label: 'Check / Insulin', fields: ['bloodSugar', 'insulinUnits', 'notes'], defaultContext: 'Breakfast' },
     { type: 'meal', label: 'Meal / Carbs', fields: ['carbs', 'mealDescription', 'notes'], defaultContext: 'Breakfast' },
     { type: 'activity', label: 'Activity / Exercise', fields: ['activityDescription', 'activityDurationMinutes', 'activityIntensity', 'notes'], defaultContext: 'Exercise' },
     { type: 'note', label: 'Note', fields: ['notes'], defaultContext: 'Other' },
@@ -31,8 +30,7 @@
     EVENT_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
   ));
   const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
-  const GLUCOSE_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Other']);
-  const INSULIN_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Correction', 'Snack', 'Other']);
+  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Other']);
   const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
   const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
   const ACTIVITY_INTENSITY_OPTIONS = Object.freeze(['Easy', 'Moderate', 'Hard']);
@@ -299,20 +297,20 @@
 
   function normalizeEventType(value, record = {}) {
     if (EVENT_TYPE_CONFIG[value]) return value;
+    if (value === 'blood-glucose' || value === 'insulin') return 'check-insulin';
     if (record.mealCarbs != null || record.carbs != null || record.mealDescription) return 'meal';
     if (record.activityDescription || record.activityDurationMinutes != null || record.activityIntensity) return 'activity';
-    if (record.administeredInsulinUnits != null || record.insulinUnits != null) return 'insulin';
-    if (record.bloodSugar != null) return 'blood-glucose';
+    if (record.administeredInsulinUnits != null || record.insulinUnits != null || record.bloodSugar != null) return 'check-insulin';
     if (record.notes) return 'note';
     return DEFAULT_EVENT_TYPE;
   }
 
   function getContextOptionsForEventType(eventType) {
     if (eventType === 'meal') return [...MEAL_CONTEXT_TYPES];
-    if (eventType === 'insulin') return [...INSULIN_CONTEXT_TYPES];
+    if (eventType === 'check-insulin') return [...CHECK_CONTEXT_TYPES];
     if (eventType === 'activity') return [...ACTIVITY_CONTEXT_TYPES];
     if (eventType === 'note') return [...NOTE_CONTEXT_TYPES];
-    return [...GLUCOSE_CONTEXT_TYPES];
+    return [...CHECK_CONTEXT_TYPES];
   }
 
   function normalizeRecordContext(type, eventType) {
@@ -1766,7 +1764,7 @@
     if (!record) return '';
     if (record.eventType === 'meal') return formatCarbs(record.mealCarbs);
     if (record.eventType === 'activity') return record.activityDescription || 'Activity';
-    if (record.eventType === 'insulin') return formatInsulin(getRecordActualInsulin(record));
+    if (record.eventType === 'check-insulin') return formatBloodSugar(record.bloodSugar) || formatInsulin(getRecordActualInsulin(record));
     if (record.eventType === 'note') return record.notes ? 'Note' : '';
     return formatBloodSugar(record.bloodSugar);
   }
@@ -1785,9 +1783,10 @@
         record.notes || '',
       ].filter(Boolean);
     }
-    if (record.eventType === 'insulin') {
+    if (record.eventType === 'check-insulin') {
       return [
         record.type,
+        record.bloodSugar != null ? formatInsulin(getRecordActualInsulin(record)) : '',
         formatBloodSugar(record.bloodSugar),
         getMealDoseSummary(record),
         record.notes || '',
@@ -1806,7 +1805,7 @@
   function getRecordDisplayTitle(record) {
     if (record.eventType === 'meal') return record.type;
     if (record.eventType === 'activity') return 'Activity';
-    if (record.eventType === 'insulin') return 'Insulin';
+    if (record.eventType === 'check-insulin') return 'Check / Insulin';
     if (record.eventType === 'note') return 'Note';
     return 'Blood Glucose';
   }
@@ -2111,8 +2110,8 @@
           <div class="lee_lee_diabetes_record_details">
             <p><strong>Context:</strong> ${escapeHtml(record.type)}</p>
             ${getRecordPrimaryValue(record) ? `<p><strong>Value:</strong> ${escapeHtml(getRecordPrimaryValue(record))}</p>` : ''}
-            ${record.eventType === 'blood-glucose' || record.eventType === 'insulin' ? `<p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>` : ''}
-            ${record.eventType === 'insulin' ? `<p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>` : ''}
+            ${record.eventType === 'check-insulin' ? `<p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>` : ''}
+            ${record.eventType === 'check-insulin' ? `<p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>` : ''}
             ${eventDetails}
             ${suggested ? `<p><strong>Suggested:</strong> ${escapeHtml(suggested)}${differs ? ' · differs from actual' : ''}</p>` : ''}
             ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : ''}
@@ -2485,7 +2484,7 @@
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
     const eventType = getEditorEventType(form);
-    if (eventType !== 'insulin' || !entryTypeUsesMealGuidance(type)) {
+    if (eventType !== 'check-insulin' || !entryTypeUsesMealGuidance(type)) {
       return {
         status: 'manual',
         baseUnits: null,
@@ -2816,7 +2815,7 @@
   function handleSave(form) {
     const record = buildRecordFromForm(form);
     if (!record) return;
-    if (record.eventType === 'insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
+    if (record.eventType === 'check-insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
       renderRecordConfirmation(record);
       return;
     }

@@ -244,6 +244,29 @@ test('entry type configuration preserves canonical labels and meal guidance boun
   assert.equal(entryTypes.getEntryTypeConfig('Night').type, 'Other');
 });
 
+test('add event configuration exposes one combined check workflow with full check contexts', () => {
+  const runtime = createTrackerRuntime();
+  const entryTypes = runtime.LeeLeeTrackerEntryTypes;
+  const eventLabels = Array.from(entryTypes.eventTypes, (definition) => definition.label);
+
+  assert.deepEqual(eventLabels, ['Check / Insulin', 'Meal / Carbs', 'Activity / Exercise', 'Note']);
+  assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('check-insulin')), [
+    'Breakfast',
+    'Lunch',
+    'Dinner',
+    'Bedtime',
+    '2 AM',
+    'Correction',
+    'Snack',
+    'Other',
+  ]);
+  assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('meal')), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
+  assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('bloodSugar'), true);
+  assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('insulinUnits'), true);
+  assert.doesNotMatch(trackerSource, /label: 'Blood Glucose'/);
+  assert.doesNotMatch(trackerSource, /label: 'Insulin'/);
+});
+
 test('meal dose helper keeps the clinician-provided calculation unchanged', () => {
   const runtime = createTrackerRuntime();
   const insulinPlan = {
