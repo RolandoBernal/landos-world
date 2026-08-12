@@ -124,6 +124,10 @@ function futbolWorkout(api) {
   return api.sourceDefinedWorkouts().find((workout) => workout.id === 'futbol-game-timer');
 }
 
+function builtInWorkoutsByName(api) {
+  return Object.fromEntries(api.sourceDefinedWorkouts().map((workout) => [workout.name, workout]));
+}
+
 function tick(intervals, count = 1) {
   for (let index = 0; index < count; index += 1) {
     const callbacks = [...intervals.values()];
@@ -156,10 +160,36 @@ test('Futbol Game Timer is a source-defined built-in workout with the regulation
   assert.equal(api.totalWorkoutDuration(steps), 95 * 60);
 });
 
+test('all canonical Violet Sprints workouts are source-defined and protected in workout-card actions', () => {
+  const { api } = createSprintsRuntime({ autoLoad: false });
+  const builtIns = builtInWorkoutsByName(api);
+
+  assert.deepEqual(Object.keys(builtIns), [
+    'Treadmill Sprints',
+    'Soccer Match Simulation',
+    'Tabata',
+    'Futbol Game Timer',
+  ]);
+
+  Object.values(builtIns).forEach((workout) => {
+    assert.equal(api.isBuiltInWorkout(workout), true, `${workout.name} should be built in`);
+    const html = api.renderWorkoutListItem(workout);
+    assert.match(html, /data-action="view"/);
+    assert.match(html, /data-action="start"/);
+    assert.match(html, /data-action="duplicate"/);
+    assert.doesNotMatch(html, /data-action="delete"/);
+  });
+});
+
 test('fresh and existing storage both include the source-defined Futbol preset without deleting custom workouts', () => {
   const fresh = createSprintsRuntime();
   const freshStored = JSON.parse(fresh.localStorage.getItem(fresh.api.STORAGE_KEY));
-  assert.ok(freshStored.some((workout) => workout.id === 'futbol-game-timer'));
+  assert.deepEqual(freshStored.filter((workout) => workout.sourceDefined).map((workout) => workout.id), [
+    'treadmill-sprints',
+    'soccer-match-simulation',
+    'tabata',
+    'futbol-game-timer',
+  ]);
 
   const customWorkout = {
     id: 'custom-futbol-name',
@@ -176,6 +206,76 @@ test('fresh and existing storage both include the source-defined Futbol preset w
   assert.ok(existingStored.some((workout) => workout.id === 'futbol-game-timer' && workout.sourceDefined === true));
   assert.ok(existingStored.some((workout) => workout.id === 'custom-futbol-name' && workout.name === 'Futbol Game Timer'));
   assert.equal(existingStored.filter((workout) => workout.name === 'Futbol Game Timer').length, 2);
+});
+
+test('existing canonical default workouts are normalized to protected built-ins without deleting custom workouts', () => {
+  const { api } = createSprintsRuntime({ autoLoad: false });
+  const legacyDefaults = api.defaultWorkouts().map((workout) => {
+    const legacy = JSON.parse(JSON.stringify(workout));
+    delete legacy.sourceDefined;
+    if (legacy.id === 'treadmill-sprints') legacy.id = 'legacy-treadmill-random';
+    if (legacy.id === 'soccer-match-simulation') legacy.id = 'legacy-soccer-random';
+    if (legacy.id === 'tabata') legacy.id = 'legacy-tabata-random';
+    return legacy;
+  }).filter((workout) => workout.name !== 'Futbol Game Timer');
+  const custom = {
+    id: 'custom-workout',
+    name: 'Tabata',
+    steps: [{ id: 'custom-step', label: 'Custom', duration: 30 }],
+  };
+  const existing = createSprintsRuntime({
+    localStorage: createLocalStorage({
+      violet_sprints_workouts_v1: JSON.stringify([...legacyDefaults, custom]),
+    }),
+  });
+  const stored = JSON.parse(existing.localStorage.getItem(existing.api.STORAGE_KEY));
+
+  assert.deepEqual(stored.filter((workout) => workout.sourceDefined).map((workout) => workout.id), [
+    'treadmill-sprints',
+    'soccer-match-simulation',
+    'tabata',
+    'futbol-game-timer',
+  ]);
+  assert.ok(stored.some((workout) => workout.id === 'custom-workout' && workout.name === 'Tabata'));
+});
+
+test('built-in deletion is rejected while user-created workout deletion still works', async () => {
+  const { api, localStorage } = createSprintsRuntime();
+  const beforeBuiltInDelete = JSON.parse(localStorage.getItem(api.STORAGE_KEY));
+  const rejected = await api.deleteWorkout('tabata', { confirm: () => Promise.resolve(true) });
+  const afterBuiltInDelete = JSON.parse(localStorage.getItem(api.STORAGE_KEY));
+
+  assert.equal(rejected, false);
+  assert.ok(afterBuiltInDelete.some((workout) => workout.id === 'tabata'));
+  assert.deepEqual(afterBuiltInDelete.map((workout) => workout.id), beforeBuiltInDelete.map((workout) => workout.id));
+
+  const custom = api.createWorkout('My Custom Workout', [{ id: 'custom-step', label: 'Walk', duration: 60 }]);
+  const merged = [...afterBuiltInDelete, custom];
+  localStorage.setItem(api.STORAGE_KEY, JSON.stringify(merged));
+  api.loadWorkouts();
+
+  const customHtml = api.renderWorkoutListItem(custom);
+  assert.equal(api.isBuiltInWorkout(custom), false);
+  assert.match(customHtml, /data-action="delete"/);
+
+  const deleted = await api.deleteWorkout(custom.id, { confirm: () => Promise.resolve(true) });
+  const afterCustomDelete = JSON.parse(localStorage.getItem(api.STORAGE_KEY));
+  assert.equal(deleted, true);
+  assert.equal(afterCustomDelete.some((workout) => workout.id === custom.id), false);
+});
+
+test('duplicates of built-in and user-created workouts become deletable user-created workouts', () => {
+  const { api } = createSprintsRuntime({ autoLoad: false });
+  Object.values(builtInWorkoutsByName(api)).forEach((workout) => {
+    const copy = api.duplicateWorkout(workout);
+    assert.equal(api.isBuiltInWorkout(copy), false, `${workout.name} copy should be user-created`);
+    assert.match(api.renderWorkoutListItem(copy), /data-action="delete"/);
+  });
+
+  const custom = api.createWorkout('Custom Hills', [{ id: 'hill', label: 'Hill', duration: 45 }]);
+  const customCopy = api.duplicateWorkout(custom);
+  assert.equal(api.isBuiltInWorkout(customCopy), false);
+  assert.match(api.renderWorkoutListItem(customCopy), /data-action="delete"/);
 });
 
 test('Futbol Game Timer uses the existing timer engine for transitions, pause resume, and warnings', () => {
