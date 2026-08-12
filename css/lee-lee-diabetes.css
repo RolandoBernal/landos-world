@@ -240,6 +240,11 @@
   align-items: stretch;
 }
 
+.lee_lee_diabetes_timeline_item--history {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .lee_lee_diabetes_timeline_values,
 .lee_lee_diabetes_timeline_notes {
   margin-top: 0.22rem;
@@ -949,7 +954,8 @@
   }
 
   .lee_lee_diabetes_timeline_item,
-  .lee_lee_diabetes_history_record {
+  .lee_lee_diabetes_history_record,
+  .lee_lee_diabetes_timeline_item--history {
     grid-template-columns: 1fr;
   }
 

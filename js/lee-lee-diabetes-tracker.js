@@ -1773,6 +1773,7 @@
     if (!record) return [];
     if (record.eventType === 'meal') {
       return [
+        record.type,
         record.mealDescription || '',
         record.notes || '',
       ].filter(Boolean);
@@ -1784,10 +1785,11 @@
       ].filter(Boolean);
     }
     if (record.eventType === 'check-insulin') {
+      const primary = getRecordPrimaryValue(record);
+      const actualInsulin = formatInsulin(getRecordActualInsulin(record));
       return [
         record.type,
-        record.bloodSugar != null ? formatInsulin(getRecordActualInsulin(record)) : '',
-        formatBloodSugar(record.bloodSugar),
+        actualInsulin && actualInsulin !== primary ? actualInsulin : '',
         getMealDoseSummary(record),
         record.notes || '',
       ].filter(Boolean);
@@ -1819,6 +1821,39 @@
     return values.length
       ? `<div class="lee_lee_diabetes_card_values">${values.map((value) => `<span class="lee_lee_diabetes_pill">${escapeHtml(value)}</span>`).join('')}</div>`
       : '';
+  }
+
+  function getEntryCardContent(record) {
+    return {
+      title: getRecordDisplayTitle(record),
+      primary: getRecordPrimaryValue(record),
+      secondary: getRecordSecondaryLines(record),
+      timestamp: getRecordTimestamp(record),
+    };
+  }
+
+  function renderEntryCardContent(record) {
+    const content = getEntryCardContent(record);
+    return `
+      <div>
+        <div class="lee_lee_diabetes_timeline_type">${escapeHtml(content.title)}</div>
+        ${content.primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(content.primary)}</div>` : ''}
+        ${content.secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
+      </div>
+    `;
+  }
+
+  function renderTrackerEntryCard(record, { variant = '', actions = '' } = {}) {
+    const timestamp = getRecordTimestamp(record);
+    return `
+      <article class="lee_lee_diabetes_timeline_item${variant ? ` lee_lee_diabetes_timeline_item--${escapeHtml(variant)}` : ''}">
+        ${renderEntryCardContent(record)}
+        <div class="lee_lee_diabetes_timeline_footer">
+          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(timestamp).toISOString())}">${escapeHtml(formatTime(timestamp))}</time>
+          ${actions}
+        </div>
+      </article>
+    `;
   }
 
   function getTrackerNavLabel(active) {
@@ -1890,21 +1925,10 @@
   }
 
   function renderTimelineItem(record) {
-    const primary = getRecordPrimaryValue(record);
-    const secondary = getRecordSecondaryLines(record);
-    return `
-      <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_timeline_item--today">
-        <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
-          ${primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(primary)}</div>` : ''}
-          ${secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
-        </div>
-        <div class="lee_lee_diabetes_timeline_footer">
-          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
-          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button>
-        </div>
-      </article>
-    `;
+    return renderTrackerEntryCard(record, {
+      variant: 'today',
+      actions: `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button>`,
+    });
   }
 
   function renderFilterControls(filters, scope) {
@@ -2091,39 +2115,15 @@
   }
 
   function renderHistoryRecord(record) {
-    const suggested = record.suggestedTotalUnits == null ? '' : formatInsulin(record.suggestedTotalUnits);
-    const breakdown = record.suggestedBaseUnits == null && record.suggestedCorrectionUnits == null
-      ? ''
-      : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
-    const actual = getRecordActualInsulin(record);
-    const differs = suggested && actual != null && Number(record.suggestedTotalUnits) !== Number(actual);
-    const notes = record.notes ? `<p><strong>Notes:</strong> ${escapeHtml(record.notes)}</p>` : '';
-    const eventDetails = getRecordSecondaryLines(record)
-      .filter((line) => line && line !== record.type && line !== record.notes && line !== getMealDoseSummary(record))
-      .map((line) => `<p>${escapeHtml(line)}</p>`)
-      .join('');
-    return `
-      <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
-        <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
-          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
-          <div class="lee_lee_diabetes_record_details">
-            <p><strong>Context:</strong> ${escapeHtml(record.type)}</p>
-            ${getRecordPrimaryValue(record) ? `<p><strong>Value:</strong> ${escapeHtml(getRecordPrimaryValue(record))}</p>` : ''}
-            ${record.eventType === 'check-insulin' ? `<p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>` : ''}
-            ${record.eventType === 'check-insulin' ? `<p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>` : ''}
-            ${eventDetails}
-            ${suggested ? `<p><strong>Suggested:</strong> ${escapeHtml(suggested)}${differs ? ' · differs from actual' : ''}</p>` : ''}
-            ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : ''}
-            ${notes}
-          </div>
-        </div>
+    return renderTrackerEntryCard(record, {
+      variant: 'history',
+      actions: `
         <div class="lee_lee_diabetes_record_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record" data-id="${escapeHtml(record.id)}">Edit</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record" data-id="${escapeHtml(record.id)}">Delete</button>
         </div>
-      </article>
-    `;
+      `,
+    });
   }
 
   function renderDeleteConfirmation(record) {
@@ -4458,6 +4458,10 @@
     formatTime,
     formatBloodSugar,
     formatInsulin,
+    getEntryCardContent,
+    renderEntryCardContent,
+    renderTimelineItem,
+    renderHistoryRecord,
     getTodaysActivityRecords,
     getVisibleHistoryGroups,
     getHistoryFilterCount,
