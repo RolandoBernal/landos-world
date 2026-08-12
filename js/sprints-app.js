@@ -88,6 +88,44 @@
     };
   }
 
+  function treadmillSprintsWorkout() {
+    return {
+      id: 'treadmill-sprints',
+      name: 'Treadmill Sprints',
+      sourceDefined: true,
+      blocks: treadmillSprintsBlocks(),
+    };
+  }
+
+  function soccerMatchSimulationWorkout() {
+    return {
+      id: 'soccer-match-simulation',
+      name: 'Soccer Match Simulation',
+      sourceDefined: true,
+      blocks: [],
+      generator: 'soccer-match',
+    };
+  }
+
+  function tabataWorkout() {
+    return {
+      id: 'tabata',
+      name: 'Tabata',
+      sourceDefined: true,
+      steps: [
+        createSourceDefinedStep('tabata-exercise-1', 'Exercise', 20),
+        createSourceDefinedStep('tabata-rest-1', 'Rest', 10),
+        createSourceDefinedStep('tabata-exercise-2', 'Exercise', 20),
+        createSourceDefinedStep('tabata-rest-2', 'Rest', 10),
+        createSourceDefinedStep('tabata-exercise-3', 'Exercise', 20),
+        createSourceDefinedStep('tabata-rest-3', 'Rest', 10),
+        createSourceDefinedStep('tabata-exercise-4', 'Exercise', 20),
+        createSourceDefinedStep('tabata-rest-4', 'Rest', 10),
+        createSourceDefinedStep('tabata-cooldown', 'Cooldown', 120),
+      ],
+    };
+  }
+
   function treadmillSprintsSteps() {
     const steps = [
       createStep('Warmup Walk', 120, { targetSpeed: 3.2, speedUnit: 'MPH' }),
@@ -372,26 +410,16 @@
   }
 
   function defaultWorkouts() {
-    return [
-      futbolGameTimerWorkout(),
-      createBlockedWorkout('Treadmill Sprints', treadmillSprintsBlocks()),
-      createBlockedWorkout('Soccer Match Simulation', [], { generator: 'soccer-match' }),
-      createWorkout('Tabata', [
-        createStep('Exercise', 20),
-        createStep('Rest', 10),
-        createStep('Exercise', 20),
-        createStep('Rest', 10),
-        createStep('Exercise', 20),
-        createStep('Rest', 10),
-        createStep('Exercise', 20),
-        createStep('Rest', 10),
-        createStep('Cooldown', 120),
-      ]),
-    ];
+    return sourceDefinedWorkouts();
   }
 
   function sourceDefinedWorkouts() {
-    return [futbolGameTimerWorkout()];
+    return [
+      treadmillSprintsWorkout(),
+      soccerMatchSimulationWorkout(),
+      tabataWorkout(),
+      futbolGameTimerWorkout(),
+    ];
   }
 
   function escapeHtml(text) {
@@ -505,11 +533,56 @@
     return `${stepsForWorkout(workout).length} steps`;
   }
 
+  function isBuiltInWorkout(workout) {
+    return workout?.sourceDefined === true;
+  }
+
+  function isCanonicalTreadmillSprints(workout) {
+    return isCurrentFlatTreadmillSprints(workout)
+      || (
+        workout?.name === 'Treadmill Sprints'
+        && Array.isArray(workout?.blocks)
+        && workout.blocks.length === 5
+        && workout.blocks[0]?.id === 'treadmill-warmup'
+        && workout.blocks[1]?.id === 'treadmill-fast-run'
+        && workout.blocks[2]?.id === 'treadmill-halftime'
+        && workout.blocks[3]?.id === 'treadmill-sprint'
+        && workout.blocks[4]?.id === 'treadmill-cooldown'
+      );
+  }
+
+  function isCanonicalSoccerMatchSimulation(workout) {
+    return workout?.name === 'Soccer Match Simulation'
+      && workout?.generator === 'soccer-match'
+      && stepsForWorkout(workout).length === 0;
+  }
+
+  function isCanonicalTabataWorkout(workout) {
+    return isDefaultTabata(workout)
+      || (
+        workout?.name === 'Tabata'
+        && Array.isArray(workout?.steps)
+        && workout.steps.length === 9
+        && workout.steps.every((step, index) => (
+          step.label === tabataWorkout().steps[index].label
+          && step.duration === tabataWorkout().steps[index].duration
+        ))
+      );
+  }
+
+  function normalizeSourceDefinedWorkout(workout) {
+    if (isBuiltInWorkout(workout)) return sourceDefinedWorkouts().find((builtInWorkout) => builtInWorkout.id === workout.id) || workout;
+    if (isCanonicalTreadmillSprints(workout)) return treadmillSprintsWorkout();
+    if (isCanonicalSoccerMatchSimulation(workout)) return soccerMatchSimulationWorkout();
+    if (isCanonicalTabataWorkout(workout)) return tabataWorkout();
+    return workout;
+  }
+
   function mergeSourceDefinedWorkouts(savedWorkouts) {
-    const merged = Array.isArray(savedWorkouts) ? [...savedWorkouts] : [];
+    const merged = (Array.isArray(savedWorkouts) ? savedWorkouts : []).map(normalizeSourceDefinedWorkout);
     sourceDefinedWorkouts().forEach((builtInWorkout) => {
       const existingIndex = merged.findIndex((workout) => workout.id === builtInWorkout.id);
-      if (existingIndex >= 0 && merged[existingIndex]?.sourceDefined) {
+      if (existingIndex >= 0 && isBuiltInWorkout(merged[existingIndex])) {
         merged[existingIndex] = builtInWorkout;
       } else if (existingIndex < 0) {
         merged.push(builtInWorkout);
@@ -571,12 +644,12 @@
   }
 
   function loadWorkouts() {
-    workouts = mergeSourceDefinedWorkouts(readWorkouts() || defaultWorkouts());
-    workouts = workouts.map((workout) => {
+    workouts = (readWorkouts() || defaultWorkouts()).map((workout) => {
       if (isOldThursdaySprints(workout) || isNumberedThursdaySprints(workout) || isPreviousDefaultThursdaySprints(workout) || isCurrentFlatTreadmillSprints(workout)) return updateOldThursdaySprints(workout);
       if (isDefaultTabata(workout)) return updateDefaultTabata(workout);
       return workout;
     });
+    workouts = mergeSourceDefinedWorkouts(workouts);
     try {
       if (workouts.some((workout) => workout.generator === 'soccer-match')) {
         localStorage.setItem(SOCCER_WORKOUT_ADDED_KEY, 'true');
@@ -611,6 +684,21 @@
       name: `${workout.name} Copy`,
       ...(blocks ? { blocks } : { steps: stepsForWorkout(workout).map((step) => ({ ...step, id: createId() })) }),
     };
+  }
+
+  function deleteWorkout(workoutId, { confirm = showConfirmationDialog } = {}) {
+    const target = workouts.find((workout) => workout.id === workoutId);
+    if (!target || isBuiltInWorkout(target)) return Promise.resolve(false);
+    return confirm({
+      title: 'Delete Workout?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+    }).then((confirmed) => {
+      if (!confirmed) return false;
+      workouts = workouts.filter((workout) => workout.id !== workoutId);
+      saveWorkouts();
+      return true;
+    });
   }
 
   function getAudioContext() {
@@ -901,6 +989,22 @@
     }
   }
 
+  function renderWorkoutListItem(workout) {
+    return `
+      <li class="sprints-list-item" data-id="${escapeHtml(workout.id)}">
+        <div class="sprints-list-main">
+          <span class="sprints-list-name">${escapeHtml(workout.name)}</span>
+          <span class="sprints-list-meta">${escapeHtml(workoutStepCount(workout))}</span>
+        </div>
+        <div class="sprints-list-actions">
+          <button type="button" class="sprints-btn" data-action="view" data-id="${escapeHtml(workout.id)}">View Steps</button>
+          <button type="button" class="sprints-btn sprints-btn--accent" data-action="start" data-id="${escapeHtml(workout.id)}">Start</button>
+          <button type="button" class="sprints-btn" data-action="duplicate" data-id="${escapeHtml(workout.id)}">Duplicate</button>
+          ${isBuiltInWorkout(workout) ? '' : `<button type="button" class="sprints-btn sprints-btn--danger" data-action="delete" data-id="${escapeHtml(workout.id)}">Delete</button>`}
+        </div>
+      </li>`;
+  }
+
   function showWorkoutList() {
     stopTimer();
     setView('sprints');
@@ -914,19 +1018,7 @@
         </header>
         ${installSuggestionMarkup()}
         <ul class="sprints-list" role="list">
-          ${workouts.length ? workouts.map((workout) => `
-            <li class="sprints-list-item" data-id="${escapeHtml(workout.id)}">
-              <div class="sprints-list-main">
-                <span class="sprints-list-name">${escapeHtml(workout.name)}</span>
-                <span class="sprints-list-meta">${escapeHtml(workoutStepCount(workout))}</span>
-              </div>
-              <div class="sprints-list-actions">
-                <button type="button" class="sprints-btn" data-action="view" data-id="${escapeHtml(workout.id)}">View Steps</button>
-                <button type="button" class="sprints-btn sprints-btn--accent" data-action="start" data-id="${escapeHtml(workout.id)}">Start</button>
-                <button type="button" class="sprints-btn" data-action="duplicate" data-id="${escapeHtml(workout.id)}">Duplicate</button>
-                ${workout.sourceDefined ? '' : `<button type="button" class="sprints-btn sprints-btn--danger" data-action="delete" data-id="${escapeHtml(workout.id)}">Delete</button>`}
-              </div>
-            </li>`).join('') : '<li class="sprints-empty">No workouts yet. Tap + New to create one.</li>'}
+          ${workouts.length ? workouts.map(renderWorkoutListItem).join('') : '<li class="sprints-empty">No workouts yet. Tap + New to create one.</li>'}
         </ul>
       </div>`;
 
@@ -958,20 +1050,8 @@
         }
       }
       if (action === 'delete') {
-        const target = workouts.find((workout) => workout.id === id);
-        if (target?.sourceDefined) {
-          showWorkoutList();
-          return;
-        }
-        if (target && await showConfirmationDialog({
-          title: 'Delete Workout?',
-          message: 'This action cannot be undone.',
-          confirmLabel: 'Delete',
-        })) {
-          workouts = workouts.filter((workout) => workout.id !== id);
-          saveWorkouts();
-          showWorkoutList();
-        }
+        await deleteWorkout(id);
+        showWorkoutList();
       }
     });
   }
@@ -1649,14 +1729,19 @@
     createWorkout,
     createWorkoutTimer,
     defaultWorkouts,
+    deleteWorkout,
+    duplicateWorkout,
     formatDuration,
     formatCountdownDisplay,
+    isBuiltInWorkout,
     loadWorkouts,
     mergeSourceDefinedWorkouts,
     normalizeWorkout,
+    renderWorkoutListItem,
     sourceDefinedWorkouts,
     stepsForWorkout,
     totalWorkoutDuration,
+    getWorkouts: () => workouts.map((workout) => JSON.parse(JSON.stringify(workout))),
   };
 
   document.addEventListener('DOMContentLoaded', init);

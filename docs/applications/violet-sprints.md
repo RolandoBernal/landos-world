@@ -6,6 +6,15 @@ Violet Sprints is a local-first interval timer inside Lando's World. Workouts ru
 
 Built-in workouts are defined in application source and are merged into the local workout list by stable ID. They do not depend on a one-time localStorage seed, import, sync, or user-created workout data.
 
+Built-in workouts can be viewed, started, and duplicated, but they cannot be deleted. Duplicating a built-in creates a normal user-owned workout copy that can be edited and deleted like any other custom workout.
+
+The current built-ins are:
+
+- Treadmill Sprints
+- Soccer Match Simulation
+- Tabata
+- Futbol Game Timer
+
 ### Futbol Game Timer
 
 `futbol-game-timer` is a source-defined built-in preset for regulation high-school soccer game timing:
