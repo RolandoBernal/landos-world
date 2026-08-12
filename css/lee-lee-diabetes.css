@@ -269,6 +269,15 @@
   margin-top: 0.7rem;
 }
 
+.lee_lee_diabetes_timeline_actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin-left: auto;
+}
+
 .lee_lee_diabetes_timeline_edit {
   min-width: 52px;
   min-height: 36px;
@@ -281,6 +290,16 @@
   font-size: 0.85rem;
   font-weight: 900;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.lee_lee_diabetes_timeline_edit--danger {
+  color: #fca5a5;
+}
+
+.lee_lee_diabetes_timeline_edit--danger:hover,
+.lee_lee_diabetes_timeline_edit--danger:focus-visible {
+  color: #fecaca;
 }
 
 .lee_lee_diabetes_filters {

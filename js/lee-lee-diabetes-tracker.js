@@ -2118,9 +2118,9 @@
     return renderTrackerEntryCard(record, {
       variant: 'history',
       actions: `
-        <div class="lee_lee_diabetes_record_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record" data-id="${escapeHtml(record.id)}">Edit</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record" data-id="${escapeHtml(record.id)}">Delete</button>
+        <div class="lee_lee_diabetes_timeline_actions" aria-label="History record actions">
+          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-record" data-id="${escapeHtml(record.id)}">Edit</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record" data-id="${escapeHtml(record.id)}">Delete</button>
         </div>
       `,
     });

@@ -456,6 +456,9 @@ test('canonical entry cards render check insulin dinner once in today and histor
   assert.match(historyHtml, /lee_lee_diabetes_timeline_item--history/);
   assert.match(historyHtml, /data-action="edit-record"/);
   assert.match(historyHtml, /data-action="delete-record"/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_footer[\s\S]*lee_lee_diabetes_timeline_actions[\s\S]*data-action="edit-record"[\s\S]*data-action="delete-record"/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record"/);
+  assert.doesNotMatch(historyHtml, /lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record"|lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record"/);
   assert.ok(todayHtml.includes(canonicalHtml));
   assert.ok(historyHtml.includes(canonicalHtml));
 
@@ -581,10 +584,15 @@ test('today activity edit action uses the shared edit pipeline', () => {
   assert.match(trackerSource, /if \(currentEditor\?\.returnTo === 'history-day' && currentEditor\.returnDateKey\)/);
 });
 
-test('today activity edit control has compact footer styling', () => {
+test('entry card footer actions stay compact and preserve delete confirmation', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_footer[\s\S]*justify-content: space-between/);
+  assert.match(cssSource, /\.lee_lee_diabetes_timeline_actions[\s\S]*inline-flex[\s\S]*flex-wrap: wrap/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit[\s\S]*min-height: 36px/);
+  assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger[\s\S]*#fca5a5/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit:focus-visible/);
+  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id\)/);
+  assert.match(trackerSource, /function deleteRecord\(recordId\)[\s\S]*renderDeleteConfirmation\(record\)/);
+  assert.match(trackerSource, /data-action="confirm-delete-record"/);
 });
 
 test('shared sync status copy explains healthy, syncing, and offline states', () => {

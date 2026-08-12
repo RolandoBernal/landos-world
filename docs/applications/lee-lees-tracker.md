@@ -60,7 +60,7 @@ History reviews active saved records without creating a separate history store. 
 
 Date groups are sorted newest first. Records inside a day are sorted oldest first so the day reads from morning through overnight.
 
-Today and History use the same canonical entry-card content renderer for the medical/event details inside each card. History wraps that shared content with History-specific Edit and Delete controls, but it does not add separate generic lines such as `Value`, `Blood sugar`, or `Insulin given` when those values are already displayed by the event-specific formatter.
+Today and History use the same canonical entry-card content renderer for the medical/event details inside each card. They also share the same footer pattern: timestamp on the left and compact text actions on the right. History adds Edit and Delete actions in that footer, but it does not add separate generic lines such as `Value`, `Blood sugar`, or `Insulin given` when those values are already displayed by the event-specific formatter.
 
 History supports:
 
