@@ -65,6 +65,29 @@
     return { id: createId(), name, blocks, ...metadata };
   }
 
+  function createSourceDefinedStep(id, label, duration, metadata = {}) {
+    return { id, label, duration, ...metadata };
+  }
+
+  function futbolGameTimerWorkout() {
+    return {
+      id: 'futbol-game-timer',
+      name: 'Futbol Game Timer',
+      sourceDefined: true,
+      blocks: [
+        createWorkoutBlock('First Half', 'work', [
+          createSourceDefinedStep('futbol-first-half', 'First Half', 40 * 60),
+        ], { id: 'futbol-first-half' }),
+        createWorkoutBlock('Half Time', 'recovery', [
+          createSourceDefinedStep('futbol-half-time', 'Half Time', 15 * 60),
+        ], { id: 'futbol-half-time' }),
+        createWorkoutBlock('Second Half', 'work', [
+          createSourceDefinedStep('futbol-second-half', 'Second Half', 40 * 60),
+        ], { id: 'futbol-second-half' }),
+      ],
+    };
+  }
+
   function treadmillSprintsSteps() {
     const steps = [
       createStep('Warmup Walk', 120, { targetSpeed: 3.2, speedUnit: 'MPH' }),
@@ -350,6 +373,7 @@
 
   function defaultWorkouts() {
     return [
+      futbolGameTimerWorkout(),
       createBlockedWorkout('Treadmill Sprints', treadmillSprintsBlocks()),
       createBlockedWorkout('Soccer Match Simulation', [], { generator: 'soccer-match' }),
       createWorkout('Tabata', [
@@ -364,6 +388,10 @@
         createStep('Cooldown', 120),
       ]),
     ];
+  }
+
+  function sourceDefinedWorkouts() {
+    return [futbolGameTimerWorkout()];
   }
 
   function escapeHtml(text) {
@@ -477,6 +505,19 @@
     return `${stepsForWorkout(workout).length} steps`;
   }
 
+  function mergeSourceDefinedWorkouts(savedWorkouts) {
+    const merged = Array.isArray(savedWorkouts) ? [...savedWorkouts] : [];
+    sourceDefinedWorkouts().forEach((builtInWorkout) => {
+      const existingIndex = merged.findIndex((workout) => workout.id === builtInWorkout.id);
+      if (existingIndex >= 0 && merged[existingIndex]?.sourceDefined) {
+        merged[existingIndex] = builtInWorkout;
+      } else if (existingIndex < 0) {
+        merged.push(builtInWorkout);
+      }
+    });
+    return merged;
+  }
+
   function normalizeBlocks(workout) {
     if (Array.isArray(workout?.blocks) && workout.blocks.length) {
       return workout.blocks.map((block) => ({
@@ -530,7 +571,7 @@
   }
 
   function loadWorkouts() {
-    workouts = readWorkouts() || defaultWorkouts();
+    workouts = mergeSourceDefinedWorkouts(readWorkouts() || defaultWorkouts());
     workouts = workouts.map((workout) => {
       if (isOldThursdaySprints(workout) || isNumberedThursdaySprints(workout) || isPreviousDefaultThursdaySprints(workout) || isCurrentFlatTreadmillSprints(workout)) return updateOldThursdaySprints(workout);
       if (isDefaultTabata(workout)) return updateDefaultTabata(workout);
@@ -883,7 +924,7 @@
                 <button type="button" class="sprints-btn" data-action="view" data-id="${escapeHtml(workout.id)}">View Steps</button>
                 <button type="button" class="sprints-btn sprints-btn--accent" data-action="start" data-id="${escapeHtml(workout.id)}">Start</button>
                 <button type="button" class="sprints-btn" data-action="duplicate" data-id="${escapeHtml(workout.id)}">Duplicate</button>
-                <button type="button" class="sprints-btn sprints-btn--danger" data-action="delete" data-id="${escapeHtml(workout.id)}">Delete</button>
+                ${workout.sourceDefined ? '' : `<button type="button" class="sprints-btn sprints-btn--danger" data-action="delete" data-id="${escapeHtml(workout.id)}">Delete</button>`}
               </div>
             </li>`).join('') : '<li class="sprints-empty">No workouts yet. Tap + New to create one.</li>'}
         </ul>
@@ -904,6 +945,7 @@
       if (action === 'view') {
         const target = workouts.find((workout) => workout.id === id);
         if (target?.generator === 'soccer-match') showSoccerDifficulty(id, 'preview');
+        else if (target?.sourceDefined) showBuiltInPreview(id);
         else showEditor(id);
       }
       if (action === 'start') showTimer(id);
@@ -917,6 +959,10 @@
       }
       if (action === 'delete') {
         const target = workouts.find((workout) => workout.id === id);
+        if (target?.sourceDefined) {
+          showWorkoutList();
+          return;
+        }
         if (target && await showConfirmationDialog({
           title: 'Delete Workout?',
           message: 'This action cannot be undone.',
@@ -930,11 +976,44 @@
     });
   }
 
+  function showBuiltInPreview(id) {
+    stopTimer();
+    setView('sprints');
+    const root = replaceSprintsRoot();
+    const workout = workouts.find((item) => item.id === id);
+    if (!workout) {
+      showWorkoutList();
+      return;
+    }
+    root.innerHTML = `
+      <div class="sprints-app">
+        ${renderEcosystemNav()}
+        <header class="sprints-header">
+          <button type="button" class="sprints-btn sprints-btn--ghost" data-action="list">Workouts</button>
+          <h1 class="sprints-title">${escapeHtml(workout.name)}</h1>
+          <button type="button" class="sprints-btn sprints-btn--accent sprints-btn--large" data-action="start">Start</button>
+        </header>
+        <div class="sprints-preview">
+          ${workoutPreviewMarkup(workout)}
+        </div>
+      </div>`;
+    root.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action]');
+      if (!button) return;
+      if (button.dataset.action === 'list') showWorkoutList();
+      if (button.dataset.action === 'start') showTimer(id);
+    });
+  }
+
   function showEditor(id) {
     stopTimer();
     setView('sprints');
     const root = replaceSprintsRoot();
     let draft = JSON.parse(JSON.stringify(workouts.find((workout) => workout.id === id) || createWorkout()));
+    if (draft.sourceDefined) {
+      showBuiltInPreview(id);
+      return;
+    }
     if (draft.generator === 'soccer-match') {
       showSoccerDifficulty(id, 'preview');
       return;
@@ -1564,6 +1643,21 @@
       setView('clock');
     }
   }
+
+  window.VioletSprints = {
+    STORAGE_KEY,
+    createWorkout,
+    createWorkoutTimer,
+    defaultWorkouts,
+    formatDuration,
+    formatCountdownDisplay,
+    loadWorkouts,
+    mergeSourceDefinedWorkouts,
+    normalizeWorkout,
+    sourceDefinedWorkouts,
+    stepsForWorkout,
+    totalWorkoutDuration,
+  };
 
   document.addEventListener('DOMContentLoaded', init);
 })();
