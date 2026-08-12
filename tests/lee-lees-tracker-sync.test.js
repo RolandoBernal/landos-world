@@ -594,10 +594,44 @@ test('CSV export escapes quotes, commas, and line breaks', () => {
   const context = createSyncContext();
   const store = createDocumentStore();
   const repository = context.LeeLeeTrackerSync.createRepository(store);
-  const csv = repository.exportCsv([{ ...record(), notes: 'Line one,\nLine "two"' }]);
+  const csv = repository.exportCsv([{
+    ...record({
+      eventType: 'meal',
+      type: 'Lunch',
+      mealCarbs: 62,
+      mealDescription: 'Turkey sandwich, chips, apple',
+      notes: 'Line one,\nLine "two"',
+    }),
+  }]);
 
   assert.match(csv, /"Line one,\nLine ""two"""/);
   assert.match(csv, /"Entered By"/);
+  assert.match(csv, /"Event Type","Record Type","Glucose","Insulin Units","Carbs","Meal Description"/);
+  assert.match(csv, /"meal","Lunch","198","5","62","Turkey sandwich, chips, apple"/);
+});
+
+test('record content comparison includes meal and activity details', async () => {
+  const context = createSyncContext();
+  const store = createDocumentStore();
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+  const preview = repository.previewJsonImport({
+    appIdentifier: 'lee-lee-tracker-full-backup',
+    records: [record({
+      id: 'meal-1',
+      eventType: 'meal',
+      type: 'Lunch',
+      mealCarbs: 80,
+      mealDescription: 'Pizza',
+    })],
+  }, [record({
+    id: 'meal-1',
+    eventType: 'meal',
+    type: 'Lunch',
+    mealCarbs: 20,
+    mealDescription: 'Pizza',
+  })]);
+
+  assert.equal(preview.summary.conflictingRecords.length, 1);
 });
 
 test('SQL migration blocks direct updates and leaves writes to the versioned RPC', () => {

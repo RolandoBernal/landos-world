@@ -1,6 +1,6 @@
 # Lee-Lee's Tracker
 
-Lee-Lee's Tracker is a local-first blood-sugar and insulin log inside Lando's World. It now supports Supabase-backed shared records for a single shared family account used on Rolando's and Emily's devices.
+Lee-Lee's Tracker is a local-first T1D event log inside Lando's World. It supports blood glucose, insulin, meal/carbohydrate, activity, and note records, with Supabase-backed shared records for a single shared family account used on Rolando's and Emily's devices.
 
 ## Navigation
 
@@ -12,6 +12,17 @@ The tracker has four in-app sections:
 - Settings
 
 All sections read from the same normalized tracker document. Supabase is the authoritative shared source after sign-in. Browser storage remains the local cache, offline queue, safety backup layer, and recovery fallback.
+
+## Event Model
+
+Records now distinguish event category from context:
+
+- `eventType`: blood glucose, insulin, meal, activity, or note
+- `type`: context or occasion, such as Breakfast, Lunch, Dinner, Bedtime, 2 AM, Correction, Snack, Exercise, or Other
+
+Meal records store carbohydrate grams and an optional meal description. Activity records store an optional activity description, duration in minutes, and Easy/Moderate/Hard intensity. These fields live on the same normalized record object and use the same create, edit, soft delete, restore, backup, sync, conflict, history, and export paths as older glucose and insulin records.
+
+Carbs are informational/training-only in this version. They are not used in dose guidance, do not create a carb bolus, and do not imply an insulin-to-carbohydrate ratio. The current insulin guidance remains the clinician-provided 4-unit applicable-meal base plus the existing glucose correction table. Insulin-to-carb ratios, carb-based meal bolus calculations, food photos, and AI-assisted carb estimation are intentionally deferred.
 
 ## Authentication & Device Identity
 
@@ -27,7 +38,7 @@ That label is written as record attribution (`enteredBy`, `lastEditedBy`, and `d
 
 ## Synchronization
 
-Records save locally first, then queue a remote operation. Sync runs:
+Records save locally first, then queue a remote operation. Meal and activity records use the same record queue and Supabase `lee_lee_records` payload as glucose, insulin, and notes. Sync runs:
 
 - After record create, edit, soft delete, or restore
 - On authenticated app load
@@ -39,11 +50,11 @@ Records save locally first, then queue a remote operation. Sync runs:
 
 Sync status is intentionally compact: Saved, Syncing, Synced, Offline, Waiting to sync, Sync problem, or Conflict needs review.
 
-Patient and clinic information uses a separate shared-settings sync path backed by `public.lee_lee_shared_settings`. It is still local-first in the browser, but it syncs independently from glucose and insulin records.
+Patient and clinic information uses a separate shared-settings sync path backed by `public.lee_lee_shared_settings`. It is still local-first in the browser, but it syncs independently from tracker event records.
 
 ## History
 
-History reviews active saved records without creating a separate history store. Records are grouped by the local calendar date derived from `recordTimestamp`, which is the actual event time for the blood-sugar reading or insulin dose.
+History reviews active saved records without creating a separate history store. Records are grouped by the local calendar date derived from `recordTimestamp`, which is the actual event time for the event.
 
 Date groups are sorted newest first. Records inside a day are sorted oldest first so the day reads from morning through overnight.
 
@@ -135,7 +146,11 @@ If multiple records of the same primary type or additional checks exist on a day
 The Detailed Report groups records by date and displays every record individually with:
 
 - Time
+- Event type
 - Entry type
+- Carbs
+- Meal description
+- Activity details
 - Blood sugar
 - Actual insulin given
 - Suggested dose details when available
@@ -146,7 +161,7 @@ Actual administered insulin is always the primary insulin value. Suggested insul
 
 ## CSV Export
 
-Settings includes a CSV export for human-readable review. It excludes deleted records by default and includes local display date/time, record type, glucose, insulin, notes, attribution, created time, and updated time. CSV is not a restore format.
+Settings includes a CSV export for human-readable review. It excludes deleted records by default and includes local display date/time, event type, context, glucose, insulin, carbs, meal description, activity description, activity duration, activity intensity, notes, attribution, created time, and updated time. CSV is not a restore format.
 
 ## Print Behavior
 
@@ -199,14 +214,19 @@ Patient and clinic settings conflicts are labeled separately as Patient & Clinic
 12. Select multiple conflicts and confirm bulk Keep Shared or bulk Use This Device preserves unresolved failures.
 13. Delete and restore a record.
 14. Turn on airplane mode, add a record or edit Patient & Clinic, close and reopen, reconnect, and confirm it syncs once.
-15. Export a JSON backup.
-16. Preview/import that same JSON and confirm it does not duplicate records.
-17. Export CSV and verify escaping for commas, quotes, and line breaks.
-18. Verify existing localStorage data is still present before any production migration.
+15. Add Lunch with 60 g carbs and a short meal description.
+16. Confirm it appears in Today, edit it from Today to 65 g, refresh, and confirm it remains.
+17. Add Activity with description, duration, and intensity.
+18. Confirm meal and activity records appear in History, printable export, CSV, and the second signed-in device.
+19. Verify changing a meal from 20 g carbs to 80 g carbs does not change insulin guidance.
+20. Export a JSON backup.
+21. Preview/import that same JSON and confirm it does not duplicate records.
+22. Export CSV and verify escaping for commas, quotes, and line breaks.
+23. Verify existing localStorage data is still present before any production migration.
 
 ## Legacy Compatibility
 
-Older records remain compatible through the tracker migration layer. When a record is missing newer fields, the app falls back to `recordTimestamp`, then `date` and `time`, then legacy `timestamp`. Legacy `insulinUnits` is treated as the actual administered insulin value.
+Older records remain compatible through the tracker migration layer. When a record is missing newer fields, the app falls back to `recordTimestamp`, then `date` and `time`, then legacy `timestamp`. Legacy `insulinUnits` is treated as the actual administered insulin value. Older records infer an event type from their available values.
 
 ## Privacy
 
@@ -214,4 +234,4 @@ Tracker data syncs only to the configured Supabase project after authentication.
 
 ## Known Limitations
 
-The current reporting flow relies on the browser print dialog. Users can save as PDF from that dialog, but the app does not generate a standalone PDF file itself. Long-term analytics, charts, CGM-style reporting, and automatic clinic sharing are intentionally out of scope.
+The current reporting flow relies on the browser print dialog. Users can save as PDF from that dialog, but the app does not generate a standalone PDF file itself. Native iOS migration work is paused, not removed. Long-term analytics, charts, CGM-style reporting, automatic clinic sharing, food-photo capture, AI carb estimation, meal templates, and carb-based dosing are intentionally out of scope.

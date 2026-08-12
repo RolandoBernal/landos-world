@@ -20,6 +20,22 @@
   const LEGACY_PLAN_STORAGE_KEYS = [
     `${PRE_REBRAND_KEY_PREFIX}_diabetes_insulin_plans_v1`,
   ];
+  const EVENT_TYPE_DEFINITIONS = Object.freeze([
+    { type: 'blood-glucose', label: 'Blood Glucose', fields: ['bloodSugar', 'notes'], defaultContext: 'Other' },
+    { type: 'insulin', label: 'Insulin', fields: ['bloodSugar', 'insulinUnits', 'notes'], defaultContext: 'Breakfast' },
+    { type: 'meal', label: 'Meal / Carbs', fields: ['carbs', 'mealDescription', 'notes'], defaultContext: 'Breakfast' },
+    { type: 'activity', label: 'Activity / Exercise', fields: ['activityDescription', 'activityDurationMinutes', 'activityIntensity', 'notes'], defaultContext: 'Exercise' },
+    { type: 'note', label: 'Note', fields: ['notes'], defaultContext: 'Other' },
+  ]);
+  const EVENT_TYPE_CONFIG = Object.freeze(Object.fromEntries(
+    EVENT_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
+  ));
+  const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
+  const GLUCOSE_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Other']);
+  const INSULIN_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Correction', 'Snack', 'Other']);
+  const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
+  const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
+  const ACTIVITY_INTENSITY_OPTIONS = Object.freeze(['Easy', 'Moderate', 'Hard']);
   const ENTRY_TYPE_DEFINITIONS = Object.freeze([
     { type: 'Breakfast', label: 'Breakfast', clinicalLogPrimary: true, mealGuidance: true, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Lunch', label: 'Lunch', clinicalLogPrimary: true, mealGuidance: true, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
@@ -38,6 +54,7 @@
   const EXTRA_TYPES = ENTRY_TYPE_DEFINITIONS.map((definition) => definition.type);
   const MEAL_TYPES = ENTRY_TYPE_DEFINITIONS.filter((definition) => definition.mealGuidance).map((definition) => definition.type);
   const DEFAULT_ENTRY_TYPE = EXTRA_TYPES[0];
+  const DEFAULT_EVENT_TYPE = EVENT_TYPE_DEFINITIONS[0].type;
   const TRACKER_NAV_ITEMS = Object.freeze([
     ['today', 'Today'],
     ['history', 'History'],
@@ -235,6 +252,15 @@
     return Number.isFinite(number) && number >= 0 ? number : null;
   }
 
+  function normalizeWholeNumber(value) {
+    const number = normalizeNumber(value);
+    return number == null ? null : Math.round(number);
+  }
+
+  function sanitizeShortText(value, maxLength = 160) {
+    return String(value || '').replace(/\r/g, '').trim().slice(0, maxLength);
+  }
+
   function parseTimestamp(value) {
     if (value == null || value === '') return null;
     if (value instanceof Date) {
@@ -258,6 +284,34 @@
 
   function getEntryTypeConfig(type) {
     return ENTRY_TYPE_CONFIG[type] || ENTRY_TYPE_CONFIG.Other;
+  }
+
+  function getEventTypeConfig(eventType) {
+    return EVENT_TYPE_CONFIG[eventType] || EVENT_TYPE_CONFIG[DEFAULT_EVENT_TYPE];
+  }
+
+  function normalizeEventType(value, record = {}) {
+    if (EVENT_TYPE_CONFIG[value]) return value;
+    if (record.mealCarbs != null || record.carbs != null || record.mealDescription) return 'meal';
+    if (record.activityDescription || record.activityDurationMinutes != null || record.activityIntensity) return 'activity';
+    if (record.administeredInsulinUnits != null || record.insulinUnits != null) return 'insulin';
+    if (record.bloodSugar != null) return 'blood-glucose';
+    if (record.notes) return 'note';
+    return DEFAULT_EVENT_TYPE;
+  }
+
+  function getContextOptionsForEventType(eventType) {
+    if (eventType === 'meal') return [...MEAL_CONTEXT_TYPES];
+    if (eventType === 'insulin') return [...INSULIN_CONTEXT_TYPES];
+    if (eventType === 'activity') return [...ACTIVITY_CONTEXT_TYPES];
+    if (eventType === 'note') return [...NOTE_CONTEXT_TYPES];
+    return [...GLUCOSE_CONTEXT_TYPES];
+  }
+
+  function normalizeRecordContext(type, eventType) {
+    const options = getContextOptionsForEventType(eventType);
+    if (options.includes(type)) return type;
+    return getEventTypeConfig(eventType).defaultContext;
   }
 
   function entryTypeHasField(type, fieldName) {
@@ -339,20 +393,30 @@
     const recordTimestamp = Number.isFinite(rawRecordTimestamp) ? rawRecordTimestamp : fallbackTimestamp;
     const rawCreatedAt = parseTimestamp(record.createdAt);
     const rawUpdatedAt = parseTimestamp(record.updatedAt);
-    const type = EXTRA_TYPES.includes(record.type) ? record.type : 'Other';
+    const eventType = normalizeEventType(record.eventType, record);
+    const type = normalizeRecordContext(EXTRA_TYPES.includes(record.type) ? record.type : 'Other', eventType);
     const recordDate = new Date(recordTimestamp);
     const date = getLocalDateKey(recordDate);
     const time = getLocalTimeKey(recordDate);
     const administeredInsulinUnits = normalizeNumber(record.administeredInsulinUnits ?? record.insulinUnits);
+    const mealCarbs = normalizeWholeNumber(record.mealCarbs ?? record.carbs);
+    const activityDurationMinutes = normalizeWholeNumber(record.activityDurationMinutes);
+    const activityIntensity = ACTIVITY_INTENSITY_OPTIONS.includes(record.activityIntensity) ? record.activityIntensity : '';
     return {
       ...record,
       id: typeof record.id === 'string' ? record.id : createId(),
       date,
       time,
+      eventType,
       type,
       bloodSugar: normalizeBloodSugar(record.bloodSugar),
       insulinUnits: administeredInsulinUnits,
       administeredInsulinUnits,
+      mealCarbs,
+      mealDescription: sanitizeShortText(record.mealDescription, 180),
+      activityDescription: sanitizeShortText(record.activityDescription, 120),
+      activityDurationMinutes,
+      activityIntensity,
       suggestedBaseUnits: normalizeNumber(record.suggestedBaseUnits),
       suggestedCorrectionUnits: normalizeNumber(record.suggestedCorrectionUnits),
       suggestedTotalUnits: normalizeNumber(record.suggestedTotalUnits),
@@ -437,9 +501,15 @@
   function createMigrationFingerprint(record) {
     return record.migrationFingerprint || [
       record.recordTimestamp,
+      record.eventType || '',
       record.type,
       record.bloodSugar ?? '',
       record.insulinUnits ?? '',
+      record.mealCarbs ?? '',
+      record.mealDescription || '',
+      record.activityDescription || '',
+      record.activityDurationMinutes ?? '',
+      record.activityIntensity || '',
       record.notes || '',
     ].join('|');
   }
@@ -992,7 +1062,11 @@
     }
     return [
       ['Time', formatRecordDateTime(shared.recordTimestamp), formatRecordDateTime(local.recordTimestamp)],
+      ['Event', getEventTypeLabel(shared.eventType), getEventTypeLabel(local.eventType)],
       ['Entry Type', shared.type, local.type],
+      ['Carbs', formatConflictValue(shared.mealCarbs, formatCarbs), formatConflictValue(local.mealCarbs, formatCarbs)],
+      ['Meal Description', shared.mealDescription || '', local.mealDescription || ''],
+      ['Activity', [shared.activityDescription, formatActivityDuration(shared.activityDurationMinutes), shared.activityIntensity].filter(Boolean).join(' · '), [local.activityDescription, formatActivityDuration(local.activityDurationMinutes), local.activityIntensity].filter(Boolean).join(' · ')],
       ['Blood Sugar', formatConflictValue(shared.bloodSugar, formatBloodSugar), formatConflictValue(local.bloodSugar, formatBloodSugar)],
       ['Insulin', formatConflictValue(getRecordActualInsulin(shared), formatInsulin), formatConflictValue(getRecordActualInsulin(local), formatInsulin)],
       ['Notes', shared.notes || '', local.notes || ''],
@@ -1331,9 +1405,16 @@
   };
 
   window.LeeLeeTrackerEntryTypes = {
+    eventTypes: EVENT_TYPE_DEFINITIONS.map((definition) => ({ ...definition, fields: [...definition.fields] })),
     all: ENTRY_TYPE_DEFINITIONS.map((definition) => ({ ...definition, fields: [...definition.fields] })),
     primaryTypes: [...PRIMARY_TYPES],
     mealTypes: [...MEAL_TYPES],
+    mealContextTypes: [...MEAL_CONTEXT_TYPES],
+    getEventTypeConfig: (eventType) => {
+      const config = getEventTypeConfig(eventType);
+      return { ...config, fields: [...config.fields] };
+    },
+    getContextOptionsForEventType,
     getEntryTypeConfig: (type) => {
       const config = getEntryTypeConfig(type);
       return { ...config, fields: [...config.fields] };
@@ -1428,8 +1509,11 @@
       .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b) || String(a.id || '').localeCompare(String(b.id || '')))
       .map((record) => [
         record.id,
+        record.eventType ?? '',
         record.bloodSugar ?? '',
         getRecordActualInsulin(record) ?? '',
+        record.mealCarbs ?? '',
+        record.activityDurationMinutes ?? '',
         record.updatedAt ?? '',
       ].join(':'))
       .join('|');
@@ -1622,6 +1706,14 @@
     return `${value} ${value === 1 ? 'unit' : 'units'}`;
   }
 
+  function formatCarbs(value) {
+    return value == null ? '' : `${value} g carbs`;
+  }
+
+  function formatActivityDuration(value) {
+    return value == null ? '' : `${value} min`;
+  }
+
   function formatRange(range) {
     if (!range) return '';
     if (range.minGlucose == null) return `Below ${Number(range.maxGlucose) + 1} mg/dL`;
@@ -1640,6 +1732,59 @@
     const suggested = formatInsulin(record.suggestedTotalUnits);
     const breakdown = `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
     return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
+  }
+
+  function getEventTypeLabel(eventType) {
+    return getEventTypeConfig(eventType).label;
+  }
+
+  function getRecordPrimaryValue(record) {
+    if (!record) return '';
+    if (record.eventType === 'meal') return formatCarbs(record.mealCarbs);
+    if (record.eventType === 'activity') return record.activityDescription || 'Activity';
+    if (record.eventType === 'insulin') return formatInsulin(getRecordActualInsulin(record));
+    if (record.eventType === 'note') return record.notes ? 'Note' : '';
+    return formatBloodSugar(record.bloodSugar);
+  }
+
+  function getRecordSecondaryLines(record) {
+    if (!record) return [];
+    if (record.eventType === 'meal') {
+      return [
+        record.mealDescription || '',
+        record.notes || '',
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'activity') {
+      return [
+        [formatActivityDuration(record.activityDurationMinutes), record.activityIntensity].filter(Boolean).join(' · '),
+        record.notes || '',
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'insulin') {
+      return [
+        record.type,
+        formatBloodSugar(record.bloodSugar),
+        getMealDoseSummary(record),
+        record.notes || '',
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'note') {
+      return [record.notes || 'No note text'].filter(Boolean);
+    }
+    return [
+      record.type,
+      getMealDoseSummary(record),
+      record.notes || '',
+    ].filter(Boolean);
+  }
+
+  function getRecordDisplayTitle(record) {
+    if (record.eventType === 'meal') return record.type;
+    if (record.eventType === 'activity') return 'Activity';
+    if (record.eventType === 'insulin') return 'Insulin';
+    if (record.eventType === 'note') return 'Note';
+    return 'Blood Glucose';
   }
 
   function renderValuePills(record) {
@@ -1697,7 +1842,7 @@
       </section>
       ${renderTrackerNav('today')}
       <section class="lee_lee_diabetes_today_actions" aria-label="Log an entry">
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Log Entry</button>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Add Event</button>
       </section>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
@@ -1722,19 +1867,14 @@
   }
 
   function renderTimelineItem(record) {
-    const notes = record.notes
-      ? `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(record.notes)}</div>`
-      : '';
-    const doseSummary = getMealDoseSummary(record)
-      ? `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(getMealDoseSummary(record))}</div>`
-      : '';
+    const primary = getRecordPrimaryValue(record);
+    const secondary = getRecordSecondaryLines(record);
     return `
       <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_timeline_item--today">
         <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(record.type)}</div>
-          <div class="lee_lee_diabetes_timeline_values">${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')} · ${escapeHtml(formatInsulin(record.insulinUnits) || 'No insulin')}</div>
-          ${doseSummary}
-          ${notes}
+          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
+          ${primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(primary)}</div>` : ''}
+          ${secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
         </div>
         <div class="lee_lee_diabetes_timeline_footer">
           <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
@@ -1935,14 +2075,21 @@
     const actual = getRecordActualInsulin(record);
     const differs = suggested && actual != null && Number(record.suggestedTotalUnits) !== Number(actual);
     const notes = record.notes ? `<p><strong>Notes:</strong> ${escapeHtml(record.notes)}</p>` : '';
+    const eventDetails = getRecordSecondaryLines(record)
+      .filter((line) => line && line !== record.type && line !== record.notes && line !== getMealDoseSummary(record))
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join('');
     return `
       <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
         <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(record.type)}</div>
+          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
           <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
           <div class="lee_lee_diabetes_record_details">
-            <p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>
-            <p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>
+            <p><strong>Context:</strong> ${escapeHtml(record.type)}</p>
+            ${getRecordPrimaryValue(record) ? `<p><strong>Value:</strong> ${escapeHtml(getRecordPrimaryValue(record))}</p>` : ''}
+            ${record.eventType === 'blood-glucose' || record.eventType === 'insulin' ? `<p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>` : ''}
+            ${record.eventType === 'insulin' ? `<p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>` : ''}
+            ${eventDetails}
             ${suggested ? `<p><strong>Suggested:</strong> ${escapeHtml(suggested)}${differs ? ' · differs from actual' : ''}</p>` : ''}
             ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : ''}
             ${notes}
@@ -1971,6 +2118,10 @@
         <dl class="lee_lee_diabetes_confirm_list">
           <div>
             <dt>Entry</dt>
+            <dd>${escapeHtml(getRecordDisplayTitle(record))}</dd>
+          </div>
+          <div>
+            <dt>Context</dt>
             <dd>${escapeHtml(record.type)}</dd>
           </div>
           <div>
@@ -1978,12 +2129,8 @@
             <dd>${escapeHtml(formatRecordDateTime(record.recordTimestamp))}</dd>
           </div>
           <div>
-            <dt>Blood sugar</dt>
-            <dd>${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</dd>
-          </div>
-          <div>
-            <dt>Insulin given</dt>
-            <dd>${escapeHtml(formatInsulin(actual) || 'No insulin')}</dd>
+            <dt>Value</dt>
+            <dd>${escapeHtml(getRecordPrimaryValue(record) || 'No value')}</dd>
           </div>
         </dl>
         <div class="lee_lee_diabetes_actions">
@@ -2101,7 +2248,7 @@
 
   function renderClinicalLogRow(group) {
     const additional = group.additionalRecords.length
-      ? `Additional checks: ${group.additionalRecords.map((record) => `${record.type} ${formatTime(getRecordTimestamp(record))} ${formatBloodSugar(record.bloodSugar) || 'No BG'} ${formatInsulin(getRecordActualInsulin(record)) || 'No insulin'}${record.notes ? ` (${record.notes})` : ''}`).join('; ')}`
+      ? `Additional events: ${group.additionalRecords.map((record) => `${getRecordDisplayTitle(record)} ${record.type} ${formatTime(getRecordTimestamp(record))} ${getRecordPrimaryValue(record) || 'No value'}${record.notes ? ` (${record.notes})` : ''}`).join('; ')}`
       : '';
     const notes = [
       ...PRIMARY_TYPES.map((type) => group.primary[type]?.notes || '').filter(Boolean),
@@ -2136,7 +2283,11 @@
               <thead>
                 <tr>
                   <th scope="col">Time</th>
+                  <th scope="col">Event</th>
                   <th scope="col">Type</th>
+                  <th scope="col">Carbs</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Activity</th>
                   <th scope="col">Blood Sugar</th>
                   <th scope="col">Insulin Given</th>
                   <th scope="col">Suggested</th>
@@ -2168,7 +2319,11 @@
     return `
       <tr>
         <td>${escapeHtml(formatTime(getRecordTimestamp(record)))}</td>
+        <td>${escapeHtml(getEventTypeLabel(record.eventType))}</td>
         <td>${escapeHtml(record.type)}</td>
+        <td>${escapeHtml(formatCarbs(record.mealCarbs) || '—')}</td>
+        <td>${escapeHtml(record.mealDescription || '—')}</td>
+        <td>${escapeHtml([record.activityDescription, formatActivityDuration(record.activityDurationMinutes), record.activityIntensity].filter(Boolean).join(' · ') || '—')}</td>
         <td>${escapeHtml(formatBloodSugar(record.bloodSugar) || '—')}</td>
         <td>${escapeHtml(formatInsulin(getRecordActualInsulin(record)) || '—')}</td>
         <td>${escapeHtml(suggestedParts || '—')}</td>
@@ -2185,6 +2340,7 @@
     currentEditor = {
       mode: options.mode,
       id: record.id || null,
+      eventType: normalizeEventType(record.eventType || options.eventType, record),
       type: record.type || options.type || DEFAULT_ENTRY_TYPE,
       originalRecord: record.id ? { ...record } : null,
       returnTo: options.returnTo || null,
@@ -2197,15 +2353,45 @@
       : now.getTime();
     const eventDate = record.date || getLocalDateKey(new Date(recordTimestamp));
     const eventTime = record.time || getLocalTimeKey(new Date(recordTimestamp));
-    const config = getEntryTypeConfig(currentEditor.type);
+    const eventConfig = getEventTypeConfig(currentEditor.eventType);
+    const contextType = normalizeRecordContext(currentEditor.type, currentEditor.eventType);
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-lee-lee-editor>
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
-        ${renderTypeSelect(currentEditor.type)}
-        ${config.fields.includes('bloodSugar') ? `
+        ${renderEventTypeSelect(currentEditor.eventType)}
+        ${renderTypeSelect(contextType)}
+        ${eventConfig.fields.includes('bloodSugar') ? `
           <label class="lee_lee_diabetes_field">
             Blood Sugar
             <input class="lee_lee_diabetes_input" name="bloodSugar" type="number" inputmode="numeric" min="0" step="1" autocomplete="off" value="${escapeHtml(record.bloodSugar ?? '')}">
+          </label>
+        ` : ''}
+        ${eventConfig.fields.includes('carbs') ? `
+          <label class="lee_lee_diabetes_field">
+            Carbohydrates
+            <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="numeric" min="0" step="1" autocomplete="off" required value="${escapeHtml(record.mealCarbs ?? '')}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Meal Description
+            <input class="lee_lee_diabetes_input" name="mealDescription" type="text" maxlength="180" autocomplete="off" placeholder="Turkey sandwich, chips, apple" value="${escapeHtml(record.mealDescription || '')}">
+          </label>
+          <p class="lee_lee_diabetes_help">Carbs are recorded for tracking only and are not currently used in dose guidance.</p>
+        ` : ''}
+        ${eventConfig.fields.includes('activityDescription') ? `
+          <label class="lee_lee_diabetes_field">
+            Activity
+            <input class="lee_lee_diabetes_input" name="activityDescription" type="text" maxlength="120" autocomplete="off" placeholder="Bike ride" value="${escapeHtml(record.activityDescription || '')}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Duration
+            <input class="lee_lee_diabetes_input" name="activityDurationMinutes" type="number" inputmode="numeric" min="0" step="1" autocomplete="off" value="${escapeHtml(record.activityDurationMinutes ?? '')}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Intensity
+            <select class="lee_lee_diabetes_select" name="activityIntensity">
+              <option value="">Choose intensity</option>
+              ${ACTIVITY_INTENSITY_OPTIONS.map((intensity) => `<option value="${escapeHtml(intensity)}" ${record.activityIntensity === intensity ? 'selected' : ''}>${escapeHtml(intensity)}</option>`).join('')}
+            </select>
           </label>
         ` : ''}
         <label class="lee_lee_diabetes_field">
@@ -2217,13 +2403,13 @@
           <input class="lee_lee_diabetes_input" name="time" type="time" required value="${escapeHtml(eventTime)}">
         </label>
         <div data-dose-helper aria-live="polite"></div>
-        ${config.fields.includes('insulinUnits') ? `
+        ${eventConfig.fields.includes('insulinUnits') ? `
           <label class="lee_lee_diabetes_field">
             <span data-insulin-label>${entryTypeUsesMealGuidance(currentEditor.type) ? 'Insulin Actually Given' : 'Insulin'}</span>
             <input class="lee_lee_diabetes_input" name="insulinUnits" type="number" inputmode="decimal" min="0" step="0.5" autocomplete="off" value="${escapeHtml(record.administeredInsulinUnits ?? record.insulinUnits ?? '')}">
           </label>
         ` : ''}
-        ${config.fields.includes('notes') ? `
+        ${eventConfig.fields.includes('notes') ? `
           <label class="lee_lee_diabetes_field">
             Notes
             <textarea class="lee_lee_diabetes_textarea" name="notes" rows="4">${escapeHtml(record.notes || '')}</textarea>
@@ -2236,14 +2422,35 @@
       </form>
     `;
     updateEditorState(root.querySelector('[data-lee-lee-editor]'));
-    root.querySelector('[name="bloodSugar"]')?.focus();
+    root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
+  }
+
+  function buildDraftFromEditor(form) {
+    return {
+      eventType: normalizeEventType(form.elements.eventType?.value),
+      type: form.elements.type?.value || '',
+      bloodSugar: form.elements.bloodSugar?.value || '',
+      mealCarbs: form.elements.mealCarbs?.value || '',
+      mealDescription: form.elements.mealDescription?.value || '',
+      activityDescription: form.elements.activityDescription?.value || '',
+      activityDurationMinutes: form.elements.activityDurationMinutes?.value || '',
+      activityIntensity: form.elements.activityIntensity?.value || '',
+      administeredInsulinUnits: form.elements.insulinUnits?.value || '',
+      insulinUnits: form.elements.insulinUnits?.value || '',
+      notes: form.elements.notes?.value || '',
+      date: form.elements.date?.value || '',
+      time: form.elements.time?.value || '',
+    };
   }
 
   function getEditorType(form) {
     const typeInput = form.elements.type;
-    return typeInput && EXTRA_TYPES.includes(typeInput.value)
-      ? typeInput.value
-      : currentEditor?.type || DEFAULT_ENTRY_TYPE;
+    const eventType = getEditorEventType(form);
+    return normalizeRecordContext(typeInput?.value || currentEditor?.type, eventType);
+  }
+
+  function getEditorEventType(form) {
+    return normalizeEventType(form.elements.eventType?.value || currentEditor?.eventType);
   }
 
   function getEditorRecordTimestamp(form) {
@@ -2253,7 +2460,8 @@
   function getEditorDoseResult(form) {
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
-    if (!entryTypeUsesMealGuidance(type)) {
+    const eventType = getEditorEventType(form);
+    if (eventType !== 'insulin' || !entryTypeUsesMealGuidance(type)) {
       return {
         status: 'manual',
         baseUnits: null,
@@ -2364,18 +2572,56 @@
     if (!saveButton) return;
     const hasDate = Boolean(form.elements.date?.value);
     const hasTime = Boolean(form.elements.time?.value);
-    saveButton.disabled = !(hasDate && hasTime);
+    const eventType = getEditorEventType(form);
+    const hasMealCarbs = eventType !== 'meal' || normalizeWholeNumber(form.elements.mealCarbs?.value) != null;
+    saveButton.disabled = !(hasDate && hasTime && hasMealCarbs);
   }
 
   function renderTypeSelect(selectedType) {
+    const eventType = currentEditor?.eventType || DEFAULT_EVENT_TYPE;
+    const options = getContextOptionsForEventType(eventType);
     return `
       <label class="lee_lee_diabetes_field">
-        Entry Type
+        ${eventType === 'meal' ? 'Meal Context' : 'Context'}
         <select class="lee_lee_diabetes_select" name="type">
-          ${ENTRY_TYPE_DEFINITIONS.map(({ type, label }) => `<option value="${escapeHtml(type)}" ${type === selectedType ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          ${options.map((type) => `<option value="${escapeHtml(type)}" ${type === selectedType ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
         </select>
       </label>
     `;
+  }
+
+  function renderEventTypeSelect(selectedEventType) {
+    return `
+      <label class="lee_lee_diabetes_field">
+        Event Type
+        <select class="lee_lee_diabetes_select" name="eventType">
+          ${EVENT_TYPE_DEFINITIONS.map(({ type, label }) => `<option value="${escapeHtml(type)}" ${type === selectedEventType ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+        </select>
+      </label>
+    `;
+  }
+
+  function renderEventTypePicker() {
+    const root = getRoot();
+    if (!root) return;
+    currentEditor = { mode: 'event-picker' };
+    trackerMenuOpen = false;
+    root.innerHTML = `
+      <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
+        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Add Event</h1>
+        <div class="lee_lee_diabetes_event_grid">
+          ${EVENT_TYPE_DEFINITIONS.map(({ type, label }) => `
+            <button type="button" class="lee_lee_diabetes_event_option" data-action="choose-event-type" data-event-type="${escapeHtml(type)}">
+              <span>${escapeHtml(label)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel">Cancel</button>
+        </div>
+      </section>
+    `;
+    root.querySelector('[data-action="choose-event-type"]')?.focus();
   }
 
   function openPrimaryEditor(type) {
@@ -2387,16 +2633,23 @@
   }
 
   function openExtraEditor() {
-    renderEditor({
-      mode: 'log-entry',
-      record: { type: DEFAULT_ENTRY_TYPE },
-    });
+    renderEventTypePicker();
   }
 
   function openLogEntryEditor() {
+    renderEventTypePicker();
+  }
+
+  function openEventEditor(eventType, draft = {}) {
+    const config = getEventTypeConfig(eventType);
     renderEditor({
       mode: 'log-entry',
-      record: { type: DEFAULT_ENTRY_TYPE },
+      eventType,
+      record: {
+        eventType,
+        type: normalizeRecordContext(draft.type || config.defaultContext, eventType),
+        ...draft,
+      },
     });
   }
 
@@ -2438,9 +2691,15 @@
       date: getLocalDateKey(new Date(recordTimestamp)),
       time: getLocalTimeKey(new Date(recordTimestamp)),
       type: observedContext.type,
+      eventType: observedContext.eventType,
       bloodSugar: observedContext.bloodSugar,
       insulinUnits: actualAction.administeredInsulinUnits,
       administeredInsulinUnits: actualAction.administeredInsulinUnits,
+      mealCarbs: observedContext.mealCarbs,
+      mealDescription: observedContext.mealDescription,
+      activityDescription: observedContext.activityDescription,
+      activityDurationMinutes: observedContext.activityDurationMinutes,
+      activityIntensity: observedContext.activityIntensity,
       suggestedBaseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.baseUnits : null,
       suggestedCorrectionUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.correctionUnits : null,
       suggestedTotalUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.suggestedTotalUnits : null,
@@ -2463,9 +2722,15 @@
 
   function getObservedEntryContext(form) {
     return {
+      eventType: getEditorEventType(form),
       type: getEditorType(form),
       recordTimestamp: getEditorRecordTimestamp(form),
       bloodSugar: normalizeBloodSugar(form.elements.bloodSugar?.value),
+      mealCarbs: normalizeWholeNumber(form.elements.mealCarbs?.value),
+      mealDescription: sanitizeShortText(form.elements.mealDescription?.value, 180),
+      activityDescription: sanitizeShortText(form.elements.activityDescription?.value, 120),
+      activityDurationMinutes: normalizeWholeNumber(form.elements.activityDurationMinutes?.value),
+      activityIntensity: ACTIVITY_INTENSITY_OPTIONS.includes(form.elements.activityIntensity?.value) ? form.elements.activityIntensity.value : '',
       notes: sanitizeNotes(form.elements.notes?.value),
     };
   }
@@ -2527,7 +2792,7 @@
   function handleSave(form) {
     const record = buildRecordFromForm(form);
     if (!record) return;
-    if (MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
+    if (record.eventType === 'insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
       renderRecordConfirmation(record);
       return;
     }
@@ -2878,7 +3143,7 @@
                 <div class="lee_lee_diabetes_timeline_type">${escapeHtml(record.type)}</div>
                 <div class="lee_lee_diabetes_record_details">
                   <p>${escapeHtml(formatRecordDateTime(record.recordTimestamp))}</p>
-                  <p>${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')} · ${escapeHtml(formatInsulin(getRecordActualInsulin(record)) || 'No insulin')}</p>
+                  <p>${escapeHtml(getRecordDisplayTitle(record))} · ${escapeHtml(getRecordPrimaryValue(record) || record.type)}</p>
                   <p>Deleted by ${escapeHtml(record.deletedBy || 'Unknown')}</p>
                 </div>
               </div>
@@ -3159,9 +3424,15 @@
       source: record.source === 'app' ? 'localStorage_migration' : record.source,
       migrationFingerprint: record.migrationFingerprint || [
         record.recordTimestamp,
+        record.eventType || '',
         record.type,
         record.bloodSugar ?? '',
         record.insulinUnits ?? '',
+        record.mealCarbs ?? '',
+        record.mealDescription || '',
+        record.activityDescription || '',
+        record.activityDurationMinutes ?? '',
+        record.activityIntensity || '',
         record.notes || '',
       ].join('|'),
       updatedAt: record.updatedAt || now,
@@ -3791,6 +4062,9 @@
       if (action === 'extra' || action === 'log-entry') {
         openExtraEditor();
       }
+      if (action === 'choose-event-type') {
+        openEventEditor(target.dataset.eventType || DEFAULT_EVENT_TYPE);
+      }
       if (action === 'today') {
         trackerMenuOpen = false;
         renderHome();
@@ -3814,6 +4088,7 @@
       if (action === 'back-to-editor') {
         renderEditor({
           mode: currentEditor?.mode || 'extra',
+          eventType: currentEditor?.pendingRecord?.eventType || currentEditor?.eventType,
           type: currentEditor?.pendingRecord?.type || currentEditor?.type,
           record: currentEditor?.pendingRecord || currentEditor?.originalRecord || {},
           returnTo: currentEditor?.returnTo || null,
@@ -4056,6 +4331,16 @@
       }
       const form = event.target.closest('[data-lee-lee-editor]');
       if (!form) return;
+      if (event.target.name === 'eventType') {
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: event.target.value,
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+        });
+        return;
+      }
       updateEditorState(form);
     });
     root.addEventListener('change', (event) => {
