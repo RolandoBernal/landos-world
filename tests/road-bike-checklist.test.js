@@ -32,6 +32,61 @@ function createRoot() {
   };
 }
 
+function createClassList(initial = []) {
+  const values = new Set(initial);
+  return {
+    add: (className) => values.add(className),
+    remove: (className) => values.delete(className),
+    toggle(className, force) {
+      const shouldAdd = force ?? !values.has(className);
+      if (shouldAdd) values.add(className);
+      else values.delete(className);
+      return shouldAdd;
+    },
+    contains: (className) => values.has(className),
+  };
+}
+
+function createAccordionRoot(sectionIds, initiallyOpenIds = []) {
+  const elements = new Map();
+  const panels = {};
+  const toggles = {};
+  const sections = {};
+  const openIds = new Set(initiallyOpenIds);
+
+  sectionIds.forEach((sectionId) => {
+    sections[sectionId] = { classList: createClassList([
+      'road_bike_section',
+      ...(openIds.has(sectionId) ? ['road_bike_section--expanded'] : []),
+    ]) };
+    toggles[sectionId] = {
+      attributes: {},
+      setAttribute(name, value) {
+        this.attributes[name] = String(value);
+      },
+    };
+    panels[sectionId] = {
+      hidden: !openIds.has(sectionId),
+      addEventListener(type, handler) {
+        if (type === 'transitionend') this.transitionEnd = handler;
+      },
+    };
+
+    elements.set(`[data-road-bike-section="${sectionId}"]`, sections[sectionId]);
+    elements.set(`[data-road-bike-section-toggle="${sectionId}"]`, toggles[sectionId]);
+    elements.set(`[data-road-bike-section-panel="${sectionId}"]`, panels[sectionId]);
+  });
+
+  return {
+    panels,
+    sections,
+    toggles,
+    querySelector(selector) {
+      return elements.get(selector) || null;
+    },
+  };
+}
+
 function createChecklist({ localStorage = createLocalStorage(), root = createRoot() } = {}) {
   const listeners = {};
   const context = {
@@ -254,6 +309,74 @@ test('renders all checklist sections and items', () => {
   });
   assert.match(root.innerHTML, /type="checkbox"/);
   assert.doesNotMatch(root.innerHTML, /\[[ x]\]/i);
+});
+
+test('renders checklist sections as accessible accordion controls with the first section open', () => {
+  const { root, api } = createChecklist();
+
+  api.CHECKLIST_SECTIONS.forEach((section, index) => {
+    const isFirstSection = index === 0;
+    assert.match(
+      root.innerHTML,
+      new RegExp(`data-road-bike-section="${section.id}"[^>]*aria-labelledby="road-bike-section-${section.id}-toggle"`),
+    );
+    assert.match(
+      root.innerHTML,
+      new RegExp(`<button type="button" class="road_bike_section_header" id="road-bike-section-${section.id}-toggle"[^>]*data-road-bike-section-toggle="${section.id}"[^>]*aria-expanded="${isFirstSection ? 'true' : 'false'}"[^>]*aria-controls="road-bike-section-${section.id}-items"`),
+    );
+    const panelPattern = isFirstSection
+      ? `data-road-bike-section-panel="${section.id}"[^>]*role="region"[^>]*aria-labelledby="road-bike-section-${section.id}-toggle">`
+      : `data-road-bike-section-panel="${section.id}"[^>]*role="region"[^>]*aria-labelledby="road-bike-section-${section.id}-toggle" hidden`;
+    assert.match(root.innerHTML, new RegExp(panelPattern));
+  });
+
+  assert.match(root.innerHTML, /road_bike_section road_bike_section--expanded" data-road-bike-section="bike-essentials"/);
+  assert.match(root.innerHTML, /class="road_bike_section_chevron" aria-hidden="true"/);
+  assert.match(root.innerHTML, /<path d="M6 9l6 6 6-6"><\/path>/);
+});
+
+test('section headers show compact progress and completed state from checked items', () => {
+  const { root, api } = createChecklist();
+  const bikeEssentials = api.CHECKLIST_SECTIONS.find((section) => section.id === 'bike-essentials');
+
+  api.saveCheckedItemIds(bikeEssentials.items.map((item) => item.id));
+  api.renderApp(root);
+
+  assert.match(root.innerHTML, /road_bike_section road_bike_section--expanded road_bike_section--complete" data-road-bike-section="bike-essentials"/);
+  assert.match(root.innerHTML, /data-road-bike-section-count="bike-essentials">13 \/ 13 ✓<\/span>/);
+  assert.match(root.innerHTML, /data-road-bike-section-count="cycling-apparel">0 \/ 13<\/span>/);
+});
+
+test('accordion sections expand and collapse independently during a session', () => {
+  const { api } = createChecklist();
+  const root = createAccordionRoot(['bike-essentials', 'cycling-apparel'], ['bike-essentials']);
+
+  assert.equal(root.panels['bike-essentials'].hidden, false);
+  assert.equal(root.sections['bike-essentials'].classList.contains('road_bike_section--expanded'), true);
+  assert.equal(root.panels['cycling-apparel'].hidden, true);
+
+  assert.equal(api.toggleSection(root, 'cycling-apparel'), true);
+  assert.equal(root.panels['bike-essentials'].hidden, false);
+  assert.equal(root.panels['cycling-apparel'].hidden, false);
+  assert.equal(root.toggles['cycling-apparel'].attributes['aria-expanded'], 'true');
+  assert.equal(root.sections['bike-essentials'].classList.contains('road_bike_section--expanded'), true);
+
+  assert.equal(api.toggleSection(root, 'bike-essentials'), true);
+  assert.equal(root.toggles['bike-essentials'].attributes['aria-expanded'], 'false');
+  assert.equal(root.sections['bike-essentials'].classList.contains('road_bike_section--expanded'), false);
+  root.panels['bike-essentials'].transitionEnd();
+  assert.equal(root.panels['bike-essentials'].hidden, true);
+  assert.equal(root.panels['cycling-apparel'].hidden, false);
+});
+
+test('accordion styling covers motion, completion, focus, and reduced-motion states', () => {
+  assert.match(css, /\.road_bike_section_header:focus-visible\s*\{/);
+  assert.match(css, /\.road_bike_section_panel\s*\{[^}]*grid-template-rows:\s*0fr;/s);
+  assert.match(css, /\.road_bike_section--expanded \.road_bike_section_panel\s*\{[^}]*grid-template-rows:\s*1fr;/s);
+  assert.match(css, /\.road_bike_section--expanded \.road_bike_section_chevron svg\s*\{[^}]*rotate\(180deg\)/s);
+  assert.match(css, /\.road_bike_section--complete\s*\{/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /\.road_bike_section_panel\s*\{[^}]*transition:\s*none;/s);
 });
 
 test('checking and unchecking an item updates progress counts', () => {
