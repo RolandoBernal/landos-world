@@ -112,6 +112,7 @@
   ];
 
   const allItemIds = new Set(CHECKLIST_SECTIONS.flatMap((section) => section.items.map((item) => item.id)));
+  const openSectionIds = new Set(CHECKLIST_SECTIONS[0] ? [CHECKLIST_SECTIONS[0].id] : []);
 
   function getStorage() {
     try {
@@ -244,14 +245,30 @@
   function renderSection(section, state) {
     const sectionProgress = getSectionProgress(section, state);
     const checkedIds = new Set(state.checkedItemIds);
+    const isExpanded = openSectionIds.has(section.id);
+    const isComplete = sectionProgress.checked === sectionProgress.total;
+    const titleId = `road-bike-section-${section.id}`;
+    const buttonId = `${titleId}-toggle`;
+    const panelId = `${titleId}-items`;
     return `
-      <section class="road_bike_section" aria-labelledby="road-bike-section-${escapeHtml(section.id)}">
-        <div class="road_bike_section_header">
-          <h2 class="road_bike_section_title" id="road-bike-section-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2>
-          <span class="road_bike_section_count" data-road-bike-section-count="${escapeHtml(section.id)}">${sectionProgress.checked} of ${sectionProgress.total}</span>
-        </div>
-        <div class="road_bike_items">
-          ${section.items.map((item) => renderItem(item, checkedIds.has(item.id))).join('')}
+      <section class="road_bike_section${isExpanded ? ' road_bike_section--expanded' : ''}${isComplete ? ' road_bike_section--complete' : ''}" data-road-bike-section="${escapeHtml(section.id)}" aria-labelledby="${escapeHtml(buttonId)}">
+        <h2 class="road_bike_section_title" id="${escapeHtml(titleId)}">
+          <button type="button" class="road_bike_section_header" id="${escapeHtml(buttonId)}" data-road-bike-section-toggle="${escapeHtml(section.id)}" aria-expanded="${isExpanded ? 'true' : 'false'}" aria-controls="${escapeHtml(panelId)}">
+            <span class="road_bike_section_title_text">${escapeHtml(section.title)}</span>
+            <span class="road_bike_section_meta">
+              <span class="road_bike_section_count" data-road-bike-section-count="${escapeHtml(section.id)}">${sectionProgress.checked} / ${sectionProgress.total}${isComplete ? ' ✓' : ''}</span>
+              <span class="road_bike_section_chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </span>
+            </span>
+          </button>
+        </h2>
+        <div class="road_bike_section_panel" id="${escapeHtml(panelId)}" data-road-bike-section-panel="${escapeHtml(section.id)}" role="region" aria-labelledby="${escapeHtml(buttonId)}"${isExpanded ? '' : ' hidden'}>
+          <div class="road_bike_items">
+            ${section.items.map((item) => renderItem(item, checkedIds.has(item.id))).join('')}
+          </div>
         </div>
       </section>`;
   }
@@ -277,9 +294,48 @@
 
     CHECKLIST_SECTIONS.forEach((section) => {
       const sectionProgress = getSectionProgress(section, state);
+      const sectionComplete = sectionProgress.checked === sectionProgress.total;
+      const sectionEl = root.querySelector(`[data-road-bike-section="${section.id}"]`);
       const sectionCount = root.querySelector(`[data-road-bike-section-count="${section.id}"]`);
-      if (sectionCount) sectionCount.textContent = `${sectionProgress.checked} of ${sectionProgress.total}`;
+      if (sectionCount) sectionCount.textContent = `${sectionProgress.checked} / ${sectionProgress.total}${sectionComplete ? ' ✓' : ''}`;
+      sectionEl?.classList.toggle('road_bike_section--complete', sectionComplete);
     });
+  }
+
+  function setSectionExpanded(root, sectionId, expanded) {
+    if (!CHECKLIST_SECTIONS.some((section) => section.id === sectionId)) return false;
+    const section = root.querySelector(`[data-road-bike-section="${sectionId}"]`);
+    const toggle = root.querySelector(`[data-road-bike-section-toggle="${sectionId}"]`);
+    const panel = root.querySelector(`[data-road-bike-section-panel="${sectionId}"]`);
+    if (!section || !toggle || !panel) return false;
+
+    toggle.setAttribute('aria-expanded', String(expanded));
+    if (expanded) {
+      openSectionIds.add(sectionId);
+      panel.hidden = false;
+      const expand = () => section.classList.add('road_bike_section--expanded');
+      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(expand);
+      else expand();
+      return true;
+    }
+
+    openSectionIds.delete(sectionId);
+    section.classList.remove('road_bike_section--expanded');
+    const hidePanel = () => {
+      if (!openSectionIds.has(sectionId)) panel.hidden = true;
+    };
+    if (panel.addEventListener) {
+      panel.addEventListener('transitionend', hidePanel, { once: true });
+    }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !panel.addEventListener) {
+      hidePanel();
+    }
+    return true;
+  }
+
+  function toggleSection(root, sectionId) {
+    const isExpanded = openSectionIds.has(sectionId);
+    return setSectionExpanded(root, sectionId, !isExpanded);
   }
 
   function notifyUpdated() {
@@ -360,6 +416,12 @@
     });
 
     root.addEventListener('click', (event) => {
+      const sectionId = event.target.closest('[data-road-bike-section-toggle]')?.dataset.roadBikeSectionToggle;
+      if (sectionId) {
+        toggleSection(root, sectionId);
+        return;
+      }
+
       const action = event.target.closest('[data-road-bike-action]')?.dataset.roadBikeAction;
       if (action === 'reset') requestReset(root);
     });
@@ -383,6 +445,7 @@
     resetChecklistState,
     renderApp,
     requestReset,
+    toggleSection,
   };
 
   if (document.readyState === 'loading') {

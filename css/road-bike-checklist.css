@@ -136,6 +136,7 @@
   border: 1px solid rgb(255 255 255 / 13%);
   border-radius: 12px;
   background: rgb(255 255 255 / 5%);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 
 .road_bike_section_header {
@@ -143,27 +144,110 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
+  width: 100%;
+  min-height: 3.35rem;
   padding: 0.9rem 1rem;
+  border: 0;
   border-bottom: 1px solid rgb(255 255 255 / 10%);
+  color: inherit;
   background: rgb(var(--app-accent-rgb, 217 70 125) / 10%);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.road_bike_section_header:hover {
+  background: rgb(var(--app-accent-rgb, 217 70 125) / 16%);
 }
 
 .road_bike_section_title {
   margin: 0;
+}
+
+.road_bike_section_title_text {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #fff7fa;
   font-size: 1rem;
+  font-weight: 800;
   line-height: 1.25;
 }
 
-.road_bike_section_count {
+.road_bike_section_meta {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
+}
+
+.road_bike_section_count {
   color: var(--app-accent-soft, #ffd1df);
   font-size: 0.9rem;
   font-weight: 900;
 }
 
+.road_bike_section_chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #fff7fa;
+  opacity: 0.76;
+}
+
+.road_bike_section_chevron svg {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+  transition: transform 0.16s ease;
+}
+
+.road_bike_section_chevron path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.road_bike_section--expanded .road_bike_section_chevron svg {
+  transform: rotate(180deg);
+}
+
+.road_bike_section--complete {
+  border-color: rgb(var(--app-accent-rgb, 217 70 125) / 34%);
+  background: rgb(var(--app-accent-rgb, 217 70 125) / 7%);
+}
+
+.road_bike_section--complete .road_bike_section_header {
+  background: linear-gradient(90deg, rgb(var(--app-accent-rgb, 217 70 125) / 17%), rgb(255 255 255 / 5%));
+}
+
+.road_bike_section_header:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--app-accent-soft, #ffd1df);
+  outline-offset: -3px;
+}
+
+.road_bike_section_panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.18s ease;
+}
+
+.road_bike_section--expanded .road_bike_section_panel {
+  grid-template-rows: 1fr;
+}
+
 .road_bike_items {
   display: grid;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .road_bike_item {
@@ -283,8 +367,28 @@
 
 @media (prefers-reduced-motion: reduce) {
   .road_bike_progress_bar span,
-  .road_bike_item_text {
+  .road_bike_item_text,
+  .road_bike_section,
+  .road_bike_section_header,
+  .road_bike_section_chevron svg,
+  .road_bike_section_panel {
     transition: none;
+  }
+}
+
+@media only screen and (max-width: 380px) {
+  .road_bike_section_header {
+    gap: 0.65rem;
+    padding-right: 0.8rem;
+    padding-left: 0.8rem;
+  }
+
+  .road_bike_section_meta {
+    gap: 0.4rem;
+  }
+
+  .road_bike_section_count {
+    font-size: 0.84rem;
   }
 }
 
