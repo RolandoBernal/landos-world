@@ -72,6 +72,10 @@ function record(overrides = {}) {
   };
 }
 
+function countOccurrences(text, needle) {
+  return text.split(needle).length - 1;
+}
+
 test('history grouping uses recordTimestamp rather than createdAt and sorts days newest first', () => {
   const reports = createTrackerReports();
   const groups = reports.groupRecordsByLocalDate([
@@ -419,6 +423,130 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /<th scope="col">Activity<\/th>/);
 });
 
+test('canonical entry cards render check insulin dinner once in today and history', () => {
+  const reports = createTrackerReports();
+  const dinner = record({
+    eventType: 'check-insulin',
+    type: 'Dinner',
+    bloodSugar: 269,
+    administeredInsulinUnits: 8,
+    insulinUnits: 8,
+    suggestedTotalUnits: 8,
+    suggestedBaseUnits: 6,
+    suggestedCorrectionUnits: 2,
+    doseCalculationStatus: 'calculated',
+    recordTimestamp: '2026-08-08T17:13:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(dinner);
+  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.primary, '269 mg/dL');
+  assert.deepEqual(Array.from(content.secondary), [
+    'Dinner',
+    '8 units',
+    'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction',
+  ]);
+  assert.equal(content.timestamp, Date.parse('2026-08-08T17:13:00.000Z'));
+
+  const todayHtml = reports.renderTimelineItem(dinner);
+  const historyHtml = reports.renderHistoryRecord(dinner);
+  const canonicalHtml = reports.renderEntryCardContent(dinner).trim();
+
+  assert.match(todayHtml, /lee_lee_diabetes_timeline_item--today/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_item--history/);
+  assert.match(historyHtml, /data-action="edit-record"/);
+  assert.match(historyHtml, /data-action="delete-record"/);
+  assert.ok(todayHtml.includes(canonicalHtml));
+  assert.ok(historyHtml.includes(canonicalHtml));
+
+  for (const html of [todayHtml, historyHtml]) {
+    assert.equal(countOccurrences(html, '269 mg/dL'), 1);
+    assert.equal(countOccurrences(html, '<div class="lee_lee_diabetes_timeline_notes">8 units</div>'), 1);
+    assert.equal(countOccurrences(html, 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
+    assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
+  }
+});
+
+test('canonical entry cards keep non-meal check insulin records free of meal guidance', () => {
+  const reports = createTrackerReports();
+  const bedtime = record({
+    eventType: 'check-insulin',
+    type: 'Bedtime',
+    bloodSugar: 439,
+    administeredInsulinUnits: 15,
+    insulinUnits: 15,
+    suggestedTotalUnits: null,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+    doseCalculationStatus: 'manual',
+    recordTimestamp: '2026-08-08T21:36:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(bedtime);
+  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.primary, '439 mg/dL');
+  assert.deepEqual(Array.from(content.secondary), ['Bedtime', '15 units']);
+  assert.equal(content.timestamp, Date.parse('2026-08-08T21:36:00.000Z'));
+
+  const historyHtml = reports.renderHistoryRecord(bedtime);
+  assert.equal(countOccurrences(historyHtml, '439 mg/dL'), 1);
+  assert.match(historyHtml, /Bedtime/);
+  assert.match(historyHtml, /15 units/);
+  assert.doesNotMatch(historyHtml, /base|correction|Suggested/);
+});
+
+test('canonical entry cards keep meal activity note and legacy records clean', () => {
+  const reports = createTrackerReports();
+  const meal = record({
+    eventType: 'meal',
+    type: 'Lunch',
+    mealCarbs: 62,
+    mealDescription: 'Turkey sandwich, chips, apple',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T12:18:00.000Z',
+  });
+  const activity = record({
+    eventType: 'activity',
+    type: 'Exercise',
+    activityDescription: 'Bike ride',
+    activityDurationMinutes: 45,
+    activityIntensity: 'Moderate',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T16:30:00.000Z',
+  });
+  const note = record({
+    eventType: 'note',
+    type: 'Other',
+    notes: 'Felt steady before bed.',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+  });
+  const legacy = record({
+    eventType: 'check-insulin',
+    type: 'Correction',
+    bloodSugar: 210,
+    administeredInsulinUnits: null,
+    insulinUnits: 3,
+    suggestedTotalUnits: null,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+  });
+
+  assert.deepEqual(Array.from(reports.getEntryCardContent(meal).secondary), ['Lunch', 'Turkey sandwich, chips, apple']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(activity).secondary), ['45 min · Moderate']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(note).secondary), ['Felt steady before bed.']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['Correction', '3 units']);
+
+  for (const html of [meal, activity, note, legacy].map((item) => reports.renderHistoryRecord(item))) {
+    assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>/);
+  }
+});
+
 test('today activity helper returns only current-day active records newest first', () => {
   const reports = createTrackerReports();
   const today = reports.getTodaysActivityRecords([
@@ -443,7 +571,9 @@ test('today UI uses one log-entry CTA and responsive navigation contracts', () =
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {
-  assert.match(trackerSource, /lee_lee_diabetes_timeline_item--today/);
+  assert.match(trackerSource, /function renderTrackerEntryCard\(record/);
+  assert.match(trackerSource, /variant: 'today'/);
+  assert.match(trackerSource, /variant: 'history'/);
   assert.match(trackerSource, /data-action="edit-today-record" data-id="\$\{escapeHtml\(record\.id\)\}">Edit/);
   assert.match(trackerSource, /openRecordEditor\(target\.dataset\.id, 'today'\)/);
   assert.match(trackerSource, /function openRecordEditor\(recordId, returnTo = 'history-day'\)/);
