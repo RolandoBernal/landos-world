@@ -72,6 +72,10 @@ function record(overrides = {}) {
   };
 }
 
+function countOccurrences(text, needle) {
+  return text.split(needle).length - 1;
+}
+
 test('history grouping uses recordTimestamp rather than createdAt and sorts days newest first', () => {
   const reports = createTrackerReports();
   const groups = reports.groupRecordsByLocalDate([
@@ -244,22 +248,58 @@ test('entry type configuration preserves canonical labels and meal guidance boun
   assert.equal(entryTypes.getEntryTypeConfig('Night').type, 'Other');
 });
 
+test('add event configuration exposes one combined check workflow with full check contexts', () => {
+  const runtime = createTrackerRuntime();
+  const entryTypes = runtime.LeeLeeTrackerEntryTypes;
+  const eventLabels = Array.from(entryTypes.eventTypes, (definition) => definition.label);
+
+  assert.deepEqual(eventLabels, ['Check / Insulin', 'Meal / Carbs', 'Activity / Exercise', 'Note']);
+  assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('check-insulin')), [
+    'Breakfast',
+    'Lunch',
+    'Dinner',
+    'Bedtime',
+    '2 AM',
+    'Correction',
+    'Snack',
+    'Other',
+  ]);
+  assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('meal')), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
+  assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('bloodSugar'), true);
+  assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('insulinUnits'), true);
+  assert.doesNotMatch(trackerSource, /label: 'Blood Glucose'/);
+  assert.doesNotMatch(trackerSource, /label: 'Insulin'/);
+});
+
 test('meal dose helper keeps the clinician-provided calculation unchanged', () => {
   const runtime = createTrackerRuntime();
-  const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+  const insulinPlan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+      { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+    ],
+  };
+  const breakfast = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
     bloodSugar: 198,
     entryType: 'Breakfast',
     recordTimestamp: Date.parse('2026-08-01T07:42:00.000Z'),
-    insulinPlan: {
-      id: 'plan',
-      supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-      mealBaseUnits: 4,
-      correctionRanges: [
-        { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
-        { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
-        { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
-      ],
-    },
+    insulinPlan,
+  });
+  const lunch = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Lunch',
+    recordTimestamp: Date.parse('2026-08-01T12:42:00.000Z'),
+    insulinPlan,
+  });
+  const dinner = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Dinner',
+    recordTimestamp: Date.parse('2026-08-01T18:42:00.000Z'),
+    insulinPlan,
   });
   const correction = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
     bloodSugar: 198,
@@ -268,15 +308,21 @@ test('meal dose helper keeps the clinician-provided calculation unchanged', () =
     insulinPlan: {
       id: 'plan',
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-      mealBaseUnits: 4,
+      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
       correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
     },
   });
 
-  assert.equal(result.status, 'calculated');
-  assert.equal(result.baseUnits, 4);
-  assert.equal(result.correctionUnits, 1);
-  assert.equal(result.suggestedTotalUnits, 5);
+  assert.equal(breakfast.status, 'calculated');
+  assert.equal(breakfast.baseUnits, 5);
+  assert.equal(breakfast.correctionUnits, 1);
+  assert.equal(breakfast.suggestedTotalUnits, 6);
+  assert.equal(lunch.baseUnits, 6);
+  assert.equal(lunch.correctionUnits, 1);
+  assert.equal(lunch.suggestedTotalUnits, 7);
+  assert.equal(dinner.baseUnits, 6);
+  assert.equal(dinner.correctionUnits, 1);
+  assert.equal(dinner.suggestedTotalUnits, 7);
   assert.equal(correction.status, 'unsupported-entry-type');
   assert.equal(correction.suggestedTotalUnits, null);
 });
@@ -286,7 +332,7 @@ test('carb entries do not change clinician-provided insulin guidance', () => {
   const plan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    mealBaseUnits: 4,
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
       { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
@@ -307,11 +353,39 @@ test('carb entries do not change clinician-provided insulin guidance', () => {
     insulinPlan: plan,
   });
 
-  assert.equal(lowCarbResult.baseUnits, 4);
+  assert.equal(lowCarbResult.baseUnits, 6);
   assert.equal(lowCarbResult.correctionUnits, 1);
-  assert.equal(lowCarbResult.suggestedTotalUnits, 5);
+  assert.equal(lowCarbResult.suggestedTotalUnits, 7);
   assert.deepEqual(highCarbResult, lowCarbResult);
   assert.doesNotMatch(trackerSource, /insulin-to-carb|carb bolus|carbs\s*\/|carbs\s*÷/i);
+});
+
+test('non-meal contexts do not receive meal base doses', () => {
+  const runtime = createTrackerRuntime();
+  const insulinPlan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+  };
+  ['Bedtime', '2 AM', 'Correction', 'Snack', 'Other'].forEach((entryType) => {
+    const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+      bloodSugar: 198,
+      entryType,
+      recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
+      insulinPlan,
+    });
+
+    assert.equal(result.status, 'unsupported-entry-type');
+    assert.equal(result.baseUnits, null);
+    assert.equal(result.suggestedTotalUnits, null);
+  });
+});
+
+test('settings UI exposes independent meal base dose controls', () => {
+  assert.match(trackerSource, /\$\{escapeHtml\(type\)\} Base Dose/);
+  assert.match(trackerSource, /name="\$\{escapeHtml\(type\.toLowerCase\(\)\)\}BaseUnits"/);
+  assert.doesNotMatch(trackerSource, /name="mealBaseUnits" type="number"/);
 });
 
 test('meal and activity events render in today and reports with category fields', () => {
@@ -349,6 +423,133 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /<th scope="col">Activity<\/th>/);
 });
 
+test('canonical entry cards render check insulin dinner once in today and history', () => {
+  const reports = createTrackerReports();
+  const dinner = record({
+    eventType: 'check-insulin',
+    type: 'Dinner',
+    bloodSugar: 269,
+    administeredInsulinUnits: 8,
+    insulinUnits: 8,
+    suggestedTotalUnits: 8,
+    suggestedBaseUnits: 6,
+    suggestedCorrectionUnits: 2,
+    doseCalculationStatus: 'calculated',
+    recordTimestamp: '2026-08-08T17:13:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(dinner);
+  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.primary, '269 mg/dL');
+  assert.deepEqual(Array.from(content.secondary), [
+    'Dinner',
+    '8 units',
+    'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction',
+  ]);
+  assert.equal(content.timestamp, Date.parse('2026-08-08T17:13:00.000Z'));
+
+  const todayHtml = reports.renderTimelineItem(dinner);
+  const historyHtml = reports.renderHistoryRecord(dinner);
+  const canonicalHtml = reports.renderEntryCardContent(dinner).trim();
+
+  assert.match(todayHtml, /lee_lee_diabetes_timeline_item--today/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_item--history/);
+  assert.match(historyHtml, /data-action="edit-record"/);
+  assert.match(historyHtml, /data-action="delete-record"/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_footer[\s\S]*lee_lee_diabetes_timeline_actions[\s\S]*data-action="edit-record"[\s\S]*data-action="delete-record"/);
+  assert.match(historyHtml, /lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record"/);
+  assert.doesNotMatch(historyHtml, /lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record"|lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record"/);
+  assert.ok(todayHtml.includes(canonicalHtml));
+  assert.ok(historyHtml.includes(canonicalHtml));
+
+  for (const html of [todayHtml, historyHtml]) {
+    assert.equal(countOccurrences(html, '269 mg/dL'), 1);
+    assert.equal(countOccurrences(html, '<div class="lee_lee_diabetes_timeline_notes">8 units</div>'), 1);
+    assert.equal(countOccurrences(html, 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
+    assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
+  }
+});
+
+test('canonical entry cards keep non-meal check insulin records free of meal guidance', () => {
+  const reports = createTrackerReports();
+  const bedtime = record({
+    eventType: 'check-insulin',
+    type: 'Bedtime',
+    bloodSugar: 439,
+    administeredInsulinUnits: 15,
+    insulinUnits: 15,
+    suggestedTotalUnits: null,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+    doseCalculationStatus: 'manual',
+    recordTimestamp: '2026-08-08T21:36:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(bedtime);
+  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.primary, '439 mg/dL');
+  assert.deepEqual(Array.from(content.secondary), ['Bedtime', '15 units']);
+  assert.equal(content.timestamp, Date.parse('2026-08-08T21:36:00.000Z'));
+
+  const historyHtml = reports.renderHistoryRecord(bedtime);
+  assert.equal(countOccurrences(historyHtml, '439 mg/dL'), 1);
+  assert.match(historyHtml, /Bedtime/);
+  assert.match(historyHtml, /15 units/);
+  assert.doesNotMatch(historyHtml, /base|correction|Suggested/);
+});
+
+test('canonical entry cards keep meal activity note and legacy records clean', () => {
+  const reports = createTrackerReports();
+  const meal = record({
+    eventType: 'meal',
+    type: 'Lunch',
+    mealCarbs: 62,
+    mealDescription: 'Turkey sandwich, chips, apple',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T12:18:00.000Z',
+  });
+  const activity = record({
+    eventType: 'activity',
+    type: 'Exercise',
+    activityDescription: 'Bike ride',
+    activityDurationMinutes: 45,
+    activityIntensity: 'Moderate',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+    recordTimestamp: '2026-08-08T16:30:00.000Z',
+  });
+  const note = record({
+    eventType: 'note',
+    type: 'Other',
+    notes: 'Felt steady before bed.',
+    bloodSugar: null,
+    insulinUnits: null,
+    administeredInsulinUnits: null,
+  });
+  const legacy = record({
+    eventType: 'check-insulin',
+    type: 'Correction',
+    bloodSugar: 210,
+    administeredInsulinUnits: null,
+    insulinUnits: 3,
+    suggestedTotalUnits: null,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+  });
+
+  assert.deepEqual(Array.from(reports.getEntryCardContent(meal).secondary), ['Lunch', 'Turkey sandwich, chips, apple']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(activity).secondary), ['45 min · Moderate']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(note).secondary), ['Felt steady before bed.']);
+  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['Correction', '3 units']);
+
+  for (const html of [meal, activity, note, legacy].map((item) => reports.renderHistoryRecord(item))) {
+    assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>/);
+  }
+});
+
 test('today activity helper returns only current-day active records newest first', () => {
   const reports = createTrackerReports();
   const today = reports.getTodaysActivityRecords([
@@ -373,7 +574,9 @@ test('today UI uses one log-entry CTA and responsive navigation contracts', () =
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {
-  assert.match(trackerSource, /lee_lee_diabetes_timeline_item--today/);
+  assert.match(trackerSource, /function renderTrackerEntryCard\(record/);
+  assert.match(trackerSource, /variant: 'today'/);
+  assert.match(trackerSource, /variant: 'history'/);
   assert.match(trackerSource, /data-action="edit-today-record" data-id="\$\{escapeHtml\(record\.id\)\}">Edit/);
   assert.match(trackerSource, /openRecordEditor\(target\.dataset\.id, 'today'\)/);
   assert.match(trackerSource, /function openRecordEditor\(recordId, returnTo = 'history-day'\)/);
@@ -381,10 +584,15 @@ test('today activity edit action uses the shared edit pipeline', () => {
   assert.match(trackerSource, /if \(currentEditor\?\.returnTo === 'history-day' && currentEditor\.returnDateKey\)/);
 });
 
-test('today activity edit control has compact footer styling', () => {
+test('entry card footer actions stay compact and preserve delete confirmation', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_footer[\s\S]*justify-content: space-between/);
+  assert.match(cssSource, /\.lee_lee_diabetes_timeline_actions[\s\S]*inline-flex[\s\S]*flex-wrap: wrap/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit[\s\S]*min-height: 36px/);
+  assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger[\s\S]*#fca5a5/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit:focus-visible/);
+  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id\)/);
+  assert.match(trackerSource, /function deleteRecord\(recordId\)[\s\S]*renderDeleteConfirmation\(record\)/);
+  assert.match(trackerSource, /data-action="confirm-delete-record"/);
 });
 
 test('shared sync status copy explains healthy, syncing, and offline states', () => {

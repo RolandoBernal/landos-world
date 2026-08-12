@@ -106,8 +106,76 @@ test('migrates legacy record and plan keys into the stable tracker document with
   assert.equal(stored.records[0].recordTimestamp, '2026-07-31T12:42:00.000Z');
   assert.equal(stored.records[0].unknownFutureField, 'preserve me');
   assert.equal(stored.insulinPlans.some((plan) => plan.id === 'plan-1'), true);
+  const migratedPlan = stored.insulinPlans.find((plan) => plan.id === 'plan-1');
+  assert.deepEqual(migratedPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(migratedPlan.mealBaseUnits, 5);
   assert.ok(localStorage.getItem(legacyRecordsKey));
   assert.ok(localStorage.getItem(legacyPlansKey));
+});
+
+test('legacy shared meal base dose is replaced by current prescribed per-meal defaults', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [],
+      settings: { targetRange: 'custom' },
+      insulinPlans: [{
+        id: 'legacy-shared-dose-plan',
+        name: 'Legacy Shared Dose Plan',
+        effectiveFrom: '2026-07-31',
+        mealBaseUnits: 4,
+        supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+        correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+        notes: 'keep this',
+      }],
+      activeInsulinPlanId: 'legacy-shared-dose-plan',
+      metadata: {
+        createdAt: '2026-07-31T12:15:00.000Z',
+        updatedAt: '2026-07-31T12:15:00.000Z',
+      },
+    }),
+  });
+
+  createTracker({ localStorage });
+
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  const plan = stored.insulinPlans[0];
+  assert.deepEqual(plan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(plan.mealBaseUnits, 5);
+  assert.equal(plan.notes, 'keep this');
+  assert.equal(stored.settings.targetRange, 'custom');
+});
+
+test('separate glucose and insulin event records normalize into the combined check workflow', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [
+        sampleRecord({ id: 'glucose-only', eventType: 'blood-glucose', type: 'Bedtime', bloodSugar: 145, insulinUnits: null }),
+        sampleRecord({ id: 'insulin-entry', eventType: 'insulin', type: 'Lunch', bloodSugar: 198, insulinUnits: 7 }),
+      ],
+      settings: {},
+      insulinPlans: [],
+      metadata: {
+        createdAt: '2026-07-31T12:15:00.000Z',
+        updatedAt: '2026-07-31T12:15:00.000Z',
+      },
+    }),
+  });
+
+  createTracker({ localStorage });
+
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  const glucose = stored.records.find((record) => record.id === 'glucose-only');
+  const insulin = stored.records.find((record) => record.id === 'insulin-entry');
+  assert.equal(glucose.eventType, 'check-insulin');
+  assert.equal(glucose.type, 'Bedtime');
+  assert.equal(glucose.bloodSugar, 145);
+  assert.equal(glucose.administeredInsulinUnits, null);
+  assert.equal(insulin.eventType, 'check-insulin');
+  assert.equal(insulin.type, 'Lunch');
+  assert.equal(insulin.bloodSugar, 198);
+  assert.equal(insulin.administeredInsulinUnits, 7);
 });
 
 test('hydration preserves an existing stable document instead of overwriting with empty defaults', () => {

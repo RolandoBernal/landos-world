@@ -21,8 +21,7 @@
     `${PRE_REBRAND_KEY_PREFIX}_diabetes_insulin_plans_v1`,
   ];
   const EVENT_TYPE_DEFINITIONS = Object.freeze([
-    { type: 'blood-glucose', label: 'Blood Glucose', fields: ['bloodSugar', 'notes'], defaultContext: 'Other' },
-    { type: 'insulin', label: 'Insulin', fields: ['bloodSugar', 'insulinUnits', 'notes'], defaultContext: 'Breakfast' },
+    { type: 'check-insulin', label: 'Check / Insulin', fields: ['bloodSugar', 'insulinUnits', 'notes'], defaultContext: 'Breakfast' },
     { type: 'meal', label: 'Meal / Carbs', fields: ['carbs', 'mealDescription', 'notes'], defaultContext: 'Breakfast' },
     { type: 'activity', label: 'Activity / Exercise', fields: ['activityDescription', 'activityDurationMinutes', 'activityIntensity', 'notes'], defaultContext: 'Exercise' },
     { type: 'note', label: 'Note', fields: ['notes'], defaultContext: 'Other' },
@@ -31,8 +30,7 @@
     EVENT_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
   ));
   const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
-  const GLUCOSE_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Other']);
-  const INSULIN_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Correction', 'Snack', 'Other']);
+  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Other']);
   const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
   const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
   const ACTIVITY_INTENSITY_OPTIONS = Object.freeze(['Easy', 'Moderate', 'Hard']);
@@ -79,12 +77,18 @@
   ];
   const DEFAULT_HISTORY_WINDOW_DAYS = 30;
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
+  const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({
+    Breakfast: 5,
+    Lunch: 6,
+    Dinner: 6,
+  });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
     name: 'Current Meal Insulin Plan',
     effectiveFrom: DEFAULT_PLAN_EFFECTIVE_FROM,
     effectiveTo: null,
-    mealBaseUnits: 4,
+    mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
+    mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -220,7 +224,8 @@
       name: plan.name,
       effectiveFrom: plan.effectiveFrom,
       effectiveTo: plan.effectiveTo || null,
-      mealBaseUnits: plan.mealBaseUnits,
+      mealBaseUnitsByType: getMealBaseUnitsByType(plan),
+      mealBaseUnits: getMealBaseUnitsForType(plan, 'Breakfast'),
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -292,20 +297,20 @@
 
   function normalizeEventType(value, record = {}) {
     if (EVENT_TYPE_CONFIG[value]) return value;
+    if (value === 'blood-glucose' || value === 'insulin') return 'check-insulin';
     if (record.mealCarbs != null || record.carbs != null || record.mealDescription) return 'meal';
     if (record.activityDescription || record.activityDurationMinutes != null || record.activityIntensity) return 'activity';
-    if (record.administeredInsulinUnits != null || record.insulinUnits != null) return 'insulin';
-    if (record.bloodSugar != null) return 'blood-glucose';
+    if (record.administeredInsulinUnits != null || record.insulinUnits != null || record.bloodSugar != null) return 'check-insulin';
     if (record.notes) return 'note';
     return DEFAULT_EVENT_TYPE;
   }
 
   function getContextOptionsForEventType(eventType) {
     if (eventType === 'meal') return [...MEAL_CONTEXT_TYPES];
-    if (eventType === 'insulin') return [...INSULIN_CONTEXT_TYPES];
+    if (eventType === 'check-insulin') return [...CHECK_CONTEXT_TYPES];
     if (eventType === 'activity') return [...ACTIVITY_CONTEXT_TYPES];
     if (eventType === 'note') return [...NOTE_CONTEXT_TYPES];
-    return [...GLUCOSE_CONTEXT_TYPES];
+    return [...CHECK_CONTEXT_TYPES];
   }
 
   function normalizeRecordContext(type, eventType) {
@@ -342,6 +347,21 @@
     return { minGlucose, maxGlucose, correctionUnits };
   }
 
+  function getMealBaseUnitsByType(plan = {}) {
+    const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
+      ? plan.mealBaseUnitsByType
+      : {};
+    return Object.fromEntries(MEAL_TYPES.map((type) => [
+      type,
+      normalizeNumber(source[type]) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
+    ]));
+  }
+
+  function getMealBaseUnitsForType(plan, type) {
+    if (!MEAL_TYPES.includes(type)) return null;
+    return getMealBaseUnitsByType(plan)[type];
+  }
+
   function normalizeInsulinPlan(plan) {
     if (!plan || typeof plan !== 'object') return null;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(plan.effectiveFrom || ''))
@@ -356,6 +376,7 @@
     const supportedMealTypes = Array.isArray(plan.supportedMealTypes)
       ? plan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
+    const mealBaseUnitsByType = getMealBaseUnitsByType(plan);
     const nowTimestamp = new Date().toISOString();
     return {
       ...plan,
@@ -363,7 +384,8 @@
       name: String(plan.name || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
       effectiveFrom,
       effectiveTo,
-      mealBaseUnits: normalizeNumber(plan.mealBaseUnits) ?? DEFAULT_INSULIN_PLAN.mealBaseUnits,
+      mealBaseUnitsByType,
+      mealBaseUnits: mealBaseUnitsByType.Breakfast,
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: correctionRanges.length ? correctionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
@@ -826,7 +848,7 @@
     let data = stored.exists && stored.data
       ? normalizeTrackerDataDocument(stored.data)
       : createEmptyTrackerData();
-    let shouldWrite = !stored.exists;
+    let shouldWrite = !stored.exists || (stored.exists && stored.raw && JSON.stringify(data) !== stored.raw);
     [...LEGACY_RECORD_STORAGE_KEYS, ...LEGACY_PLAN_STORAGE_KEYS].forEach((key) => {
       if (key === TRACKER_STORAGE_KEY) return;
       const legacy = readStoredJson(key);
@@ -1387,7 +1409,7 @@
       };
     }
     const matchedRange = matches[0];
-    const baseUnits = Number(insulinPlan.mealBaseUnits);
+    const baseUnits = Number(getMealBaseUnitsForType(insulinPlan, entryType));
     const correctionUnits = Number(matchedRange.correctionUnits);
     return {
       status: 'calculated',
@@ -1742,7 +1764,7 @@
     if (!record) return '';
     if (record.eventType === 'meal') return formatCarbs(record.mealCarbs);
     if (record.eventType === 'activity') return record.activityDescription || 'Activity';
-    if (record.eventType === 'insulin') return formatInsulin(getRecordActualInsulin(record));
+    if (record.eventType === 'check-insulin') return formatBloodSugar(record.bloodSugar) || formatInsulin(getRecordActualInsulin(record));
     if (record.eventType === 'note') return record.notes ? 'Note' : '';
     return formatBloodSugar(record.bloodSugar);
   }
@@ -1751,6 +1773,7 @@
     if (!record) return [];
     if (record.eventType === 'meal') {
       return [
+        record.type,
         record.mealDescription || '',
         record.notes || '',
       ].filter(Boolean);
@@ -1761,10 +1784,12 @@
         record.notes || '',
       ].filter(Boolean);
     }
-    if (record.eventType === 'insulin') {
+    if (record.eventType === 'check-insulin') {
+      const primary = getRecordPrimaryValue(record);
+      const actualInsulin = formatInsulin(getRecordActualInsulin(record));
       return [
         record.type,
-        formatBloodSugar(record.bloodSugar),
+        actualInsulin && actualInsulin !== primary ? actualInsulin : '',
         getMealDoseSummary(record),
         record.notes || '',
       ].filter(Boolean);
@@ -1782,7 +1807,7 @@
   function getRecordDisplayTitle(record) {
     if (record.eventType === 'meal') return record.type;
     if (record.eventType === 'activity') return 'Activity';
-    if (record.eventType === 'insulin') return 'Insulin';
+    if (record.eventType === 'check-insulin') return 'Check / Insulin';
     if (record.eventType === 'note') return 'Note';
     return 'Blood Glucose';
   }
@@ -1796,6 +1821,39 @@
     return values.length
       ? `<div class="lee_lee_diabetes_card_values">${values.map((value) => `<span class="lee_lee_diabetes_pill">${escapeHtml(value)}</span>`).join('')}</div>`
       : '';
+  }
+
+  function getEntryCardContent(record) {
+    return {
+      title: getRecordDisplayTitle(record),
+      primary: getRecordPrimaryValue(record),
+      secondary: getRecordSecondaryLines(record),
+      timestamp: getRecordTimestamp(record),
+    };
+  }
+
+  function renderEntryCardContent(record) {
+    const content = getEntryCardContent(record);
+    return `
+      <div>
+        <div class="lee_lee_diabetes_timeline_type">${escapeHtml(content.title)}</div>
+        ${content.primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(content.primary)}</div>` : ''}
+        ${content.secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
+      </div>
+    `;
+  }
+
+  function renderTrackerEntryCard(record, { variant = '', actions = '' } = {}) {
+    const timestamp = getRecordTimestamp(record);
+    return `
+      <article class="lee_lee_diabetes_timeline_item${variant ? ` lee_lee_diabetes_timeline_item--${escapeHtml(variant)}` : ''}">
+        ${renderEntryCardContent(record)}
+        <div class="lee_lee_diabetes_timeline_footer">
+          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(timestamp).toISOString())}">${escapeHtml(formatTime(timestamp))}</time>
+          ${actions}
+        </div>
+      </article>
+    `;
   }
 
   function getTrackerNavLabel(active) {
@@ -1867,21 +1925,10 @@
   }
 
   function renderTimelineItem(record) {
-    const primary = getRecordPrimaryValue(record);
-    const secondary = getRecordSecondaryLines(record);
-    return `
-      <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_timeline_item--today">
-        <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
-          ${primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(primary)}</div>` : ''}
-          ${secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
-        </div>
-        <div class="lee_lee_diabetes_timeline_footer">
-          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
-          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button>
-        </div>
-      </article>
-    `;
+    return renderTrackerEntryCard(record, {
+      variant: 'today',
+      actions: `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button>`,
+    });
   }
 
   function renderFilterControls(filters, scope) {
@@ -2068,39 +2115,15 @@
   }
 
   function renderHistoryRecord(record) {
-    const suggested = record.suggestedTotalUnits == null ? '' : formatInsulin(record.suggestedTotalUnits);
-    const breakdown = record.suggestedBaseUnits == null && record.suggestedCorrectionUnits == null
-      ? ''
-      : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
-    const actual = getRecordActualInsulin(record);
-    const differs = suggested && actual != null && Number(record.suggestedTotalUnits) !== Number(actual);
-    const notes = record.notes ? `<p><strong>Notes:</strong> ${escapeHtml(record.notes)}</p>` : '';
-    const eventDetails = getRecordSecondaryLines(record)
-      .filter((line) => line && line !== record.type && line !== record.notes && line !== getMealDoseSummary(record))
-      .map((line) => `<p>${escapeHtml(line)}</p>`)
-      .join('');
-    return `
-      <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
-        <div>
-          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(getRecordDisplayTitle(record))}</div>
-          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(getRecordTimestamp(record)).toISOString())}">${escapeHtml(formatTime(getRecordTimestamp(record)))}</time>
-          <div class="lee_lee_diabetes_record_details">
-            <p><strong>Context:</strong> ${escapeHtml(record.type)}</p>
-            ${getRecordPrimaryValue(record) ? `<p><strong>Value:</strong> ${escapeHtml(getRecordPrimaryValue(record))}</p>` : ''}
-            ${record.eventType === 'blood-glucose' || record.eventType === 'insulin' ? `<p><strong>Blood sugar:</strong> ${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</p>` : ''}
-            ${record.eventType === 'insulin' ? `<p><strong>Insulin given:</strong> ${escapeHtml(formatInsulin(actual) || 'No insulin')}</p>` : ''}
-            ${eventDetails}
-            ${suggested ? `<p><strong>Suggested:</strong> ${escapeHtml(suggested)}${differs ? ' · differs from actual' : ''}</p>` : ''}
-            ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : ''}
-            ${notes}
-          </div>
+    return renderTrackerEntryCard(record, {
+      variant: 'history',
+      actions: `
+        <div class="lee_lee_diabetes_timeline_actions" aria-label="History record actions">
+          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-record" data-id="${escapeHtml(record.id)}">Edit</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record" data-id="${escapeHtml(record.id)}">Delete</button>
         </div>
-        <div class="lee_lee_diabetes_record_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record" data-id="${escapeHtml(record.id)}">Edit</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record" data-id="${escapeHtml(record.id)}">Delete</button>
-        </div>
-      </article>
-    `;
+      `,
+    });
   }
 
   function renderDeleteConfirmation(record) {
@@ -2461,7 +2484,7 @@
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
     const eventType = getEditorEventType(form);
-    if (eventType !== 'insulin' || !entryTypeUsesMealGuidance(type)) {
+    if (eventType !== 'check-insulin' || !entryTypeUsesMealGuidance(type)) {
       return {
         status: 'manual',
         baseUnits: null,
@@ -2792,7 +2815,7 @@
   function handleSave(form) {
     const record = buildRecordFromForm(form);
     if (!record) return;
-    if (record.eventType === 'insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
+    if (record.eventType === 'check-insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
       renderRecordConfirmation(record);
       return;
     }
@@ -3085,7 +3108,7 @@
         ${renderMigrationSettings()}
         ${renderMigrationDiagnostics()}
         <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-insulin-plan-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-insulin-plan-title">Insulin Plan</h2>
+          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-insulin-plan-title">Insulin Dose Guidance</h2>
           ${errorMessage ? `<p class="lee_lee_diabetes_error">${escapeHtml(errorMessage)}</p>` : ''}
           <label class="lee_lee_diabetes_field">
             Plan Name
@@ -3095,10 +3118,13 @@
             Effective Date
             <input class="lee_lee_diabetes_input" name="effectiveFrom" type="date" required value="${escapeHtml(plan.effectiveFrom)}">
           </label>
-          <label class="lee_lee_diabetes_field">
-            Meal Base Dose
-            <input class="lee_lee_diabetes_input" name="mealBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(plan.mealBaseUnits)}">
-          </label>
+          <p class="lee_lee_diabetes_help">Base doses are configured separately for Breakfast, Lunch, and Dinner. Existing glucose correction guidance is added separately.</p>
+          ${MEAL_TYPES.map((type) => `
+            <label class="lee_lee_diabetes_field">
+              ${escapeHtml(type)} Base Dose
+              <input class="lee_lee_diabetes_input" name="${escapeHtml(type.toLowerCase())}BaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getMealBaseUnitsForType(plan, type))}">
+            </label>
+          `).join('')}
           <div class="lee_lee_diabetes_plan_meta">
             <span>Supported meals: ${escapeHtml(plan.supportedMealTypes.join(', '))}</span>
             <span>Last updated: ${escapeHtml(formatDate(new Date(plan.updatedAt)))}</span>
@@ -3608,8 +3634,14 @@
     }
     const rangeError = validateCorrectionRanges(ranges);
     if (rangeError) return { error: rangeError };
-    const mealBaseUnits = normalizeNumber(form.elements.mealBaseUnits.value);
-    if (mealBaseUnits == null) return { error: 'Meal base dose must be a nonnegative number.' };
+    const mealBaseUnitsByType = {
+      Breakfast: normalizeNumber(form.elements.breakfastBaseUnits?.value),
+      Lunch: normalizeNumber(form.elements.lunchBaseUnits?.value),
+      Dinner: normalizeNumber(form.elements.dinnerBaseUnits?.value),
+    };
+    if (MEAL_TYPES.some((type) => mealBaseUnitsByType[type] == null)) {
+      return { error: 'Breakfast, Lunch, and Dinner base doses must be nonnegative numbers.' };
+    }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
     const now = new Date().toISOString();
@@ -3619,7 +3651,8 @@
         name: String(form.elements.planName.value || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
         effectiveFrom,
         effectiveTo: null,
-        mealBaseUnits,
+        mealBaseUnitsByType,
+        mealBaseUnits: mealBaseUnitsByType.Breakfast,
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -3649,10 +3682,12 @@
             <dt>Effective date</dt>
             <dd>${escapeHtml(plan.effectiveFrom)}</dd>
           </div>
-          <div>
-            <dt>Meal base dose</dt>
-            <dd>${escapeHtml(formatInsulin(plan.mealBaseUnits))}</dd>
-          </div>
+          ${MEAL_TYPES.map((type) => `
+            <div>
+              <dt>${escapeHtml(type)} base dose</dt>
+              <dd>${escapeHtml(formatInsulin(getMealBaseUnitsForType(plan, type)))}</dd>
+            </div>
+          `).join('')}
         </dl>
         <label class="lee_lee_diabetes_checkline">
           <span>I have verified these instructions with Lee-Lee’s diabetes care team.</span>
@@ -4423,6 +4458,10 @@
     formatTime,
     formatBloodSugar,
     formatInsulin,
+    getEntryCardContent,
+    renderEntryCardContent,
+    renderTimelineItem,
+    renderHistoryRecord,
     getTodaysActivityRecords,
     getVisibleHistoryGroups,
     getHistoryFilterCount,
