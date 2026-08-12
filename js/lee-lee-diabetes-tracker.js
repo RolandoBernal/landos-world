@@ -79,12 +79,18 @@
   ];
   const DEFAULT_HISTORY_WINDOW_DAYS = 30;
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
+  const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({
+    Breakfast: 5,
+    Lunch: 6,
+    Dinner: 6,
+  });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
     name: 'Current Meal Insulin Plan',
     effectiveFrom: DEFAULT_PLAN_EFFECTIVE_FROM,
     effectiveTo: null,
-    mealBaseUnits: 4,
+    mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
+    mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -220,7 +226,8 @@
       name: plan.name,
       effectiveFrom: plan.effectiveFrom,
       effectiveTo: plan.effectiveTo || null,
-      mealBaseUnits: plan.mealBaseUnits,
+      mealBaseUnitsByType: getMealBaseUnitsByType(plan),
+      mealBaseUnits: getMealBaseUnitsForType(plan, 'Breakfast'),
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -342,6 +349,21 @@
     return { minGlucose, maxGlucose, correctionUnits };
   }
 
+  function getMealBaseUnitsByType(plan = {}) {
+    const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
+      ? plan.mealBaseUnitsByType
+      : {};
+    return Object.fromEntries(MEAL_TYPES.map((type) => [
+      type,
+      normalizeNumber(source[type]) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
+    ]));
+  }
+
+  function getMealBaseUnitsForType(plan, type) {
+    if (!MEAL_TYPES.includes(type)) return null;
+    return getMealBaseUnitsByType(plan)[type];
+  }
+
   function normalizeInsulinPlan(plan) {
     if (!plan || typeof plan !== 'object') return null;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(plan.effectiveFrom || ''))
@@ -356,6 +378,7 @@
     const supportedMealTypes = Array.isArray(plan.supportedMealTypes)
       ? plan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
+    const mealBaseUnitsByType = getMealBaseUnitsByType(plan);
     const nowTimestamp = new Date().toISOString();
     return {
       ...plan,
@@ -363,7 +386,8 @@
       name: String(plan.name || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
       effectiveFrom,
       effectiveTo,
-      mealBaseUnits: normalizeNumber(plan.mealBaseUnits) ?? DEFAULT_INSULIN_PLAN.mealBaseUnits,
+      mealBaseUnitsByType,
+      mealBaseUnits: mealBaseUnitsByType.Breakfast,
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: correctionRanges.length ? correctionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
@@ -826,7 +850,7 @@
     let data = stored.exists && stored.data
       ? normalizeTrackerDataDocument(stored.data)
       : createEmptyTrackerData();
-    let shouldWrite = !stored.exists;
+    let shouldWrite = !stored.exists || (stored.exists && stored.raw && JSON.stringify(data) !== stored.raw);
     [...LEGACY_RECORD_STORAGE_KEYS, ...LEGACY_PLAN_STORAGE_KEYS].forEach((key) => {
       if (key === TRACKER_STORAGE_KEY) return;
       const legacy = readStoredJson(key);
@@ -1387,7 +1411,7 @@
       };
     }
     const matchedRange = matches[0];
-    const baseUnits = Number(insulinPlan.mealBaseUnits);
+    const baseUnits = Number(getMealBaseUnitsForType(insulinPlan, entryType));
     const correctionUnits = Number(matchedRange.correctionUnits);
     return {
       status: 'calculated',
@@ -3085,7 +3109,7 @@
         ${renderMigrationSettings()}
         ${renderMigrationDiagnostics()}
         <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-insulin-plan-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-insulin-plan-title">Insulin Plan</h2>
+          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-insulin-plan-title">Insulin Dose Guidance</h2>
           ${errorMessage ? `<p class="lee_lee_diabetes_error">${escapeHtml(errorMessage)}</p>` : ''}
           <label class="lee_lee_diabetes_field">
             Plan Name
@@ -3095,10 +3119,13 @@
             Effective Date
             <input class="lee_lee_diabetes_input" name="effectiveFrom" type="date" required value="${escapeHtml(plan.effectiveFrom)}">
           </label>
-          <label class="lee_lee_diabetes_field">
-            Meal Base Dose
-            <input class="lee_lee_diabetes_input" name="mealBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(plan.mealBaseUnits)}">
-          </label>
+          <p class="lee_lee_diabetes_help">Base doses are configured separately for Breakfast, Lunch, and Dinner. Existing glucose correction guidance is added separately.</p>
+          ${MEAL_TYPES.map((type) => `
+            <label class="lee_lee_diabetes_field">
+              ${escapeHtml(type)} Base Dose
+              <input class="lee_lee_diabetes_input" name="${escapeHtml(type.toLowerCase())}BaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getMealBaseUnitsForType(plan, type))}">
+            </label>
+          `).join('')}
           <div class="lee_lee_diabetes_plan_meta">
             <span>Supported meals: ${escapeHtml(plan.supportedMealTypes.join(', '))}</span>
             <span>Last updated: ${escapeHtml(formatDate(new Date(plan.updatedAt)))}</span>
@@ -3608,8 +3635,14 @@
     }
     const rangeError = validateCorrectionRanges(ranges);
     if (rangeError) return { error: rangeError };
-    const mealBaseUnits = normalizeNumber(form.elements.mealBaseUnits.value);
-    if (mealBaseUnits == null) return { error: 'Meal base dose must be a nonnegative number.' };
+    const mealBaseUnitsByType = {
+      Breakfast: normalizeNumber(form.elements.breakfastBaseUnits?.value),
+      Lunch: normalizeNumber(form.elements.lunchBaseUnits?.value),
+      Dinner: normalizeNumber(form.elements.dinnerBaseUnits?.value),
+    };
+    if (MEAL_TYPES.some((type) => mealBaseUnitsByType[type] == null)) {
+      return { error: 'Breakfast, Lunch, and Dinner base doses must be nonnegative numbers.' };
+    }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
     const now = new Date().toISOString();
@@ -3619,7 +3652,8 @@
         name: String(form.elements.planName.value || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
         effectiveFrom,
         effectiveTo: null,
-        mealBaseUnits,
+        mealBaseUnitsByType,
+        mealBaseUnits: mealBaseUnitsByType.Breakfast,
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -3649,10 +3683,12 @@
             <dt>Effective date</dt>
             <dd>${escapeHtml(plan.effectiveFrom)}</dd>
           </div>
-          <div>
-            <dt>Meal base dose</dt>
-            <dd>${escapeHtml(formatInsulin(plan.mealBaseUnits))}</dd>
-          </div>
+          ${MEAL_TYPES.map((type) => `
+            <div>
+              <dt>${escapeHtml(type)} base dose</dt>
+              <dd>${escapeHtml(formatInsulin(getMealBaseUnitsForType(plan, type)))}</dd>
+            </div>
+          `).join('')}
         </dl>
         <label class="lee_lee_diabetes_checkline">
           <span>I have verified these instructions with Lee-Lee’s diabetes care team.</span>
