@@ -2256,24 +2256,31 @@
 
   function renderReportHeader(rangeText) {
     const settings = getPatientSettings();
-    const details = [
+    const leftDetails = [
       settings.patientName ? ['Patient', settings.patientName] : null,
-      settings.patientBirthDate ? ['Date of birth', formatShortDateKey(settings.patientBirthDate)] : null,
       settings.clinicName ? ['Clinic', settings.clinicName] : null,
-      settings.clinicPhone ? ['Clinic phone', settings.clinicPhone] : null,
-      ['Report range', rangeText],
       ['Generated', `${formatDate(new Date())} at ${formatTime(Date.now())}`],
     ].filter(Boolean);
+    const rightDetails = [
+      settings.patientBirthDate ? ['Date of birth', formatShortDateKey(settings.patientBirthDate)] : null,
+      ['Report range', rangeText],
+    ].filter(Boolean);
+    const renderMetadataColumn = (details) => `
+      <div class="lee_lee_diabetes_report_metadata_column">
+        ${details.map(([label, value]) => `
+          <div class="lee_lee_diabetes_report_metadata_item">
+            <dt>${escapeHtml(label)}</dt>
+            <dd>${escapeHtml(value)}</dd>
+          </div>
+        `).join('')}
+      </div>
+    `;
     return `
       <header class="lee_lee_diabetes_report_header">
         <h2>Glucose &amp; Insulin Log</h2>
-        <dl>
-          ${details.map(([label, value]) => `
-            <div>
-              <dt>${escapeHtml(label)}</dt>
-              <dd>${escapeHtml(value)}</dd>
-            </div>
-          `).join('')}
+        <dl class="lee_lee_diabetes_report_metadata">
+          ${renderMetadataColumn(leftDetails)}
+          ${renderMetadataColumn(rightDetails)}
         </dl>
       </header>
     `;
