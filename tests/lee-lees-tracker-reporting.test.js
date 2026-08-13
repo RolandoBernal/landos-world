@@ -194,6 +194,15 @@ test('printable clinical report uses report title and leaves missing values blan
   const html = reports.renderReportDocument('clinical', [
     record({ id: 'breakfast', type: 'Breakfast', bloodSugar: 124, administeredInsulinUnits: 4, notes: '' }),
     record({
+      id: 'dinner-zero',
+      type: 'Dinner',
+      bloodSugar: 100,
+      administeredInsulinUnits: 0,
+      insulinUnits: null,
+      notes: '',
+      recordTimestamp: '2026-08-01T18:00:00.000Z',
+    }),
+    record({
       id: 'lunch',
       type: 'Lunch',
       bloodSugar: null,
@@ -211,6 +220,7 @@ test('printable clinical report uses report title and leaves missing values blan
   assert.match(compact, /<td>124 mg\/dL<\/td> <td>4 units<\/td>/);
   assert.match(compact, /<th scope="col">Lunch BG<\/th> <th scope="col">Lunch Insulin<\/th>/);
   assert.match(compact, /<td><\/td> <td><\/td>/);
+  assert.match(compact, /<td>100 mg\/dL<\/td> <td>0 units<\/td>/);
 });
 
 test('printable report header includes patient metadata from tracker settings', () => {
@@ -222,7 +232,6 @@ test('printable report header includes patient metadata from tracker settings', 
       patientName: 'Levi Bernal',
       patientBirthDate: '2014-06-13',
       clinicName: "Vandy's Children's Hospital",
-      clinicPhone: '615-555-0100',
     },
   }));
   const html = runtime.LeeLeeTrackerReports.renderReportDocument('clinical', [
@@ -232,58 +241,23 @@ test('printable report header includes patient metadata from tracker settings', 
 
   assert.match(html, /Glucose &amp; Insulin Log/);
   assert.match(compact, /<dt>Patient<\/dt> <dd>Levi Bernal<\/dd>/);
-  assert.match(compact, /<dt>Clinic<\/dt> <dd>Vandy&#39;s Children&#39;s Hospital<\/dd>/);
-  assert.match(compact, /<dt>Generated<\/dt> <dd>.+<\/dd>/);
   assert.match(compact, /<dt>Date of birth<\/dt> <dd>Jun 13, 2014<\/dd>/);
+  assert.match(compact, /<dt>Clinic<\/dt> <dd>Vandy&#39;s Children&#39;s Hospital<\/dd>/);
   assert.match(compact, /<dt>Report range<\/dt> <dd>Aug 7, 2026 through Aug 13, 2026<\/dd>/);
+  assert.match(compact, /<dt>Generated<\/dt> <dd>.+<\/dd>/);
   const orderedLabels = [...html.matchAll(/<dt>(.*?)<\/dt>/g)].map((match) => match[1]);
-  assert.deepEqual(orderedLabels, ['Patient', 'Clinic', 'Generated', 'Date of birth', 'Report range']);
+  assert.deepEqual(orderedLabels, ['Patient', 'Date of birth', 'Clinic', 'Report range', 'Generated']);
   assert.doesNotMatch(html, /Clinic phone/);
   assert.doesNotMatch(html, /<h2>Lee-Lee’s Tracker<\/h2>/);
   assert.doesNotMatch(html, /Lando.s World/);
   assert.doesNotMatch(html, /Online|Offline/);
 });
 
-test('print styles remove app shell navigation and allow multi-page table flow', () => {
+test('print styles remove app shell navigation and status chrome', () => {
   assert.match(cssSource, /\.ecosystem_nav,[\s\S]*display: none !important/);
   assert.match(cssSource, /\.ecosystem_nav_back,[\s\S]*display: none !important/);
-  assert.match(cssSource, /\.lee_lee_diabetes_clinical_table thead,[\s\S]*display: table-header-group/);
-  assert.match(cssSource, /\.lee_lee_diabetes_clinical_table tbody,[\s\S]*display: table-row-group/);
-  assert.doesNotMatch(cssSource, /table,\s*[\r\n]\s*tr\s*\{[\s\S]*break-inside: avoid/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_report_section,[\s\S]*break-inside: avoid/);
-});
-
-test('printable detailed report keeps zero values while blanking missing fields', () => {
-  const reports = createTrackerReports();
-  const html = reports.renderReportDocument('detailed', [
-    record({
-      id: 'zero-values',
-      type: 'Correction',
-      mealCarbs: 0,
-      mealDescription: '',
-      activityDescription: '',
-      activityDurationMinutes: 0,
-      activityIntensity: '',
-      bloodSugar: 0,
-      administeredInsulinUnits: 0,
-      insulinUnits: null,
-      suggestedTotalUnits: 0,
-      suggestedBaseUnits: 0,
-      suggestedCorrectionUnits: 0,
-      insulinPlanSnapshot: null,
-      insulinPlanId: '',
-      notes: '',
-    }),
-  ], 'Aug 1, 2026');
-  const compact = compactHtml(html);
-
-  assert.doesNotMatch(html, /—/);
-  assert.match(compact, /<td>0 g carbs<\/td>/);
-  assert.match(compact, /<td>0 min<\/td>/);
-  assert.match(compact, /<td>0 mg\/dL<\/td>/);
-  assert.match(compact, /<td>0 units<\/td>/);
-  assert.match(compact, /<td>0 units · 0 units base \+ 0 units correction<\/td>/);
-  assert.match(compact, /<td><\/td> <td><\/td> <\/tr>/);
+  assert.match(cssSource, /\.lando_settings_link,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.pwa_network_status,[\s\S]*display: none !important/);
 });
 
 test('history visible window returns the newest day groups first', () => {

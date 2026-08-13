@@ -848,16 +848,14 @@
   color: #10213f;
 }
 
-.lee_lee_diabetes_report_metadata {
+.lee_lee_diabetes_report_header dl {
   display: grid;
-  grid-auto-flow: column;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, auto);
-  gap: 0.4rem 1.5rem;
+  gap: 0.4rem 1rem;
   margin: 0;
 }
 
-.lee_lee_diabetes_report_metadata_item {
+.lee_lee_diabetes_report_header div {
   display: grid;
   gap: 0.08rem;
 }
@@ -1047,18 +1045,10 @@
     background: #ffffff !important;
   }
 
-  .lee_lee_diabetes_clinical_table thead,
-  .lee_lee_diabetes_detail_table thead {
-    display: table-header-group;
-  }
-
-  .lee_lee_diabetes_clinical_table tbody,
-  .lee_lee_diabetes_detail_table tbody {
-    display: table-row-group;
-  }
-
   .lee_lee_diabetes_report_header,
+  .lee_lee_diabetes_report_section,
   .lee_lee_diabetes_report_day,
+  table,
   tr {
     break-inside: avoid;
     page-break-inside: avoid;

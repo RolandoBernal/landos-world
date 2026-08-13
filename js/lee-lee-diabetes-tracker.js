@@ -1728,20 +1728,6 @@
     return value == null ? fallback : formatter(value);
   }
 
-  function isMissingPrintValue(value) {
-    return value == null || value === '';
-  }
-
-  function formatPrintValue(value, formatter = (item) => item) {
-    if (isMissingPrintValue(value)) return '';
-    const formatted = formatter(value);
-    return isMissingPrintValue(formatted) ? '' : String(formatted);
-  }
-
-  function joinPrintValues(values, separator = ' · ') {
-    return values.filter((value) => !isMissingPrintValue(value)).join(separator);
-  }
-
   function todaysRecords() {
     return getTodaysActivityRecords(records);
   }
@@ -2048,13 +2034,13 @@
     `;
   }
 
-  function renderSummaryGrid(summary, missingFallback = 'No data') {
+  function renderSummaryGrid(summary) {
     const items = [
       ['Entries', summary.entryCount],
-      ['Average', formatSummaryValue(summary.averageBloodSugar, formatBloodSugar, missingFallback)],
-      ['High', formatSummaryValue(summary.highestBloodSugar, formatBloodSugar, missingFallback)],
-      ['Low', formatSummaryValue(summary.lowestBloodSugar, formatBloodSugar, missingFallback)],
-      ['Total insulin', formatSummaryValue(summary.totalInsulin, formatInsulin, missingFallback)],
+      ['Average', formatSummaryValue(summary.averageBloodSugar, formatBloodSugar)],
+      ['High', formatSummaryValue(summary.highestBloodSugar, formatBloodSugar)],
+      ['Low', formatSummaryValue(summary.lowestBloodSugar, formatBloodSugar)],
+      ['Total insulin', formatSummaryValue(summary.totalInsulin, formatInsulin)],
     ];
     return `
       <dl class="lee_lee_diabetes_summary_grid">
@@ -2258,17 +2244,18 @@
     const settings = getPatientSettings();
     const details = [
       settings.patientName ? ['Patient', settings.patientName] : null,
-      settings.clinicName ? ['Clinic', settings.clinicName] : null,
-      ['Generated', `${formatDate(new Date())} at ${formatTime(Date.now())}`],
       settings.patientBirthDate ? ['Date of birth', formatShortDateKey(settings.patientBirthDate)] : null,
+      settings.clinicName ? ['Clinic', settings.clinicName] : null,
+      settings.clinicPhone ? ['Clinic phone', settings.clinicPhone] : null,
       ['Report range', rangeText],
+      ['Generated', `${formatDate(new Date())} at ${formatTime(Date.now())}`],
     ].filter(Boolean);
     return `
       <header class="lee_lee_diabetes_report_header">
         <h2>Glucose &amp; Insulin Log</h2>
-        <dl class="lee_lee_diabetes_report_metadata">
+        <dl>
           ${details.map(([label, value]) => `
-            <div class="lee_lee_diabetes_report_metadata_item">
+            <div>
               <dt>${escapeHtml(label)}</dt>
               <dd>${escapeHtml(value)}</dd>
             </div>
@@ -2305,15 +2292,7 @@
 
   function renderClinicalLogRow(group) {
     const additional = group.additionalRecords.length
-      ? `Additional events: ${group.additionalRecords.map((record) => {
-        const eventDetails = joinPrintValues([
-          getRecordDisplayTitle(record),
-          record.type,
-          formatTime(getRecordTimestamp(record)),
-          getRecordPrimaryValue(record),
-        ], ' ');
-        return `${eventDetails}${record.notes ? ` (${record.notes})` : ''}`;
-      }).join('; ')}`
+      ? `Additional events: ${group.additionalRecords.map((record) => `${getRecordDisplayTitle(record)} ${record.type} ${formatTime(getRecordTimestamp(record))} ${getRecordPrimaryValue(record) || 'No value'}${record.notes ? ` (${record.notes})` : ''}`).join('; ')}`
       : '';
     const notes = [
       ...PRIMARY_TYPES.map((type) => group.primary[type]?.notes || '').filter(Boolean),
@@ -2324,14 +2303,22 @@
         <th scope="row">${escapeHtml(formatShortDateKey(group.dateKey))}</th>
         ${PRIMARY_TYPES.map((type) => {
           const record = group.primary[type];
+          const bloodSugar = record ? formatClinicalLogCell(record.bloodSugar, formatBloodSugar) : '';
+          const insulin = record ? formatClinicalLogCell(getRecordActualInsulin(record), formatInsulin) : '';
           return `
-            <td>${escapeHtml(record ? formatPrintValue(record.bloodSugar, formatBloodSugar) : '')}</td>
-            <td>${escapeHtml(record ? formatPrintValue(getRecordActualInsulin(record), formatInsulin) : '')}</td>
+            <td>${escapeHtml(bloodSugar)}</td>
+            <td>${escapeHtml(insulin)}</td>
           `;
         }).join('')}
         <td>${escapeHtml(notes)}</td>
       </tr>
     `;
+  }
+
+  function formatClinicalLogCell(value, formatter) {
+    if (value == null || value === '') return '';
+    const formatted = formatter(value);
+    return formatted == null || formatted === '' ? '' : formatted;
   }
 
   function renderDetailedReport(reportData) {
@@ -2343,7 +2330,7 @@
         ${groups.map((group) => `
           <section class="lee_lee_diabetes_report_day">
             <h4>${escapeHtml(formatDateKey(group.dateKey))}</h4>
-            ${renderSummaryGrid(group.summary, '')}
+            ${renderSummaryGrid(group.summary)}
             <table class="lee_lee_diabetes_detail_table">
               <thead>
                 <tr>
@@ -2372,10 +2359,10 @@
 
   function renderDetailedReportRow(record) {
     const suggestedParts = [
-      formatPrintValue(record.suggestedTotalUnits, formatInsulin),
+      record.suggestedTotalUnits == null ? '' : formatInsulin(record.suggestedTotalUnits),
       record.suggestedBaseUnits == null && record.suggestedCorrectionUnits == null
         ? ''
-        : `${formatPrintValue(record.suggestedBaseUnits, formatInsulin)} base + ${formatPrintValue(record.suggestedCorrectionUnits, formatInsulin)} correction`,
+        : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`,
       record.doseCalculationStatus && record.doseCalculationStatus !== 'calculated' && record.doseCalculationStatus !== 'manual'
         ? record.doseCalculationStatus
         : '',
@@ -2386,14 +2373,14 @@
         <td>${escapeHtml(formatTime(getRecordTimestamp(record)))}</td>
         <td>${escapeHtml(getEventTypeLabel(record.eventType))}</td>
         <td>${escapeHtml(record.type)}</td>
-        <td>${escapeHtml(formatPrintValue(record.mealCarbs, formatCarbs))}</td>
-        <td>${escapeHtml(formatPrintValue(record.mealDescription))}</td>
-        <td>${escapeHtml(joinPrintValues([record.activityDescription, formatPrintValue(record.activityDurationMinutes, formatActivityDuration), record.activityIntensity]))}</td>
-        <td>${escapeHtml(formatPrintValue(record.bloodSugar, formatBloodSugar))}</td>
-        <td>${escapeHtml(formatPrintValue(getRecordActualInsulin(record), formatInsulin))}</td>
-        <td>${escapeHtml(suggestedParts)}</td>
-        <td>${escapeHtml(formatPrintValue(planName))}</td>
-        <td>${escapeHtml(formatPrintValue(record.notes))}</td>
+        <td>${escapeHtml(formatCarbs(record.mealCarbs) || '—')}</td>
+        <td>${escapeHtml(record.mealDescription || '—')}</td>
+        <td>${escapeHtml([record.activityDescription, formatActivityDuration(record.activityDurationMinutes), record.activityIntensity].filter(Boolean).join(' · ') || '—')}</td>
+        <td>${escapeHtml(formatBloodSugar(record.bloodSugar) || '—')}</td>
+        <td>${escapeHtml(formatInsulin(getRecordActualInsulin(record)) || '—')}</td>
+        <td>${escapeHtml(suggestedParts || '—')}</td>
+        <td>${escapeHtml(planName || '—')}</td>
+        <td>${escapeHtml(record.notes || '—')}</td>
       </tr>
     `;
   }
@@ -4512,7 +4499,6 @@
     buildClinicalReport,
     buildDetailedReportData,
     renderReportDocument,
-    formatPrintValue,
     formatRelativeSyncTime,
     getFriendlySyncStatus,
     getMigrationSessionSummary,
