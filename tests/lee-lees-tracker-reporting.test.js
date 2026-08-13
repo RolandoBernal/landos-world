@@ -236,11 +236,21 @@ test('printable report header includes patient metadata from tracker settings', 
   assert.match(compact, /<dt>Generated<\/dt> <dd>.+<\/dd>/);
   assert.match(compact, /<dt>Date of birth<\/dt> <dd>Jun 13, 2014<\/dd>/);
   assert.match(compact, /<dt>Report range<\/dt> <dd>Aug 7, 2026 through Aug 13, 2026<\/dd>/);
-  assert.match(compact, /lee_lee_diabetes_report_metadata_column/);
+  const orderedLabels = [...html.matchAll(/<dt>(.*?)<\/dt>/g)].map((match) => match[1]);
+  assert.deepEqual(orderedLabels, ['Patient', 'Clinic', 'Generated', 'Date of birth', 'Report range']);
   assert.doesNotMatch(html, /Clinic phone/);
   assert.doesNotMatch(html, /<h2>Lee-Lee’s Tracker<\/h2>/);
   assert.doesNotMatch(html, /Lando.s World/);
   assert.doesNotMatch(html, /Online|Offline/);
+});
+
+test('print styles remove app shell navigation and allow multi-page table flow', () => {
+  assert.match(cssSource, /\.ecosystem_nav,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.ecosystem_nav_back,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.lee_lee_diabetes_clinical_table thead,[\s\S]*display: table-header-group/);
+  assert.match(cssSource, /\.lee_lee_diabetes_clinical_table tbody,[\s\S]*display: table-row-group/);
+  assert.doesNotMatch(cssSource, /table,\s*[\r\n]\s*tr\s*\{[\s\S]*break-inside: avoid/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_report_section,[\s\S]*break-inside: avoid/);
 });
 
 test('printable detailed report keeps zero values while blanking missing fields', () => {
