@@ -2218,12 +2218,16 @@
   }
 
   function renderReportPreview(exportRecords, rangeText) {
-    const report = getReportDefinition(exportOptions.layout);
-    const reportData = report.builder(exportRecords);
+    return renderReportDocument(exportOptions.layout, exportRecords, rangeText);
+  }
+
+  function renderReportDocument(reportId, exportRecords, rangeText) {
+    const selectedReport = getReportDefinition(reportId);
+    const reportData = selectedReport.builder(exportRecords);
     return `
-      <article class="lee_lee_diabetes_report ${report.printLayout === 'landscape' ? 'lee_lee_diabetes_report--landscape' : ''}">
+      <article class="lee_lee_diabetes_report ${selectedReport.printLayout === 'landscape' ? 'lee_lee_diabetes_report--landscape' : ''}">
         ${renderReportHeader(rangeText)}
-        ${report.id === 'clinical'
+        ${selectedReport.id === 'clinical'
           ? renderClinicalLogReport(reportData)
           : renderDetailedReport(reportData)}
       </article>
@@ -2239,16 +2243,15 @@
   function renderReportHeader(rangeText) {
     const settings = getPatientSettings();
     const details = [
-      settings.patientName ? ['Patient', settings.patientName] : null,
-      settings.patientBirthDate ? ['Date of birth', formatShortDateKey(settings.patientBirthDate)] : null,
-      settings.clinicName ? ['Clinic', settings.clinicName] : null,
-      settings.clinicPhone ? ['Clinic phone', settings.clinicPhone] : null,
+      ['Patient', settings.patientName || ''],
+      ['Date of birth', settings.patientBirthDate ? formatShortDateKey(settings.patientBirthDate) : ''],
+      ['Clinic', settings.clinicName || ''],
       ['Report range', rangeText],
       ['Generated', `${formatDate(new Date())} at ${formatTime(Date.now())}`],
-    ].filter(Boolean);
+    ];
     return `
       <header class="lee_lee_diabetes_report_header">
-        <h2>Lee-Lee’s Tracker</h2>
+        <h2>Glucose &amp; Insulin Log</h2>
         <dl>
           ${details.map(([label, value]) => `
             <div>
@@ -2299,14 +2302,22 @@
         <th scope="row">${escapeHtml(formatShortDateKey(group.dateKey))}</th>
         ${PRIMARY_TYPES.map((type) => {
           const record = group.primary[type];
+          const bloodSugar = record ? formatClinicalLogCell(record.bloodSugar, formatBloodSugar) : '';
+          const insulin = record ? formatClinicalLogCell(getRecordActualInsulin(record), formatInsulin) : '';
           return `
-            <td>${escapeHtml(record ? formatBloodSugar(record.bloodSugar) || '—' : '—')}</td>
-            <td>${escapeHtml(record ? formatInsulin(getRecordActualInsulin(record)) || '—' : '—')}</td>
+            <td>${escapeHtml(bloodSugar)}</td>
+            <td>${escapeHtml(insulin)}</td>
           `;
         }).join('')}
-        <td>${escapeHtml(notes || '—')}</td>
+        <td>${escapeHtml(notes)}</td>
       </tr>
     `;
+  }
+
+  function formatClinicalLogCell(value, formatter) {
+    if (value == null || value === '') return '';
+    const formatted = formatter(value);
+    return formatted == null || formatted === '' ? '' : formatted;
   }
 
   function renderDetailedReport(reportData) {
@@ -4486,6 +4497,7 @@
     getDailySummaryCacheSize,
     buildClinicalReport,
     buildDetailedReportData,
+    renderReportDocument,
     formatRelativeSyncTime,
     getFriendlySyncStatus,
     getMigrationSessionSummary,
