@@ -2243,13 +2243,12 @@
   function renderReportHeader(rangeText) {
     const settings = getPatientSettings();
     const details = [
-      settings.patientName ? ['Patient', settings.patientName] : null,
-      settings.patientBirthDate ? ['Date of birth', formatShortDateKey(settings.patientBirthDate)] : null,
-      settings.clinicName ? ['Clinic', settings.clinicName] : null,
-      settings.clinicPhone ? ['Clinic phone', settings.clinicPhone] : null,
+      ['Patient', settings.patientName || ''],
+      ['Date of birth', settings.patientBirthDate ? formatShortDateKey(settings.patientBirthDate) : ''],
+      ['Clinic', settings.clinicName || ''],
       ['Report range', rangeText],
       ['Generated', `${formatDate(new Date())} at ${formatTime(Date.now())}`],
-    ].filter(Boolean);
+    ];
     return `
       <header class="lee_lee_diabetes_report_header">
         <h2>Glucose &amp; Insulin Log</h2>

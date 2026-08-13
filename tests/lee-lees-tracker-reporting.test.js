@@ -253,6 +253,22 @@ test('printable report header includes patient metadata from tracker settings', 
   assert.doesNotMatch(html, /Online|Offline/);
 });
 
+test('printable report header keeps all metadata labels when patient settings are blank', () => {
+  const reports = createTrackerReports();
+  const html = reports.renderReportDocument('clinical', [
+    record({ id: 'breakfast', type: 'Breakfast', bloodSugar: 124, administeredInsulinUnits: 4, notes: '' }),
+  ], 'Aug 7, 2026 through Aug 13, 2026');
+  const orderedLabels = [...html.matchAll(/<dt>(.*?)<\/dt>/g)].map((match) => match[1]);
+  const compact = compactHtml(html);
+
+  assert.deepEqual(orderedLabels, ['Patient', 'Date of birth', 'Clinic', 'Report range', 'Generated']);
+  assert.match(compact, /<dt>Patient<\/dt> <dd><\/dd>/);
+  assert.match(compact, /<dt>Date of birth<\/dt> <dd><\/dd>/);
+  assert.match(compact, /<dt>Clinic<\/dt> <dd><\/dd>/);
+  assert.match(compact, /<dt>Report range<\/dt> <dd>Aug 7, 2026 through Aug 13, 2026<\/dd>/);
+  assert.match(compact, /<dt>Generated<\/dt> <dd>.+<\/dd>/);
+});
+
 test('print styles remove app shell navigation and status chrome', () => {
   assert.match(cssSource, /\.ecosystem_nav,[\s\S]*display: none !important/);
   assert.match(cssSource, /\.ecosystem_nav_back,[\s\S]*display: none !important/);
