@@ -76,6 +76,10 @@ function countOccurrences(text, needle) {
   return text.split(needle).length - 1;
 }
 
+function compactHtml(text) {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 test('history grouping uses recordTimestamp rather than createdAt and sorts days newest first', () => {
   const reports = createTrackerReports();
   const groups = reports.groupRecordsByLocalDate([
@@ -175,11 +179,71 @@ test('older records reconstruct event time from date and time fields', () => {
 test('print styles hide controls and use a white printable report', () => {
   assert.match(cssSource, /@media print/);
   assert.match(cssSource, /\.lee_lee_diabetes_nav,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.lee_lee_diabetes_top,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.pwa_network_status,[\s\S]*display: none !important/);
+  assert.match(cssSource, /\.pwa_toast,[\s\S]*display: none !important/);
   assert.match(cssSource, /background: #ffffff !important/);
 });
 
 test('export print action uses the browser print dialog', () => {
   assert.match(trackerSource, /window\.print\(\)/);
+});
+
+test('printable clinical report uses report title and leaves missing values blank', () => {
+  const reports = createTrackerReports();
+  const html = reports.renderReportDocument('clinical', [
+    record({ id: 'breakfast', type: 'Breakfast', bloodSugar: 124, administeredInsulinUnits: 4, notes: '' }),
+    record({
+      id: 'lunch',
+      type: 'Lunch',
+      bloodSugar: null,
+      administeredInsulinUnits: null,
+      insulinUnits: null,
+      notes: '',
+      recordTimestamp: '2026-08-01T12:00:00.000Z',
+    }),
+  ], 'Aug 1, 2026');
+  const compact = compactHtml(html);
+
+  assert.match(html, /Glucose &amp; Insulin Log/);
+  assert.doesNotMatch(html, /<h2>Lee-Lee’s Tracker<\/h2>/);
+  assert.doesNotMatch(html, /—/);
+  assert.match(compact, /<td>124 mg\/dL<\/td> <td>4 units<\/td>/);
+  assert.match(compact, /<th scope="col">Lunch BG<\/th> <th scope="col">Lunch Insulin<\/th>/);
+  assert.match(compact, /<td><\/td> <td><\/td>/);
+});
+
+test('printable detailed report keeps zero values while blanking missing fields', () => {
+  const reports = createTrackerReports();
+  const html = reports.renderReportDocument('detailed', [
+    record({
+      id: 'zero-values',
+      type: 'Correction',
+      mealCarbs: 0,
+      mealDescription: '',
+      activityDescription: '',
+      activityDurationMinutes: 0,
+      activityIntensity: '',
+      bloodSugar: 0,
+      administeredInsulinUnits: 0,
+      insulinUnits: null,
+      suggestedTotalUnits: 0,
+      suggestedBaseUnits: 0,
+      suggestedCorrectionUnits: 0,
+      insulinPlanSnapshot: null,
+      insulinPlanId: '',
+      notes: '',
+    }),
+  ], 'Aug 1, 2026');
+  const compact = compactHtml(html);
+
+  assert.doesNotMatch(html, /—/);
+  assert.match(compact, /<td>0 g carbs<\/td>/);
+  assert.match(compact, /<td>0 min<\/td>/);
+  assert.match(compact, /<td>0 mg\/dL<\/td>/);
+  assert.match(compact, /<td>0 units<\/td>/);
+  assert.match(compact, /<td>0 units · 0 units base \+ 0 units correction<\/td>/);
+  assert.match(compact, /<td><\/td> <td><\/td> <\/tr>/);
 });
 
 test('history visible window returns the newest day groups first', () => {
