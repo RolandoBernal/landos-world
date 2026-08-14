@@ -236,6 +236,9 @@
 
 .sprints-btn {
   padding: 0.75rem 0.95rem;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sprints-btn[disabled] {
