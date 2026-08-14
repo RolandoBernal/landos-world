@@ -13,6 +13,34 @@
   const REMOTE_RECORDS_TABLE = 'lee_lee_records';
   const REMOTE_SHARED_SETTINGS_TABLE = 'lee_lee_shared_settings';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
+  const SHARED_SETTINGS_SCHEMA_VERSION = 2;
+  const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
+  const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
+  const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({ Breakfast: 5, Lunch: 6, Dinner: 6 });
+  const DEFAULT_BEDTIME_BASE_UNITS = 15;
+  const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
+  const DEFAULT_SHARED_INSULIN_PLAN = Object.freeze({
+    id: 'meal_plan_2026_07_31',
+    name: 'Current Meal Insulin Plan',
+    effectiveFrom: DEFAULT_PLAN_EFFECTIVE_FROM,
+    effectiveTo: null,
+    mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
+    mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
+    bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
+    supportedMealTypes: [...MEAL_TYPES],
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+      { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+      { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+      { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+      { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+      { ...HIGH_GLUCOSE_CORRECTION_RANGE },
+    ],
+    notes: '',
+    createdAt: `${DEFAULT_PLAN_EFFECTIVE_FROM}T00:00:00.000Z`,
+    updatedAt: `${DEFAULT_PLAN_EFFECTIVE_FROM}T00:00:00.000Z`,
+  });
 
   function nowIso() {
     return new Date().toISOString();
@@ -130,15 +158,135 @@
     return next;
   }
 
+  function normalizeSharedNumber(value) {
+    if (value == null || value === '') return null;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
+  }
+
+  function normalizeSharedCorrectionRange(range) {
+    const source = range && typeof range === 'object' ? range : {};
+    const minGlucose = source.minGlucose == null || source.minGlucose === '' ? null : Number(source.minGlucose);
+    const maxGlucose = source.maxGlucose == null || source.maxGlucose === '' ? null : Number(source.maxGlucose);
+    const correctionUnits = normalizeSharedNumber(source.correctionUnits);
+    if (
+      (minGlucose != null && (!Number.isInteger(minGlucose) || minGlucose < 0))
+      || (maxGlucose != null && (!Number.isInteger(maxGlucose) || maxGlucose < 0))
+      || correctionUnits == null
+    ) {
+      return null;
+    }
+    return { minGlucose, maxGlucose, correctionUnits };
+  }
+
+  function ensureSharedHighGlucoseCorrectionRange(correctionRanges) {
+    const ranges = Array.isArray(correctionRanges) ? correctionRanges : [];
+    const hasHighGlucoseRange = ranges.some((range) => (
+      (range.minGlucose == null || HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose >= range.minGlucose)
+      && range.maxGlucose == null
+    ));
+    if (hasHighGlucoseRange) return ranges;
+    const finalRange = ranges[ranges.length - 1];
+    if (finalRange?.maxGlucose === HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose - 1) {
+      return [...ranges, { ...HIGH_GLUCOSE_CORRECTION_RANGE }];
+    }
+    return ranges;
+  }
+
+  function normalizeSharedMealBaseUnitsByType(plan = {}) {
+    const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
+      ? plan.mealBaseUnitsByType
+      : {};
+    return Object.fromEntries(MEAL_TYPES.map((type) => [
+      type,
+      normalizeSharedNumber(source[type]) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
+    ]));
+  }
+
+  function normalizeSharedInsulinPlan(plan) {
+    const source = plan && typeof plan === 'object' ? plan : DEFAULT_SHARED_INSULIN_PLAN;
+    const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(source.effectiveFrom || ''))
+      ? source.effectiveFrom
+      : DEFAULT_PLAN_EFFECTIVE_FROM;
+    const effectiveTo = /^\d{4}-\d{2}-\d{2}$/.test(String(source.effectiveTo || ''))
+      ? source.effectiveTo
+      : null;
+    const correctionRanges = Array.isArray(source.correctionRanges)
+      ? source.correctionRanges.map(normalizeSharedCorrectionRange).filter(Boolean)
+      : [];
+    const normalizedCorrectionRanges = ensureSharedHighGlucoseCorrectionRange(correctionRanges);
+    const supportedMealTypes = Array.isArray(source.supportedMealTypes)
+      ? source.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
+      : [...MEAL_TYPES];
+    const mealBaseUnitsByType = normalizeSharedMealBaseUnitsByType(source);
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : DEFAULT_SHARED_INSULIN_PLAN.id,
+      name: String(source.name || DEFAULT_SHARED_INSULIN_PLAN.name).trim().slice(0, 80),
+      effectiveFrom,
+      effectiveTo,
+      mealBaseUnitsByType,
+      mealBaseUnits: mealBaseUnitsByType.Breakfast,
+      bedtimeBaseUnits: normalizeSharedNumber(source.bedtimeBaseUnits) ?? DEFAULT_BEDTIME_BASE_UNITS,
+      supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
+      correctionRanges: normalizedCorrectionRanges.length
+        ? normalizedCorrectionRanges
+        : DEFAULT_SHARED_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
+      notes: String(source.notes || '').trim().slice(0, 500),
+      createdAt: source.createdAt || DEFAULT_SHARED_INSULIN_PLAN.createdAt,
+      updatedAt: source.updatedAt || DEFAULT_SHARED_INSULIN_PLAN.updatedAt,
+    };
+  }
+
+  function sharedInsulinPlanMeaning(plan) {
+    const normalized = normalizeSharedInsulinPlan(plan);
+    return {
+      name: normalized.name,
+      effectiveFrom: normalized.effectiveFrom,
+      effectiveTo: normalized.effectiveTo,
+      mealBaseUnitsByType: normalized.mealBaseUnitsByType,
+      mealBaseUnits: normalized.mealBaseUnits,
+      bedtimeBaseUnits: normalized.bedtimeBaseUnits,
+      supportedMealTypes: normalized.supportedMealTypes,
+      correctionRanges: normalized.correctionRanges,
+      notes: normalized.notes,
+    };
+  }
+
+  function getSharedSettingsPayloadSource(source) {
+    return source.payload && typeof source.payload === 'object' ? source.payload : {};
+  }
+
+  function getSharedPatientClinicSource(source) {
+    const payload = getSharedSettingsPayloadSource(source);
+    if (payload.patientClinic && typeof payload.patientClinic === 'object') return payload.patientClinic;
+    if (payload.patientName || payload.patientBirthDate || payload.clinicName || payload.clinicPhone) return payload;
+    return source;
+  }
+
+  function getSharedInsulinPlanSource(source) {
+    const payload = getSharedSettingsPayloadSource(source);
+    const insulinConfiguration = payload.insulinConfiguration && typeof payload.insulinConfiguration === 'object'
+      ? payload.insulinConfiguration
+      : {};
+    return source.insulinPlan
+      || source.activeInsulinPlan
+      || insulinConfiguration.activeInsulinPlan
+      || payload.insulinPlan
+      || DEFAULT_SHARED_INSULIN_PLAN;
+  }
+
   function normalizeSharedSettings(settings = {}) {
     const source = settings && typeof settings === 'object' ? settings : {};
+    const patientClinic = getSharedPatientClinicSource(source);
     return {
-      patientName: String(source.patientName || source.patient_name || '').trim().slice(0, 80),
-      patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.patientBirthDate || source.patient_date_of_birth || ''))
-        ? String(source.patientBirthDate || source.patient_date_of_birth)
+      schemaVersion: SHARED_SETTINGS_SCHEMA_VERSION,
+      patientName: String(patientClinic.patientName || patientClinic.patient_name || source.patient_name || '').trim().slice(0, 80),
+      patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(patientClinic.patientBirthDate || patientClinic.patient_date_of_birth || source.patient_date_of_birth || ''))
+        ? String(patientClinic.patientBirthDate || patientClinic.patient_date_of_birth || source.patient_date_of_birth)
         : '',
-      clinicName: String(source.clinicName || source.clinic_name || '').trim().slice(0, 120),
-      clinicPhone: String(source.clinicPhone || source.clinic_phone || '').trim().slice(0, 40),
+      clinicName: String(patientClinic.clinicName || patientClinic.clinic_name || source.clinic_name || '').trim().slice(0, 120),
+      clinicPhone: String(patientClinic.clinicPhone || patientClinic.clinic_phone || source.clinic_phone || '').trim().slice(0, 40),
+      insulinPlan: normalizeSharedInsulinPlan(getSharedInsulinPlanSource(source)),
       version: Number(source.version || 0) || null,
       lastEditedBy: DEVICE_USERS.includes(source.lastEditedBy || source.last_edited_by) ? (source.lastEditedBy || source.last_edited_by) : null,
       updatedAt: source.updatedAt || source.updated_at || null,
@@ -149,7 +297,13 @@
 
   function sharedSettingsHaveValues(settings) {
     const normalized = normalizeSharedSettings(settings);
-    return Boolean(normalized.patientName || normalized.patientBirthDate || normalized.clinicName || normalized.clinicPhone);
+    return Boolean(
+      normalized.patientName
+      || normalized.patientBirthDate
+      || normalized.clinicName
+      || normalized.clinicPhone
+      || stableJson(sharedInsulinPlanMeaning(normalized.insulinPlan)) !== stableJson(sharedInsulinPlanMeaning(DEFAULT_SHARED_INSULIN_PLAN))
+    );
   }
 
   function sharedSettingsFingerprint(settings) {
@@ -159,6 +313,7 @@
       normalized.patientBirthDate,
       normalized.clinicName,
       normalized.clinicPhone,
+      stableJson(sharedInsulinPlanMeaning(normalized.insulinPlan)),
     ].join('|');
   }
 
@@ -173,6 +328,7 @@
       patientBirthDate: row.patient_date_of_birth,
       clinicName: row.clinic_name,
       clinicPhone: row.clinic_phone,
+      payload: row.payload,
       version: row.version,
       lastEditedBy: row.last_edited_by,
       updatedAt: row.updated_at,
@@ -190,12 +346,18 @@
       clinic_phone: normalized.clinicPhone || null,
       last_edited_by: normalized.lastEditedBy || getDeviceIdentity() || null,
       payload: {
-        patientName: normalized.patientName,
-        patientBirthDate: normalized.patientBirthDate,
-        clinicName: normalized.clinicName,
-        clinicPhone: normalized.clinicPhone,
+        schemaVersion: SHARED_SETTINGS_SCHEMA_VERSION,
+        patientClinic: {
+          patientName: normalized.patientName,
+          patientBirthDate: normalized.patientBirthDate,
+          clinicName: normalized.clinicName,
+          clinicPhone: normalized.clinicPhone,
+        },
+        insulinConfiguration: {
+          activeInsulinPlan: normalized.insulinPlan,
+        },
       },
-      app_schema_version: 1,
+      app_schema_version: SHARED_SETTINGS_SCHEMA_VERSION,
     };
   }
 
@@ -1260,6 +1422,7 @@
       cleanupIdenticalConflicts,
       getSharedSettings: getSharedSettingsCache,
       saveSharedSettings,
+      normalizeSharedSettings,
       getSharedSettingsStatus,
       getSharedSettingsMigration,
       setSharedSettingsMigration,
@@ -1291,6 +1454,9 @@
     sanitizeRecordForRemote,
     recordFromRemote,
     normalizeSharedSettings,
+    normalizeSharedInsulinPlan,
+    sharedSettingsToRemote,
+    sharedSettingsFromRemote,
     sharedSettingsAreSame,
     recordMeaningFingerprint,
   };

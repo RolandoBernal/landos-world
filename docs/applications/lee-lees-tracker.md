@@ -190,14 +190,27 @@ Insulin Dose Guidance stores the active insulin plan in the tracker document. Br
 - Lunch: 6 units
 - Dinner: 6 units
 
-Glucose correction ranges are configured separately and are added to the meal-specific base dose. Non-meal check contexts such as Bedtime, 2 AM, Correction, Snack, and Other do not receive Breakfast/Lunch/Dinner meal bases.
+Bedtime defaults to 15 units. Glucose correction ranges are configured separately and are added to the meal-specific base dose. The correction table includes the open-ended 550+ glucose range at 6 units. Non-meal check contexts such as 2 AM, Correction, Snack, and Other do not receive Breakfast/Lunch/Dinner meal bases.
+
+Shared Settings now syncs the complete shared care configuration through `lee_lee_shared_settings.payload`:
+
+- Patient name
+- Date of birth
+- Clinic name
+- Clinic phone
+- Active insulin plan name
+- Effective date
+- Breakfast, Lunch, Dinner, and Bedtime base doses
+- Full correction table, including the open-ended 550+ range
+- Plan notes
 
 The following settings intentionally remain local to each device:
 
 - This device is used by
 - History Initial Window
-- Local migration metadata
-- Backup reminder state
+- Shared Sync status, diagnostics, and migration metadata
+- Local backup/import/export controls and reminder state
+- Recently Deleted controls
 - Auth/session state
 
 ## Recently Deleted
