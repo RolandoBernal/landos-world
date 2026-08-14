@@ -421,6 +421,57 @@ test('meal dose helper keeps the clinician-provided calculation unchanged', () =
   assert.equal(correction.suggestedTotalUnits, null);
 });
 
+test('bedtime dose helper uses configured bedtime base dose without glucose correction', () => {
+  const runtime = createTrackerRuntime();
+  const insulinPlan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    bedtimeBaseUnits: 15,
+    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+  };
+  const defaultBedtime = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: '',
+    entryType: 'Bedtime',
+    recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
+    insulinPlan,
+  });
+  const updatedBedtime = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 439,
+    entryType: 'Bedtime',
+    recordTimestamp: Date.parse('2026-08-02T21:00:00.000Z'),
+    insulinPlan: { ...insulinPlan, bedtimeBaseUnits: 13 },
+  });
+
+  assert.equal(defaultBedtime.status, 'calculated');
+  assert.equal(defaultBedtime.baseUnits, 15);
+  assert.equal(defaultBedtime.correctionUnits, null);
+  assert.equal(defaultBedtime.suggestedTotalUnits, 15);
+  assert.equal(defaultBedtime.matchedRange, null);
+  assert.equal(updatedBedtime.status, 'calculated');
+  assert.equal(updatedBedtime.baseUnits, 13);
+  assert.equal(updatedBedtime.correctionUnits, null);
+  assert.equal(updatedBedtime.suggestedTotalUnits, 13);
+});
+
+test('bedtime dose helper defaults existing plans to 15 units', () => {
+  const runtime = createTrackerRuntime();
+  const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 210,
+    entryType: 'Bedtime',
+    recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
+    insulinPlan: {
+      id: 'legacy-plan',
+      supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+      correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+    },
+  });
+
+  assert.equal(result.status, 'calculated');
+  assert.equal(result.suggestedTotalUnits, 15);
+});
+
 test('meal dose helper uses the open-ended 550 plus correction band', () => {
   const runtime = createTrackerRuntime();
   const insulinPlan = {
@@ -512,15 +563,16 @@ test('carb entries do not change clinician-provided insulin guidance', () => {
   assert.doesNotMatch(trackerSource, /insulin-to-carb|carb bolus|carbs\s*\/|carbs\s*÷/i);
 });
 
-test('non-meal contexts do not receive meal base doses', () => {
+test('non-guidance contexts do not receive meal or bedtime base doses', () => {
   const runtime = createTrackerRuntime();
   const insulinPlan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
     mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    bedtimeBaseUnits: 15,
     correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
   };
-  ['Bedtime', '2 AM', 'Correction', 'Snack', 'Other'].forEach((entryType) => {
+  ['2 AM', 'Correction', 'Snack', 'Other'].forEach((entryType) => {
     const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
       bloodSugar: 198,
       entryType,
@@ -538,6 +590,17 @@ test('settings UI exposes independent meal base dose controls', () => {
   assert.match(trackerSource, /\$\{escapeHtml\(type\)\} Base Dose/);
   assert.match(trackerSource, /name="\$\{escapeHtml\(type\.toLowerCase\(\)\)\}BaseUnits"/);
   assert.doesNotMatch(trackerSource, /name="mealBaseUnits" type="number"/);
+});
+
+test('settings UI exposes independent bedtime base dose control', () => {
+  assert.match(trackerSource, /Bedtime Base Dose/);
+  assert.match(trackerSource, /name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0\.5" required/);
+  assert.match(trackerSource, /bedtimeBaseUnits = normalizeNumber\(form\.elements\.bedtimeBaseUnits\?\.value\)/);
+  assert.match(trackerSource, /Bedtime base dose must be a nonnegative number\./);
+});
+
+test('settings plan activation closes an existing plan with the same effective date', () => {
+  assert.match(trackerSource, /range\.start <= pendingStart && range\.end > pendingStart/);
 });
 
 test('settings correction table includes the editable open-ended 550 plus row', () => {
@@ -628,31 +691,62 @@ test('canonical entry cards render check insulin dinner once in today and histor
   }
 });
 
-test('canonical entry cards keep non-meal check insulin records free of meal guidance', () => {
+test('canonical entry cards show bedtime manual override against suggested dose', () => {
   const reports = createTrackerReports();
   const bedtime = record({
     eventType: 'check-insulin',
     type: 'Bedtime',
     bloodSugar: 439,
-    administeredInsulinUnits: 15,
-    insulinUnits: 15,
-    suggestedTotalUnits: null,
-    suggestedBaseUnits: null,
+    administeredInsulinUnits: 14,
+    insulinUnits: 14,
+    suggestedTotalUnits: 15,
+    suggestedBaseUnits: 15,
     suggestedCorrectionUnits: null,
-    doseCalculationStatus: 'manual',
+    doseCalculationStatus: 'calculated',
     recordTimestamp: '2026-08-08T21:36:00.000Z',
   });
 
   const content = reports.getEntryCardContent(bedtime);
   assert.equal(content.title, 'Check / Insulin');
   assert.equal(content.primary, '439 mg/dL');
-  assert.deepEqual(Array.from(content.secondary), ['Bedtime', '15 units']);
+  assert.deepEqual(Array.from(content.secondary), [
+    'Bedtime',
+    '14 units',
+    'Given: 14 units · Suggested: 15 units',
+  ]);
   assert.equal(content.timestamp, Date.parse('2026-08-08T21:36:00.000Z'));
 
   const historyHtml = reports.renderHistoryRecord(bedtime);
   assert.equal(countOccurrences(historyHtml, '439 mg/dL'), 1);
   assert.match(historyHtml, /Bedtime/);
-  assert.match(historyHtml, /15 units/);
+  assert.match(historyHtml, /14 units/);
+  assert.match(historyHtml, /Given: 14 units · Suggested: 15 units/);
+  assert.doesNotMatch(historyHtml, /base|correction/);
+});
+
+test('canonical entry cards keep other check insulin records free of dose guidance', () => {
+  const reports = createTrackerReports();
+  const overnight = record({
+    eventType: 'check-insulin',
+    type: '2 AM',
+    bloodSugar: 139,
+    administeredInsulinUnits: 0,
+    insulinUnits: 0,
+    suggestedTotalUnits: null,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+    doseCalculationStatus: 'manual',
+    recordTimestamp: '2026-08-09T02:00:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(overnight);
+  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.primary, '139 mg/dL');
+  assert.deepEqual(Array.from(content.secondary), ['2 AM', '0 units']);
+
+  const historyHtml = reports.renderHistoryRecord(overnight);
+  assert.match(historyHtml, /2 AM/);
+  assert.match(historyHtml, /0 units/);
   assert.doesNotMatch(historyHtml, /base|correction|Suggested/);
 });
 

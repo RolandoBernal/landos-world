@@ -109,11 +109,12 @@ test('migrates legacy record and plan keys into the stable tracker document with
   const migratedPlan = stored.insulinPlans.find((plan) => plan.id === 'plan-1');
   assert.deepEqual(migratedPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
   assert.equal(migratedPlan.mealBaseUnits, 5);
+  assert.equal(migratedPlan.bedtimeBaseUnits, 15);
   assert.ok(localStorage.getItem(legacyRecordsKey));
   assert.ok(localStorage.getItem(legacyPlansKey));
 });
 
-test('legacy shared meal base dose is replaced by current prescribed per-meal defaults', () => {
+test('legacy shared meal base dose is replaced by current prescribed per-meal and bedtime defaults', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({
       schemaVersion: 1,
@@ -142,8 +143,51 @@ test('legacy shared meal base dose is replaced by current prescribed per-meal de
   const plan = stored.insulinPlans[0];
   assert.deepEqual(plan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
   assert.equal(plan.mealBaseUnits, 5);
+  assert.equal(plan.bedtimeBaseUnits, 15);
   assert.equal(plan.notes, 'keep this');
   assert.equal(stored.settings.targetRange, 'custom');
+});
+
+test('bedtime base dose migration preserves unrelated settings and custom values', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [sampleRecord({
+        id: 'bedtime-history',
+        type: 'Bedtime',
+        administeredInsulinUnits: 14,
+        insulinUnits: 14,
+        suggestedTotalUnits: 15,
+        suggestedBaseUnits: 15,
+        suggestedCorrectionUnits: null,
+        doseCalculationStatus: 'calculated',
+      })],
+      settings: { targetRange: 'custom', historyInitialWindowDays: '14' },
+      insulinPlans: [{
+        id: 'custom-bedtime-plan',
+        name: 'Custom Bedtime Plan',
+        effectiveFrom: '2026-07-31',
+        mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+        bedtimeBaseUnits: 13,
+        supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+        correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+      }],
+      activeInsulinPlanId: 'custom-bedtime-plan',
+      metadata: {
+        createdAt: '2026-07-31T12:15:00.000Z',
+        updatedAt: '2026-07-31T12:15:00.000Z',
+      },
+    }),
+  });
+
+  createTracker({ localStorage });
+
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  assert.equal(stored.insulinPlans[0].bedtimeBaseUnits, 13);
+  assert.equal(stored.settings.targetRange, 'custom');
+  assert.equal(stored.settings.historyInitialWindowDays, '14');
+  assert.equal(stored.records[0].administeredInsulinUnits, 14);
+  assert.equal(stored.records[0].suggestedTotalUnits, 15);
 });
 
 test('stored current correction table is extended with the open-ended 550 plus range', () => {
