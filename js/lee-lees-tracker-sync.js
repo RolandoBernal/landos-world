@@ -12,7 +12,7 @@
   const LEGACY_SNAPSHOT_PREFIX = 'lando-world:lee-lees-tracker:legacy-snapshot:';
   const REMOTE_RECORDS_TABLE = 'lee_lee_records';
   const REMOTE_SHARED_SETTINGS_TABLE = 'lee_lee_shared_settings';
-  const DEVICE_USERS = ['Rolando', 'Emily', 'Unknown'];
+  const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
 
   function nowIso() {
     return new Date().toISOString();

@@ -89,9 +89,9 @@ The policies restrict every row to `user_id = auth.uid()`. Updates are performed
 
 1. Open Authentication, then Users.
 2. Create one email/password account for Lee-Lee's Tracker.
-3. Use that same account on both iPhones.
+3. Use that same account on each family device.
 
-Rolando and Emily are device labels, not separate Supabase accounts.
+Rolando, Emily, Levi, and Violet are device labels, not separate Supabase accounts. Unknown remains a fallback for missing or legacy labels.
 
 ## 6. Configure Auth Redirect URLs
 
