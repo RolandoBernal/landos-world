@@ -76,6 +76,7 @@
     { value: 'all', label: 'All Records', days: null },
   ];
   const DEFAULT_HISTORY_WINDOW_DAYS = 30;
+  const FALLBACK_DEVICE_USERS = Object.freeze(['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown']);
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
   const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({
     Breakfast: 5,
@@ -1019,7 +1020,7 @@
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-auth-form aria-labelledby="lee-lee-diabetes-title">
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Sign In</h1>
-        <p class="lee_lee_diabetes_help">Use the shared Lee-Lee’s Tracker account to sync records on both phones.</p>
+        <p class="lee_lee_diabetes_help">Use the shared Lee-Lee’s Tracker account to sync records on family devices.</p>
         ${authError ? `<p class="lee_lee_diabetes_error">${escapeHtml(authError)}</p>` : ''}
         ${authMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--synced">${escapeHtml(authMessage)}</p>` : ''}
         <label class="lee_lee_diabetes_field">
@@ -1051,9 +1052,7 @@
           This device is used by
           <select class="lee_lee_diabetes_select" name="deviceIdentity" required>
             <option value="">Choose one</option>
-            <option value="Rolando">Rolando</option>
-            <option value="Emily">Emily</option>
-            <option value="Unknown">Unknown</option>
+            ${renderDeviceIdentityOptions()}
           </select>
         </label>
         <div class="lee_lee_diabetes_actions">
@@ -1061,6 +1060,17 @@
         </div>
       </form>
     `;
+  }
+
+  function getDeviceIdentityOptions() {
+    const syncOptions = window.LeeLeeTrackerSync?.DEVICE_USERS;
+    return Array.isArray(syncOptions) && syncOptions.length ? syncOptions : FALLBACK_DEVICE_USERS;
+  }
+
+  function renderDeviceIdentityOptions(selectedIdentity = '') {
+    return getDeviceIdentityOptions()
+      .map((name) => `<option value="${escapeHtml(name)}" ${selectedIdentity === name ? 'selected' : ''}>${escapeHtml(name)}</option>`)
+      .join('');
   }
 
   function renderConflicts() {
@@ -3097,7 +3107,7 @@
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title" role="dialog" aria-modal="true">
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Shared Sync is Ready</h1>
         <p class="lee_lee_diabetes_help">Lee-Lee’s Tracker is now synchronized.</p>
-        <p class="lee_lee_diabetes_help">Any new glucose readings or insulin records entered on Rolando’s or Emily’s devices will automatically appear everywhere.</p>
+        <p class="lee_lee_diabetes_help">Any new glucose readings or insulin records entered on family devices will automatically appear everywhere.</p>
         <p class="lee_lee_diabetes_help">You're all set.</p>
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="continue-shared-sync-welcome" data-primary-focus>Continue</button>
@@ -3161,7 +3171,7 @@
           <label class="lee_lee_diabetes_field">
             This device is used by
             <select class="lee_lee_diabetes_select" name="deviceIdentity">
-              ${['Rolando', 'Emily', 'Unknown'].map((name) => `<option value="${escapeHtml(name)}" ${syncStatus.deviceIdentity === name ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}
+              ${renderDeviceIdentityOptions(syncStatus.deviceIdentity)}
             </select>
           </label>
           <div class="lee_lee_diabetes_plan_meta">

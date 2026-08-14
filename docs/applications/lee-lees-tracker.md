@@ -1,6 +1,6 @@
 # Lee-Lee's Tracker
 
-Lee-Lee's Tracker is a local-first T1D event log inside Lando's World. It supports a combined check/insulin workflow, meal/carbohydrate records, activity records, and notes, with Supabase-backed shared records for a single shared family account used on Rolando's and Emily's devices.
+Lee-Lee's Tracker is a local-first T1D event log inside Lando's World. It supports a combined check/insulin workflow, meal/carbohydrate records, activity records, and notes, with Supabase-backed shared records for a single shared family account used on family devices.
 
 ## Navigation
 
@@ -28,12 +28,14 @@ Carbs are informational/training-only in this version. They are not used in dose
 
 ## Authentication & Device Identity
 
-The tracker is protected behind email/password Supabase sign-in. Both phones use the same shared app account.
+The tracker is protected behind email/password Supabase sign-in. Family devices use the same shared app account.
 
 Each device also stores a local label:
 
 - Rolando
 - Emily
+- Levi
+- Violet
 - Unknown
 
 That label is written as record attribution (`enteredBy`, `lastEditedBy`, and `deletedBy`). It is not a separate Supabase identity.

@@ -235,10 +235,79 @@ test('reports missing Supabase config without throwing', () => {
   assert.equal(context.LeeLeeTrackerSync.getConfig().configured, false);
 });
 
-test('device identity is persisted locally', () => {
+test('family device identities are valid and persisted locally', () => {
   const context = createSyncContext();
-  context.LeeLeeTrackerSync.setDeviceIdentity('Emily');
-  assert.equal(context.LeeLeeTrackerSync.getDeviceIdentity(), 'Emily');
+  assert.deepEqual(Array.from(context.LeeLeeTrackerSync.DEVICE_USERS), ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown']);
+
+  for (const name of ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown']) {
+    context.LeeLeeTrackerSync.setDeviceIdentity(name);
+    assert.equal(context.LeeLeeTrackerSync.getDeviceIdentity(), name);
+  }
+});
+
+test('invalid device identity falls back to Unknown', () => {
+  const context = createSyncContext();
+  assert.equal(context.LeeLeeTrackerSync.setDeviceIdentity('Other'), 'Unknown');
+  assert.equal(context.LeeLeeTrackerSync.getDeviceIdentity(), 'Unknown');
+});
+
+test('new records queued by Levi and Violet carry selected identity metadata', async () => {
+  for (const name of ['Levi', 'Violet']) {
+    const supabase = createMockSupabase();
+    const context = createSyncContext({
+      supabase,
+      config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+    });
+    context.navigator.onLine = false;
+    const store = createDocumentStore();
+    const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+    await repository.initialize();
+    repository.setDeviceIdentity(name);
+    const operation = repository.queueUpsert(record({ id: `local-${name}`, enteredBy: '' }), null);
+    assert.equal(operation.payload.enteredBy, name);
+
+    context.navigator.onLine = true;
+    await repository.processQueue();
+    assert.equal(supabase.client.rows[0].entered_by, name);
+    assert.equal(supabase.client.rows[0].payload.enteredBy, name);
+  }
+});
+
+test('editing existing records does not rewrite original enteredBy identity', async () => {
+  const supabase = createMockSupabase();
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  context.navigator.onLine = false;
+  const store = createDocumentStore({ records: [record({ id: 'existing-record', enteredBy: 'Rolando' })] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  repository.setDeviceIdentity('Levi');
+  const operation = repository.queueUpsert(
+    record({ id: 'existing-record', bloodSugar: 210, enteredBy: 'Rolando' }),
+    record({ id: 'existing-record', bloodSugar: 198, enteredBy: 'Rolando' }),
+  );
+
+  assert.equal(operation.payload.enteredBy, 'Rolando');
+  assert.equal(operation.payload.lastEditedBy, 'Levi');
+});
+
+test('sync serialization accepts Levi, Violet, and Unknown identities', () => {
+  const context = createSyncContext();
+  for (const name of ['Levi', 'Violet', 'Unknown']) {
+    const remote = context.LeeLeeTrackerSync.sanitizeRecordForRemote(record({
+      id: `record-${name}`,
+      enteredBy: name,
+      lastEditedBy: name === 'Unknown' ? null : name,
+    }), 'user-1');
+
+    assert.equal(remote.entered_by, name);
+    assert.equal(remote.payload.enteredBy, name);
+    assert.equal(remote.last_edited_by, name === 'Unknown' ? null : name);
+  }
 });
 
 test('new record queues locally and uploads through Supabase once initialized', async () => {
