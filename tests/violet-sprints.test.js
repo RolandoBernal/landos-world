@@ -36,18 +36,29 @@ function createRoot() {
   };
 }
 
-function createSprintsRuntime({ localStorage = createLocalStorage(), autoLoad = true } = {}) {
+function createSprintsRuntime({ localStorage = createLocalStorage(), autoLoad = true, now = 1_800_000_000_000 } = {}) {
   const documentListeners = {};
   const intervals = new Map();
   let intervalId = 0;
   const sprintsRoot = createRoot();
+  let currentTime = now;
+  class MockDate extends Date {
+    constructor(...args) {
+      super(...(args.length ? args : [currentTime]));
+    }
+
+    static now() {
+      return currentTime;
+    }
+  }
+  Object.setPrototypeOf(MockDate, Date);
   const context = {
     console: {
       ...console,
       warn: () => {},
       log: () => {},
     },
-    Date,
+    Date: MockDate,
     JSON,
     Map,
     Math,
@@ -115,6 +126,9 @@ function createSprintsRuntime({ localStorage = createLocalStorage(), autoLoad = 
   return {
     api: context.VioletSprints,
     context,
+    advanceTime(seconds) {
+      currentTime += seconds * 1000;
+    },
     intervals,
     localStorage,
   };
@@ -128,8 +142,9 @@ function builtInWorkoutsByName(api) {
   return Object.fromEntries(api.sourceDefinedWorkouts().map((workout) => [workout.name, workout]));
 }
 
-function tick(intervals, count = 1) {
+function tick(intervals, count = 1, advanceTime = () => {}) {
   for (let index = 0; index < count; index += 1) {
+    advanceTime(1);
     const callbacks = [...intervals.values()];
     callbacks.forEach((callback) => callback());
   }
@@ -154,10 +169,10 @@ test('Futbol Game Timer is a source-defined built-in workout with the regulation
   ]);
   assert.deepEqual(plain(steps.map((step) => [step.label, step.duration, api.formatDuration(step.duration)])), [
     ['First Half', 40 * 60, '40:00'],
-    ['Half Time', 15 * 60, '15:00'],
+    ['Half Time', 10 * 60, '10:00'],
     ['Second Half', 40 * 60, '40:00'],
   ]);
-  assert.equal(api.totalWorkoutDuration(steps), 95 * 60);
+  assert.equal(api.totalWorkoutDuration(steps), 90 * 60);
 });
 
 test('all canonical Violet Sprints workouts are source-defined and protected in workout-card actions', () => {
@@ -279,7 +294,7 @@ test('duplicates of built-in and user-created workouts become deletable user-cre
 });
 
 test('Futbol Game Timer uses the existing timer engine for transitions, pause resume, and warnings', () => {
-  const { api, intervals } = createSprintsRuntime({ autoLoad: false });
+  const { api, intervals, advanceTime } = createSprintsRuntime({ autoLoad: false });
   const updates = [];
   const timer = api.createWorkoutTimer(futbolWorkout(api), {
     onUpdate: (state) => updates.push({ ...state }),
@@ -290,31 +305,119 @@ test('Futbol Game Timer uses the existing timer engine for transitions, pause re
   assert.equal(updates.at(-1).blockTitle, 'First Half');
   assert.equal(updates.at(-1).stepLabel, 'First Half');
   assert.equal(updates.at(-1).countdown, '40:00');
-  assert.equal(updates.at(-1).remaining, '95:00');
+  assert.equal(updates.at(-1).remaining, '90:00');
 
-  tick(intervals, 2390);
+  tick(intervals, 2390, advanceTime);
   assert.equal(updates.at(-1).countdown, '00:10');
   timer.pause();
   const pausedAt = updates.at(-1).countdown;
-  tick(intervals, 3);
+  tick(intervals, 3, advanceTime);
   assert.equal(updates.at(-1).countdown, pausedAt);
   timer.resume();
   assert.equal(updates.at(-1).countdown, pausedAt);
 
-  tick(intervals, 5);
+  tick(intervals, 5, advanceTime);
   assert.equal(updates.at(-1).countdown, '00:05');
   assert.equal(updates.at(-1).warningActive, true);
 
-  tick(intervals, 5);
+  tick(intervals, 5, advanceTime);
   assert.equal(updates.at(-1).blockTitle, 'Half Time');
   assert.equal(updates.at(-1).stepLabel, 'Half Time');
-  assert.equal(updates.at(-1).countdown, '15:00');
+  assert.equal(updates.at(-1).countdown, '10:00');
 
-  tick(intervals, 900);
+  tick(intervals, 600, advanceTime);
   assert.equal(updates.at(-1).blockTitle, 'Second Half');
   assert.equal(updates.at(-1).stepLabel, 'Second Half');
   assert.equal(updates.at(-1).countdown, '40:00');
 
-  tick(intervals, 2400);
+  tick(intervals, 2400, advanceTime);
   assert.equal(updates.at(-1).complete, true);
+});
+
+test('running timers reconcile from wall-clock time across multiple elapsed steps', () => {
+  const { api, advanceTime } = createSprintsRuntime({ autoLoad: false });
+  const updates = [];
+  const timer = api.createWorkoutTimer(futbolWorkout(api), {
+    onUpdate: (state) => updates.push({ ...state }),
+  });
+
+  timer.start();
+  advanceTime((38 * 60) + (17 * 60));
+  timer.reconcile({ sound: false, persist: true });
+
+  assert.equal(updates.at(-1).blockTitle, 'Second Half');
+  assert.equal(updates.at(-1).stepLabel, 'Second Half');
+  assert.equal(updates.at(-1).countdown, '35:00');
+  assert.equal(updates.at(-1).remaining, '35:00');
+});
+
+test('paused timers preserve remaining time while wall-clock time advances', () => {
+  const { api, intervals, advanceTime } = createSprintsRuntime({ autoLoad: false });
+  const updates = [];
+  const timer = api.createWorkoutTimer(futbolWorkout(api), {
+    onUpdate: (state) => updates.push({ ...state }),
+  });
+
+  timer.start();
+  tick(intervals, (21 * 60) + 37, advanceTime);
+  timer.pause();
+  assert.equal(updates.at(-1).countdown, '18:23');
+
+  advanceTime(10 * 60);
+  timer.reconcile({ sound: false, persist: true });
+  assert.equal(updates.at(-1).paused, true);
+  assert.equal(updates.at(-1).countdown, '18:23');
+
+  timer.resume();
+  advanceTime(23);
+  timer.reconcile({ sound: false, persist: true });
+  assert.equal(updates.at(-1).countdown, '18:00');
+});
+
+test('active timer state is persisted with timestamps and restored accurately', () => {
+  const localStorage = createLocalStorage();
+  const firstRuntime = createSprintsRuntime({ autoLoad: false, localStorage, now: 1_900_000_000_000 });
+  const firstUpdates = [];
+  const firstTimer = firstRuntime.api.createWorkoutTimer(futbolWorkout(firstRuntime.api), {
+    onUpdate: (state) => firstUpdates.push({ ...state }),
+  });
+
+  firstTimer.start();
+  firstRuntime.advanceTime(20 * 60);
+  firstTimer.reconcile({ sound: false, persist: true });
+  const persisted = JSON.parse(localStorage.getItem(firstRuntime.api.ACTIVE_TIMER_KEY));
+  assert.equal(persisted.workoutId, 'futbol-game-timer');
+  assert.equal(persisted.phase, 'running');
+  assert.equal(persisted.stepIndex, 0);
+  assert.equal(persisted.stepEndsAt - persisted.stepStartedAt, 40 * 60 * 1000);
+
+  const secondRuntime = createSprintsRuntime({ autoLoad: false, localStorage, now: 1_900_000_000_000 + (27 * 60 * 1000) });
+  const restoredUpdates = [];
+  const restoredTimer = secondRuntime.api.createWorkoutTimer(futbolWorkout(secondRuntime.api), {
+    onUpdate: (state) => restoredUpdates.push({ ...state }),
+  }, { restoreState: persisted });
+  restoredTimer.start();
+
+  assert.equal(restoredUpdates.at(-1).blockTitle, 'First Half');
+  assert.equal(restoredUpdates.at(-1).countdown, '13:00');
+});
+
+test('manual skip advances exactly one step and resets the next step timestamp', () => {
+  const { api, localStorage, advanceTime } = createSprintsRuntime({ autoLoad: false });
+  const updates = [];
+  const timer = api.createWorkoutTimer(futbolWorkout(api), {
+    onUpdate: (state) => updates.push({ ...state }),
+  });
+
+  timer.start();
+  advanceTime(7 * 60);
+  timer.skip();
+
+  assert.equal(updates.at(-1).blockTitle, 'Half Time');
+  assert.equal(updates.at(-1).stepLabel, 'Half Time');
+  assert.equal(updates.at(-1).countdown, '10:00');
+
+  const persisted = JSON.parse(localStorage.getItem(api.ACTIVE_TIMER_KEY));
+  assert.equal(persisted.stepIndex, 1);
+  assert.equal(persisted.stepEndsAt - persisted.stepStartedAt, 10 * 60 * 1000);
 });

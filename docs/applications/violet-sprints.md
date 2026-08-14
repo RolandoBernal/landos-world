@@ -20,10 +20,10 @@ The current built-ins are:
 `futbol-game-timer` is a source-defined built-in preset for regulation high-school soccer game timing:
 
 - First Half - 40 min
-- Half Time - 15 min
+- Half Time - 10 min
 - Second Half - 40 min
-- Total - 95 min
+- Total - 90 min
 
 It appears on fresh devices and existing installations without deleting or overwriting custom workouts. If a user-created workout has the same display name, it is preserved separately because matching uses the stable built-in ID rather than the name.
 
-The timer uses the existing Violet Sprints countdown engine. The current engine pauses via in-memory timer state and resumes from the remaining seconds. It reacquires wake lock and audio readiness when the page becomes visible, but it does not reconcile elapsed wall-clock time while the browser or PWA is backgrounded.
+The timer uses Violet Sprints' shared timestamp-based countdown engine. Running workouts persist their active timer state locally and reconcile from wall-clock time when the page initializes, regains focus, becomes visible, or returns to the Violet Sprints route, so browser/PWA/native suspension does not implicitly pause elapsed workout time. Explicit Pause freezes the remaining time until Resume creates a fresh end timestamp.

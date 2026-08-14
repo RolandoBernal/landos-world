@@ -1,8 +1,10 @@
 (() => {
   const STORAGE_KEY = 'violet_sprints_workouts_v1';
+  const ACTIVE_TIMER_KEY = 'violet_sprints_active_timer_v1';
   const PRE_STEP_COUNTDOWN = 3;
   const INSTALL_PROMPT_DISMISSED_KEY = 'violet_sprints_install_prompt_dismissed_v1';
   const SOCCER_WORKOUT_ADDED_KEY = 'violet_sprints_soccer_workout_added_v1';
+  const ACTION_GUARD_MS = 350;
   const COMPLETION_MESSAGES = [
     'Great work!',
     'Good job!',
@@ -26,7 +28,9 @@
   let wakeLock = null;
   let workoutWakeLockWanted = false;
   let wakeLockNoticeShown = false;
+  let activeTimerRestoreIntent = null;
   const activeAudioNodes = new Set();
+  const guardedActions = new WeakMap();
 
   function renderEcosystemNav() {
     return `
@@ -79,7 +83,7 @@
           createSourceDefinedStep('futbol-first-half', 'First Half', 40 * 60),
         ], { id: 'futbol-first-half' }),
         createWorkoutBlock('Half Time', 'recovery', [
-          createSourceDefinedStep('futbol-half-time', 'Half Time', 15 * 60),
+          createSourceDefinedStep('futbol-half-time', 'Half Time', 10 * 60),
         ], { id: 'futbol-half-time' }),
         createWorkoutBlock('Second Half', 'work', [
           createSourceDefinedStep('futbol-second-half', 'Second Half', 40 * 60),
@@ -453,6 +457,36 @@
       : '';
   }
 
+  function getGuardedActionButton(event, selector = '[data-action]') {
+    const target = event.target;
+    const actionTarget = typeof Element !== 'undefined' && target instanceof Element
+      ? target
+      : target?.parentElement;
+    const button = actionTarget?.closest?.(selector);
+    if (!button || button.disabled) return null;
+    const now = Date.now();
+    const action = button.dataset.action || button.dataset.confirmAction || '';
+    const key = [
+      action,
+      button.dataset.id || '',
+      button.dataset.index || '',
+      button.dataset.difficulty || '',
+    ].join(':');
+    const last = guardedActions.get(button);
+    if (last && last.key === key && now - last.time < ACTION_GUARD_MS) {
+      event.preventDefault();
+      return null;
+    }
+    guardedActions.set(button, { key, time: now });
+    window.setTimeout(() => {
+      const current = guardedActions.get(button);
+      if (current?.key === key && current.time === now) guardedActions.delete(button);
+    }, ACTION_GUARD_MS);
+    event.preventDefault();
+    if (typeof HTMLElement !== 'undefined' && button instanceof HTMLElement) button.blur();
+    return button;
+  }
+
   function showConfirmationDialog({
     title,
     message,
@@ -461,7 +495,7 @@
     confirmClass = 'sprints-btn--danger',
   }) {
     return new Promise((resolve) => {
-      const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const previousFocus = typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const restoreAction = previousFocus?.getAttribute('data-action');
       const titleId = `sprints-confirm-title-${createId()}`;
       const messageId = `sprints-confirm-message-${createId()}`;
@@ -488,7 +522,7 @@
         const focusTarget = previousFocus?.isConnected
           ? previousFocus
           : document.querySelector(`[data-action="${restoreAction}"]`);
-        if (focusTarget instanceof HTMLElement) focusTarget.focus();
+        if (typeof HTMLElement !== 'undefined' && focusTarget instanceof HTMLElement) focusTarget.focus();
         resolve(confirmed);
       }
 
@@ -497,7 +531,8 @@
       }
 
       dialog.addEventListener('click', (event) => {
-        const action = event.target.closest('[data-confirm-action]')?.dataset.confirmAction;
+        const button = getGuardedActionButton(event, '[data-confirm-action]');
+        const action = button?.dataset.confirmAction;
         if (action === 'cancel') close(false);
         if (action === 'confirm') close(true);
       });
@@ -730,7 +765,8 @@
     button.className = 'sprints-sound-enable';
     button.dataset.action = 'enable-sound';
     button.textContent = 'Tap to Enable Sound';
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', async (event) => {
+      if (!getGuardedActionButton(event)) return;
       const enabled = await unlockAudio();
       if (enabled) {
         button.remove();
@@ -977,6 +1013,25 @@
     releaseWorkoutWakeLock();
   }
 
+  function currentRestorableTimerState() {
+    const state = readActiveTimerState();
+    if (!state || !state.workoutId) return null;
+    const savedWorkout = workouts.find((workout) => workout.id === state.workoutId);
+    const workout = savedWorkout?.sourceDefined
+      ? savedWorkout
+      : (savedWorkout || state.workout);
+    if (!workout || !stepsForWorkout(workout).length) return null;
+    return { state, workout };
+  }
+
+  function restoreActiveTimerIfAvailable() {
+    const restorable = currentRestorableTimerState();
+    if (!restorable) return false;
+    activeTimerRestoreIntent = restorable.state;
+    showTimer(restorable.workout.id, { restoredWorkout: restorable.workout });
+    return true;
+  }
+
   function showClock() {
     stopTimer();
     stopActiveBeeps();
@@ -1023,7 +1078,7 @@
       </div>`;
 
     root.addEventListener('click', async (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button) return;
       const id = button.dataset.id;
       const action = button.dataset.action;
@@ -1078,7 +1133,7 @@
         </div>
       </div>`;
     root.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button) return;
       if (button.dataset.action === 'list') showWorkoutList();
       if (button.dataset.action === 'start') showTimer(id);
@@ -1154,7 +1209,7 @@
     }
 
     root.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button) return;
       readForm();
       const index = Number(button.dataset.index);
@@ -1192,7 +1247,29 @@
     render();
   }
 
-  function createWorkoutTimer(workout, callbacks) {
+  function readActiveTimerState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ACTIVE_TIMER_KEY) || 'null');
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeActiveTimerState(state) {
+    try {
+      if (!state) localStorage.removeItem(ACTIVE_TIMER_KEY);
+      else localStorage.setItem(ACTIVE_TIMER_KEY, JSON.stringify(state));
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  function clearActiveTimerState() {
+    writeActiveTimerState(null);
+  }
+
+  function createWorkoutTimer(workout, callbacks, options = {}) {
     const normalizedWorkout = normalizeWorkout(workout);
     const blocks = normalizedWorkout.blocks;
     const timerSteps = blocks.flatMap((block, blockIndex) => (
@@ -1206,13 +1283,20 @@
     ));
     let stepIndex = 0;
     let phase = 'idle';
+    let stepStartedAt = 0;
+    let stepEndsAt = 0;
+    let pausedRemainingMs = 0;
     let secondsLeft = 0;
     let tickId = null;
+    let tickGeneration = 0;
     let paused = false;
     let warningPulseKey = 0;
     let warningPulseActive = false;
+    let completed = false;
+    let lastWarningSecond = null;
 
     function clearTick() {
+      tickGeneration += 1;
       if (tickId !== null) {
         clearInterval(tickId);
         tickId = null;
@@ -1230,6 +1314,25 @@
     function currentBlock() {
       const step = currentStep();
       return step ? blocks[step.blockIndex] : null;
+    }
+
+    function nowMs() {
+      return Date.now();
+    }
+
+    function durationMsForPhase(targetPhase = phase, index = stepIndex) {
+      if (targetPhase === 'pre_countdown') return blockPreCountdown(index) * 1000;
+      return (timerSteps[index]?.duration || 0) * 1000;
+    }
+
+    function displayedSecondsFromMs(milliseconds) {
+      return Math.max(0, Math.ceil(Math.max(0, milliseconds) / 1000));
+    }
+
+    function currentRemainingMs(now = nowMs()) {
+      if (phase === 'idle' || phase === 'complete') return 0;
+      if (paused) return Math.max(0, pausedRemainingMs);
+      return Math.max(0, stepEndsAt - now);
     }
 
     function isFirstStepInBlock(index = stepIndex) {
@@ -1299,8 +1402,31 @@
       return total;
     }
 
+    function snapshotState() {
+      if (phase === 'idle' || phase === 'complete') return null;
+      return {
+        schema: 1,
+        workoutId: normalizedWorkout.id,
+        workout: normalizedWorkout,
+        stepIndex,
+        phase,
+        paused,
+        stepStartedAt,
+        stepEndsAt,
+        pausedRemainingMs,
+        updatedAt: nowMs(),
+      };
+    }
+
+    function persistState() {
+      const state = snapshotState();
+      if (state) writeActiveTimerState(state);
+      else clearActiveTimerState();
+    }
+
     function emitUpdate() {
       const step = currentStep();
+      secondsLeft = displayedSecondsFromMs(currentRemainingMs());
       callbacks.onUpdate({
         phase,
         paused,
@@ -1326,114 +1452,195 @@
       warningPulseActive = false;
     }
 
-    function beginPreCountdown() {
+    function beginPreCountdown(at = nowMs(), { sound = true } = {}) {
       phase = 'pre_countdown';
-      secondsLeft = blockPreCountdown();
+      paused = false;
+      pausedRemainingMs = 0;
+      stepStartedAt = at;
+      stepEndsAt = at + durationMsForPhase('pre_countdown');
+      secondsLeft = displayedSecondsFromMs(stepEndsAt - at);
       emitUpdate();
-      playBeep(660);
+      if (sound) playBeep(660);
+      persistState();
     }
 
-    function beginStep() {
+    function beginStep(at = nowMs(), { sound = true } = {}) {
       const step = currentStep();
       if (!step) {
         phase = 'complete';
+        completed = true;
+        clearActiveTimerState();
         releaseWorkoutWakeLock();
         emitUpdate();
         return;
       }
       phase = 'running';
-      secondsLeft = step.duration;
-      playBeep(isWorkStep(step) ? 1760 : 1320, isWorkStep(step) ? 240 : 100);
+      paused = false;
+      pausedRemainingMs = 0;
+      stepStartedAt = at;
+      stepEndsAt = at + durationMsForPhase('running');
+      secondsLeft = displayedSecondsFromMs(stepEndsAt - at);
+      lastWarningSecond = null;
+      if (sound) playBeep(isWorkStep(step) ? 1760 : 1320, isWorkStep(step) ? 240 : 100);
       triggerVisualWarningPulse();
-      if (isWorkStep(step) && secondsLeft <= 5) {
+      if (sound && isWorkStep(step) && secondsLeft <= 5) {
         playBeep(880);
       }
-      if (shouldPlayRestWarning() && secondsLeft <= 5) {
+      if (sound && shouldPlayRestWarning() && secondsLeft <= 5) {
         playBeep(660);
       }
       emitUpdate();
+      persistState();
     }
 
-    function advanceStep() {
+    function completeWorkout() {
+      phase = 'complete';
+      completed = true;
+      clearTick();
+      clearActiveTimerState();
+      releaseWorkoutWakeLock();
+      emitUpdate();
+    }
+
+    function advanceStep(at = nowMs(), { sound = true } = {}) {
       if (stepIndex >= timerSteps.length - 1) {
-        phase = 'complete';
-        clearTick();
-        releaseWorkoutWakeLock();
-        emitUpdate();
+        completeWorkout();
         return;
       }
       const previousStep = currentStep();
       stepIndex += 1;
-      if (shouldBeginPreCountdown(previousStep)) beginPreCountdown();
-      else beginStep();
+      if (shouldBeginPreCountdown(previousStep)) beginPreCountdown(at, { sound });
+      else beginStep(at, { sound });
     }
 
-    function tick() {
-      if (paused) return;
-      secondsLeft -= 1;
-      if (secondsLeft > 0) {
-        if (phase === 'pre_countdown') playBeep(660);
-        if (phase === 'running') triggerVisualWarningPulse();
-        if (phase === 'running' && isWorkStep(currentStep()) && secondsLeft <= 5) {
-          playBeep(880);
-        }
-        if (phase === 'running' && shouldPlayRestWarning() && secondsLeft <= 5) {
-          playBeep(660);
-        }
+    function reconcile({ sound = false, persist = true } = {}) {
+      if (completed || phase === 'idle' || phase === 'complete') return;
+      if (paused) {
+        secondsLeft = displayedSecondsFromMs(pausedRemainingMs);
         emitUpdate();
+        if (persist) persistState();
         return;
       }
-      if (phase === 'pre_countdown') beginStep();
-      else if (phase === 'running') {
-        advanceStep();
+      const now = nowMs();
+      let changedPhase = false;
+      let safety = timerSteps.length + blocks.length + 2;
+      while (phase !== 'complete' && stepEndsAt <= now && safety > 0) {
+        safety -= 1;
+        const transitionAt = stepEndsAt;
+        if (phase === 'pre_countdown') {
+          beginStep(transitionAt, { sound: false });
+        } else if (phase === 'running') {
+          advanceStep(transitionAt, { sound: false });
+        } else {
+          break;
+        }
+        changedPhase = true;
       }
+      secondsLeft = displayedSecondsFromMs(currentRemainingMs(now));
+      if (phase === 'running') triggerVisualWarningPulse();
+      if (sound && secondsLeft > 0 && secondsLeft <= 5 && secondsLeft !== lastWarningSecond) {
+        lastWarningSecond = secondsLeft;
+        if (isWorkStep(currentStep())) playBeep(880);
+        if (shouldPlayRestWarning()) playBeep(660);
+      }
+      if (phase === 'pre_countdown' && sound && secondsLeft > 0 && secondsLeft !== lastWarningSecond) {
+        lastWarningSecond = secondsLeft;
+        playBeep(660);
+      }
+      emitUpdate();
+      if (persist && changedPhase) persistState();
+    }
+
+    function startTickLoop() {
+      clearTick();
+      const generation = tickGeneration;
+      tickId = setInterval(() => {
+        if (generation !== tickGeneration) return;
+        reconcile({ sound: true, persist: false });
+      }, 1000);
+    }
+
+    function restore(savedState) {
+      if (!savedState || savedState.workoutId !== normalizedWorkout.id) return false;
+      const savedStepIndex = Number(savedState.stepIndex);
+      if (!Number.isInteger(savedStepIndex) || savedStepIndex < 0 || savedStepIndex >= timerSteps.length) return false;
+      if (savedState.phase !== 'running' && savedState.phase !== 'pre_countdown') return false;
+      stepIndex = savedStepIndex;
+      phase = savedState.phase;
+      paused = savedState.paused === true;
+      stepStartedAt = Number(savedState.stepStartedAt) || nowMs();
+      stepEndsAt = Number(savedState.stepEndsAt) || (stepStartedAt + durationMsForPhase(phase));
+      pausedRemainingMs = Math.max(0, Number(savedState.pausedRemainingMs) || 0);
+      completed = false;
+      if (paused && pausedRemainingMs <= 0) pausedRemainingMs = currentRemainingMs();
+      reconcile({ sound: false, persist: true });
+      if (!paused && phase !== 'complete') startTickLoop();
+      return true;
     }
 
     return {
       start() {
         if (!timerSteps.length) return;
+        if (restore(options.restoreState)) return;
         stepIndex = 0;
         paused = false;
-        if (blockPreCountdown() > 0) beginPreCountdown();
-        else beginStep();
-        clearTick();
-        tickId = setInterval(tick, 1000);
+        completed = false;
+        if (blockPreCountdown() > 0) beginPreCountdown(nowMs());
+        else beginStep(nowMs());
+        startTickLoop();
       },
       pause() {
+        if (phase === 'complete' || phase === 'idle' || paused) return;
+        reconcile({ sound: false, persist: true });
+        if (phase === 'complete' || phase === 'idle') return;
+        pausedRemainingMs = currentRemainingMs();
         paused = true;
+        clearTick();
         emitUpdate();
+        persistState();
       },
       resume() {
+        if (phase === 'complete' || phase === 'idle' || !paused) return;
         paused = false;
+        stepStartedAt = nowMs();
+        stepEndsAt = stepStartedAt + Math.max(0, pausedRemainingMs);
+        pausedRemainingMs = 0;
         emitUpdate();
+        persistState();
+        startTickLoop();
       },
       isPaused() {
         return paused;
       },
       skip() {
         if (phase === 'complete') return;
+        if (!paused) reconcile({ sound: false, persist: true });
+        if (phase === 'complete') return;
         clearTick();
-        if (phase === 'pre_countdown') beginStep();
-        else advanceStep();
-        if (phase !== 'complete') tickId = setInterval(tick, 1000);
+        if (phase === 'pre_countdown') beginStep(nowMs());
+        else advanceStep(nowMs());
+        if (phase !== 'complete' && !paused) startTickLoop();
       },
       back() {
         if (phase === 'complete') return;
+        if (!paused) reconcile({ sound: false, persist: true });
+        if (phase === 'complete') return;
         clearTick();
         if (stepIndex > 0) stepIndex -= 1;
-        if (isFirstStepInBlock() && blockPreCountdown() > 0) beginPreCountdown();
-        else beginStep();
-        tickId = setInterval(tick, 1000);
+        if (isFirstStepInBlock() && blockPreCountdown() > 0) beginPreCountdown(nowMs());
+        else beginStep(nowMs());
+        if (!paused) startTickLoop();
       },
       finish() {
         clearTick();
         stopActiveBeeps();
         releaseWorkoutWakeLock();
-        phase = 'complete';
-        emitUpdate();
+        completeWorkout();
       },
       restart() {
         clearTick();
+        clearActiveTimerState();
+        completed = false;
         this.start();
       },
       destroy() {
@@ -1442,6 +1649,7 @@
         releaseWorkoutWakeLock();
         phase = 'idle';
       },
+      reconcile,
     };
   }
 
@@ -1546,7 +1754,7 @@
         </div>
       </div>`;
     root.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button) return;
       if (button.dataset.action === 'difficulty') showSoccerDifficulty(id);
       if (button.dataset.action === 'start-preview') showTimer(id, { generatedWorkout });
@@ -1575,7 +1783,7 @@
         </div>
       </div>`;
     root.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button) return;
       if (button.dataset.action === 'list') showWorkoutList();
       if (button.dataset.action === 'start-soccer') showTimer(id, { difficulty: button.dataset.difficulty || 'competitive' });
@@ -1589,7 +1797,7 @@
       showWorkoutList();
       return;
     }
-    if (savedWorkout.generator === 'soccer-match' && !options.difficulty && !options.generatedWorkout) {
+    if (savedWorkout.generator === 'soccer-match' && !options.difficulty && !options.generatedWorkout && !options.restoredWorkout) {
       showSoccerDifficulty(id);
       return;
     }
@@ -1597,7 +1805,9 @@
       unlockAudio(),
       new Promise((resolve) => setTimeout(resolve, 350)),
     ]);
-    const workout = options.generatedWorkout || (savedWorkout?.generator === 'soccer-match'
+    const restoreState = activeTimerRestoreIntent?.workoutId === id ? activeTimerRestoreIntent : null;
+    activeTimerRestoreIntent = null;
+    const workout = options.restoredWorkout || options.generatedWorkout || (savedWorkout?.generator === 'soccer-match'
       ? generateSoccerMatchWorkout(options.difficulty || 'competitive')
       : savedWorkout);
     stopTimer();
@@ -1606,7 +1816,7 @@
     if (!stepsForWorkout(workout).length) {
       root.innerHTML = `${renderEcosystemNav()}<div class="sprints-app"><button type="button" class="sprints-btn sprints-btn--ghost" data-action="list">Workouts</button><div class="sprints-empty">Add at least one workout step before starting.</div></div>`;
       root.addEventListener('click', (event) => {
-        if (event.target.closest('[data-action="list"]')) showWorkoutList();
+        if (getGuardedActionButton(event, '[data-action="list"]')) showWorkoutList();
       });
       return;
     }
@@ -1633,7 +1843,7 @@
           renderTimer(root, state);
         }
       },
-    });
+    }, { restoreState });
     let stepNavigationLocked = false;
     let finishConfirmationOpen = false;
 
@@ -1645,7 +1855,7 @@
     }
 
     root.addEventListener('click', async (event) => {
-      const button = event.target.closest('[data-action]');
+      const button = getGuardedActionButton(event);
       if (!button || !activeTimer) return;
       const action = button.dataset.action;
       if (action === 'pause') activeTimer.pause();
@@ -1702,10 +1912,19 @@
       if (window.LandosWorld && window.location.hash !== '#/violet-sprints') {
         window.LandosWorld.navigateToRoute('violet-sprints');
       }
-      showWorkoutList();
+      if (!restoreActiveTimerIfAvailable()) showWorkoutList();
       unlockAudio().then((audioEnabled) => {
         if (!audioEnabled) showSoundEnableControl();
       });
+    });
+    window.addEventListener?.('focus', () => {
+      if (activeTimer) activeTimer.reconcile({ sound: false, persist: true });
+      else if (window.location.hash === '#/violet-sprints') restoreActiveTimerIfAvailable();
+    });
+    window.addEventListener?.('hashchange', () => {
+      if (window.location.hash === '#/violet-sprints' && !activeTimer) {
+        restoreActiveTimerIfAvailable();
+      }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && audioCtx) {
@@ -1713,19 +1932,25 @@
           if (!running) logAudioState('not running after visibility restore');
         });
       }
+      if (document.visibilityState === 'visible') {
+        if (activeTimer) activeTimer.reconcile({ sound: false, persist: true });
+        else if (window.location.hash === '#/violet-sprints') restoreActiveTimerIfAvailable();
+      }
       if (document.visibilityState === 'visible' && workoutWakeLockWanted) {
         requestWorkoutWakeLock();
       }
     });
     if (window.location.hash === '#/violet-sprints') {
-      showWorkoutList();
+      if (!restoreActiveTimerIfAvailable()) showWorkoutList();
     } else if (!window.LandosWorld) {
       setView('clock');
     }
   }
 
   window.VioletSprints = {
+    ACTIVE_TIMER_KEY,
     STORAGE_KEY,
+    clearActiveTimerState,
     createWorkout,
     createWorkoutTimer,
     defaultWorkouts,
