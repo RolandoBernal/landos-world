@@ -82,6 +82,8 @@
     Lunch: 6,
     Dinner: 6,
   });
+  const BEDTIME_CONTEXT_TYPE = 'Bedtime';
+  const DEFAULT_BEDTIME_BASE_UNITS = 15;
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
@@ -90,6 +92,7 @@
     effectiveTo: null,
     mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
+    bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -228,6 +231,7 @@
       effectiveTo: plan.effectiveTo || null,
       mealBaseUnitsByType: getMealBaseUnitsByType(plan),
       mealBaseUnits: getMealBaseUnitsForType(plan, 'Breakfast'),
+      bedtimeBaseUnits: getBedtimeBaseUnits(plan),
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -329,6 +333,10 @@
     return getEntryTypeConfig(type).mealGuidance === true;
   }
 
+  function entryTypeUsesDoseGuidance(type) {
+    return entryTypeUsesMealGuidance(type) || type === BEDTIME_CONTEXT_TYPE;
+  }
+
   function normalizeCorrectionRange(range) {
     if (!range || typeof range !== 'object') return null;
     const minGlucose = range.minGlucose == null || range.minGlucose === ''
@@ -378,6 +386,10 @@
     return getMealBaseUnitsByType(plan)[type];
   }
 
+  function getBedtimeBaseUnits(plan = {}) {
+    return normalizeNumber(plan.bedtimeBaseUnits) ?? DEFAULT_BEDTIME_BASE_UNITS;
+  }
+
   function normalizeInsulinPlan(plan) {
     if (!plan || typeof plan !== 'object') return null;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(plan.effectiveFrom || ''))
@@ -403,6 +415,7 @@
       effectiveTo,
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
+      bedtimeBaseUnits: getBedtimeBaseUnits(plan),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
@@ -1364,6 +1377,29 @@
 
   function calculateMealInsulinDose({ bloodSugar, entryType, insulinPlan, recordTimestamp }) {
     const glucoseText = String(bloodSugar ?? '').trim();
+    if (entryType === BEDTIME_CONTEXT_TYPE) {
+      if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
+        return {
+          status: 'unavailable',
+          baseUnits: null,
+          correctionUnits: null,
+          suggestedTotalUnits: null,
+          matchedRange: null,
+          insulinPlanId: insulinPlan?.id || null,
+          message: 'No insulin plan is configured for this date.',
+        };
+      }
+      const baseUnits = getBedtimeBaseUnits(insulinPlan);
+      return {
+        status: 'calculated',
+        baseUnits,
+        correctionUnits: null,
+        suggestedTotalUnits: baseUnits,
+        matchedRange: null,
+        insulinPlanId: insulinPlan.id,
+        message: 'Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.',
+      };
+    }
     if (!MEAL_TYPES.includes(entryType) || !insulinPlan?.supportedMealTypes?.includes(entryType)) {
       if (MEAL_TYPES.includes(entryType) && !insulinPlan) {
         return {
@@ -1383,7 +1419,7 @@
         suggestedTotalUnits: null,
         matchedRange: null,
         insulinPlanId: insulinPlan?.id || null,
-        message: 'Automatic dose guidance is available only for Breakfast, Lunch, and Dinner under the current plan.',
+        message: 'Automatic dose guidance is available only for Breakfast, Lunch, Dinner, and Bedtime under the current plan.',
       };
     }
     if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
@@ -1769,6 +1805,9 @@
     if (!record || record.doseCalculationStatus !== 'calculated' || record.suggestedTotalUnits == null) return '';
     const given = formatInsulin(record.administeredInsulinUnits ?? record.insulinUnits) || 'No insulin';
     const suggested = formatInsulin(record.suggestedTotalUnits);
+    if (record.type === BEDTIME_CONTEXT_TYPE) {
+      return `Given: ${given} · Suggested: ${suggested}`;
+    }
     const breakdown = `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
     return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
   }
@@ -2456,7 +2495,7 @@
         <div data-dose-helper aria-live="polite"></div>
         ${eventConfig.fields.includes('insulinUnits') ? `
           <label class="lee_lee_diabetes_field">
-            <span data-insulin-label>${entryTypeUsesMealGuidance(currentEditor.type) ? 'Insulin Actually Given' : 'Insulin'}</span>
+            <span data-insulin-label>${entryTypeUsesDoseGuidance(contextType) ? 'Insulin Actually Given' : 'Insulin'}</span>
             <input class="lee_lee_diabetes_input" name="insulinUnits" type="number" inputmode="decimal" min="0" step="0.5" autocomplete="off" value="${escapeHtml(record.administeredInsulinUnits ?? record.insulinUnits ?? '')}">
           </label>
         ` : ''}
@@ -2512,7 +2551,7 @@
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
     const eventType = getEditorEventType(form);
-    if (eventType !== 'check-insulin' || !entryTypeUsesMealGuidance(type)) {
+    if (eventType !== 'check-insulin' || !entryTypeUsesDoseGuidance(type)) {
       return {
         status: 'manual',
         baseUnits: null,
@@ -2551,13 +2590,19 @@
 
   function renderDoseHelperResult(result) {
     if (result.status === 'calculated') {
+      const breakdown = result.correctionUnits == null
+        ? ''
+        : `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>`;
+      const range = result.matchedRange
+        ? `<div class="lee_lee_diabetes_dose_range">${escapeHtml(formatRange(result.matchedRange))}</div>`
+        : '';
       return `
         <section class="lee_lee_diabetes_dose_card" aria-label="Suggested insulin">
           <div>
             <div class="lee_lee_diabetes_dose_label">Suggested dose</div>
             <div class="lee_lee_diabetes_dose_total">${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>
-            <div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>
-            <div class="lee_lee_diabetes_dose_range">${escapeHtml(formatRange(result.matchedRange))}</div>
+            ${breakdown}
+            ${range}
           </div>
           <p>${escapeHtml(result.message)}</p>
         </section>
@@ -2582,7 +2627,7 @@
     const type = getEditorType(form);
     const label = form.querySelector('[data-insulin-label]');
     if (label) {
-      label.textContent = entryTypeUsesMealGuidance(type) ? 'Insulin Actually Given' : 'Insulin';
+      label.textContent = entryTypeUsesDoseGuidance(type) ? 'Insulin Actually Given' : 'Insulin';
     }
     const helper = form.querySelector('[data-dose-helper]');
     const result = getEditorDoseResult(form);
@@ -3146,13 +3191,17 @@
             Effective Date
             <input class="lee_lee_diabetes_input" name="effectiveFrom" type="date" required value="${escapeHtml(plan.effectiveFrom)}">
           </label>
-          <p class="lee_lee_diabetes_help">Base doses are configured separately for Breakfast, Lunch, and Dinner. Existing glucose correction guidance is added separately.</p>
+          <p class="lee_lee_diabetes_help">Base doses are configured separately for Breakfast, Lunch, Dinner, and Bedtime. Existing glucose correction guidance is added separately for meals only.</p>
           ${MEAL_TYPES.map((type) => `
             <label class="lee_lee_diabetes_field">
               ${escapeHtml(type)} Base Dose
               <input class="lee_lee_diabetes_input" name="${escapeHtml(type.toLowerCase())}BaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getMealBaseUnitsForType(plan, type))}">
             </label>
           `).join('')}
+          <label class="lee_lee_diabetes_field">
+            Bedtime Base Dose
+            <input class="lee_lee_diabetes_input" name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getBedtimeBaseUnits(plan))}">
+          </label>
           <div class="lee_lee_diabetes_plan_meta">
             <span>Supported meals: ${escapeHtml(plan.supportedMealTypes.join(', '))}</span>
             <span>Last updated: ${escapeHtml(formatDate(new Date(plan.updatedAt)))}</span>
@@ -3670,6 +3719,10 @@
     if (MEAL_TYPES.some((type) => mealBaseUnitsByType[type] == null)) {
       return { error: 'Breakfast, Lunch, and Dinner base doses must be nonnegative numbers.' };
     }
+    const bedtimeBaseUnits = normalizeNumber(form.elements.bedtimeBaseUnits?.value);
+    if (bedtimeBaseUnits == null) {
+      return { error: 'Bedtime base dose must be a nonnegative number.' };
+    }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
     const now = new Date().toISOString();
@@ -3681,6 +3734,7 @@
         effectiveTo: null,
         mealBaseUnitsByType,
         mealBaseUnits: mealBaseUnitsByType.Breakfast,
+        bedtimeBaseUnits,
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -3716,6 +3770,10 @@
               <dd>${escapeHtml(formatInsulin(getMealBaseUnitsForType(plan, type)))}</dd>
             </div>
           `).join('')}
+          <div>
+            <dt>Bedtime base dose</dt>
+            <dd>${escapeHtml(formatInsulin(getBedtimeBaseUnits(plan)))}</dd>
+          </div>
         </dl>
         <label class="lee_lee_diabetes_checkline">
           <span>I have verified these instructions with Lee-Lee’s diabetes care team.</span>
@@ -3737,7 +3795,7 @@
     updateTrackerData((current) => {
       const nextPlans = current.insulinPlans.map((plan) => {
         const range = getPlanTimestampRange(plan);
-        if (pendingStart != null && range.start < pendingStart && range.end > pendingStart) {
+        if (pendingStart != null && range.start <= pendingStart && range.end > pendingStart) {
           return {
             ...plan,
             effectiveTo: pendingPlan.effectiveFrom,
