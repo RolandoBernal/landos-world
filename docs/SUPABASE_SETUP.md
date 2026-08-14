@@ -133,7 +133,9 @@ The app keeps local data as:
 - Safety backup source
 - Recovery fallback
 
-Patient and clinic information also remains local until the user confirms the guided shared-settings upload. Device identity and History Initial Window stay local and are not uploaded.
+Patient, clinic, and active insulin-dose configuration remain local until the user confirms the guided shared-settings upload. After upload, Shared Settings syncs Patient & Clinic plus the active insulin plan details in `lee_lee_shared_settings.payload`: plan name, effective date, Breakfast/Lunch/Dinner/Bedtime base doses, the full correction table including the open-ended 550+ row, and plan notes.
+
+Device identity, History Initial Window, sync diagnostics/migration metadata, backup/import/export controls, and Recently Deleted controls stay local and are not uploaded. Apply all migrations in `supabase/migrations/`; `202608140001_allow_family_shared_settings_editors.sql` is required before devices labeled Levi or Violet can save Shared Settings.
 
 ## 10. Rollback
 

@@ -609,6 +609,79 @@ test('settings correction table includes the editable open-ended 550 plus row', 
   assert.match(trackerSource, /DEFAULT_INSULIN_PLAN\.correctionRanges\.map\(\(_, index\) => normalizeCorrectionRange/);
 });
 
+test('shared settings contract applies restored patient and dose settings to calculator state', () => {
+  const runtime = createTrackerRuntime();
+  const shared = runtime.LeeLeeTrackerSharedSettings;
+  const sourceDocument = {
+    schemaVersion: 1,
+    records: [],
+    settings: {
+      patientName: '',
+      historyInitialWindowDays: '14',
+    },
+    insulinPlans: [],
+    activeInsulinPlanId: null,
+    recovery: {},
+    metadata: {},
+  };
+  const restored = shared.applySharedSettingsToDocument(sourceDocument, {
+    patientName: 'Lee Bernal',
+    patientBirthDate: '2014-06-13',
+    clinicName: 'Vanderbilt Children',
+    clinicPhone: '615-555-0100',
+    insulinPlan: {
+      id: 'shared-plan',
+      name: 'Shared Plan',
+      effectiveFrom: '2026-08-14',
+      effectiveTo: null,
+      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+      bedtimeBaseUnits: 15,
+      supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+      correctionRanges: [
+        { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+        { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+        { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+        { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+        { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+        { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+        { minGlucose: 550, maxGlucose: null, correctionUnits: 6 },
+      ],
+      notes: '',
+    },
+  });
+  const plan = restored.insulinPlans.find((item) => item.id === restored.activeInsulinPlanId);
+  const lunch550 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 550,
+    entryType: 'Lunch',
+    recordTimestamp: Date.parse('2026-08-14T12:00:00.000Z'),
+    insulinPlan: plan,
+  });
+
+  assert.equal(restored.settings.patientName, 'Lee Bernal');
+  assert.equal(restored.settings.historyInitialWindowDays, '14');
+  assert.equal(plan.mealBaseUnitsByType.Breakfast, 5);
+  assert.equal(plan.mealBaseUnitsByType.Lunch, 6);
+  assert.equal(plan.mealBaseUnitsByType.Dinner, 6);
+  assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
+  assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
+  assert.equal(plan.correctionRanges.at(-1).correctionUnits, 6);
+  assert.equal(lunch550.baseUnits, 6);
+  assert.equal(lunch550.correctionUnits, 6);
+  assert.equal(lunch550.suggestedTotalUnits, 12);
+});
+
+test('shared settings inventory classifies every current LLT settings control', () => {
+  const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
+  const byLabel = new Map(inventory.map((item) => [item.label, item]));
+
+  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Breakfast Base Dose', 'Lunch Base Dose', 'Dinner Base Dose', 'Correction Table'].forEach((label) => {
+    assert.equal(byLabel.get(label)?.classification, 'SHARED');
+  });
+  ['History Initial Window', 'This device is used by', 'Shared Sync status/diagnostics', 'Local Backup import/export controls', 'Recently Deleted controls'].forEach((label) => {
+    assert.equal(byLabel.get(label)?.classification, 'LOCAL');
+  });
+});
+
 test('meal and activity events render in today and reports with category fields', () => {
   const reports = createTrackerReports();
   const meal = record({

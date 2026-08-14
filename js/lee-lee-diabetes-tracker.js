@@ -77,6 +77,26 @@
   ];
   const DEFAULT_HISTORY_WINDOW_DAYS = 30;
   const FALLBACK_DEVICE_USERS = Object.freeze(['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown']);
+  const SHARED_SETTINGS_SCHEMA_VERSION = 2;
+  const LLT_SETTINGS_INVENTORY = Object.freeze([
+    { label: 'Patient Name', key: 'settings.patientName', classification: 'SHARED' },
+    { label: 'Date of Birth', key: 'settings.patientBirthDate', classification: 'SHARED' },
+    { label: 'Clinic Name', key: 'settings.clinicName', classification: 'SHARED' },
+    { label: 'Clinic Phone', key: 'settings.clinicPhone', classification: 'SHARED' },
+    { label: 'Plan Name', key: 'insulinPlans[].name', classification: 'SHARED' },
+    { label: 'Effective Date', key: 'insulinPlans[].effectiveFrom', classification: 'SHARED' },
+    { label: 'Breakfast Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Breakfast', classification: 'SHARED' },
+    { label: 'Lunch Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Lunch', classification: 'SHARED' },
+    { label: 'Dinner Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Dinner', classification: 'SHARED' },
+    { label: 'Bedtime Base Dose', key: 'insulinPlans[].bedtimeBaseUnits', classification: 'SHARED' },
+    { label: 'Correction Table', key: 'insulinPlans[].correctionRanges', classification: 'SHARED' },
+    { label: 'Plan Notes', key: 'insulinPlans[].notes', classification: 'SHARED' },
+    { label: 'History Initial Window', key: 'settings.historyInitialWindowDays', classification: 'LOCAL' },
+    { label: 'This device is used by', key: 'deviceIdentity', classification: 'LOCAL' },
+    { label: 'Shared Sync status/diagnostics', key: 'syncStatus/sharedSyncMigrationMetadata', classification: 'LOCAL' },
+    { label: 'Local Backup import/export controls', key: 'backup/import/export actions', classification: 'LOCAL' },
+    { label: 'Recently Deleted controls', key: 'records[].deletedAt/deletedBy', classification: 'LOCAL' },
+  ]);
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
   const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({
     Breakfast: 5,
@@ -425,6 +445,52 @@
     };
   }
 
+  function createSharedInsulinPlanSnapshot(plan = getCurrentPlan()) {
+    return clonePlanSnapshot(normalizeInsulinPlan(plan || DEFAULT_INSULIN_PLAN));
+  }
+
+  function createSharedSettingsSnapshot({ plan = getCurrentPlan(), settings = trackerData.settings || {}, version = syncRepository?.getSharedSettings?.()?.version || null } = {}) {
+    return {
+      schemaVersion: SHARED_SETTINGS_SCHEMA_VERSION,
+      patientName: String(settings.patientName || '').trim().slice(0, 80),
+      patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(settings.patientBirthDate || '')) ? settings.patientBirthDate : '',
+      clinicName: String(settings.clinicName || '').trim().slice(0, 120),
+      clinicPhone: String(settings.clinicPhone || '').trim().slice(0, 40),
+      insulinPlan: createSharedInsulinPlanSnapshot(plan),
+      version,
+    };
+  }
+
+  function mergeSharedInsulinPlan(current, sharedPlan) {
+    const normalizedPlan = normalizeInsulinPlan(sharedPlan || DEFAULT_INSULIN_PLAN);
+    if (!normalizedPlan) return current;
+    const nextPlans = (current.insulinPlans || []).map((plan) => (
+      plan.id === normalizedPlan.id ? normalizedPlan : plan
+    ));
+    if (!nextPlans.some((plan) => plan.id === normalizedPlan.id)) {
+      nextPlans.push(normalizedPlan);
+    }
+    return {
+      ...current,
+      insulinPlans: dedupePlans(nextPlans),
+      activeInsulinPlanId: normalizedPlan.id,
+    };
+  }
+
+  function applySharedSettingsToDocument(current, settings) {
+    const source = settings && typeof settings === 'object' ? settings : {};
+    return mergeSharedInsulinPlan({
+      ...current,
+      settings: {
+        ...(current.settings || {}),
+        patientName: source.patientName || '',
+        patientBirthDate: source.patientBirthDate || '',
+        clinicName: source.clinicName || '',
+        clinicPhone: source.clinicPhone || '',
+      },
+    }, source.insulinPlan || DEFAULT_INSULIN_PLAN);
+  }
+
   function normalizeDoseStatus(value) {
     return [
       'calculated',
@@ -682,31 +748,17 @@
   }
 
   function getLocalSharedSettings() {
-    const settings = trackerData.settings || {};
-    return {
-      patientName: String(settings.patientName || '').trim().slice(0, 80),
-      patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(settings.patientBirthDate || '')) ? settings.patientBirthDate : '',
-      clinicName: String(settings.clinicName || '').trim().slice(0, 120),
-      clinicPhone: String(settings.clinicPhone || '').trim().slice(0, 40),
-    };
+    return createSharedSettingsSnapshot();
   }
 
   function sharedSettingsHaveValues(settings = getLocalSharedSettings()) {
-    return Boolean(settings.patientName || settings.patientBirthDate || settings.clinicName || settings.clinicPhone);
+    return syncRepository?.sharedSettingsHaveValues?.(settings)
+      || Boolean(settings.patientName || settings.patientBirthDate || settings.clinicName || settings.clinicPhone);
   }
 
   function applySharedSettingsToLocal(settings) {
     if (!settings) return;
-    updateTrackerData((current) => ({
-      ...current,
-      settings: {
-        ...(current.settings || {}),
-        patientName: settings.patientName || '',
-        patientBirthDate: settings.patientBirthDate || '',
-        clinicName: settings.clinicName || '',
-        clinicPhone: settings.clinicPhone || '',
-      },
-    }));
+    updateTrackerData((current) => applySharedSettingsToDocument(current, settings));
   }
 
   function getSharedSettingsStatus() {
@@ -3821,6 +3873,9 @@
         activeInsulinPlanId: pendingPlan.id,
       };
     });
+    if (syncRepository?.saveSharedSettings) {
+      syncRepository.saveSharedSettings(createSharedSettingsSnapshot({ plan: pendingPlan }));
+    }
     renderSettings();
   }
 
@@ -3828,15 +3883,17 @@
     if (!form) return;
     patientSettingsMessage = 'Saving…';
     patientSettingsError = '';
-    const sharedSettings = {
-      patientName: String(form.elements.patientName?.value || '').trim().slice(0, 80),
-      patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(form.elements.patientBirthDate?.value || ''))
-        ? form.elements.patientBirthDate.value
-        : '',
-      clinicName: String(form.elements.clinicName?.value || '').trim().slice(0, 120),
-      clinicPhone: String(form.elements.clinicPhone?.value || '').trim().slice(0, 40),
-      version: syncRepository?.getSharedSettings?.()?.version || null,
-    };
+    const sharedSettings = createSharedSettingsSnapshot({
+      settings: {
+        ...(trackerData.settings || {}),
+        patientName: String(form.elements.patientName?.value || '').trim().slice(0, 80),
+        patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(form.elements.patientBirthDate?.value || ''))
+          ? form.elements.patientBirthDate.value
+          : '',
+        clinicName: String(form.elements.clinicName?.value || '').trim().slice(0, 120),
+        clinicPhone: String(form.elements.clinicPhone?.value || '').trim().slice(0, 40),
+      },
+    });
     const localSettings = {
       patientName: sharedSettings.patientName,
       patientBirthDate: sharedSettings.patientBirthDate,
@@ -4074,14 +4131,14 @@
         }
       },
       onSharedSettingsChange: (settings) => {
-        if (currentEditor?.mode === 'settings') return;
         applySharedSettingsToLocal(settings);
         patientSettingsMessage = '';
         patientSettingsError = '';
-        if (!currentEditor || ['history', 'history-day', 'export'].includes(currentEditor.mode)) {
+        if (!currentEditor || ['history', 'history-day', 'export', 'settings'].includes(currentEditor.mode)) {
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
           else if (currentEditor?.mode === 'export') renderExport();
+          else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
         }
       },
@@ -4538,6 +4595,18 @@
     mergeTrackerDocuments,
     validateBackupPayload,
     createBackupDocument,
+  };
+
+  window.LeeLeeTrackerSharedSettings = {
+    schemaVersion: SHARED_SETTINGS_SCHEMA_VERSION,
+    settingsInventory: LLT_SETTINGS_INVENTORY.map((item) => ({ ...item })),
+    createSharedSettingsSnapshot: ({ document, plan } = {}) => createSharedSettingsSnapshot({
+      settings: document?.settings || trackerData.settings || {},
+      plan: plan || (document ? ((document.insulinPlans || []).find((item) => item.id === document.activeInsulinPlanId) || document.insulinPlans?.[0]) : getCurrentPlan()),
+      version: null,
+    }),
+    applySharedSettingsToDocument,
+    createSharedInsulinPlanSnapshot,
   };
 
   window.LeeLeeTrackerReports = {

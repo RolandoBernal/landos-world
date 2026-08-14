@@ -12,6 +12,10 @@ const sharedSettingsMigrationSource = readFileSync(
   new URL('../supabase/migrations/202608040001_create_lee_lee_shared_settings.sql', import.meta.url),
   'utf8',
 );
+const sharedSettingsEditorMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202608140001_allow_family_shared_settings_editors.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -228,6 +232,70 @@ function createMockSupabase(remoteRows = [], options = {}) {
     rpcCalls,
   };
   return { createClient: () => client, client };
+}
+
+function sharedInsulinPlan(overrides = {}) {
+  return {
+    id: 'plan-shared',
+    name: 'Shared School Plan',
+    effectiveFrom: '2026-08-14',
+    effectiveTo: null,
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    mealBaseUnits: 5,
+    bedtimeBaseUnits: 15,
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+      { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+      { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+      { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+      { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+      { minGlucose: 550, maxGlucose: null, correctionUnits: 6 },
+    ],
+    notes: 'Shared plan note',
+    createdAt: '2026-08-14T12:00:00.000Z',
+    updatedAt: '2026-08-14T12:30:00.000Z',
+    ...overrides,
+  };
+}
+
+function sharedSettings(overrides = {}) {
+  return {
+    patientName: 'Lee Bernal',
+    patientBirthDate: '2014-06-13',
+    clinicName: 'Vanderbilt Children',
+    clinicPhone: '615-555-0100',
+    insulinPlan: sharedInsulinPlan(),
+    ...overrides,
+  };
+}
+
+function remoteSharedSettingsRow(overrides = {}) {
+  const settings = sharedSettings(overrides.settings || {});
+  return {
+    user_id: 'user-1',
+    patient_name: settings.patientName,
+    patient_date_of_birth: settings.patientBirthDate,
+    clinic_name: settings.clinicName,
+    clinic_phone: settings.clinicPhone,
+    version: overrides.version || 3,
+    last_edited_by: overrides.last_edited_by || 'Rolando',
+    updated_at: overrides.updated_at || '2026-08-14T13:00:00.000Z',
+    payload: overrides.payload || {
+      schemaVersion: 2,
+      patientClinic: {
+        patientName: settings.patientName,
+        patientBirthDate: settings.patientBirthDate,
+        clinicName: settings.clinicName,
+        clinicPhone: settings.clinicPhone,
+      },
+      insulinConfiguration: {
+        activeInsulinPlan: settings.insulinPlan,
+      },
+    },
+    app_schema_version: overrides.app_schema_version || 2,
+  };
 }
 
 test('reports missing Supabase config without throwing', () => {
@@ -518,6 +586,164 @@ test('shared settings insert for authenticated user and sync to a second client'
   assert.equal(second.getSharedSettingsStatus().hasRemote, true);
 });
 
+test('shared settings serialize and deserialize the complete shared care contract', () => {
+  const context = createSyncContext();
+  const normalized = context.LeeLeeTrackerSync.normalizeSharedSettings(sharedSettings());
+  const remote = context.LeeLeeTrackerSync.sharedSettingsToRemote({
+    ...normalized,
+    historyInitialWindowDays: '14',
+    deviceIdentity: 'Levi',
+    migration: { completed: true },
+  }, 'user-1');
+  const restored = context.LeeLeeTrackerSync.sharedSettingsFromRemote({
+    ...remote,
+    version: 4,
+    updated_at: '2026-08-14T13:00:00.000Z',
+  });
+
+  assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+  assert.equal(restored.patientName, 'Lee Bernal');
+  assert.equal(restored.clinicPhone, '615-555-0100');
+  assert.deepEqual(restored.insulinPlan, normalized.insulinPlan);
+  assert.equal(remote.payload.schemaVersion, 2);
+  assert.equal(remote.app_schema_version, 2);
+  assert.equal(Object.hasOwn(remote.payload, 'historyInitialWindowDays'), false);
+  assert.equal(Object.hasOwn(remote.payload, 'deviceIdentity'), false);
+  assert.equal(Object.hasOwn(remote.payload, 'migration'), false);
+});
+
+test('shared settings write payload includes dose settings and excludes local-only preferences', async () => {
+  const supabase = createMockSupabase();
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+  repository.setDeviceIdentity('Levi');
+  repository.saveSharedSettings({
+    ...sharedSettings(),
+    historyInitialWindowDays: '60',
+    syncDiagnosticsOpen: true,
+  });
+  await repository.processSharedSettingsQueue();
+
+  const row = supabase.client.sharedSettingsRows[0];
+  assert.equal(row.last_edited_by, 'Levi');
+  assert.equal(row.payload.patientClinic.patientName, 'Lee Bernal');
+  assert.deepEqual(row.payload.insulinConfiguration.activeInsulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).minGlucose, 550);
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).maxGlucose, null);
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+  assert.equal(Object.hasOwn(row.payload, 'historyInitialWindowDays'), false);
+  assert.equal(Object.hasOwn(row.payload, 'syncDiagnosticsOpen'), false);
+});
+
+test('shared settings read restores patient clinic and dose configuration from remote payload', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow()],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+
+  const restored = repository.getSharedSettings();
+  assert.equal(restored.patientName, 'Lee Bernal');
+  assert.equal(restored.clinicName, 'Vanderbilt Children');
+  assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+});
+
+test('legacy shared settings payloads are upgraded with the current dose defaults', () => {
+  const context = createSyncContext();
+  const restored = context.LeeLeeTrackerSync.sharedSettingsFromRemote({
+    user_id: 'user-1',
+    patient_name: 'Legacy Lee',
+    patient_date_of_birth: '2014-06-13',
+    clinic_name: 'Legacy Clinic',
+    clinic_phone: '555-0100',
+    version: 1,
+    last_edited_by: 'Emily',
+    payload: { patientName: 'Legacy Lee' },
+    app_schema_version: 1,
+  });
+
+  assert.equal(restored.patientName, 'Legacy Lee');
+  assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
+  assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+});
+
+test('startup pulls established remote shared settings without pushing local defaults', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow()],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository({
+    ...createDocumentStore(),
+    getLocalSharedSettings: () => ({
+      patientName: '',
+      patientBirthDate: '',
+      clinicName: '',
+      clinicPhone: '',
+      insulinPlan: context.LeeLeeTrackerSync.normalizeSharedInsulinPlan(),
+    }),
+  });
+
+  await repository.initialize();
+
+  assert.equal(repository.getConflicts().length, 0);
+  assert.equal(repository.getSharedSettings().patientName, 'Lee Bernal');
+  assert.equal(supabase.client.sharedSettingsRows.length, 1);
+  assert.equal(supabase.client.rpcCalls.some((call) => call.name === 'update_lee_lee_shared_settings_with_version'), false);
+});
+
+test('cross-device shared settings sync carries patient and dose updates', async () => {
+  const supabase = createMockSupabase();
+  const config = { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' };
+  const firstContext = createSyncContext({ supabase, config });
+  const secondContext = createSyncContext({ supabase, config });
+  const first = firstContext.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const second = secondContext.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await first.initialize();
+  first.saveSharedSettings(sharedSettings({
+    patientName: 'Updated Lee',
+    insulinPlan: sharedInsulinPlan({
+      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+      correctionRanges: [
+        { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
+        { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
+        { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
+        { minGlucose: 325, maxGlucose: 399, correctionUnits: 3 },
+        { minGlucose: 400, maxGlucose: 474, correctionUnits: 4 },
+        { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 },
+        { minGlucose: 550, maxGlucose: null, correctionUnits: 6 },
+      ],
+    }),
+  }));
+  await first.processSharedSettingsQueue();
+  await second.initialize();
+
+  assert.equal(second.getSharedSettings().patientName, 'Updated Lee');
+  assert.equal(second.getSharedSettings().insulinPlan.mealBaseUnitsByType.Lunch, 6);
+  assert.equal(second.getSharedSettings().insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+});
+
 test('shared settings stale version creates a conflict and preserves local version', async () => {
   const supabase = createMockSupabase([], {
     sharedSettingsRows: [{
@@ -585,6 +811,25 @@ test('shared settings migration metadata is separate from medical-record migrati
   assert.equal(repository.getSharedSettingsMigration().prompted, true);
   assert.notEqual(repository.keys.sharedSettingsMigration, repository.keys.migration);
   assert.equal(repository.sharedSettingsHaveValues({ patientName: 'Lee' }), true);
+});
+
+test('default shared dose settings do not count as local values when only metadata differs', () => {
+  const context = createSyncContext();
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const defaultPlan = context.LeeLeeTrackerSync.normalizeSharedInsulinPlan();
+
+  assert.equal(repository.sharedSettingsHaveValues({
+    patientName: '',
+    patientBirthDate: '',
+    clinicName: '',
+    clinicPhone: '',
+    insulinPlan: {
+      ...defaultPlan,
+      id: 'device-local-plan-id',
+      createdAt: '2026-07-31T05:00:00.000Z',
+      updatedAt: '2026-08-14T15:00:00.000Z',
+    },
+  }), false);
 });
 
 test('sync repository exposes a read-only record queue snapshot for migration resume checks', () => {
@@ -743,6 +988,9 @@ test('shared settings SQL migration uses RLS and version-aware RPC only', () => 
   assert.match(sharedSettingsMigrationSource, /grant select, insert on public\.lee_lee_shared_settings to authenticated/);
   assert.match(sharedSettingsMigrationSource, /grant execute on function public\.update_lee_lee_shared_settings_with_version[\s\S]*to authenticated/);
   assert.match(sharedSettingsMigrationSource, /revoke all on function public\.update_lee_lee_shared_settings_with_version[\s\S]*from public, anon/);
+  assert.match(sharedSettingsEditorMigrationSource, /drop constraint if exists lee_lee_shared_settings_last_edited_by_check/);
+  assert.match(sharedSettingsEditorMigrationSource, /last_edited_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
+  assert.doesNotMatch(sharedSettingsEditorMigrationSource, /grant .*service_role|disable row level security/i);
 });
 
 test('versioned RPC mock succeeds for owner and returns no row for another user', async () => {
