@@ -20,6 +20,10 @@ const recordEditorMigrationSource = readFileSync(
   new URL('../supabase/migrations/202608150001_allow_family_record_editors.sql', import.meta.url),
   'utf8',
 );
+const rpcCoalesceRepairMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202608150002_fix_versioned_rpc_coalesce.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -1077,6 +1081,19 @@ test('record editor SQL migration allows every in-app family identity without we
   assert.match(recordEditorMigrationSource, /lee_lee_records_last_edited_by_check[\s\S]*last_edited_by is null or last_edited_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
   assert.match(recordEditorMigrationSource, /lee_lee_records_deleted_by_check[\s\S]*deleted_by is null or deleted_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
   assert.doesNotMatch(recordEditorMigrationSource, /grant .*service_role|disable row level security/i);
+});
+
+test('versioned RPC SQL uses COALESCE syntax without pg_catalog function qualification', () => {
+  assert.doesNotMatch(migrationSource, /pg_catalog\.coalesce/i);
+  assert.doesNotMatch(sharedSettingsMigrationSource, /pg_catalog\.coalesce/i);
+  assert.doesNotMatch(rpcCoalesceRepairMigrationSource, /pg_catalog\.coalesce/i);
+  assert.match(rpcCoalesceRepairMigrationSource, /create or replace function public\.update_lee_lee_record_with_version/);
+  assert.match(rpcCoalesceRepairMigrationSource, /notes = coalesce\(p_notes, ''\)/);
+  assert.match(rpcCoalesceRepairMigrationSource, /payload = coalesce\(p_payload, '\{\}'::jsonb\)/);
+  assert.match(rpcCoalesceRepairMigrationSource, /create or replace function public\.update_lee_lee_shared_settings_with_version/);
+  assert.match(rpcCoalesceRepairMigrationSource, /grant execute on function public\.update_lee_lee_record_with_version[\s\S]*to authenticated/);
+  assert.match(rpcCoalesceRepairMigrationSource, /grant execute on function public\.update_lee_lee_shared_settings_with_version[\s\S]*to authenticated/);
+  assert.doesNotMatch(rpcCoalesceRepairMigrationSource, /grant .*service_role|disable row level security/i);
 });
 
 test('versioned RPC mock succeeds for owner and returns no row for another user', async () => {

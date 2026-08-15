@@ -118,7 +118,7 @@ begin
     insulin_plan_id = p_insulin_plan_id,
     insulin_plan_snapshot = p_insulin_plan_snapshot,
     dose_calculation_status = p_dose_calculation_status,
-    notes = pg_catalog.coalesce(p_notes, ''),
+    notes = coalesce(p_notes, ''),
     recorded_at = p_recorded_at,
     entered_by = p_entered_by,
     last_edited_by = p_last_edited_by,
@@ -129,7 +129,7 @@ begin
     migration_fingerprint = p_migration_fingerprint,
     import_fingerprint = p_import_fingerprint,
     app_schema_version = p_app_schema_version,
-    payload = pg_catalog.coalesce(p_payload, '{}'::jsonb),
+    payload = coalesce(p_payload, '{}'::jsonb),
     version = public.lee_lee_records.version + 1
   where
     id = p_id
