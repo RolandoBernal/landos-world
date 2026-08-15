@@ -16,6 +16,10 @@ const sharedSettingsEditorMigrationSource = readFileSync(
   new URL('../supabase/migrations/202608140001_allow_family_shared_settings_editors.sql', import.meta.url),
   'utf8',
 );
+const recordEditorMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202608150001_allow_family_record_editors.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -115,6 +119,11 @@ function createMockSupabase(remoteRows = [], options = {}) {
       const tableRows = tableName === 'lee_lee_shared_settings' ? sharedSettingsRows : rows;
       const builder = {
         insert(payload) {
+          if (tableName === 'lee_lee_records' && options.recordInsertError) {
+            builder.error = options.recordInsertError;
+            builder.current = null;
+            return builder;
+          }
           const index = tableName === 'lee_lee_shared_settings'
             ? tableRows.findIndex((row) => row.user_id === payload.user_id)
             : tableRows.findIndex((row) => row.id === payload.id);
@@ -397,6 +406,70 @@ test('new record queues locally and uploads through Supabase once initialized', 
 
   assert.equal(supabase.client.rows.some((row) => row.id === 'local-first'), true);
   assert.equal(repository.getSyncStatus().pendingCount, 0);
+});
+
+test('record insert check constraint failures keep entries preserved with safe diagnostics', async () => {
+  const supabase = createMockSupabase([], {
+    recordInsertError: {
+      code: '23514',
+      message: 'new row for relation "lee_lee_records" violates check constraint "lee_lee_records_entered_by_check"',
+      details: 'Failing row contains sensitive data omitted by Supabase.',
+      hint: '',
+    },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  context.navigator.onLine = false;
+  const store = createDocumentStore({ records: [record({ id: 'constraint-record', enteredBy: 'Levi' })] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  repository.queueUpsert(record({ id: 'constraint-record', enteredBy: 'Levi' }), null);
+  context.navigator.onLine = true;
+  await repository.processQueue();
+
+  const status = repository.getSyncStatus();
+  const diagnostics = repository.getSyncDiagnostics();
+  assert.equal(status.pendingCount, 1);
+  assert.equal(status.lastSyncAttempt.attempted, 1);
+  assert.equal(status.lastSyncAttempt.failed, 1);
+  assert.equal(status.lastSyncAttempt.failuresByReason.validation, 1);
+  assert.equal(diagnostics.queue[0].state, 'needs-attention');
+  assert.equal(diagnostics.queue[0].recordType, 'Breakfast');
+  assert.equal(diagnostics.queue[0].lastErrorCode, '23514');
+  assert.match(diagnostics.queue[0].lastErrorMessage, /entered_by_check/);
+  assert.equal('bloodSugar' in diagnostics.queue[0], false);
+  assert.equal('insulinUnits' in diagnostics.queue[0], false);
+});
+
+test('automatic queue processing skips deterministic needs-attention items until explicit retry', async () => {
+  const supabase = createMockSupabase([], {
+    recordInsertError: {
+      code: '23514',
+      message: 'violates check constraint "lee_lee_records_entered_by_check"',
+    },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  context.navigator.onLine = false;
+  const store = createDocumentStore({ records: [record({ id: 'needs-attention', enteredBy: 'Violet' })] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  repository.queueUpsert(record({ id: 'needs-attention', enteredBy: 'Violet' }), null);
+  context.navigator.onLine = true;
+  await repository.processQueue();
+  assert.equal(repository.getSyncDiagnostics().queue[0].retryCount, 1);
+
+  await repository.processQueue();
+  assert.equal(repository.getSyncDiagnostics().queue[0].retryCount, 1);
+
+  await repository.processQueue({ includeNeedsAttention: true });
+  assert.equal(repository.getSyncDiagnostics().queue[0].retryCount, 2);
 });
 
 test('same-record stale update creates a conflict instead of overwriting', async () => {
@@ -835,8 +908,8 @@ test('default shared dose settings do not count as local values when only metada
 test('sync repository exposes a read-only record queue snapshot for migration resume checks', () => {
   assert.match(syncSource, /function getRecordQueueSnapshot\(\)/);
   assert.match(syncSource, /getRecordQueueSnapshot,/);
-  assert.match(syncSource, /recordId: operation\.recordId/);
-  assert.match(syncSource, /lastErrorCategory: operation\.lastErrorCategory/);
+  assert.match(syncSource, /getQueue\(\)\.map\(sanitizeOperationMetadata\)/);
+  assert.match(syncSource, /lastErrorCategory: operation\?\.lastErrorCategory/);
 });
 
 test('identical conflicts are auto-resolved while meaningful differences remain', async () => {
@@ -991,6 +1064,19 @@ test('shared settings SQL migration uses RLS and version-aware RPC only', () => 
   assert.match(sharedSettingsEditorMigrationSource, /drop constraint if exists lee_lee_shared_settings_last_edited_by_check/);
   assert.match(sharedSettingsEditorMigrationSource, /last_edited_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
   assert.doesNotMatch(sharedSettingsEditorMigrationSource, /grant .*service_role|disable row level security/i);
+});
+
+test('record editor SQL migration allows every in-app family identity without weakening RLS', () => {
+  const allowedIdentities = /\('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/;
+
+  assert.match(migrationSource, allowedIdentities);
+  assert.match(recordEditorMigrationSource, /drop constraint if exists lee_lee_records_entered_by_check/);
+  assert.match(recordEditorMigrationSource, /drop constraint if exists lee_lee_records_last_edited_by_check/);
+  assert.match(recordEditorMigrationSource, /drop constraint if exists lee_lee_records_deleted_by_check/);
+  assert.match(recordEditorMigrationSource, /lee_lee_records_entered_by_check[\s\S]*entered_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
+  assert.match(recordEditorMigrationSource, /lee_lee_records_last_edited_by_check[\s\S]*last_edited_by is null or last_edited_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
+  assert.match(recordEditorMigrationSource, /lee_lee_records_deleted_by_check[\s\S]*deleted_by is null or deleted_by in \('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'\)/);
+  assert.doesNotMatch(recordEditorMigrationSource, /grant .*service_role|disable row level security/i);
 });
 
 test('versioned RPC mock succeeds for owner and returns no row for another user', async () => {
