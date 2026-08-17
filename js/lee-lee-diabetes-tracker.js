@@ -31,6 +31,7 @@
   ));
   const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
   const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Other']);
+  const SINGLE_USE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM']);
   const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
   const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
   const ACTIVITY_INTENSITY_OPTIONS = Object.freeze(['Easy', 'Moderate', 'Hard']);
@@ -1906,7 +1907,6 @@
       const primary = getRecordPrimaryValue(record);
       const actualInsulin = formatInsulin(getRecordActualInsulin(record));
       return [
-        record.type,
         actualInsulin && actualInsulin !== primary ? actualInsulin : '',
         getMealDoseSummary(record),
         record.notes || '',
@@ -1925,7 +1925,7 @@
   function getRecordDisplayTitle(record) {
     if (record.eventType === 'meal') return record.type;
     if (record.eventType === 'activity') return 'Activity';
-    if (record.eventType === 'check-insulin') return 'Check / Insulin';
+    if (record.eventType === 'check-insulin') return normalizeRecordContext(record.type, 'check-insulin');
     if (record.eventType === 'note') return 'Note';
     return 'Blood Glucose';
   }
@@ -2018,7 +2018,7 @@
       </section>
       ${renderTrackerNav('today')}
       <section class="lee_lee_diabetes_today_actions" aria-label="Log an entry">
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Add Event</button>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Log Entry</button>
       </section>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
@@ -2512,6 +2512,7 @@
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
         ${renderEventTypeSelect(currentEditor.eventType)}
         ${renderTypeSelect(contextType)}
+        <p class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" data-editor-error role="alert" hidden>${escapeHtml(options.error || '')}</p>
         ${eventConfig.fields.includes('bloodSugar') ? `
           <label class="lee_lee_diabetes_field">
             Blood Sugar
@@ -2574,6 +2575,9 @@
       </form>
     `;
     updateEditorState(root.querySelector('[data-lee-lee-editor]'));
+    if (options.error) {
+      showEditorError(root.querySelector('[data-lee-lee-editor]'), options.error);
+    }
     root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
   }
 
@@ -2720,6 +2724,8 @@
   }
 
   function updateEditorState(form) {
+    showEditorError(form, '');
+    updateContextSelectAvailability(form);
     updateDoseHelper(form);
     updateEditorSaveState(form);
   }
@@ -2737,15 +2743,89 @@
 
   function renderTypeSelect(selectedType) {
     const eventType = currentEditor?.eventType || DEFAULT_EVENT_TYPE;
-    const options = getContextOptionsForEventType(eventType);
+    const optionStates = getContextOptionStates(eventType, selectedType);
     return `
       <label class="lee_lee_diabetes_field">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
         <select class="lee_lee_diabetes_select" name="type">
-          ${options.map((type) => `<option value="${escapeHtml(type)}" ${type === selectedType ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+          ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
       </label>
     `;
+  }
+
+  function renderContextOption(option) {
+    return `<option value="${escapeHtml(option.type)}" ${option.selected ? 'selected' : ''} ${option.disabled ? 'disabled' : ''}>${escapeHtml(option.label)}</option>`;
+  }
+
+  function getContextOptionStates(eventType, selectedType, form = null) {
+    const normalizedEventType = normalizeEventType(eventType);
+    const options = getContextOptionsForEventType(normalizedEventType);
+    const dateKey = form?.elements.date?.value || '';
+    const editingId = currentEditor?.id || null;
+    const selected = options.includes(selectedType) ? selectedType : getEventTypeConfig(normalizedEventType).defaultContext;
+    const loggedContexts = getLoggedSingleUseCheckContextsForDate(dateKey, editingId);
+    const firstAvailable = options.find((type) => !isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts)) || options[0] || selected;
+    const effectiveSelected = isContextUnavailableForCheckDate(selected, normalizedEventType, loggedContexts) ? firstAvailable : selected;
+    return options.map((type) => {
+      const disabled = isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts);
+      return {
+        type,
+        disabled,
+        selected: type === effectiveSelected,
+        label: disabled ? `${type} - ✓ Logged` : type,
+      };
+    });
+  }
+
+  function isContextUnavailableForCheckDate(type, eventType, loggedContexts) {
+    return eventType === 'check-insulin'
+      && SINGLE_USE_CHECK_CONTEXT_TYPES.includes(type)
+      && loggedContexts.has(type);
+  }
+
+  function getLoggedSingleUseCheckContextsForDate(dateKey, excludeRecordId = null) {
+    const logged = new Set();
+    if (!dateKey) return logged;
+    activeRecords().forEach((record) => {
+      if (excludeRecordId && record.id === excludeRecordId) return;
+      if (normalizeEventType(record.eventType, record) !== 'check-insulin') return;
+      const context = normalizeRecordContext(record.type, 'check-insulin');
+      if (!SINGLE_USE_CHECK_CONTEXT_TYPES.includes(context)) return;
+      if (getRecordEventDateKey(record) === dateKey) {
+        logged.add(context);
+      }
+    });
+    return logged;
+  }
+
+  function getDuplicateScheduledContextMessage(record) {
+    if (normalizeEventType(record.eventType, record) !== 'check-insulin') return '';
+    const context = normalizeRecordContext(record.type, 'check-insulin');
+    if (!SINGLE_USE_CHECK_CONTEXT_TYPES.includes(context)) return '';
+    const dateKey = getRecordEventDateKey(record);
+    return getLoggedSingleUseCheckContextsForDate(dateKey, record.id).has(context)
+      ? `${context} has already been logged for this date.`
+      : '';
+  }
+
+  function updateContextSelectAvailability(form) {
+    const select = form?.elements.type;
+    if (!select) return;
+    const eventType = getEditorEventType(form);
+    const currentType = getEditorType(form);
+    const nextOptions = getContextOptionStates(eventType, currentType, form);
+    const nextHtml = nextOptions.map((option) => renderContextOption(option)).join('');
+    if (select.innerHTML !== nextHtml) {
+      select.innerHTML = nextHtml;
+    }
+  }
+
+  function showEditorError(form, message) {
+    const error = form?.querySelector('[data-editor-error]');
+    if (!error) return;
+    error.textContent = message;
+    error.hidden = !message;
   }
 
   function renderEventTypeSelect(selectedEventType) {
@@ -2766,7 +2846,7 @@
     trackerMenuOpen = false;
     root.innerHTML = `
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
-        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Add Event</h1>
+        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Log Entry</h1>
         <div class="lee_lee_diabetes_event_grid">
           ${EVENT_TYPE_DEFINITIONS.map(({ type, label }) => `
             <button type="button" class="lee_lee_diabetes_event_option" data-action="choose-event-type" data-event-type="${escapeHtml(type)}">
@@ -2950,6 +3030,12 @@
   function handleSave(form) {
     const record = buildRecordFromForm(form);
     if (!record) return;
+    const duplicateMessage = getDuplicateScheduledContextMessage(record);
+    if (duplicateMessage) {
+      showEditorError(form, duplicateMessage);
+      updateContextSelectAvailability(form);
+      return;
+    }
     if (record.eventType === 'check-insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
       renderRecordConfirmation(record);
       return;
@@ -4284,6 +4370,19 @@
         });
       }
       if (action === 'confirm-save' && currentEditor?.pendingRecord) {
+        const duplicateMessage = getDuplicateScheduledContextMessage(currentEditor.pendingRecord);
+        if (duplicateMessage) {
+          renderEditor({
+            mode: currentEditor?.mode || 'log-entry',
+            eventType: currentEditor.pendingRecord.eventType,
+            type: currentEditor.pendingRecord.type,
+            record: currentEditor.pendingRecord,
+            returnTo: currentEditor?.returnTo || null,
+            returnDateKey: currentEditor?.returnDateKey || null,
+            error: duplicateMessage,
+          });
+          return;
+        }
         upsertRecord(currentEditor.pendingRecord);
         renderAfterRecordChange(currentEditor.pendingRecord);
       }

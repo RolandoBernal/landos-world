@@ -733,10 +733,9 @@ test('canonical entry cards render check insulin dinner once in today and histor
   });
 
   const content = reports.getEntryCardContent(dinner);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, 'Dinner');
   assert.equal(content.primary, '269 mg/dL');
   assert.deepEqual(Array.from(content.secondary), [
-    'Dinner',
     '8 units',
     'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction',
   ]);
@@ -758,6 +757,7 @@ test('canonical entry cards render check insulin dinner once in today and histor
 
   for (const html of [todayHtml, historyHtml]) {
     assert.equal(countOccurrences(html, '269 mg/dL'), 1);
+    assert.equal(countOccurrences(html, 'Dinner'), 1);
     assert.equal(countOccurrences(html, '<div class="lee_lee_diabetes_timeline_notes">8 units</div>'), 1);
     assert.equal(countOccurrences(html, 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
@@ -780,10 +780,9 @@ test('canonical entry cards show bedtime manual override against suggested dose'
   });
 
   const content = reports.getEntryCardContent(bedtime);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, 'Bedtime');
   assert.equal(content.primary, '439 mg/dL');
   assert.deepEqual(Array.from(content.secondary), [
-    'Bedtime',
     '14 units',
     'Given: 14 units · Suggested: 15 units',
   ]);
@@ -813,9 +812,9 @@ test('canonical entry cards keep other check insulin records free of dose guidan
   });
 
   const content = reports.getEntryCardContent(overnight);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, '2 AM');
   assert.equal(content.primary, '139 mg/dL');
-  assert.deepEqual(Array.from(content.secondary), ['2 AM', '0 units']);
+  assert.deepEqual(Array.from(content.secondary), ['0 units']);
 
   const historyHtml = reports.renderHistoryRecord(overnight);
   assert.match(historyHtml, /2 AM/);
@@ -868,7 +867,8 @@ test('canonical entry cards keep meal activity note and legacy records clean', (
   assert.deepEqual(Array.from(reports.getEntryCardContent(meal).secondary), ['Lunch', 'Turkey sandwich, chips, apple']);
   assert.deepEqual(Array.from(reports.getEntryCardContent(activity).secondary), ['45 min · Moderate']);
   assert.deepEqual(Array.from(reports.getEntryCardContent(note).secondary), ['Felt steady before bed.']);
-  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['Correction', '3 units']);
+  assert.equal(reports.getEntryCardContent(legacy).title, 'Correction');
+  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['3 units']);
 
   for (const html of [meal, activity, note, legacy].map((item) => reports.renderHistoryRecord(item))) {
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>/);
@@ -890,12 +890,29 @@ test('today activity helper returns only current-day active records newest first
 test('today UI uses one log-entry CTA and responsive navigation contracts', () => {
   assert.match(trackerSource, /Today’s Activity/);
   assert.match(trackerSource, /data-action="log-entry"/);
+  assert.match(trackerSource, />\+ Log Entry<\/button>/);
+  assert.match(trackerSource, /id="lee-lee-diabetes-title">Log Entry<\/h1>/);
+  assert.doesNotMatch(trackerSource, />\+ Add Event<\/button>/);
+  assert.doesNotMatch(trackerSource, /id="lee-lee-diabetes-title">Add Event<\/h1>/);
   assert.doesNotMatch(trackerSource, /PRIMARY_TYPES\.map\(renderPrimaryCard\)/);
   assert.match(trackerSource, /data-action="toggle-tracker-nav"/);
   assert.match(trackerSource, /aria-expanded/);
   assert.match(cssSource, /\.lee_lee_diabetes_mobile_nav_button/);
   assert.match(cssSource, /max-width: 520px[\s\S]*\.lee_lee_diabetes_nav_shell\.is-open \.lee_lee_diabetes_nav/);
   assert.match(cssSource, /min-width: 680px[\s\S]*\.lee_lee_diabetes_cards/);
+});
+
+test('check insulin scheduled contexts are marked logged and rechecked before save', () => {
+  assert.match(trackerSource, /SINGLE_USE_CHECK_CONTEXT_TYPES = Object\.freeze\(\['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM'\]\)/);
+  assert.match(trackerSource, /getLoggedSingleUseCheckContextsForDate\(dateKey, excludeRecordId = null\)/);
+  assert.match(trackerSource, /activeRecords\(\)\.forEach\(\(record\) =>/);
+  assert.match(trackerSource, /normalizeEventType\(record\.eventType, record\) !== 'check-insulin'/);
+  assert.match(trackerSource, /getRecordEventDateKey\(record\) === dateKey/);
+  assert.match(trackerSource, /\$\{type\} - ✓ Logged/);
+  assert.match(trackerSource, /getDuplicateScheduledContextMessage\(record\)/);
+  assert.match(trackerSource, /\$\{context\} has already been logged for this date\./);
+  assert.match(trackerSource, /showEditorError\(form, duplicateMessage\)/);
+  assert.match(trackerSource, /if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\)[\s\S]*getDuplicateScheduledContextMessage\(currentEditor\.pendingRecord\)/);
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {
