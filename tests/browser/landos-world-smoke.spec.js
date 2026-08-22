@@ -324,16 +324,23 @@ test('light appearance keeps launcher cards as branded islands', async ({ page }
     expect(styles.titleLuminance).toBeGreaterThan(0.65);
   }
 
-  const weatherCard = page.locator('.clock_utility_card--weather');
-  await expect(weatherCard).toBeVisible();
-  const weatherStyles = await weatherCard.evaluate((element) => ({
+  const readWeatherStyles = () => page.locator('.clock_utility_card--weather').evaluate((element) => ({
     backgroundImage: getComputedStyle(element).backgroundImage,
     backgroundColor: getComputedStyle(element).backgroundColor,
+    borderColor: getComputedStyle(element).borderColor,
     titleColor: getComputedStyle(element.querySelector('.clock_utility_title')).color,
+    summaryBackgroundImage: getComputedStyle(element.querySelector('.clock_utility_weather_summary')).backgroundImage,
+    summaryBackgroundColor: getComputedStyle(element.querySelector('.clock_utility_weather_summary')).backgroundColor,
   }));
-  expect(weatherStyles.backgroundImage).toContain('rgba(255, 212, 0, 0.16)');
-  expect(weatherStyles.backgroundColor).toBe('rgb(48, 40, 0)');
-  expect(weatherStyles.titleColor).toBe('rgb(255, 229, 102)');
+
+  const lightWeatherStyles = await readWeatherStyles();
+  expect(lightWeatherStyles.backgroundImage).toContain('rgba(255, 212, 0, 0.25)');
+  expect(lightWeatherStyles.backgroundImage).toContain('rgb(245, 196, 0)');
+  expect(lightWeatherStyles.titleColor).toBe('rgb(255, 229, 102)');
+
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(await readWeatherStyles()).toEqual(lightWeatherStyles);
 });
 
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {
