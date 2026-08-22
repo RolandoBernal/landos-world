@@ -2,7 +2,7 @@
   "name": "Lando's World",
   "short_name": "Lando",
   "id": "/landos-world/",
-  "description": "Lando's World is a personal application ecosystem with Digital Clock, Weather, Daily Chief Briefing, Violet Sprints, Death on Notecards, and Lee-Lee's Tracker.",
+  "description": "Lando's World is a personal application ecosystem with Digital Clock, Weather, Daily Chief Briefing, Violet Sprints, Violet Futbol Game Tracker, Death on Notecards, and Lee-Lee's Tracker.",
   "start_url": "/landos-world/",
   "scope": "/landos-world/",
   "display": "standalone",
@@ -84,6 +84,12 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Violet Futbol Game Tracker",
+      "short_name": "Game Tracker",
+      "description": "Open Violet Futbol Game Tracker.",
+      "url": "/landos-world/#/violet-futbol-game-tracker"
     }
   ]
 }

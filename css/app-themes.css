@@ -63,6 +63,15 @@
   --app-accent-contrast: #12091f;
 }
 
+.app_theme--violet-futbol-game-tracker {
+  --app-accent: #4aa3ff;
+  --app-accent-rgb: 74 163 255;
+  --app-accent-soft: #d9ecff;
+  --app-accent-bg: #041431;
+  --app-accent-deep: #064596;
+  --app-accent-contrast: #f8fbff;
+}
+
 .app_theme--road-bike-checklist {
   --app-accent: #d9467d;
   --app-accent-rgb: 217 70 125;

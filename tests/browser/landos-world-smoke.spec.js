@@ -38,6 +38,7 @@ const LOCAL_APP_ROUTES = [
       { text: 'Digital Clock' },
       { text: 'Lee-Lee' },
       { text: 'Violet Sprints' },
+      { text: 'Violet Futbol Game Tracker' },
       { text: 'Road Bike Trip Checklist' },
     ],
   },
@@ -98,8 +99,18 @@ const LOCAL_APP_ROUTES = [
     root: '#sprints-view',
     visible: [
       { role: 'heading', name: 'Violet Sprints' },
-      { text: 'Futbol Game Timer' },
+      { text: 'Soccer Match Simulation' },
       { text: 'Treadmill Sprints' },
+    ],
+  },
+  {
+    name: 'violet futbol game tracker',
+    hash: '#/violet-futbol-game-tracker',
+    root: '#violet-futbol-game-tracker-view',
+    visible: [
+      { role: 'heading', name: 'Violet Futbol Game Tracker' },
+      { text: 'New Game' },
+      { text: 'Saved Games' },
     ],
   },
   {
@@ -171,6 +182,7 @@ test('launcher opens every local app route from its cards', async ({ page }) => 
     ['Open Digital Clock', /#\/digital-clock$/],
     ['Open Lee-Lee', /#\/lee-lees-tracker$/],
     ['Open Violet Sprints', /#\/violet-sprints$/],
+    ['Open Game Tracker', /#\/violet-futbol-game-tracker$/],
     ['Open Checklist', /#\/road-bike-checklist$/],
   ];
 
@@ -247,7 +259,7 @@ test('Lee-Lee print media hides app shell chrome around the report body', async 
   });
 
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.ecosystem_nav')).toHaveCount(6);
+  await expect(page.locator('.ecosystem_nav')).toHaveCount(7);
   expect(await page.locator('.ecosystem_nav').evaluateAll((nodes) => (
     nodes.every((node) => getComputedStyle(node).display === 'none')
   ))).toBe(true);

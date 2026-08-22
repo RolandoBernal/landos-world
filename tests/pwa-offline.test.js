@@ -8,6 +8,7 @@ const sw = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8'
 const pwaManager = readFileSync(new URL('../js/pwa-manager.js', import.meta.url), 'utf8');
 const digitalClockCss = readFileSync(new URL('../css/digital-clock.css', import.meta.url), 'utf8');
 const sprintsCss = readFileSync(new URL('../css/sprints.css', import.meta.url), 'utf8');
+const vfgtCss = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
 const roadBikeCss = readFileSync(new URL('../css/road-bike-checklist.css', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('../manifest.webmanifest', import.meta.url), 'utf8'));
 
@@ -132,6 +133,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './css/daily-chief-briefing.css',
     './css/lee-lee-diabetes.css',
     './css/sprints.css',
+    './css/violet-futbol-game-tracker.css',
     './css/road-bike-checklist.css',
     './js/pwa-manager.js',
     './js/weather-service.js',
@@ -139,6 +141,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/daily-chief-briefing.js',
     './js/lee-lee-diabetes-tracker.js',
     './js/sprints-app.js',
+    './js/violet-futbol-game-tracker.js',
     './js/road-bike-checklist.js',
     './fonts/digital-7.ttf',
     './icons/landos-world.svg',
@@ -152,7 +155,7 @@ test('service worker precaches the app shell and app modules needed for offline 
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-08-21-1'/);
+  assert.match(sw, /const SW_VERSION = '2026-08-22-1'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -411,5 +414,6 @@ test('manifest is installable and exposes first-class app shortcuts', () => {
     '/landos-world/#/digital-clock',
     '/landos-world/#/lee-lees-tracker',
     '/landos-world/#/violet-sprints',
+    '/landos-world/#/violet-futbol-game-tracker',
   ]);
 });

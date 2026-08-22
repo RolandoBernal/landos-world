@@ -73,25 +73,6 @@
     return { id, label, duration, ...metadata };
   }
 
-  function futbolGameTimerWorkout() {
-    return {
-      id: 'futbol-game-timer',
-      name: 'Futbol Game Timer',
-      sourceDefined: true,
-      blocks: [
-        createWorkoutBlock('First Half', 'work', [
-          createSourceDefinedStep('futbol-first-half', 'First Half', 40 * 60),
-        ], { id: 'futbol-first-half' }),
-        createWorkoutBlock('Half Time', 'recovery', [
-          createSourceDefinedStep('futbol-half-time', 'Half Time', 10 * 60),
-        ], { id: 'futbol-half-time' }),
-        createWorkoutBlock('Second Half', 'work', [
-          createSourceDefinedStep('futbol-second-half', 'Second Half', 40 * 60),
-        ], { id: 'futbol-second-half' }),
-      ],
-    };
-  }
-
   function treadmillSprintsWorkout() {
     return {
       id: 'treadmill-sprints',
@@ -422,7 +403,6 @@
       treadmillSprintsWorkout(),
       soccerMatchSimulationWorkout(),
       tabataWorkout(),
-      futbolGameTimerWorkout(),
     ];
   }
 
@@ -614,7 +594,9 @@
   }
 
   function mergeSourceDefinedWorkouts(savedWorkouts) {
-    const merged = (Array.isArray(savedWorkouts) ? savedWorkouts : []).map(normalizeSourceDefinedWorkout);
+    const merged = (Array.isArray(savedWorkouts) ? savedWorkouts : [])
+      .filter((workout) => workout?.id !== 'futbol-game-timer')
+      .map(normalizeSourceDefinedWorkout);
     sourceDefinedWorkouts().forEach((builtInWorkout) => {
       const existingIndex = merged.findIndex((workout) => workout.id === builtInWorkout.id);
       if (existingIndex >= 0 && isBuiltInWorkout(merged[existingIndex])) {

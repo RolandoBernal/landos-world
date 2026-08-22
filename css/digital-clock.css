@@ -43,7 +43,8 @@ body {
 .app_theme .daily_briefing_shell,
 .app_theme .lee_lee_diabetes_shell,
 .app_theme .road_bike_shell,
-.app_theme .sprints-app {
+.app_theme .sprints-app,
+.app_theme .vfgt_app {
   width: min(100%, var(--landos-page-max-width));
   margin-left: auto;
   margin-right: auto;
@@ -785,6 +786,23 @@ body {
   color: #171100;
   background: linear-gradient(180deg, var(--app-accent-soft, #ffe566), var(--app-accent, #ffd400));
   border-color: rgb(var(--app-accent-rgb, 255 212 0) / 44%);
+}
+
+.clock_utility_card--vfgt {
+  border-color: rgb(74 163 255 / 34%);
+  background:
+    radial-gradient(circle at 78% 10%, rgb(74 163 255 / 20%), transparent 12rem),
+    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%));
+}
+
+.clock_utility_card--vfgt .clock_utility_title {
+  color: #d9ecff;
+}
+
+.clock_utility_card--vfgt .clock_launch_btn {
+  color: #03152e;
+  background: linear-gradient(180deg, #f8fbff, #4aa3ff);
+  border-color: rgb(74 163 255 / 48%);
 }
 
 @media only screen and (min-width: 768px) {
