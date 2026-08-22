@@ -30,6 +30,25 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+:root[data-theme="light"] .lee_lee_diabetes_shell {
+  --lee-lee-bg: #f6fbff;
+  --lee-lee-panel: rgb(255 255 255 / 88%);
+  --lee-lee-panel-strong: rgb(247 251 255 / 96%);
+  --lee-lee-border: rgb(15 63 110 / 16%);
+  --lee-lee-border-strong: rgb(var(--app-accent-rgb, 9 104 195) / 40%);
+  --lee-lee-text: #172033;
+  --lee-lee-muted: #5e6f84;
+  --lee-lee-soft: var(--app-accent-soft, #074f93);
+  --lee-lee-green: #13794a;
+}
+
+:root[data-theme="light"] .clock_utility_card--lee-lee-diabetes {
+  background:
+    radial-gradient(circle at 20% 16%, rgb(var(--app-accent-rgb, 9 104 195) / 18%), transparent 38%),
+    linear-gradient(145deg, #ffffff, var(--app-accent-bg, #e7f4ff) 58%, #dceeff);
+  color: var(--lee-lee-text, #172033);
+}
+
 .lee_lee_diabetes_loading,
 .lee_lee_diabetes_empty {
   color: var(--lee-lee-muted);

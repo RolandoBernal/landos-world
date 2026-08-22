@@ -302,6 +302,31 @@
   gap: 0.85rem;
 }
 
+:root[data-theme="light"] .weather_app {
+  --weather-panel: rgb(255 255 255 / 82%);
+  --weather-panel-strong: rgb(255 255 255 / 94%);
+  --weather-line: rgb(117 82 0 / 18%);
+  --weather-ink: #211704;
+  --weather-muted: rgb(33 23 4 / 68%);
+}
+
+:root[data-theme="light"] .weather_hero {
+  background:
+    radial-gradient(circle at 88% 0%, rgb(255 212 0 / 25%), transparent 27rem),
+    linear-gradient(155deg, rgb(255 255 255 / 96%), rgb(255 248 218 / 72) 56%, rgb(255 255 255 / 88%));
+  box-shadow: 0 24px 70px rgb(117 82 0 / 13%), 0 0 30px rgb(255 212 0 / 14%);
+}
+
+:root[data-theme="light"] .weather_location_form {
+  background: rgb(255 255 255 / 82%);
+}
+
+:root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon),
+:root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon),
+:root[data-theme="light"] .weather_ride p {
+  color: rgb(33 23 4 / 74%);
+}
+
 .weather_visually_hidden {
   position: absolute;
   width: 1px;

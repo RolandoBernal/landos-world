@@ -207,6 +207,52 @@
   box-sizing: border-box;
 }
 
+:root[data-theme="light"] .clock_utility_card {
+  background:
+    radial-gradient(circle at 20% 20%, rgb(var(--app-accent-rgb, 126 53 216) / 16%), transparent 42%),
+    linear-gradient(145deg, #ffffff, var(--app-accent-bg, #f0e6ff));
+  color: #172033;
+  box-shadow: 0 16px 40px rgb(15 23 42 / 12%),
+    0 0 24px rgb(var(--app-accent-rgb, 126 53 216) / 13%);
+}
+
+:root[data-theme="light"] .clock_utility_title {
+  color: #172033;
+}
+
+:root[data-theme="light"] .clock_utility_description,
+:root[data-theme="light"] .clock_utility_footer {
+  color: var(--app-accent-soft, #5d22a6);
+}
+
+:root[data-theme="light"] .sprints-view {
+  --sprints-accent: var(--app-accent, #7e35d8);
+  --sprints-accent-rgb: var(--app-accent-rgb, 126 53 216);
+  --sprints-accent-soft: var(--app-accent-soft, #5d22a6);
+  --sprints-accent-bg: var(--app-accent-bg, #f0e6ff);
+  --sprints-accent-deep: var(--app-accent-deep, #d8c0ff);
+  background: var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-card,
+:root[data-theme="light"] .sprints-modal,
+:root[data-theme="light"] .sprints-editor,
+:root[data-theme="light"] .sprints-list-item {
+  background: rgb(255 255 255 / 88%);
+  border-color: rgb(23 32 51 / 14%);
+  color: var(--color-text, #172033);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .sprints-input,
+:root[data-theme="light"] .sprints-select,
+:root[data-theme="light"] .sprints-textarea {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(23 32 51 / 18%);
+  color: var(--color-text, #172033);
+}
+
 .sprints-app {
   padding-top: var(--landos-section-gap);
   padding-bottom: var(--landos-page-bottom-space);
@@ -382,6 +428,64 @@
 .sprints-install-tip strong,
 .sprints-install-tip span {
   display: block;
+}
+
+:root[data-theme="light"] .sprints-btn {
+  border-color: rgb(var(--sprints-accent-rgb) / 42%);
+  background: rgb(255 255 255 / 88%);
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-btn--primary,
+:root[data-theme="light"] .sprints-btn--accent {
+  background: var(--sprints-accent-bg);
+  border-color: var(--sprints-accent);
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-btn--danger {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+:root[data-theme="light"] .sprints-btn--ghost {
+  background: rgb(255 255 255 / 70%);
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-list-item,
+:root[data-theme="light"] .sprints-step,
+:root[data-theme="light"] .sprints-empty {
+  background: rgb(255 255 255 / 88%);
+  border-color: rgb(23 32 51 / 14%);
+  color: var(--color-text, #172033);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .sprints-list-name {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-list-meta,
+:root[data-theme="light"] .sprints-label,
+:root[data-theme="light"] .sprints-timer-meta,
+:root[data-theme="light"] .sprints-timer-small,
+:root[data-theme="light"] .sprints-empty {
+  color: var(--color-text-muted, rgb(23 32 51 / 72%));
+}
+
+:root[data-theme="light"] .sprints-install-tip {
+  color: var(--color-text, #172033);
+  background: rgb(var(--sprints-accent-rgb) / 10%);
+}
+
+:root[data-theme="light"] .sprints-input,
+:root[data-theme="light"] .sprints-select,
+:root[data-theme="light"] .sprints-textarea {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(23 32 51 / 18%);
+  color: var(--color-text, #172033);
 }
 
 .sprints-install-tip span {

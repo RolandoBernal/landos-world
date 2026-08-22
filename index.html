@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-appearance-preference="system" data-theme="light">
 
 <head>
   <meta charset="UTF-8">
@@ -20,13 +20,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Lando's World">
   <meta name="theme-color" content="#000000">
+  <script src="js/theme-manager.js?v=20260822-1"></script>
   <!--
 Weather: Open-Meteo (no API key). Optional future provider:
 <script>window.__WEATHER_API_KEY__ = 'your-key';</script>
 const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
 -->
-  <link rel="stylesheet" href="css/digital-clock.css?v=20260731-1">
-  <link rel="stylesheet" href="css/app-themes.css?v=20260822-1">
+  <link rel="stylesheet" href="css/digital-clock.css?v=20260822-2">
+  <link rel="stylesheet" href="css/app-themes.css?v=20260822-2">
   <link rel="stylesheet" href="css/weather-app.css?v=20260803-1">
   <link rel="stylesheet" href="css/daily-chief-briefing.css?v=20260804-1">
   <link rel="stylesheet" href="css/lee-lee-diabetes.css?v=20260821-1">
@@ -96,7 +97,17 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     <main class="lando_settings_shell" aria-labelledby="lando-settings-title">
       <section class="lando_settings_intro">
         <h1 id="lando-settings-title">Lando's World Settings</h1>
-        <p>Application status and offline controls for the Lando's World ecosystem.</p>
+        <p>Appearance, application status, and offline controls for the Lando's World ecosystem.</p>
+      </section>
+      <section class="lando_settings_panel" aria-labelledby="lando-appearance-title">
+        <div class="lando_settings_panel_header">
+          <h2 id="lando-appearance-title">Appearance</h2>
+        </div>
+        <div class="appearance_segmented_control" role="radiogroup" aria-label="Appearance">
+          <button type="button" class="appearance_option" data-appearance-option="system" role="radio" aria-checked="true">System</button>
+          <button type="button" class="appearance_option" data-appearance-option="light" role="radio" aria-checked="false">Light</button>
+          <button type="button" class="appearance_option" data-appearance-option="dark" role="radio" aria-checked="false">Dark</button>
+        </div>
       </section>
       <div id="pwa-offline-settings" aria-live="polite"></div>
     </main>
@@ -769,6 +780,25 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       handleRouteChange();
     }
 
+    function syncAppearanceControls(state = window.LandosTheme?.getState?.()) {
+      const preference = state?.preference || 'system';
+      document.querySelectorAll('[data-appearance-option]').forEach((option) => {
+        const selected = option.dataset.appearanceOption === preference;
+        option.classList.toggle('is-selected', selected);
+        option.setAttribute('aria-checked', selected ? 'true' : 'false');
+      });
+    }
+
+    function initAppearanceSettings() {
+      syncAppearanceControls();
+      window.LandosTheme?.subscribe?.(syncAppearanceControls);
+      document.addEventListener('click', (event) => {
+        const option = event.target.closest('[data-appearance-option]');
+        if (!option) return;
+        window.LandosTheme?.setPreference?.(option.dataset.appearanceOption);
+      });
+    }
+
     function getRoadBikeChecklistLauncherSummary() {
       const checklist = window.RoadBikeTripChecklist;
       if (!checklist?.getProgress) return 'Not started';
@@ -1275,6 +1305,7 @@ ${dateLongParts.year}`;
     document.addEventListener('DOMContentLoaded', () => {
       renderLauncherCards();
       initUIState();
+      initAppearanceSettings();
       initMobileSettingsMenu();
       initControlPanel();
       clockBindings = bindClockRoots(CLOCK_CONFIG);

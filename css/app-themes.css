@@ -107,3 +107,76 @@
   --app-accent-deep: #321018;
   --app-accent-contrast: #190606;
 }
+
+:root[data-theme="light"] .app_theme--daily-chief-briefing,
+:root[data-theme="light"] .app_theme--weather {
+  --app-accent: #a86f00;
+  --app-accent-rgb: 168 111 0;
+  --app-accent-soft: #7a5200;
+  --app-accent-bg: #fff3bd;
+  --app-accent-deep: #e6ad00;
+  --app-accent-contrast: #1c1300;
+}
+
+:root[data-theme="light"] .app_theme--digital-clock {
+  --app-accent: #087a3a;
+  --app-accent-rgb: 8 122 58;
+  --app-accent-soft: #0b5f31;
+  --app-accent-bg: #dff8e9;
+  --app-accent-deep: #b8e8cc;
+  --app-accent-contrast: #04210f;
+}
+
+:root[data-theme="light"] .app_theme--landos-world-settings {
+  --app-accent: #334155;
+  --app-accent-rgb: 51 65 85;
+  --app-accent-soft: #172033;
+  --app-accent-bg: #eef3f8;
+  --app-accent-deep: #d8e1ed;
+  --app-accent-contrast: #ffffff;
+}
+
+:root[data-theme="light"] .app_theme--lee-lees-tracker {
+  --app-accent: #0968c3;
+  --app-accent-rgb: 9 104 195;
+  --app-accent-soft: #074f93;
+  --app-accent-bg: #e7f4ff;
+  --app-accent-deep: #b7dcff;
+  --app-accent-contrast: #ffffff;
+}
+
+:root[data-theme="light"] .app_theme--violet-sprints {
+  --app-accent: #7e35d8;
+  --app-accent-rgb: 126 53 216;
+  --app-accent-soft: #5d22a6;
+  --app-accent-bg: #f0e6ff;
+  --app-accent-deep: #d8c0ff;
+  --app-accent-contrast: #ffffff;
+}
+
+:root[data-theme="light"] .app_theme--violet-futbol-game-tracker {
+  --app-accent: #0968c3;
+  --app-accent-rgb: 9 104 195;
+  --app-accent-soft: #074f93;
+  --app-accent-bg: #e7f2ff;
+  --app-accent-deep: #bbddff;
+  --app-accent-contrast: #ffffff;
+}
+
+:root[data-theme="light"] .app_theme--road-bike-checklist {
+  --app-accent: #bd275f;
+  --app-accent-rgb: 189 39 95;
+  --app-accent-soft: #8f1745;
+  --app-accent-bg: #ffe7ef;
+  --app-accent-deep: #f7b7cd;
+  --app-accent-contrast: #ffffff;
+}
+
+:root[data-theme="light"] .app_theme--death-on-notecards {
+  --app-accent: #c72f32;
+  --app-accent-rgb: 199 47 50;
+  --app-accent-soft: #942022;
+  --app-accent-bg: #ffe7e7;
+  --app-accent-deep: #f6b9b9;
+  --app-accent-contrast: #ffffff;
+}

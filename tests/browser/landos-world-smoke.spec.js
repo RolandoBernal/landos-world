@@ -48,6 +48,7 @@ const LOCAL_APP_ROUTES = [
     root: '#lando-settings-view',
     visible: [
       { role: 'heading', name: "Lando's World Settings" },
+      { text: 'Appearance' },
       { text: 'Application Status' },
     ],
   },
@@ -192,6 +193,30 @@ test('launcher opens every local app route from its cards', async ({ page }) => 
     await page.getByRole('button', { name: buttonName }).click();
     await expect(page).toHaveURL(hashPattern);
   }
+});
+
+test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
+  await page.goto('/#/settings');
+
+  const root = page.locator('html');
+  await expect(root).toHaveAttribute('data-appearance-preference', 'system');
+
+  const dark = page.getByRole('radio', { name: 'Dark' });
+  await dark.click();
+  await expect(dark).toHaveAttribute('aria-checked', 'true');
+  await expect(root).toHaveAttribute('data-appearance-preference', 'dark');
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
+
+  await page.reload();
+  await expect(page.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
+  await expect(root).toHaveAttribute('data-appearance-preference', 'dark');
+
+  const light = page.getByRole('radio', { name: 'Light' });
+  await light.click();
+  await expect(light).toHaveAttribute('aria-checked', 'true');
+  await expect(root).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f8fb');
 });
 
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {

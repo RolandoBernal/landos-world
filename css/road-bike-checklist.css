@@ -47,6 +47,57 @@
   box-sizing: border-box;
 }
 
+:root[data-theme="light"] .clock_utility_card--road-bike {
+  background:
+    radial-gradient(circle at 22% 16%, rgb(var(--app-accent-rgb, 189 39 95) / 14%), transparent 40%),
+    linear-gradient(145deg, #ffffff, var(--app-accent-bg, #ffe7ef) 62%, #fff6f9);
+  color: #172033;
+}
+
+:root[data-theme="light"] .clock_utility_card--road-bike .clock_utility_title {
+  color: #172033;
+}
+
+:root[data-theme="light"] .road_bike_view {
+  background:
+    radial-gradient(circle at 50% -10%, rgb(var(--app-accent-rgb, 189 39 95) / 13%), transparent 22rem),
+    var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_hero,
+:root[data-theme="light"] .road_bike_section,
+:root[data-theme="light"] .road_bike_modal {
+  border-color: rgb(23 32 51 / 13%);
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .road_bike_title,
+:root[data-theme="light"] .road_bike_progress_count,
+:root[data-theme="light"] .road_bike_section_title_text,
+:root[data-theme="light"] .road_bike_section_chevron {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_section_header {
+  border-color: rgb(23 32 51 / 10%);
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 8%);
+}
+
+:root[data-theme="light"] .road_bike_item {
+  border-color: rgb(23 32 51 / 9%);
+}
+
+:root[data-theme="light"] .road_bike_item_text {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_item:has(input:checked) .road_bike_item_text {
+  color: var(--color-text-subtle, rgb(23 32 51 / 62%));
+  text-decoration-color: rgb(23 32 51 / 34%);
+}
+
 .road_bike_shell {
   padding-top: 0;
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));

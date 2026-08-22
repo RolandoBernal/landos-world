@@ -7,13 +7,15 @@
 }
 
 body {
-  background-color: black;
+  background-color: var(--color-bg, #000);
+  color: var(--color-text, #f7f7f7);
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 :root {
+  color-scheme: light dark;
   --landos-page-max-width: 920px;
   --landos-page-gutter: max(1rem, env(safe-area-inset-left));
   --landos-page-gutter-right: max(1rem, env(safe-area-inset-right));
@@ -25,6 +27,47 @@ body {
   --launcher-card-max-size: 420px;
   --clock-content-max-width: var(--landos-page-max-width);
   --clock-card-max-size: 420px;
+  --color-bg: #000;
+  --color-bg-rgb: 0 0 0;
+  --color-surface: #0a0a0a;
+  --color-surface-elevated: #111;
+  --color-surface-soft: rgb(255 255 255 / 5%);
+  --color-text: #f7f7f7;
+  --color-text-strong: #fff;
+  --color-text-muted: rgb(255 255 255 / 70%);
+  --color-text-subtle: rgb(255 255 255 / 64%);
+  --color-border: #222;
+  --color-border-soft: rgb(255 255 255 / 14%);
+  --color-border-strong: #333;
+  --color-overlay: rgb(0 0 0 / 64%);
+  --color-shadow: rgb(0 0 0 / 42%);
+  --color-shadow-inverse: rgb(255 255 255 / 10%);
+  --color-success: #a8ffcc;
+  --color-warning: #ffe566;
+  --color-error: #ff9b9b;
+  --theme-chrome-color: #000000;
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f6f8fb;
+  --color-bg-rgb: 246 248 251;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #eef3f8;
+  --color-surface-soft: rgb(9 25 48 / 5%);
+  --color-text: #172033;
+  --color-text-strong: #0f172a;
+  --color-text-muted: rgb(23 32 51 / 72%);
+  --color-text-subtle: rgb(23 32 51 / 62%);
+  --color-border: #d6dee9;
+  --color-border-soft: rgb(23 32 51 / 14%);
+  --color-border-strong: #b7c4d6;
+  --color-overlay: rgb(15 23 42 / 42%);
+  --color-shadow: rgb(15 23 42 / 16%);
+  --color-shadow-inverse: rgb(15 23 42 / 9%);
+  --color-success: #11683f;
+  --color-warning: #825400;
+  --color-error: #b4232b;
+  --theme-chrome-color: #f6f8fb;
 }
 
 .digit_clock_app {
@@ -33,6 +76,8 @@ body {
   min-height: 100vh;
   padding: var(--landos-page-top-space) 0 var(--landos-page-bottom-space);
   box-sizing: border-box;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .landos-page-container,
@@ -62,7 +107,7 @@ body {
   margin: calc(-1 * var(--landos-page-top-space)) 0 var(--landos-section-gap) calc(50% - 50vw);
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
-  color: #f7f7f7;
+  color: var(--color-text);
   background: transparent;
   box-shadow: none;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -70,8 +115,8 @@ body {
 }
 
 .is-ecosystem-scrolled .ecosystem_nav {
-  background: rgb(7 7 7 / 92%);
-  box-shadow: 0 8px 18px rgb(0 0 0 / 26%);
+  background: rgb(var(--color-bg-rgb) / 92%);
+  box-shadow: 0 8px 18px var(--color-shadow);
   backdrop-filter: blur(14px);
 }
 
@@ -114,7 +159,7 @@ body {
 
 @supports not (backdrop-filter: blur(1px)) {
   .is-ecosystem-scrolled .ecosystem_nav {
-    background: rgb(7 7 7 / 96%);
+    background: rgb(var(--color-bg-rgb) / 96%);
   }
 }
 
@@ -150,11 +195,11 @@ body {
 }
 
 .lando_world_brand {
-  color: #f7f7f7;
+  color: var(--color-text);
 }
 
 .lando_world_logo {
-  color: #f7f7f7;
+  color: var(--color-text);
 }
 
 .digit_clock_app.app_theme .lando_world_brand,
@@ -177,8 +222,8 @@ body {
   min-height: 44px;
   padding: 0.5rem;
   color: var(--app-accent, #66ff99);
-  background-color: #111;
-  border: 1px solid #333;
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
@@ -216,21 +261,21 @@ body {
   flex-shrink: 0;
   width: 44px;
   height: 44px;
-  color: #f7f7f7;
-  background: rgb(255 255 255 / 6%);
-  border: 1px solid rgb(255 255 255 / 18%);
+  color: var(--color-text);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border-soft);
   border-radius: 6px;
   text-decoration: none;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .lando_settings_link:hover {
-  background: rgb(255 255 255 / 12%);
-  border-color: rgb(255 255 255 / 42%);
+  background: rgb(var(--color-bg-rgb) / 10%);
+  border-color: var(--color-border-strong);
 }
 
 .lando_settings_link:focus-visible {
-  outline: 2px solid #f7f7f7;
+  outline: 2px solid var(--color-text);
   outline-offset: 3px;
 }
 
@@ -291,10 +336,10 @@ body {
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background-color: #0a0a0a;
-  border: 2px solid #222;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border);
   border-radius: 10px;
-  box-shadow: 0 6px 16px 0 rgb(255 255 255 / 10%);
+  box-shadow: 0 6px 16px 0 var(--color-shadow-inverse);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -313,8 +358,8 @@ body {
   font-family: inherit;
   font-size: 12px;
   color: var(--app-accent, #66ff99);
-  background-color: #111;
-  border: 1px solid #333;
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   padding: 0.35rem 0.6rem;
   cursor: pointer;
@@ -368,7 +413,7 @@ body {
 
 .lando_home_footer {
   margin-top: 50px;
-  color: rgb(255 255 255 / 64%);
+  color: var(--color-text-subtle);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
@@ -376,18 +421,18 @@ body {
 }
 
 .lando_home_footer a {
-  color: #f7f7f7;
-  text-decoration-color: rgb(255 255 255 / 34%);
+  color: var(--color-text);
+  text-decoration-color: var(--color-border-strong);
   text-underline-offset: 0.18em;
 }
 
 .lando_home_footer a:hover {
-  color: #fff;
-  text-decoration-color: rgb(255 255 255 / 72%);
+  color: var(--color-text-strong);
+  text-decoration-color: var(--color-text-muted);
 }
 
 .lando_home_footer a:focus-visible {
-  outline: 2px solid #f7f7f7;
+  outline: 2px solid var(--color-text);
   outline-offset: 4px;
   border-radius: 4px;
 }
@@ -396,7 +441,7 @@ body {
   display: grid;
   gap: var(--landos-section-gap);
   max-width: 42rem;
-  color: #f7f7f7;
+  color: var(--color-text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -411,15 +456,74 @@ body {
 }
 
 .lando_settings_intro h1 {
-  color: #fff;
+  color: var(--color-text-strong);
   font-size: 2rem;
   line-height: 1.1;
 }
 
 .lando_settings_intro p {
-  color: rgb(255 255 255 / 70%);
+  color: var(--color-text-muted);
   font-size: 0.95rem;
   line-height: 1.45;
+}
+
+.lando_settings_panel {
+  display: grid;
+  gap: 0.8rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 1rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  background: var(--color-surface-soft);
+  color: var(--color-text);
+}
+
+.lando_settings_panel_header h2 {
+  margin: 0;
+  color: var(--app-accent-soft, var(--color-text-strong));
+  font-size: 0.9rem;
+}
+
+.appearance_segmented_control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  background: rgb(var(--color-bg-rgb) / 32%);
+}
+
+.appearance_option {
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  color: var(--color-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.appearance_option:hover {
+  color: var(--color-text-strong);
+  border-color: var(--color-border-soft);
+}
+
+.appearance_option.is-selected {
+  border-color: var(--app-accent, var(--color-border-strong));
+  color: var(--app-accent-soft, var(--color-text-strong));
+  background: rgb(var(--app-accent-rgb, 247 247 247) / 14%);
+}
+
+.appearance_option:focus-visible {
+  outline: 2px solid var(--app-accent, var(--color-text));
+  outline-offset: 3px;
 }
 
 .pwa_network_status {
@@ -429,11 +533,11 @@ body {
   z-index: 30;
   max-width: min(22rem, calc(100vw - 2rem));
   padding: 0.55rem 0.75rem;
-  border: 1px solid rgb(255 255 255 / 22%);
+  border: 1px solid var(--color-border-soft);
   border-radius: 999px;
-  color: #f7f7f7;
-  background: rgb(8 8 8 / 92%);
-  box-shadow: 0 10px 22px rgb(0 0 0 / 42%);
+  color: var(--color-text);
+  background: rgb(var(--color-bg-rgb) / 92%);
+  box-shadow: 0 10px 22px var(--color-shadow);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.82rem;
   font-weight: 800;
@@ -441,7 +545,7 @@ body {
 
 .pwa_network_status.is-offline {
   border-color: rgb(255 212 0 / 44%);
-  color: #ffe566;
+  color: var(--color-warning);
 }
 
 .pwa_toast {
@@ -454,11 +558,11 @@ body {
   gap: 0.7rem;
   max-width: min(34rem, calc(100vw - 2rem));
   padding: 0.7rem;
-  border: 1px solid rgb(255 255 255 / 22%);
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
-  color: #f7f7f7;
-  background: rgb(8 8 8 / 94%);
-  box-shadow: 0 14px 34px rgb(0 0 0 / 48%);
+  color: var(--color-text);
+  background: rgb(var(--color-bg-rgb) / 94%);
+  box-shadow: 0 14px 34px var(--color-shadow);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.88rem;
   font-weight: 800;
@@ -495,10 +599,10 @@ body {
   min-width: 0;
   box-sizing: border-box;
   padding: 1rem;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
-  background: rgb(255 255 255 / 5%);
-  color: #f7f7f7;
+  background: var(--color-surface-soft);
+  color: var(--color-text);
 }
 
 .pwa_offline_panel h2 {
@@ -529,25 +633,25 @@ body {
 
 .pwa_offline_panel dt,
 .pwa_offline_panel p {
-  color: rgb(255 255 255 / 68%);
+  color: var(--color-text-muted);
 }
 
 .pwa_offline_panel dd {
-  color: #fff;
+  color: var(--color-text-strong);
   font-weight: 800;
   text-align: right;
 }
 
 .pwa_status_value--success {
-  color: var(--app-accent-soft, #a8ffcc);
+  color: var(--color-success);
 }
 
 .pwa_status_value--warning {
-  color: #ffe566;
+  color: var(--color-warning);
 }
 
 .pwa_status_value--error {
-  color: #ff9b9b;
+  color: var(--color-error);
 }
 
 #clock-view .digit_clocks_container {
@@ -648,9 +752,9 @@ body {
 }
 
 .digital_clock_wrapper {
-  border: 2px solid #222;
-  box-shadow: 0 10px 16px 0 rgb(255 255 255 / 10%),
-    0 6px 20px 0 rgb(255 255 255 / 10%) !important;
+  border: 2px solid var(--color-border);
+  box-shadow: 0 10px 16px 0 var(--color-shadow-inverse),
+    0 6px 20px 0 var(--color-shadow-inverse) !important;
   padding: 1rem;
   width: 100%;
   max-width: min(480px, 100%);
@@ -803,6 +907,41 @@ body {
   color: #f8fbff;
   background: linear-gradient(180deg, #4aa3ff, #064596);
   border-color: rgb(74 163 255 / 62%);
+}
+
+:root[data-theme="light"] .digital_clock_wrapper:not(.clock_utility_card) {
+  background: rgb(255 255 255 / 74%);
+}
+
+:root[data-theme="light"] .clock_utility_weather_summary {
+  color: var(--app-accent-soft, #7a5200);
+  background:
+    radial-gradient(circle at top right, rgb(var(--app-accent-rgb, 168 111 0) / 13%), transparent 9rem),
+    rgb(var(--app-accent-rgb, 168 111 0) / 6%);
+}
+
+:root[data-theme="light"] .clock_utility_weather_location,
+:root[data-theme="light"] .clock_utility_weather_range,
+:root[data-theme="light"] .clock_utility_weather_unavailable {
+  color: var(--color-text-muted);
+}
+
+:root[data-theme="light"] .clock_utility_weather_temp {
+  color: var(--color-text-strong);
+}
+
+:root[data-theme="light"] .clock_utility_card--weather {
+  background:
+    radial-gradient(circle at 82% 8%, rgb(var(--app-accent-rgb, 168 111 0) / 14%), transparent 13rem),
+    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(255 247 215 / 70%));
+}
+
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_title {
+  color: #211704;
+}
+
+:root[data-theme="light"] .clock_utility_card--notecards .clock_utility_title {
+  color: #172033;
 }
 
 @media only screen and (min-width: 768px) {
