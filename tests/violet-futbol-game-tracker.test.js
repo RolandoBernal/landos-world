@@ -234,7 +234,14 @@ test('normalization recovers unfinished persisted game state', () => {
 
 test('launcher and VFGT setup use the approved icon and dark form controls', () => {
   assert.match(indexHtml, /iconSrc: 'icons\/violet-futbol-game-tracker\.png'/);
+  assert.match(css, /\.vfgt_page_header h1,[\s\S]*\.vfgt_match_header h1 \{[\s\S]*margin: 20px 0 0 0/);
+  assert.match(css, /\.vfgt_form \{[\s\S]*min-width: 0/);
+  assert.match(css, /\.vfgt_form label \{[\s\S]*min-width: 0/);
   assert.match(css, /\.vfgt_form input[\s\S]*background: var\(--vfgt-input\)/);
+  assert.match(css, /\.vfgt_form input \{[\s\S]*width: 100%[\s\S]*max-width: 100%[\s\S]*min-width: 0[\s\S]*display: block/);
+  assert.match(css, /\.vfgt_form input\[type="date"\],[\s\S]*\.vfgt_form input\[type="time"\] \{[\s\S]*width: 100%[\s\S]*max-width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_form_grid,[\s\S]*\.vfgt_summary_grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)[\s\S]*min-width: 0/);
+  assert.match(css, /\.vfgt_form_grid > \*,[\s\S]*\.vfgt_summary_grid > \* \{[\s\S]*min-width: 0/);
   assert.match(css, /--vfgt-input: rgb\(0 0 0 \/ 26%\)/);
   assert.doesNotMatch(css, /\.vfgt_form input[\s\S]{0,240}background: #f8fbff/);
 });
