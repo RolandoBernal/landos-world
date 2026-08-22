@@ -62,7 +62,36 @@
 :root[data-theme="light"] .vfgt_final_score,
 :root[data-theme="light"] .vfgt_empty,
 :root[data-theme="light"] .vfgt_form {
-  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+  background:
+    radial-gradient(circle at 16% 0%, rgb(9 104 195 / 10%), transparent 14rem),
+    linear-gradient(180deg, rgb(235 246 255 / 96%), rgb(221 239 255 / 86%));
+  box-shadow: 0 16px 42px rgb(9 104 195 / 10%);
+}
+
+:root[data-theme="light"] .vfgt_button {
+  background: rgb(9 104 195 / 10%);
+  border-color: rgb(9 104 195 / 32%);
+  color: var(--vfgt-muted-strong);
+}
+
+:root[data-theme="light"] .vfgt_button--primary,
+:root[data-theme="light"] .vfgt_score_button {
+  background: linear-gradient(180deg, var(--vfgt-accent-strong), #064596);
+  border-color: var(--vfgt-border-strong);
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .vfgt_history_item,
+:root[data-theme="light"] .vfgt_manual_half,
+:root[data-theme="light"] .vfgt_manual_total {
+  background: rgb(221 239 255 / 58%);
+  border-color: rgb(9 104 195 / 20%);
+}
+
+:root[data-theme="light"] .vfgt_form input,
+:root[data-theme="light"] .vfgt_score_input {
+  background: rgb(248 251 255 / 94%);
+  border-color: rgb(9 104 195 / 28%);
 }
 
 .vfgt_hero {

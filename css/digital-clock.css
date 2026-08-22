@@ -910,7 +910,11 @@ body {
 }
 
 :root[data-theme="light"] .digital_clock_wrapper:not(.clock_utility_card) {
-  background: rgb(255 255 255 / 74%);
+  background:
+    radial-gradient(circle at 18% 0%, rgb(var(--app-accent-rgb, 8 122 58) / 9%), transparent 12rem),
+    linear-gradient(180deg, rgb(239 255 246 / 94%), rgb(223 248 233 / 84%));
+  border-color: rgb(var(--app-accent-rgb, 8 122 58) / 24%);
+  box-shadow: 0 16px 42px rgb(8 122 58 / 10%) !important;
 }
 
 :root[data-theme="light"] .clock_utility_weather_summary {

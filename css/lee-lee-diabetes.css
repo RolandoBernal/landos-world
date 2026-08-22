@@ -1033,13 +1033,55 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button {
-  background: rgb(255 255 255 / 92%);
+  background: rgb(var(--app-accent-rgb, 9 104 195) / 10%);
   border-color: var(--lee-lee-border-strong);
-  color: var(--lee-lee-text);
+  color: var(--lee-lee-soft);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_shell {
+  --lee-lee-panel: rgb(231 244 255 / 94%);
+  --lee-lee-panel-strong: rgb(217 236 255 / 94%);
+  --lee-lee-border: rgb(9 104 195 / 20%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_card,
+:root[data-theme="light"] .lee_lee_diabetes_timeline_item,
+:root[data-theme="light"] .lee_lee_diabetes_editor,
+:root[data-theme="light"] .lee_lee_diabetes_history_date,
+:root[data-theme="light"] .lee_lee_diabetes_report_preview,
+:root[data-theme="light"] .lee_lee_diabetes_sheet {
+  background:
+    radial-gradient(circle at 16% 0%, rgb(var(--app-accent-rgb, 9 104 195) / 9%), transparent 14rem),
+    linear-gradient(180deg, var(--lee-lee-panel), var(--lee-lee-panel-strong));
+  border-color: var(--lee-lee-border);
+  box-shadow: 0 16px 42px rgb(9 104 195 / 10%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_nav_button,
+:root[data-theme="light"] .lee_lee_diabetes_event_option,
+:root[data-theme="light"] .lee_lee_diabetes_pill,
+:root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_food_calculator,
+:root[data-theme="light"] .lee_lee_diabetes_saved_food,
+:root[data-theme="light"] .lee_lee_diabetes_food_row,
+:root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
+:root[data-theme="light"] .lee_lee_diabetes_range_row,
+:root[data-theme="light"] .lee_lee_diabetes_status_grid div {
+  background: rgb(217 236 255 / 58%);
+  border-color: var(--lee-lee-border);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_input,
+:root[data-theme="light"] .lee_lee_diabetes_textarea,
+:root[data-theme="light"] .lee_lee_diabetes_select {
+  background: rgb(247 251 255 / 94%);
+  border-color: rgb(9 104 195 / 28%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button--primary {
-  background: linear-gradient(135deg, var(--app-accent, #0968c3), #68aeea);
+  background: linear-gradient(135deg, var(--app-accent, #0968c3), #0b49b5);
+  border-color: rgb(var(--app-accent-rgb, 9 104 195) / 62%);
   color: #ffffff;
 }
 
