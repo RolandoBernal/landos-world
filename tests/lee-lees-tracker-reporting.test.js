@@ -339,6 +339,10 @@ test('entry type configuration exposes active carb-counting contexts while prese
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Lunch'), true);
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Dinner'), true);
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Correction'), false);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Breakfast'), true);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Snacks'), true);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Bedtime'), false);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Correction'), false);
   assert.equal(entryTypes.getEntryTypeConfig('Night').type, 'Other');
 });
 
