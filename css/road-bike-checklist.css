@@ -47,6 +47,46 @@
   box-sizing: border-box;
 }
 
+:root[data-theme="light"] .road_bike_view {
+  background:
+    radial-gradient(circle at 50% -10%, rgb(var(--app-accent-rgb, 189 39 95) / 13%), transparent 22rem),
+    var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_hero,
+:root[data-theme="light"] .road_bike_section,
+:root[data-theme="light"] .road_bike_modal {
+  border-color: rgb(23 32 51 / 13%);
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .road_bike_title,
+:root[data-theme="light"] .road_bike_progress_count,
+:root[data-theme="light"] .road_bike_section_title_text,
+:root[data-theme="light"] .road_bike_section_chevron {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_section_header {
+  border-color: rgb(23 32 51 / 10%);
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 8%);
+}
+
+:root[data-theme="light"] .road_bike_item {
+  border-color: rgb(23 32 51 / 9%);
+}
+
+:root[data-theme="light"] .road_bike_item_text {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_item:has(input:checked) .road_bike_item_text {
+  color: var(--color-text-subtle, rgb(23 32 51 / 62%));
+  text-decoration-color: rgb(23 32 51 / 34%);
+}
+
 .road_bike_shell {
   padding-top: 0;
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
@@ -363,6 +403,120 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.7rem;
+}
+
+:root[data-theme="light"] .road_bike_view {
+  background:
+    radial-gradient(circle at 50% -10%, rgb(var(--app-accent-rgb, 189 39 95) / 13%), transparent 22rem),
+    var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_hero,
+:root[data-theme="light"] .road_bike_section,
+:root[data-theme="light"] .road_bike_confirm__dialog {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(23 32 51 / 13%);
+  color: var(--color-text, #172033);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .road_bike_title,
+:root[data-theme="light"] .road_bike_progress_count,
+:root[data-theme="light"] .road_bike_section_title_text,
+:root[data-theme="light"] .road_bike_section_chevron,
+:root[data-theme="light"] .road_bike_item_text,
+:root[data-theme="light"] .road_bike_confirm__title {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .road_bike_subtitle,
+:root[data-theme="light"] .road_bike_progress_percent,
+:root[data-theme="light"] .road_bike_section_count,
+:root[data-theme="light"] .road_bike_confirm__message {
+  color: var(--app-accent-soft, #8f1745);
+}
+
+:root[data-theme="light"] .road_bike_progress_bar {
+  background: rgb(23 32 51 / 10%);
+}
+
+:root[data-theme="light"] .road_bike_section_header {
+  border-color: rgb(23 32 51 / 10%);
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 8%);
+}
+
+:root[data-theme="light"] .road_bike_section_header:hover,
+:root[data-theme="light"] .road_bike_item:focus-within {
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 13%);
+}
+
+:root[data-theme="light"] .road_bike_section--complete {
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 28%);
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 6%);
+}
+
+:root[data-theme="light"] .road_bike_section--complete .road_bike_section_header {
+  background: linear-gradient(90deg, rgb(var(--app-accent-rgb, 189 39 95) / 13%), rgb(255 255 255 / 74%));
+}
+
+:root[data-theme="light"] .road_bike_item {
+  border-color: rgb(23 32 51 / 9%);
+}
+
+:root[data-theme="light"] .road_bike_item:has(input:checked) .road_bike_item_text {
+  color: var(--color-text-subtle, rgb(23 32 51 / 62%));
+  text-decoration-color: rgb(23 32 51 / 34%);
+}
+
+:root[data-theme="light"] .road_bike_button {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 48%);
+  color: var(--app-accent-soft, #8f1745);
+}
+
+:root[data-theme="light"] .road_bike_button:hover {
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 10%);
+}
+
+:root[data-theme="light"] .road_bike_button--danger {
+  border-color: rgb(180 35 43 / 42%);
+  color: #b4232b;
+}
+
+:root[data-theme="light"] .road_bike_confirm__backdrop {
+  background: rgb(15 23 42 / 42%);
+}
+
+:root[data-theme="light"] .road_bike_hero,
+:root[data-theme="light"] .road_bike_section,
+:root[data-theme="light"] .road_bike_confirm__dialog {
+  background:
+    radial-gradient(circle at 14% 0%, rgb(var(--app-accent-rgb, 189 39 95) / 9%), transparent 16rem),
+    linear-gradient(180deg, rgb(255 247 250 / 96%), rgb(255 231 239 / 84%));
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 22%);
+  box-shadow: 0 16px 42px rgb(var(--app-accent-rgb, 189 39 95) / 10%);
+}
+
+:root[data-theme="light"] .road_bike_section_header {
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 16%);
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 10%);
+}
+
+:root[data-theme="light"] .road_bike_item {
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 12%);
+}
+
+:root[data-theme="light"] .road_bike_button {
+  background: rgb(var(--app-accent-rgb, 189 39 95) / 10%);
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 44%);
+  color: var(--app-accent-soft, #8f1745);
+}
+
+:root[data-theme="light"] .road_bike_button:not(.road_bike_button--danger):last-child {
+  background: linear-gradient(135deg, var(--app-accent, #bd275f), #8f1745);
+  border-color: rgb(var(--app-accent-rgb, 189 39 95) / 62%);
+  color: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {

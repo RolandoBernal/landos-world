@@ -139,6 +139,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/weather-service.js',
     './js/weather-app.js',
     './js/daily-chief-briefing.js',
+    './js/theme-manager.js',
     './js/lee-lee-diabetes-tracker.js',
     './js/sprints-app.js',
     './js/violet-futbol-game-tracker.js',
@@ -156,7 +157,7 @@ test('service worker precaches the app shell and app modules needed for offline 
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-08-22-6'/);
+  assert.match(sw, /const SW_VERSION = '2026-08-22-12'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
