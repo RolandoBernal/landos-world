@@ -251,3 +251,13 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
   assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
 });
+
+test('live phase actions support one-tap pointer activation and final discard', () => {
+  assert.match(source, /root\.addEventListener\('pointerup', handleClick\)/);
+  assert.match(source, /root\.addEventListener\('touchend', handleClick, \{ passive: false \}\)/);
+  assert.match(source, /lastDirectActivationAt/);
+  assert.match(source, /event\.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS/);
+  assert.match(source, /data-vfgt-action="discard-final">Abandon<\/button>/);
+  assert.match(source, /action === 'discard-final'[\s\S]*clearActiveGame\(\)/);
+  assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
+});

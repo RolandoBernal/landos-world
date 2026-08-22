@@ -11,6 +11,7 @@
   let refreshTimer = null;
   let audioCtx = null;
   let audioUnlocked = false;
+  let lastDirectActivationAt = 0;
   const guardedActions = new WeakMap();
 
   function createId() {
@@ -657,8 +658,7 @@
         </section>
       </div>
       <div class="vfgt_actions vfgt_actions--sticky">
-        <button type="button" class="vfgt_button" data-vfgt-action="home">History</button>
-        ${includeSave ? '<button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="save">Save Game</button>' : '<button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved">Delete Game</button>'}
+        ${includeSave ? '<button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="discard-final">Abandon</button><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="save">Save Game</button>' : '<button type="button" class="vfgt_button" data-vfgt-action="home">History</button><button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved">Delete Game</button>'}
       </div>
     </section>`;
   }
@@ -716,7 +716,14 @@
 
   function handleClick(event) {
     const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
-    if (!button || !guardAction(event, button)) return;
+    const now = Date.now();
+    if (!button) return;
+    if (event.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS) {
+      event.preventDefault();
+      return;
+    }
+    if (!guardAction(event, button)) return;
+    if (event.type === 'pointerup' || event.type === 'touchend') lastDirectActivationAt = now;
     void unlockAudio();
     const action = button.dataset.vfgtAction;
     if (button.dataset.vfgtManualScore) {
@@ -766,6 +773,10 @@
       renderSummary();
     }
     if (action === 'save') saveCompletedGame();
+    if (action === 'discard-final' && window.confirm('Abandon this unsaved game?')) {
+      clearActiveGame();
+      renderHome();
+    }
     if (action === 'delete-saved' && window.confirm('Delete this saved game?')) {
       savedGames = readSavedGames().filter((game) => game.id !== button.dataset.id);
       writeSavedGames();
@@ -836,6 +847,11 @@
     const root = getRoot();
     if (!root) return;
     savedGames = sortedGames(readSavedGames());
+    if (window.PointerEvent) {
+      root.addEventListener('pointerup', handleClick);
+    } else {
+      root.addEventListener('touchend', handleClick, { passive: false });
+    }
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('submit', handleSubmit);
