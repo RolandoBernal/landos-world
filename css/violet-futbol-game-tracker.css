@@ -53,7 +53,7 @@
 .vfgt_page_header h1,
 .vfgt_hero h1,
 .vfgt_match_header h1 {
-  margin: 0;
+  margin: 20px 0 0 0;
   font-size: clamp(1.5rem, 4vw, 2.35rem);
   line-height: 1.05;
   letter-spacing: 0;
@@ -213,18 +213,25 @@
 .vfgt_form {
   display: grid;
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .vfgt_form label {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   color: var(--vfgt-muted);
   font-weight: 800;
 }
 
 .vfgt_form input {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 50px;
+  display: block;
   padding: 0.75rem;
   box-sizing: border-box;
   color: var(--vfgt-text);
@@ -234,6 +241,14 @@
   font: inherit;
   font-size: 1rem;
   color-scheme: dark;
+}
+
+.vfgt_form input[type="date"],
+.vfgt_form input[type="time"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .vfgt_form input::placeholder {
@@ -251,6 +266,12 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
+  min-width: 0;
+}
+
+.vfgt_form_grid > *,
+.vfgt_summary_grid > * {
+  min-width: 0;
 }
 
 .vfgt_actions {
@@ -482,7 +503,7 @@
   .vfgt_form_grid,
   .vfgt_summary_grid,
   .vfgt_final_score {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .vfgt_scoreboard {
