@@ -793,6 +793,100 @@
   white-space: nowrap;
 }
 
+:root[data-theme="light"] .sprints-view {
+  background: var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-title {
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-list-item,
+:root[data-theme="light"] .sprints-step,
+:root[data-theme="light"] .sprints-empty,
+:root[data-theme="light"] .sprints-difficulty-card,
+:root[data-theme="light"] .sprints-preview-step,
+:root[data-theme="light"] .sprints-confirm__dialog {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(23 32 51 / 14%);
+  color: var(--color-text, #172033);
+  box-shadow: 0 16px 42px rgb(15 23 42 / 12%);
+}
+
+:root[data-theme="light"] .sprints-list-name,
+:root[data-theme="light"] .sprints-difficulty-main,
+:root[data-theme="light"] .sprints-confirm__title {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-list-meta,
+:root[data-theme="light"] .sprints-label,
+:root[data-theme="light"] .sprints-timer-meta,
+:root[data-theme="light"] .sprints-timer-small,
+:root[data-theme="light"] .sprints-empty,
+:root[data-theme="light"] .sprints-confirm__message {
+  color: var(--color-text-muted, rgb(23 32 51 / 72%));
+}
+
+:root[data-theme="light"] .sprints-install-tip__close,
+:root[data-theme="light"] .sprints-sound-enable,
+:root[data-theme="light"] .sprints-btn {
+  background: rgb(255 255 255 / 92%);
+  border-color: rgb(var(--sprints-accent-rgb) / 42%);
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-btn--primary,
+:root[data-theme="light"] .sprints-btn--accent {
+  background: var(--sprints-accent-bg);
+  border-color: var(--sprints-accent);
+  color: var(--sprints-accent-soft);
+}
+
+:root[data-theme="light"] .sprints-btn--danger {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+:root[data-theme="light"] .sprints-confirm__backdrop {
+  background: rgb(15 23 42 / 42%);
+}
+
+:root[data-theme="light"] .sprints-timer,
+:root[data-theme="light"] .sprints-timer--sprint,
+:root[data-theme="light"] .sprints-timer--walk,
+:root[data-theme="light"] .sprints-timer--rest,
+:root[data-theme="light"] .sprints-timer--cooldown,
+:root[data-theme="light"] .sprints-timer--default,
+:root[data-theme="light"] .sprints-timer--jog,
+:root[data-theme="light"] .sprints-complete {
+  background:
+    radial-gradient(circle at top, rgb(var(--sprints-accent-rgb) / 14%), transparent 24rem),
+    var(--color-bg, #f6f8fb);
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-timer-step,
+:root[data-theme="light"] .sprints-timer-speed,
+:root[data-theme="light"] .sprints-countdown,
+:root[data-theme="light"] .sprints-timer-value,
+:root[data-theme="light"] .sprints-complete,
+:root[data-theme="light"] .sprints-complete-title {
+  color: var(--color-text, #172033);
+}
+
+:root[data-theme="light"] .sprints-timer-panel {
+  background: rgb(255 255 255 / 72%);
+  border-color: rgb(23 32 51 / 14%);
+}
+
+:root[data-theme="light"] .sprints-countdown--warning {
+  color: #7a5200;
+  text-shadow: 0 0 24px rgb(255 212 0 / 28%);
+}
+
 @keyframes sprints-warning-pulse {
   0% {
     opacity: 0.92;

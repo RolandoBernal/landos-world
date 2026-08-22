@@ -219,6 +219,70 @@ test('appearance setting reflects the preference and applies immediately', async
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f8fb');
 });
 
+test('light appearance reaches child app surfaces with readable foregrounds', async ({ page }) => {
+  const cases = [
+    {
+      hash: '#/weather',
+      surface: '.weather_hero',
+      text: '.weather_current_temp',
+    },
+    {
+      hash: '#/lee-lees-tracker',
+      surface: '.lee_lee_diabetes_editor',
+      text: '.lee_lee_diabetes_editor_title',
+    },
+    {
+      hash: '#/violet-sprints',
+      surface: '.sprints-list-item',
+      text: '.sprints-list-name',
+    },
+    {
+      hash: '#/road-bike-checklist',
+      surface: '.road_bike_hero',
+      text: '.road_bike_title',
+    },
+  ];
+
+  for (const appCase of cases) {
+    await page.goto('/#/settings');
+    await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
+    await page.goto(`/${appCase.hash}`);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator(appCase.surface).first()).toBeVisible();
+    await expect(page.locator(appCase.text).first()).toBeVisible();
+
+    const colors = await page.locator(appCase.surface).first().evaluate((surface, textSelector) => {
+      function channelValues(value) {
+        const match = value.match(/rgba?\(([^)]+)\)/);
+        if (!match) return { channels: [255, 255, 255], alpha: 1 };
+        const parts = match[1].split(/[,\s/]+/).filter(Boolean).map(Number);
+        return { channels: parts.slice(0, 3), alpha: parts[3] ?? 1 };
+      }
+      function luminance(value) {
+        const [r, g, b] = channelValues(value).channels.map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.03928
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+      }
+      const text = surface.querySelector(textSelector);
+      const surfaceBackground = getComputedStyle(surface).backgroundColor;
+      const effectiveSurfaceBackground = channelValues(surfaceBackground).alpha === 0
+        ? getComputedStyle(document.body).backgroundColor
+        : surfaceBackground;
+      return {
+        surfaceLuminance: luminance(effectiveSurfaceBackground),
+        textLuminance: luminance(getComputedStyle(text).color),
+      };
+    }, appCase.text);
+
+    expect(colors.surfaceLuminance).toBeGreaterThan(0.65);
+    expect(colors.textLuminance).toBeLessThan(0.25);
+  }
+});
+
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {
   const cases = [
     {

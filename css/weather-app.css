@@ -308,6 +308,8 @@
   --weather-line: rgb(117 82 0 / 18%);
   --weather-ink: #211704;
   --weather-muted: rgb(33 23 4 / 68%);
+  --weather-yellow: #c99100;
+  --weather-yellow-soft: #7a5200;
 }
 
 :root[data-theme="light"] .weather_hero {
@@ -321,10 +323,49 @@
   background: rgb(255 255 255 / 82%);
 }
 
+:root[data-theme="light"] .weather_location_form input {
+  color: var(--weather-ink);
+}
+
+:root[data-theme="light"] .weather_location_form input::placeholder {
+  color: rgb(33 23 4 / 56%);
+}
+
+:root[data-theme="light"] .weather_current_details div,
+:root[data-theme="light"] .weather_daypart_card,
+:root[data-theme="light"] .weather_week_card,
+:root[data-theme="light"] .weather_ride {
+  background: linear-gradient(180deg, var(--weather-panel), rgb(255 250 232 / 72%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 68%);
+}
+
+:root[data-theme="light"] .weather_section h2,
+:root[data-theme="light"] .weather_current_temp,
+:root[data-theme="light"] .weather_condition,
+:root[data-theme="light"] .weather_current_details dd,
+:root[data-theme="light"] .weather_daypart_card strong,
+:root[data-theme="light"] .weather_week_card strong {
+  color: var(--weather-ink);
+}
+
+:root[data-theme="light"] .weather_location,
+:root[data-theme="light"] .weather_current_details dt,
+:root[data-theme="light"] .weather_card_label,
+:root[data-theme="light"] .weather_week_card small,
+:root[data-theme="light"] .weather_daypart_card small,
+:root[data-theme="light"] .weather_skeleton p,
+:root[data-theme="light"] .weather_error p {
+  color: var(--weather-muted);
+}
+
 :root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon),
 :root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon),
 :root[data-theme="light"] .weather_ride p {
   color: rgb(33 23 4 / 74%);
+}
+
+:root[data-theme="light"] .weather_week_low {
+  color: var(--weather-muted) !important;
 }
 
 .weather_visually_hidden {
