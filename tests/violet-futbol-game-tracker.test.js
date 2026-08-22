@@ -247,9 +247,19 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(source, /class="vfgt_matchup_title"/);
   assert.match(source, /class="vfgt_matchup_vs">VS<\/span>/);
   assert.match(css, /\.vfgt_history_matchup[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: left/);
+  assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
   assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
+});
+
+test('mobile keeps saved history in a row while stacking live score controls', () => {
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_matchup \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_vs \{[\s\S]*width: auto/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_score_controls \{[\s\S]*grid-template-columns: minmax\(56px, auto\) minmax\(0, 1fr\) minmax\(56px, auto\)/);
+  assert.doesNotMatch(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_matchup_title \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 });
 
 test('live phase actions support one-tap pointer activation and final discard', () => {
