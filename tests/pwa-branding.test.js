@@ -76,6 +76,7 @@ test('active local apps expose the shared sticky ecosystem navigation', () => {
     ["id=\"weather-view\"", 'Weather'],
     ["id=\"lee-lees-tracker-view\"", 'Lee-Lee’s Tracker'],
     ["id=\"clock-view\"", 'Digital Clock'],
+    ["id=\"violet-futbol-game-tracker-view\"", 'Violet Futbol Game Tracker'],
     ["id=\"road-bike-checklist-view\"", 'Road Bike Trip Checklist'],
   ].forEach(([viewMarker, appName]) => {
     const viewStart = html.indexOf(viewMarker);
@@ -96,7 +97,8 @@ test('shared page container aligns ecosystem headers, navigation, and app shells
   assert.match(css, /\.app_theme \.daily_briefing_shell,/);
   assert.match(css, /\.app_theme \.lee_lee_diabetes_shell,/);
   assert.match(css, /\.app_theme \.road_bike_shell,/);
-  assert.match(css, /\.app_theme \.sprints-app/);
+  assert.match(css, /\.app_theme \.sprints-app,/);
+  assert.match(css, /\.app_theme \.vfgt_app/);
 });
 
 test('ecosystem router exposes shared scroll reset behavior for app navigation', () => {
