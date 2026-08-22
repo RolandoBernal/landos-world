@@ -9,6 +9,24 @@
   accent-color: var(--app-accent);
 }
 
+.app_theme :where(input[type="date"], input[type="time"], input[type="datetime-local"]) {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  margin: 0;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.app_theme :where(input[type="date"], input[type="time"], input[type="datetime-local"])::-webkit-date-and-time-value {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  margin: 0;
+  text-align: left;
+}
+
 .app_theme--daily-chief-briefing {
   --app-accent: #ffd400;
   --app-accent-rgb: 255 212 0;

@@ -194,6 +194,63 @@ test('launcher opens every local app route from its cards', async ({ page }) => 
   }
 });
 
+test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {
+  const cases = [
+    {
+      hash: '#/lee-lees-tracker',
+      root: '#lee-lees-tracker-view',
+      fieldClass: 'lee_lee_diabetes_input',
+    },
+    {
+      hash: '#/violet-futbol-game-tracker',
+      root: '#violet-futbol-game-tracker-view',
+      fieldClass: '',
+    },
+  ];
+
+  await page.setViewportSize({ width: 393, height: 852 });
+
+  for (const appCase of cases) {
+    await page.goto(`/${appCase.hash}`);
+    await page.locator(appCase.root).evaluate((root, fieldClass) => {
+      const existing = root.querySelector('[data-mobile-picker-check]');
+      if (existing) existing.remove();
+      root.insertAdjacentHTML('beforeend', `
+        <form data-mobile-picker-check style="width: 100%; max-width: 100%; padding: 16px; box-sizing: border-box;">
+          <div data-picker-box style="width: 100%; max-width: 100%; padding: 16px; box-sizing: border-box; border: 1px solid currentColor;">
+            <input class="${fieldClass}" name="date" type="date" value="2026-08-22" style="display: block; width: 100%; max-width: 100%; min-width: 0;">
+            <input class="${fieldClass}" name="time" type="time" value="09:16" style="display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 16px;">
+          </div>
+        </form>
+      `);
+    }, appCase.fieldClass);
+
+    const metrics = await page.locator(`${appCase.root} [data-picker-box]`).evaluate((box) => {
+      const boxRect = box.getBoundingClientRect();
+      const fields = [...box.querySelectorAll('input')].map((input) => {
+        const rect = input.getBoundingClientRect();
+        const style = getComputedStyle(input);
+        return {
+          appearance: style.appearance,
+          webkitAppearance: style.webkitAppearance,
+          inlineSize: parseFloat(style.inlineSize),
+          right: rect.right,
+          width: rect.width,
+        };
+      });
+      return { boxRight: boxRect.right, fields };
+    });
+
+    for (const field of metrics.fields) {
+      expect(field.right).toBeLessThanOrEqual(metrics.boxRight + 0.5);
+      expect(field.width).toBeGreaterThan(0);
+      expect(field.inlineSize).toBeGreaterThan(0);
+      expect(field.appearance).toBe('none');
+      expect(field.webkitAppearance).toBe('none');
+    }
+  }
+});
+
 test('Lee-Lee printable report can render patient metadata without app chrome', async ({ page }) => {
   await page.goto('/#/lee-lees-tracker');
   const reportHtml = await page.evaluate(() => {
