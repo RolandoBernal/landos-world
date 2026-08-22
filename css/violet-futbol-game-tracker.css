@@ -275,6 +275,10 @@
   margin-top: 1.25rem;
 }
 
+.vfgt_summary_grid + .vfgt_actions {
+  margin-top: 1.25rem;
+}
+
 .vfgt_clock_panel {
   display: grid;
   justify-items: center;

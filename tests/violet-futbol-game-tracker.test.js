@@ -249,4 +249,5 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /\.vfgt_history_matchup[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
+  assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
 });
