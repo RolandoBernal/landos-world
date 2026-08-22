@@ -328,10 +328,12 @@ test('light appearance keeps launcher cards as branded islands', async ({ page }
   await expect(weatherCard).toBeVisible();
   const weatherStyles = await weatherCard.evaluate((element) => ({
     backgroundImage: getComputedStyle(element).backgroundImage,
+    backgroundColor: getComputedStyle(element).backgroundColor,
     titleColor: getComputedStyle(element.querySelector('.clock_utility_title')).color,
   }));
-  expect(weatherStyles.backgroundImage).toContain('rgba(255, 247, 215, 0.7)');
-  expect(weatherStyles.titleColor).toBe('rgb(33, 23, 4)');
+  expect(weatherStyles.backgroundImage).toContain('rgba(255, 212, 0, 0.16)');
+  expect(weatherStyles.backgroundColor).toBe('rgb(48, 40, 0)');
+  expect(weatherStyles.titleColor).toBe('rgb(255, 229, 102)');
 });
 
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {

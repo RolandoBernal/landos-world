@@ -879,7 +879,8 @@ body {
   border-color: rgb(var(--app-accent-rgb, 255 212 0) / 24%);
   background:
     radial-gradient(circle at 82% 8%, rgb(var(--app-accent-rgb, 255 212 0) / 16%), transparent 13rem),
-    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%));
+    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%)),
+    var(--app-accent-bg, #302800);
 }
 
 .clock_utility_card--weather .clock_utility_title {
@@ -935,13 +936,32 @@ body {
 }
 
 :root[data-theme="light"] .clock_utility_card--weather {
+  border-color: rgb(var(--app-accent-rgb, 255 212 0) / 24%);
   background:
-    radial-gradient(circle at 82% 8%, rgb(var(--app-accent-rgb, 168 111 0) / 14%), transparent 13rem),
-    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(255 247 215 / 70%));
+    radial-gradient(circle at 82% 8%, rgb(var(--app-accent-rgb, 255 212 0) / 16%), transparent 13rem),
+    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%)),
+    var(--app-accent-bg, #302800);
 }
 
 :root[data-theme="light"] .clock_utility_card--weather .clock_utility_title {
-  color: #211704;
+  color: var(--app-accent-soft, #ffe566);
+}
+
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_weather_summary {
+  color: var(--utility-accent-soft, #ffe566);
+  background:
+    radial-gradient(circle at top right, rgb(var(--app-accent-rgb, 255 212 0) / 16%), transparent 9rem),
+    rgb(var(--app-accent-rgb, 255 212 0) / 7%);
+}
+
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_weather_location,
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_weather_range,
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_weather_unavailable {
+  color: rgb(255 255 255 / 74%);
+}
+
+:root[data-theme="light"] .clock_utility_card--weather .clock_utility_weather_temp {
+  color: #ffffff;
 }
 
 @media only screen and (min-width: 768px) {
