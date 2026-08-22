@@ -89,7 +89,14 @@
       "name": "Violet Futbol Game Tracker",
       "short_name": "Game Tracker",
       "description": "Open Violet Futbol Game Tracker.",
-      "url": "/landos-world/#/violet-futbol-game-tracker"
+      "url": "/landos-world/#/violet-futbol-game-tracker",
+      "icons": [
+        {
+          "src": "/landos-world/icons/violet-futbol-game-tracker.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

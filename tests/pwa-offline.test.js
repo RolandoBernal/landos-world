@@ -149,13 +149,14 @@ test('service worker precaches the app shell and app modules needed for offline 
     './icons/digital-clock.png',
     './icons/lee-lees-tracker.png',
     './icons/violet-sprints.png',
+    './icons/violet-futbol-game-tracker.png',
     './icons/road-bike-checklist.png',
     './icons/death-on-notecards.png',
   ].forEach((asset) => assert.match(sw, new RegExp(asset.replaceAll('.', '\\.'))));
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-08-22-1'/);
+  assert.match(sw, /const SW_VERSION = '2026-08-22-2'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -416,4 +417,6 @@ test('manifest is installable and exposes first-class app shortcuts', () => {
     '/landos-world/#/violet-sprints',
     '/landos-world/#/violet-futbol-game-tracker',
   ]);
+  const vfgtShortcut = manifest.shortcuts.find((shortcut) => shortcut.url === '/landos-world/#/violet-futbol-game-tracker');
+  assert.equal(vfgtShortcut.icons[0].src, '/landos-world/icons/violet-futbol-game-tracker.png');
 });

@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-08-22-1';
+const SW_VERSION = '2026-08-22-2';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -50,6 +50,7 @@ const PRECACHE_URLS = [
   './icons/lee-lees-tracker.png',
   './icons/violet-sprints.svg',
   './icons/violet-sprints.png',
+  './icons/violet-futbol-game-tracker.png',
   './icons/road-bike-checklist.svg',
   './icons/road-bike-checklist.png',
   './icons/death-on-notecards.svg',

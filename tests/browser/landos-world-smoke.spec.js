@@ -110,6 +110,7 @@ const LOCAL_APP_ROUTES = [
     visible: [
       { role: 'heading', name: 'Violet Futbol Game Tracker' },
       { text: 'New Game' },
+      { text: 'Add Past Game' },
       { text: 'Saved Games' },
     ],
   },

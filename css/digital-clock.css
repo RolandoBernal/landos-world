@@ -800,9 +800,9 @@ body {
 }
 
 .clock_utility_card--vfgt .clock_launch_btn {
-  color: #03152e;
-  background: linear-gradient(180deg, #f8fbff, #4aa3ff);
-  border-color: rgb(74 163 255 / 48%);
+  color: #f8fbff;
+  background: linear-gradient(180deg, #4aa3ff, #064596);
+  border-color: rgb(74 163 255 / 62%);
 }
 
 @media only screen and (min-width: 768px) {

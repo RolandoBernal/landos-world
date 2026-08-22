@@ -1,7 +1,7 @@
 (() => {
   const SAVED_GAMES_KEY = 'lando-world:violet-futbol-game-tracker:saved-games:v1';
   const ACTIVE_GAME_KEY = 'lando-world:violet-futbol-game-tracker:active-game:v1';
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
   const ACTION_GUARD_MS = 350;
@@ -30,6 +30,20 @@
     return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
   }
 
+  function parseOptionalDuration(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    if (text.includes(':')) {
+      const [minutesText, secondsText = '0'] = text.split(':');
+      const minutes = parseInt(minutesText, 10);
+      const seconds = parseInt(secondsText, 10);
+      if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return null;
+      return Math.max(0, minutes * 60 + Math.min(59, Math.max(0, seconds)));
+    }
+    const minutes = Number.parseFloat(text);
+    return Number.isFinite(minutes) ? Math.max(0, Math.round(minutes * 60)) : null;
+  }
+
   function formatClock(totalSeconds) {
     const seconds = Math.max(0, Math.floor(totalSeconds || 0));
     return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
@@ -46,6 +60,12 @@
     const parsed = new Date(`2000-01-01T${time}`);
     if (Number.isNaN(parsed.getTime())) return time;
     return parsed.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function formatDateTimeLabel(date, time) {
+    const dateLabel = formatDateLabel(date, time);
+    const timeLabel = formatTimeLabel(time);
+    return timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel;
   }
 
   function localDateTimeParts(date = new Date(Date.now())) {
@@ -116,6 +136,7 @@
     return {
       id: createId(),
       schemaVersion: SCHEMA_VERSION,
+      entryType: 'live',
       phase: 'pregame',
       team1: String(team1 || '').trim(),
       team2: String(team2 || '').trim(),
@@ -126,8 +147,8 @@
       firstHalfStartedAt: null,
       secondHalfStartedAt: null,
       halftimeStartedAt: null,
-      firstHalfDurationSeconds: 0,
-      secondHalfDurationSeconds: 0,
+      firstHalfDurationSeconds: null,
+      secondHalfDurationSeconds: null,
       firstHalfGoalsTeam1: 0,
       firstHalfGoalsTeam2: 0,
       secondHalfGoalsTeam1: 0,
@@ -136,6 +157,35 @@
       secondHalfRegulationWhistlePlayed: false,
       completedAt: null,
       savedAt: null,
+    };
+  }
+
+  function createManualGame({
+    team1,
+    team2,
+    location = '',
+    date,
+    time = '',
+    firstHalfGoalsTeam1 = 0,
+    firstHalfGoalsTeam2 = 0,
+    secondHalfGoalsTeam1 = 0,
+    secondHalfGoalsTeam2 = 0,
+    firstHalfDurationSeconds = null,
+    secondHalfDurationSeconds = null,
+  } = {}) {
+    const game = createGame({ team1, team2, location, date, time });
+    return {
+      ...game,
+      entryType: 'manual',
+      phase: 'final',
+      startTime: String(time || '').trim(),
+      firstHalfGoalsTeam1: clampScore(firstHalfGoalsTeam1),
+      firstHalfGoalsTeam2: clampScore(firstHalfGoalsTeam2),
+      secondHalfGoalsTeam1: clampScore(secondHalfGoalsTeam1),
+      secondHalfGoalsTeam2: clampScore(secondHalfGoalsTeam2),
+      firstHalfDurationSeconds,
+      secondHalfDurationSeconds,
+      completedAt: nowIso(),
     };
   }
 
@@ -169,6 +219,7 @@
   function normalizeGame(game) {
     if (!game || typeof game !== 'object') return null;
     const normalized = { ...createGame(), ...game, schemaVersion: SCHEMA_VERSION };
+    normalized.entryType = normalized.entryType === 'manual' ? 'manual' : 'live';
     normalized.team1 = String(normalized.team1 || '').trim();
     normalized.team2 = String(normalized.team2 || '').trim();
     normalized.location = String(normalized.location || '').trim();
@@ -177,10 +228,13 @@
       'firstHalfGoalsTeam2',
       'secondHalfGoalsTeam1',
       'secondHalfGoalsTeam2',
-      'firstHalfDurationSeconds',
-      'secondHalfDurationSeconds',
     ].forEach((key) => {
       normalized[key] = clampScore(normalized[key]);
+    });
+    ['firstHalfDurationSeconds', 'secondHalfDurationSeconds'].forEach((key) => {
+      normalized[key] = normalized[key] === null || normalized[key] === undefined || normalized[key] === ''
+        ? null
+        : clampScore(normalized[key]);
     });
     return normalized.team1 && normalized.team2 ? normalized : null;
   }
@@ -231,12 +285,20 @@
     localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
   }
 
+  function gameSortTime(game, index = 0) {
+    const parsed = Date.parse(`${game?.date || ''}T${game?.startTime || '00:00'}`);
+    if (Number.isFinite(parsed)) return parsed;
+    return Date.parse(game?.completedAt || game?.savedAt || '') || index;
+  }
+
   function sortedGames(games) {
-    return [...games].sort((a, b) => {
-      const aTime = Date.parse(a.savedAt || a.completedAt || `${a.date}T${a.startTime}`) || 0;
-      const bTime = Date.parse(b.savedAt || b.completedAt || `${b.date}T${b.startTime}`) || 0;
-      return bTime - aTime;
-    });
+    return [...games]
+      .map((game, index) => ({ game, index }))
+      .sort((a, b) => {
+        const delta = gameSortTime(b.game, b.index) - gameSortTime(a.game, a.index);
+        return delta || a.index - b.index;
+      })
+      .map(({ game }) => game);
   }
 
   function escapeHtml(text) {
@@ -373,15 +435,15 @@
           ${savedGames.map((game) => {
             const score = finalScores(game);
             return `<button type="button" class="vfgt_history_item" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" role="listitem">
-              <span class="vfgt_history_date">${escapeHtml(formatDateLabel(game.date, game.startTime))} · ${escapeHtml(formatTimeLabel(game.startTime))}</span>
+              <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
               <span class="vfgt_history_score"><strong>${escapeHtml(game.team1)}</strong> ${score.team1} - ${score.team2} <strong>${escapeHtml(game.team2)}</strong></span>
-              <span class="vfgt_history_location">${escapeHtml(game.location || 'Location not set')}</span>
+              <span class="vfgt_history_location">${escapeHtml(game.location || 'Location not set')} · ${game.entryType === 'manual' ? 'Past game' : 'Live game'}</span>
             </button>`;
           }).join('')}
         </div>`
       : `<div class="vfgt_empty">
           <h2>No saved games yet</h2>
-          <p>Start a new match when the teams are ready.</p>
+          <p>Start a new match or add a past result.</p>
         </div>`;
     getRoot().innerHTML = `
       <section class="vfgt_app" aria-labelledby="vfgt-title">
@@ -390,7 +452,10 @@
             <p class="vfgt_kicker">VFGT</p>
             <h1 id="vfgt-title">Violet Futbol Game Tracker</h1>
           </div>
-          <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="new">New Game</button>
+          <div class="vfgt_home_actions">
+            <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="new">New Game</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="past">Add Past Game</button>
+          </div>
         </header>
         ${unfinished ? `<section class="vfgt_resume" aria-label="Unfinished game">
           <div>
@@ -428,6 +493,62 @@
           <div class="vfgt_actions vfgt_actions--sticky">
             <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Start Game</button>
+          </div>
+        </form>
+      </section>`;
+  }
+
+  function manualScoreEditor(name, label, value = 0) {
+    const safeName = escapeHtml(name);
+    const safeLabel = escapeHtml(label);
+    return `<label class="vfgt_score_editor">
+      <span>${safeLabel}</span>
+      <div class="vfgt_score_controls vfgt_score_controls--compact">
+        <button type="button" class="vfgt_score_button" data-vfgt-manual-score="${safeName}" data-delta="-1" aria-label="Decrease ${safeLabel}">-</button>
+        <input class="vfgt_score_input" name="${safeName}" inputmode="numeric" pattern="[0-9]*" value="${clampScore(value)}" aria-label="${safeLabel}" data-vfgt-manual-input>
+        <button type="button" class="vfgt_score_button" data-vfgt-manual-score="${safeName}" data-delta="1" aria-label="Increase ${safeLabel}">+</button>
+      </div>
+    </label>`;
+  }
+
+  function renderManualForm() {
+    const defaults = localDateTimeParts();
+    getRoot().innerHTML = `
+      <section class="vfgt_app" aria-labelledby="vfgt-manual-title">
+        <header class="vfgt_page_header">
+          <p class="vfgt_kicker">Past Game</p>
+          <h1 id="vfgt-manual-title">Add Past Game</h1>
+        </header>
+        <form class="vfgt_form" data-vfgt-manual-form>
+          <div class="vfgt_form_grid">
+            <label>Date <input name="date" type="date" value="${defaults.date}" required></label>
+            <label>Start time <input name="time" type="time"></label>
+          </div>
+          <label>Location <input name="location" autocomplete="street-address" placeholder="Optional"></label>
+          <div class="vfgt_form_grid">
+            <label>School/Team 1 <input name="team1" required autocomplete="organization" data-vfgt-manual-team="1"></label>
+            <label>School/Team 2 <input name="team2" required autocomplete="organization" data-vfgt-manual-team="2"></label>
+          </div>
+          <section class="vfgt_manual_half" aria-labelledby="vfgt-manual-first-half">
+            <h2 id="vfgt-manual-first-half">First Half</h2>
+            <div class="vfgt_form_grid">
+              ${manualScoreEditor('firstHalfGoalsTeam1', 'Team 1 goals')}
+              ${manualScoreEditor('firstHalfGoalsTeam2', 'Team 2 goals')}
+            </div>
+            <label>Duration <input name="firstHalfDuration" inputmode="numeric" placeholder="Optional, e.g. 40 or 42:15"></label>
+          </section>
+          <section class="vfgt_manual_half" aria-labelledby="vfgt-manual-second-half">
+            <h2 id="vfgt-manual-second-half">Second Half</h2>
+            <div class="vfgt_form_grid">
+              ${manualScoreEditor('secondHalfGoalsTeam1', 'Team 1 goals')}
+              ${manualScoreEditor('secondHalfGoalsTeam2', 'Team 2 goals')}
+            </div>
+            <label>Duration <input name="secondHalfDuration" inputmode="numeric" placeholder="Optional, e.g. 40 or 43:05"></label>
+          </section>
+          <output class="vfgt_manual_total" data-vfgt-manual-final aria-live="polite">Final: 0 - 0</output>
+          <div class="vfgt_actions vfgt_actions--sticky">
+            <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+            <button type="submit" class="vfgt_button vfgt_button--primary">Save Past Game</button>
           </div>
         </form>
       </section>`;
@@ -496,11 +617,15 @@
     startRefreshTimer();
   }
 
+  function summaryDurationMarkup(label, seconds) {
+    return seconds === null || seconds === undefined ? '' : `<p>${label}: ${formatClock(seconds)}</p>`;
+  }
+
   function summaryMarkup(game, includeSave) {
     const score = finalScores(game);
     return `<section class="vfgt_app" aria-labelledby="vfgt-summary-title">
       <header class="vfgt_page_header">
-        <p class="vfgt_kicker">${escapeHtml(formatDateLabel(game.date, game.startTime))} · ${escapeHtml(formatTimeLabel(game.startTime))}</p>
+        <p class="vfgt_kicker">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</p>
         <h1 id="vfgt-summary-title">FINAL</h1>
         <p>${escapeHtml(game.location || 'Location not set')}</p>
       </header>
@@ -514,13 +639,13 @@
           <h2>First Half</h2>
           <p>${escapeHtml(game.team1)}: ${game.firstHalfGoalsTeam1}</p>
           <p>${escapeHtml(game.team2)}: ${game.firstHalfGoalsTeam2}</p>
-          <p>Duration: ${formatClock(game.firstHalfDurationSeconds)}</p>
+          ${summaryDurationMarkup('Duration', game.firstHalfDurationSeconds)}
         </section>
         <section>
           <h2>Second Half</h2>
           <p>${escapeHtml(game.team1)}: ${game.secondHalfGoalsTeam1}</p>
           <p>${escapeHtml(game.team2)}: ${game.secondHalfGoalsTeam2}</p>
-          <p>Duration: ${formatClock(game.secondHalfDurationSeconds)}</p>
+          ${summaryDurationMarkup('Duration', game.secondHalfDurationSeconds)}
         </section>
       </div>
       <div class="vfgt_actions vfgt_actions--sticky">
@@ -565,11 +690,36 @@
     renderHome();
   }
 
+  function saveManualGame(game) {
+    const saved = serializeCompletedGame(game);
+    if (!saved) return;
+    savedGames = sortedGames([saved, ...readSavedGames().filter((item) => item.id !== saved.id)]);
+    writeSavedGames();
+    renderHome();
+  }
+
+  function updateManualFinalPreview(form) {
+    const data = new FormData(form);
+    const team1 = clampScore(data.get('firstHalfGoalsTeam1')) + clampScore(data.get('secondHalfGoalsTeam1'));
+    const team2 = clampScore(data.get('firstHalfGoalsTeam2')) + clampScore(data.get('secondHalfGoalsTeam2'));
+    const output = form.querySelector('[data-vfgt-manual-final]');
+    if (output) output.textContent = `Final: ${team1} - ${team2}`;
+  }
+
   function handleClick(event) {
-    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score]');
+    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
     if (!button || !guardAction(event, button)) return;
     void unlockAudio();
     const action = button.dataset.vfgtAction;
+    if (button.dataset.vfgtManualScore) {
+      const form = button.closest('[data-vfgt-manual-form]');
+      const input = form?.querySelector(`[name="${button.dataset.vfgtManualScore}"]`);
+      if (input) {
+        input.value = String(Math.max(0, clampScore(input.value) + Number(button.dataset.delta || 0)));
+        updateManualFinalPreview(form);
+      }
+      return;
+    }
     if (button.dataset.vfgtScore && state) {
       adjustScore(state, Number(button.dataset.vfgtScore), Number(button.dataset.delta));
       playNormalBeep();
@@ -582,6 +732,7 @@
       renderHome();
     }
     if (action === 'new') renderSetup();
+    if (action === 'past') renderManualForm();
     if (action === 'resume') resumeStoredGame();
     if (action === 'abandon' && window.confirm('Abandon the unfinished game?')) {
       clearActiveGame();
@@ -615,6 +766,13 @@
   }
 
   function handleInput(event) {
+    const manualForm = event.target.closest('[data-vfgt-manual-form]');
+    if (manualForm) {
+      const input = event.target.closest('[data-vfgt-manual-input]');
+      if (input && input.value !== '') input.value = String(clampScore(input.value));
+      updateManualFinalPreview(manualForm);
+      return;
+    }
     const input = event.target.closest('[data-vfgt-score-input]');
     if (!input || !state) return;
     const raw = input.value;
@@ -626,6 +784,28 @@
   }
 
   function handleSubmit(event) {
+    const manualForm = event.target.closest('[data-vfgt-manual-form]');
+    if (manualForm) {
+      event.preventDefault();
+      const data = new FormData(manualForm);
+      const game = createManualGame({
+        team1: data.get('team1'),
+        team2: data.get('team2'),
+        location: data.get('location'),
+        date: data.get('date'),
+        time: data.get('time'),
+        firstHalfGoalsTeam1: data.get('firstHalfGoalsTeam1'),
+        firstHalfGoalsTeam2: data.get('firstHalfGoalsTeam2'),
+        secondHalfGoalsTeam1: data.get('secondHalfGoalsTeam1'),
+        secondHalfGoalsTeam2: data.get('secondHalfGoalsTeam2'),
+        firstHalfDurationSeconds: parseOptionalDuration(data.get('firstHalfDuration')),
+        secondHalfDurationSeconds: parseOptionalDuration(data.get('secondHalfDuration')),
+      });
+      if (!game.team1 || !game.team2) return;
+      saveManualGame(game);
+      return;
+    }
+
     const form = event.target.closest('[data-vfgt-setup]');
     if (!form) return;
     event.preventDefault();
@@ -671,14 +851,17 @@
     adjustScore,
     clampScore,
     createGame,
+    createManualGame,
     elapsedForHalf,
     endFirstHalf,
     endSecondHalf,
     finalScores,
     formatClock,
+    gameSortTime,
     halftimeRemaining,
     maybeMarkRegulation,
     normalizeGame,
+    parseOptionalDuration,
     scoreForPhase,
     serializeCompletedGame,
     setScoreForPhase,

@@ -4,6 +4,8 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../js/violet-futbol-game-tracker.js', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
+const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 function createRuntime(now = 2_000_000_000_000) {
   let currentTime = now;
@@ -165,22 +167,51 @@ test('completed games serialize with final scores that equal half totals', () =>
   game.secondHalfGoalsTeam2 = 1;
 
   const saved = api.serializeCompletedGame(game, '2026-08-22T12:00:00.000Z');
-  assert.equal(saved.schemaVersion, 1);
+  assert.equal(saved.schemaVersion, 2);
+  assert.equal(saved.entryType, 'live');
   assert.equal(saved.finalTeam1Score, 3);
   assert.equal(saved.finalTeam2Score, 1);
   assert.equal(api.finalScores(saved).team1, saved.finalTeam1Score);
   assert.equal(saved.savedAt, '2026-08-22T12:00:00.000Z');
 });
 
-test('saved history sorts newest to oldest', () => {
+test('manual past games preserve half scores and optional durations', () => {
+  const { api } = createRuntime();
+  const game = api.createManualGame({
+    team1: 'Violet',
+    team2: 'Hume-Fogg',
+    location: 'Metro Soccer Complex',
+    date: '2026-08-05',
+    time: '',
+    firstHalfGoalsTeam1: 1,
+    firstHalfGoalsTeam2: 0,
+    secondHalfGoalsTeam1: 2,
+    secondHalfGoalsTeam2: 1,
+    firstHalfDurationSeconds: api.parseOptionalDuration('42:15'),
+    secondHalfDurationSeconds: api.parseOptionalDuration(''),
+  });
+  const saved = api.serializeCompletedGame(game, '2026-08-22T12:00:00.000Z');
+
+  assert.equal(saved.entryType, 'manual');
+  assert.equal(saved.finalTeam1Score, 3);
+  assert.equal(saved.finalTeam2Score, 1);
+  assert.equal(saved.firstHalfDurationSeconds, 42 * 60 + 15);
+  assert.equal(saved.secondHalfDurationSeconds, null);
+});
+
+test('saved history sorts by game date and time instead of save time', () => {
   const { api } = createRuntime();
   const games = [
-    { id: 'old', savedAt: '2026-08-20T12:00:00.000Z' },
-    { id: 'new', savedAt: '2026-08-22T12:00:00.000Z' },
-    { id: 'middle', savedAt: '2026-08-21T12:00:00.000Z' },
+    { id: 'added-today-old-game', date: '2026-08-05', startTime: '', savedAt: '2026-08-22T12:00:00.000Z' },
+    { id: 'newer-game', date: '2026-08-22', startTime: '09:00', savedAt: '2026-08-20T12:00:00.000Z' },
+    { id: 'later-same-day', date: '2026-08-05', startTime: '19:00', savedAt: '2026-08-21T12:00:00.000Z' },
   ];
 
-  assert.deepEqual(Array.from(api.sortedGames(games).map((game) => game.id)), ['new', 'middle', 'old']);
+  assert.deepEqual(Array.from(api.sortedGames(games).map((game) => game.id)), [
+    'newer-game',
+    'later-same-day',
+    'added-today-old-game',
+  ]);
 });
 
 test('normalization recovers unfinished persisted game state', () => {
@@ -196,6 +227,13 @@ test('normalization recovers unfinished persisted game state', () => {
 
   assert.equal(recovered.phase, 'first_half');
   assert.equal(recovered.firstHalfRegulationWhistlePlayed, true);
+  assert.equal(recovered.entryType, 'live');
   assert.equal(recovered.firstHalfGoalsTeam1, 2);
   assert.equal(recovered.secondHalfGoalsTeam1, 0);
+});
+
+test('launcher and VFGT setup use the approved icon and dark form controls', () => {
+  assert.match(indexHtml, /iconSrc: 'icons\/violet-futbol-game-tracker\.png'/);
+  assert.match(css, /\.vfgt_form input[\s\S]*background: var\(--vfgt-input\)/);
+  assert.doesNotMatch(css, /\.vfgt_form input[\s\S]{0,240}background: #f8fbff/);
 });
