@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-08-22-8';
+const SW_VERSION = '2026-08-22-9';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;

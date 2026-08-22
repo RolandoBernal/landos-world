@@ -283,41 +283,55 @@ test('light appearance reaches child app surfaces with readable foregrounds', as
   }
 });
 
-test('light appearance keeps launcher card foregrounds readable', async ({ page }) => {
+test('light appearance keeps launcher cards as branded islands', async ({ page }) => {
   await page.goto('/#/settings');
   await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
   await page.goto('/#/');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-  const launcherCards = page.locator('.clock_utility_card');
-  await expect(launcherCards).toHaveCount(7);
+  const brandedCards = [
+    { selector: '.clock_utility_card--clock', darkColor: 'rgb(6, 19, 11)' },
+    { selector: '.clock_utility_card--lee-lee-diabetes', darkColor: 'rgb(16, 5, 29)' },
+    { selector: '.clock_utility_card--purple', darkColor: 'rgb(16, 5, 29)' },
+    { selector: '.clock_utility_card--vfgt', darkColor: 'rgb(16, 5, 29)' },
+    { selector: '.clock_utility_card--road-bike', darkColor: 'rgb(24, 9, 18)' },
+    { selector: '.clock_utility_card--notecards', darkColor: 'rgb(12, 11, 12)' },
+  ];
 
-  const colorChecks = await launcherCards.evaluateAll((cards) => {
-    function luminance(value) {
-      const match = value.match(/rgba?\(([^)]+)\)/);
-      if (!match) return 0;
-      const [r, g, b] = match[1].split(/[,\s/]+/).filter(Boolean).slice(0, 3).map(Number).map((channel) => {
-        const normalized = channel / 255;
-        return normalized <= 0.03928
-          ? normalized / 12.92
-          : ((normalized + 0.055) / 1.055) ** 2.4;
-      });
-      return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
-    }
-    return cards.map((card) => {
-      const title = card.querySelector('.clock_utility_title');
-      const description = card.querySelector('.clock_utility_description, .clock_utility_progress_summary');
+  for (const card of brandedCards) {
+    await expect(page.locator(card.selector)).toBeVisible();
+    const styles = await page.locator(card.selector).evaluate((element) => {
+      function luminance(value) {
+        const match = value.match(/rgba?\(([^)]+)\)/);
+        if (!match) return 0;
+        const [r, g, b] = match[1].split(/[,\s/]+/).filter(Boolean).slice(0, 3).map(Number).map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.03928
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+      }
+
+      const title = element.querySelector('.clock_utility_title');
       return {
+        backgroundImage: getComputedStyle(element).backgroundImage,
         titleLuminance: luminance(getComputedStyle(title).color),
-        supportingLuminance: description ? luminance(getComputedStyle(description).color) : 0,
       };
     });
-  });
 
-  for (const check of colorChecks) {
-    expect(check.titleLuminance).toBeLessThan(0.25);
-    expect(check.supportingLuminance).toBeLessThan(0.35);
+    expect(styles.backgroundImage).toContain(card.darkColor);
+    expect(styles.titleLuminance).toBeGreaterThan(0.65);
   }
+
+  const weatherCard = page.locator('.clock_utility_card--weather');
+  await expect(weatherCard).toBeVisible();
+  const weatherStyles = await weatherCard.evaluate((element) => ({
+    backgroundImage: getComputedStyle(element).backgroundImage,
+    titleColor: getComputedStyle(element.querySelector('.clock_utility_title')).color,
+  }));
+  expect(weatherStyles.backgroundImage).toContain('rgba(255, 247, 215, 0.7)');
+  expect(weatherStyles.titleColor).toBe('rgb(33, 23, 4)');
 });
 
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {

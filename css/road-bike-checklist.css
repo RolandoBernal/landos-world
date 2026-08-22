@@ -47,17 +47,6 @@
   box-sizing: border-box;
 }
 
-:root[data-theme="light"] .clock_utility_card--road-bike {
-  background:
-    radial-gradient(circle at 22% 16%, rgb(var(--app-accent-rgb, 189 39 95) / 14%), transparent 40%),
-    linear-gradient(145deg, #ffffff, var(--app-accent-bg, #ffe7ef) 62%, #fff6f9);
-  color: #172033;
-}
-
-:root[data-theme="light"] .clock_utility_card--road-bike .clock_utility_title {
-  color: #172033;
-}
-
 :root[data-theme="light"] .road_bike_view {
   background:
     radial-gradient(circle at 50% -10%, rgb(var(--app-accent-rgb, 189 39 95) / 13%), transparent 22rem),

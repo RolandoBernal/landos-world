@@ -109,7 +109,7 @@ test('shared page container aligns ecosystem headers, navigation, and app shells
 
 test('shared app theme constrains iOS native date and time controls', () => {
   const themeCss = readFileSync(new URL('../css/app-themes.css', import.meta.url), 'utf8');
-  assert.match(html, /css\/app-themes\.css\?v=20260822-2/);
+  assert.match(html, /css\/app-themes\.css\?v=20260822-3/);
   assert.match(html, /app_theme app_theme--lee-lees-tracker/);
   assert.match(html, /app_theme app_theme--violet-futbol-game-tracker/);
   assert.match(themeCss, /\.app_theme :where\(input\[type="date"\], input\[type="time"\], input\[type="datetime-local"\]\) \{[\s\S]*inline-size: 100%[\s\S]*max-inline-size: 100%[\s\S]*min-inline-size: 0[\s\S]*-webkit-appearance: none[\s\S]*appearance: none/);

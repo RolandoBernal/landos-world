@@ -940,10 +940,6 @@ body {
   color: #211704;
 }
 
-:root[data-theme="light"] .clock_utility_card--notecards .clock_utility_title {
-  color: #172033;
-}
-
 @media only screen and (min-width: 768px) {
   .digit_clock_title {
     font-size: 18px;

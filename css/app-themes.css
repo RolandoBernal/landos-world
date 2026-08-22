@@ -180,3 +180,68 @@
   --app-accent-deep: #f6b9b9;
   --app-accent-contrast: #ffffff;
 }
+
+/* Launcher cards stay as branded app islands while opened apps honor the shell theme. */
+#lando-launcher .app_theme--daily-chief-briefing,
+#lando-launcher .app_theme--weather {
+  --app-accent: #ffd400;
+  --app-accent-rgb: 255 212 0;
+  --app-accent-soft: #ffe566;
+  --app-accent-bg: #302800;
+  --app-accent-deep: #f5c400;
+  --app-accent-contrast: #171100;
+}
+
+#lando-launcher .app_theme--digital-clock {
+  --app-accent: #3dff8a;
+  --app-accent-rgb: 61 255 138;
+  --app-accent-soft: #a8ffcc;
+  --app-accent-bg: #0c2115;
+  --app-accent-deep: #133321;
+  --app-accent-contrast: #041008;
+}
+
+#lando-launcher .app_theme--lee-lees-tracker {
+  --app-accent: #3aa0ff;
+  --app-accent-rgb: 58 160 255;
+  --app-accent-soft: #c6f2ff;
+  --app-accent-bg: #071c3b;
+  --app-accent-deep: #0b49b5;
+  --app-accent-contrast: #041326;
+}
+
+#lando-launcher .app_theme--violet-sprints {
+  --app-accent: #b265ff;
+  --app-accent-rgb: 178 101 255;
+  --app-accent-soft: #d8ccff;
+  --app-accent-bg: #1b1233;
+  --app-accent-deep: #2e1065;
+  --app-accent-contrast: #12091f;
+}
+
+#lando-launcher .app_theme--violet-futbol-game-tracker {
+  --app-accent: #4aa3ff;
+  --app-accent-rgb: 74 163 255;
+  --app-accent-soft: #d9ecff;
+  --app-accent-bg: #041431;
+  --app-accent-deep: #064596;
+  --app-accent-contrast: #f8fbff;
+}
+
+#lando-launcher .app_theme--road-bike-checklist {
+  --app-accent: #d9467d;
+  --app-accent-rgb: 217 70 125;
+  --app-accent-soft: #ffd1df;
+  --app-accent-bg: #2a0b18;
+  --app-accent-deep: #5b1530;
+  --app-accent-contrast: #fff7fa;
+}
+
+#lando-launcher .app_theme--death-on-notecards {
+  --app-accent: #ff4d4d;
+  --app-accent-rgb: 255 77 77;
+  --app-accent-soft: #ffd1d1;
+  --app-accent-bg: #1c1114;
+  --app-accent-deep: #321018;
+  --app-accent-contrast: #190606;
+}

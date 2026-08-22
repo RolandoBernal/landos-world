@@ -34,16 +34,6 @@
   --vfgt-placeholder: rgb(81 102 125 / 68%);
 }
 
-:root[data-theme="light"] .clock_utility_card--vfgt {
-  background:
-    radial-gradient(circle at 78% 10%, rgb(9 104 195 / 16%), transparent 12rem),
-    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(231 242 255 / 82%));
-}
-
-:root[data-theme="light"] .clock_utility_card--vfgt .clock_utility_title {
-  color: #172033;
-}
-
 .vfgt_hero,
 .vfgt_page_header,
 .vfgt_match_header,
