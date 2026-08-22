@@ -283,6 +283,43 @@ test('light appearance reaches child app surfaces with readable foregrounds', as
   }
 });
 
+test('light appearance keeps launcher card foregrounds readable', async ({ page }) => {
+  await page.goto('/#/settings');
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
+  await page.goto('/#/');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+  const launcherCards = page.locator('.clock_utility_card');
+  await expect(launcherCards).toHaveCount(7);
+
+  const colorChecks = await launcherCards.evaluateAll((cards) => {
+    function luminance(value) {
+      const match = value.match(/rgba?\(([^)]+)\)/);
+      if (!match) return 0;
+      const [r, g, b] = match[1].split(/[,\s/]+/).filter(Boolean).slice(0, 3).map(Number).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+    }
+    return cards.map((card) => {
+      const title = card.querySelector('.clock_utility_title');
+      const description = card.querySelector('.clock_utility_description, .clock_utility_progress_summary');
+      return {
+        titleLuminance: luminance(getComputedStyle(title).color),
+        supportingLuminance: description ? luminance(getComputedStyle(description).color) : 0,
+      };
+    });
+  });
+
+  for (const check of colorChecks) {
+    expect(check.titleLuminance).toBeLessThan(0.25);
+    expect(check.supportingLuminance).toBeLessThan(0.35);
+  }
+});
+
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {
   const cases = [
     {

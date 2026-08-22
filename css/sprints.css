@@ -208,6 +208,7 @@
 }
 
 :root[data-theme="light"] .clock_utility_card {
+  border-color: rgb(var(--app-accent-rgb, 126 53 216) / 38%);
   background:
     radial-gradient(circle at 20% 20%, rgb(var(--app-accent-rgb, 126 53 216) / 16%), transparent 42%),
     linear-gradient(145deg, #ffffff, var(--app-accent-bg, #f0e6ff));
@@ -216,13 +217,20 @@
     0 0 24px rgb(var(--app-accent-rgb, 126 53 216) / 13%);
 }
 
-:root[data-theme="light"] .clock_utility_title {
+:root[data-theme="light"] .clock_utility_card .clock_utility_title {
   color: #172033;
 }
 
-:root[data-theme="light"] .clock_utility_description,
-:root[data-theme="light"] .clock_utility_footer {
+:root[data-theme="light"] .clock_utility_card .clock_utility_description,
+:root[data-theme="light"] .clock_utility_card .clock_utility_footer,
+:root[data-theme="light"] .clock_utility_card .clock_utility_progress_summary {
   color: var(--app-accent-soft, #5d22a6);
+}
+
+:root[data-theme="light"] .clock_utility_card .clock_launch_btn {
+  border-color: rgb(var(--app-accent-rgb, 126 53 216) / 42%);
+  background: linear-gradient(135deg, var(--app-accent, #7e35d8), var(--app-accent-deep, #d8c0ff));
+  color: var(--app-accent-contrast, #ffffff);
 }
 
 :root[data-theme="light"] .sprints-view {
