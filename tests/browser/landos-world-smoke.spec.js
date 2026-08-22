@@ -331,3 +331,99 @@ test('Lee-Lee print media hides app shell chrome around the report body', async 
   await expect(page.getByRole('heading', { name: 'Glucose & Insulin Log' })).toBeVisible();
   await expect(page.getByText('0 units')).toBeVisible();
 });
+
+async function openProtectedLeeLeeTracker(page) {
+  await page.addInitScript(() => {
+    window.LEE_LEE_TRACKER_SUPABASE_CONFIG = {
+      url: 'https://example.supabase.co',
+      publishableKey: 'publishable-key-for-browser-smoke-tests',
+    };
+    localStorage.setItem('lando-world:lee-lees-tracker:device-identity:v1', 'Rolando');
+    window.supabase = {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { user: { id: 'browser-smoke-user' } } } }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+        },
+        channel: () => ({
+          on() { return this; },
+          subscribe: () => 'SUBSCRIBED',
+        }),
+        removeChannel: () => {},
+        from: () => ({
+          select() { return this; },
+          eq() { return this; },
+          order: async () => ({ data: [], error: null }),
+          maybeSingle: async () => ({ data: null, error: null }),
+          insert() { return { select: () => ({ single: async () => ({ data: null, error: { message: 'offline test client' } }) }) }; },
+        }),
+        rpc: async () => ({ data: null, error: { message: 'offline test client' } }),
+      }),
+    };
+  });
+  await page.goto('/#/lee-lees-tracker');
+  await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+}
+
+test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb data', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await expect(form.getByLabel('Context')).toHaveValue('Breakfast');
+  await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toBeVisible();
+  await expect(form.getByLabel('Blood Sugar')).toBeVisible();
+
+  await form.getByLabel('Blood Sugar').fill('198');
+  await form.getByLabel('Food').fill('Pasta');
+  await form.getByRole('spinbutton', { name: 'Total carbs' }).fill('46.5');
+  await expect(form.getByText('Total carbs: 46.5 g carbs')).toBeVisible();
+
+  await form.getByLabel('Context').selectOption('Bedtime');
+  await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
+  await expect(form.getByText('Total carbs:', { exact: false })).toHaveCount(0);
+  await expect(form.getByLabel('Blood Sugar')).toBeVisible();
+  await expect(form.getByText('Suggested dose')).toBeVisible();
+  await expect(form.getByText('17 units')).toBeVisible();
+
+  const focusableFoodControls = await form.locator('[name^="food"], [name="mealCarbs"], [data-action="add-food"], [data-action="remove-food"]').count();
+  expect(focusableFoodControls).toBe(0);
+
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+
+  const bedtimeRecord = await page.evaluate(() => {
+    const records = window.LeeLeeTrackerStorage.loadTrackerData().records;
+    return records.find((record) => record.type === 'Bedtime');
+  });
+  expect(bedtimeRecord).toMatchObject({
+    eventType: 'check-insulin',
+    type: 'Bedtime',
+    bloodSugar: 198,
+    mealCarbs: null,
+    totalCarbs: null,
+    foods: [],
+    mealDescription: '',
+    suggestedBaseUnits: 17,
+    suggestedCarbDoseUnits: null,
+    suggestedCorrectionUnits: null,
+    suggestedTotalUnits: 17,
+  });
+});
+
+test('Lee-Lee context switching restores Meal Carbs for applicable contexts', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Bedtime');
+  await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
+
+  await form.getByLabel('Context').selectOption('Lunch');
+  await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toBeVisible();
+  await expect(form.getByRole('button', { name: '+ Add Food' })).toBeVisible();
+
+  await form.getByLabel('Context').selectOption('Correction');
+  await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
+  await expect(form.getByLabel('Blood Sugar')).toBeVisible();
+});

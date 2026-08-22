@@ -377,6 +377,10 @@
     return entryTypeUsesMealGuidance(type) || ['Snacks', 'Snack', 'Correction', BEDTIME_CONTEXT_TYPE].includes(type);
   }
 
+  function entryTypeUsesFoodCalculator(type, eventType = 'check-insulin') {
+    return eventType === 'check-insulin' && ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
+  }
+
   function normalizeCorrectionRange(range) {
     if (!range || typeof range !== 'object') return null;
     const minGlucose = range.minGlucose == null || range.minGlucose === ''
@@ -1794,6 +1798,7 @@
       return { ...config, fields: [...config.fields] };
     },
     entryTypeUsesMealGuidance,
+    entryTypeUsesFoodCalculator,
     entryTypeHasField,
   };
 
@@ -2864,7 +2869,7 @@
     const eventTime = record.time || getLocalTimeKey(new Date(recordTimestamp));
     const eventConfig = getEventTypeConfig(currentEditor.eventType);
     const contextType = normalizeRecordContext(currentEditor.type, currentEditor.eventType);
-    const showFoodCalculator = currentEditor.eventType === 'check-insulin' && ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(contextType);
+    const showFoodCalculator = entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-lee-lee-editor>
@@ -3357,14 +3362,19 @@
   }
 
   function getObservedEntryContext(form) {
+    const eventType = getEditorEventType(form);
+    const type = getEditorType(form);
+    const recordsFood = eventType === 'meal' || entryTypeUsesFoodCalculator(type, eventType);
+    const foods = recordsFood ? collectFoodItemsFromForm(form) : [];
+    const mealCarbs = recordsFood ? normalizeNumber(form.elements.mealCarbs?.value) : null;
     return {
-      eventType: getEditorEventType(form),
-      type: getEditorType(form),
+      eventType,
+      type,
       recordTimestamp: getEditorRecordTimestamp(form),
       bloodSugar: normalizeBloodSugar(form.elements.bloodSugar?.value),
-      foods: collectFoodItemsFromForm(form),
-      mealCarbs: normalizeNumber(form.elements.mealCarbs?.value),
-      mealDescription: sanitizeShortText(form.elements.mealDescription?.value, 180),
+      foods,
+      mealCarbs,
+      mealDescription: recordsFood ? sanitizeShortText(form.elements.mealDescription?.value, 180) : '',
       activityDescription: sanitizeShortText(form.elements.activityDescription?.value, 120),
       activityDurationMinutes: normalizeWholeNumber(form.elements.activityDurationMinutes?.value),
       activityIntensity: ACTIVITY_INTENSITY_OPTIONS.includes(form.elements.activityIntensity?.value) ? form.elements.activityIntensity.value : '',
@@ -5095,6 +5105,18 @@
           mode: currentEditor?.mode || 'log-entry',
           eventType: event.target.value,
           record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+        });
+        return;
+      }
+      if (event.target.name === 'type') {
+        const draft = buildDraftFromEditor(form);
+        draft.type = event.target.value;
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: draft.eventType,
+          record: draft,
           returnTo: currentEditor?.returnTo || null,
           returnDateKey: currentEditor?.returnDateKey || null,
         });
