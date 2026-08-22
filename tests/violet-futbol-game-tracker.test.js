@@ -239,7 +239,8 @@ test('launcher and VFGT setup use the approved icon and dark form controls', () 
   assert.match(css, /\.vfgt_form label \{[\s\S]*min-width: 0/);
   assert.match(css, /\.vfgt_form input[\s\S]*background: var\(--vfgt-input\)/);
   assert.match(css, /\.vfgt_form input \{[\s\S]*width: 100%[\s\S]*max-width: 100%[\s\S]*min-width: 0[\s\S]*display: block/);
-  assert.match(css, /\.vfgt_form input\[type="date"\],[\s\S]*\.vfgt_form input\[type="time"\] \{[\s\S]*width: 100%[\s\S]*max-width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_form input\[type="date"\],[\s\S]*\.vfgt_form input\[type="time"\] \{[\s\S]*inline-size: 100%[\s\S]*max-inline-size: 100%[\s\S]*min-inline-size: 0[\s\S]*-webkit-appearance: none[\s\S]*appearance: none/);
+  assert.match(css, /\.vfgt_form input\[type="date"\]::-webkit-date-and-time-value,[\s\S]*\.vfgt_form input\[type="time"\]::-webkit-date-and-time-value \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*text-align: left/);
   assert.match(css, /\.vfgt_form_grid,[\s\S]*\.vfgt_summary_grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)[\s\S]*min-width: 0/);
   assert.match(css, /\.vfgt_form_grid > \*,[\s\S]*\.vfgt_summary_grid > \* \{[\s\S]*min-width: 0/);
   assert.match(css, /--vfgt-input: rgb\(0 0 0 \/ 26%\)/);

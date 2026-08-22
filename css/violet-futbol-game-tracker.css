@@ -246,9 +246,24 @@
 .vfgt_form input[type="date"],
 .vfgt_form input[type="time"] {
   width: 100%;
+  inline-size: 100%;
+  max-width: 100%;
+  max-inline-size: 100%;
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.vfgt_form input[type="date"]::-webkit-date-and-time-value,
+.vfgt_form input[type="time"]::-webkit-date-and-time-value {
+  width: 100%;
   max-width: 100%;
   min-width: 0;
-  box-sizing: border-box;
+  margin: 0;
+  text-align: left;
 }
 
 .vfgt_form input::placeholder {
