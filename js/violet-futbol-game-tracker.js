@@ -436,7 +436,11 @@
             const score = finalScores(game);
             return `<button type="button" class="vfgt_history_item" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" role="listitem">
               <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
-              <span class="vfgt_history_score"><strong>${escapeHtml(game.team1)}</strong> ${score.team1} - ${score.team2} <strong>${escapeHtml(game.team2)}</strong></span>
+              <span class="vfgt_history_matchup">
+                <strong class="vfgt_history_team vfgt_history_team--home">${escapeHtml(game.team1)}</strong>
+                <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
+                <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
+              </span>
               <span class="vfgt_history_location">${escapeHtml(game.location || 'Location not set')} · ${game.entryType === 'manual' ? 'Past game' : 'Live game'}</span>
             </button>`;
           }).join('')}
@@ -602,7 +606,11 @@
       <section class="vfgt_app vfgt_live" aria-labelledby="vfgt-live-title">
         <header class="vfgt_match_header">
           <p class="vfgt_kicker">${escapeHtml(formatDateLabel(state.date, state.startTime))} · ${escapeHtml(formatTimeLabel(state.startTime))}</p>
-          <h1 id="vfgt-live-title">${escapeHtml(state.team1)} vs ${escapeHtml(state.team2)}</h1>
+          <h1 id="vfgt-live-title" class="vfgt_matchup_title">
+            <span class="vfgt_matchup_team">${escapeHtml(state.team1)}</span>
+            <span class="vfgt_matchup_vs">VS</span>
+            <span class="vfgt_matchup_team">${escapeHtml(state.team2)}</span>
+          </h1>
           ${state.location ? `<p>${escapeHtml(state.location)}</p>` : ''}
         </header>
         <section class="vfgt_clock_panel" aria-live="polite">

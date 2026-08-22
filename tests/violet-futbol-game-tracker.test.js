@@ -235,5 +235,18 @@ test('normalization recovers unfinished persisted game state', () => {
 test('launcher and VFGT setup use the approved icon and dark form controls', () => {
   assert.match(indexHtml, /iconSrc: 'icons\/violet-futbol-game-tracker\.png'/);
   assert.match(css, /\.vfgt_form input[\s\S]*background: var\(--vfgt-input\)/);
+  assert.match(css, /--vfgt-input: rgb\(0 0 0 \/ 26%\)/);
   assert.doesNotMatch(css, /\.vfgt_form input[\s\S]{0,240}background: #f8fbff/);
+});
+
+test('saved games and live headers separate team names from score and VS labels', () => {
+  assert.match(source, /class="vfgt_history_matchup"/);
+  assert.match(source, /class="vfgt_history_score"/);
+  assert.match(source, /class="vfgt_history_team vfgt_history_team--home"/);
+  assert.match(source, /class="vfgt_history_team vfgt_history_team--away"/);
+  assert.match(source, /class="vfgt_matchup_title"/);
+  assert.match(source, /class="vfgt_matchup_vs">VS<\/span>/);
+  assert.match(css, /\.vfgt_history_matchup[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
+  assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
 });

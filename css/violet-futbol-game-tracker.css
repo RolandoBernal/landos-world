@@ -9,7 +9,7 @@
   --vfgt-text: #f8fbff;
   --vfgt-muted: #d5e8ff;
   --vfgt-muted-strong: #9bcaff;
-  --vfgt-input: rgb(3 21 46 / 88%);
+  --vfgt-input: rgb(0 0 0 / 26%);
   --vfgt-placeholder: rgb(213 232 255 / 62%);
   width: min(100%, var(--landos-page-max-width));
   margin: 0 auto;
@@ -175,9 +175,39 @@
 }
 
 .vfgt_history_score {
-  display: block;
-  font-size: 1.1rem;
-  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  color: var(--vfgt-text);
+  font-size: clamp(1.35rem, 3.4vw, 1.85rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vfgt_history_matchup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.vfgt_history_team {
+  color: var(--vfgt-text);
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.vfgt_history_team--home {
+  text-align: right;
+}
+
+.vfgt_history_team--away {
+  text-align: left;
 }
 
 .vfgt_form {
@@ -193,15 +223,16 @@
 }
 
 .vfgt_form input {
-  min-height: 48px;
-  padding: 0.72rem;
+  width: 100%;
+  min-height: 50px;
+  padding: 0.75rem;
   box-sizing: border-box;
   color: var(--vfgt-text);
   background: var(--vfgt-input);
-  border: 1px solid var(--vfgt-border-strong);
-  border-radius: 6px;
+  border: 1px solid var(--vfgt-border);
+  border-radius: 8px;
   font: inherit;
-  font-size: 16px;
+  font-size: 1rem;
   color-scheme: dark;
 }
 
@@ -211,7 +242,7 @@
 
 .vfgt_form input:focus {
   border-color: var(--vfgt-accent-strong);
-  box-shadow: 0 0 0 3px rgb(74 163 255 / 22%);
+  box-shadow: 0 0 0 3px rgb(74 163 255 / 18%);
   outline: none;
 }
 
@@ -226,7 +257,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .vfgt_home_actions {
@@ -238,6 +269,10 @@
 
 .vfgt_actions--sticky {
   justify-content: flex-end;
+}
+
+.vfgt_live .vfgt_scoreboard + .vfgt_actions {
+  margin-top: 1.25rem;
 }
 
 .vfgt_clock_panel {
@@ -273,15 +308,17 @@
 
 .vfgt_scoreboard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: stretch;
-  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(3.5rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
 }
 
 .vfgt_team_score {
   display: grid;
-  gap: 0.55rem;
+  align-content: start;
+  gap: 0.7rem;
   min-width: 0;
+  height: 100%;
 }
 
 .vfgt_team_name {
@@ -295,7 +332,7 @@
 
 .vfgt_score_controls {
   display: grid;
-  grid-template-columns: 52px minmax(68px, 1fr) 52px;
+  grid-template-columns: 54px minmax(78px, 1fr) 54px;
   gap: 0.5rem;
   align-items: center;
 }
@@ -307,7 +344,6 @@
   box-sizing: border-box;
   border-radius: 6px;
   font: inherit;
-  font-size: 1.6rem;
   font-weight: 900;
 }
 
@@ -315,6 +351,7 @@
   color: var(--vfgt-text);
   background: linear-gradient(180deg, var(--vfgt-accent-strong), #064596);
   border: 1px solid var(--vfgt-border-strong);
+  font-size: 1.35rem;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -324,6 +361,9 @@
   text-align: center;
   background: rgb(0 0 0 / 28%);
   border: 1px solid rgb(255 255 255 / 24%);
+  font-size: clamp(2rem, 7vw, 3rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .vfgt_manual_half {
@@ -364,10 +404,44 @@
 
 .vfgt_vs {
   align-self: center;
-  color: #9bcaff;
-  font-size: 0.78rem;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  min-height: 56px;
+  color: var(--vfgt-muted-strong);
+  font-size: clamp(1rem, 3vw, 1.25rem);
   font-weight: 900;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.vfgt_matchup_title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.vfgt_matchup_team {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vfgt_matchup_team:first-child {
+  text-align: right;
+}
+
+.vfgt_matchup_team:last-child {
+  text-align: left;
+}
+
+.vfgt_matchup_vs {
+  align-self: center;
+  color: var(--vfgt-muted-strong);
+  font-size: clamp(0.78rem, 2.3vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
 .vfgt_final_score {
@@ -403,9 +477,29 @@
 
   .vfgt_form_grid,
   .vfgt_summary_grid,
-  .vfgt_scoreboard,
   .vfgt_final_score {
     grid-template-columns: 1fr;
+  }
+
+  .vfgt_scoreboard {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .vfgt_history_matchup,
+  .vfgt_matchup_title {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0.45rem;
+  }
+
+  .vfgt_history_team,
+  .vfgt_history_team--home,
+  .vfgt_history_team--away,
+  .vfgt_matchup_team,
+  .vfgt_matchup_team:first-child,
+  .vfgt_matchup_team:last-child {
+    text-align: center;
   }
 
   .vfgt_vs {
@@ -413,7 +507,8 @@
   }
 
   .vfgt_score_controls {
-    grid-template-columns: 60px minmax(86px, 1fr) 60px;
+    grid-template-columns: minmax(44px, 52px) minmax(58px, 1fr) minmax(44px, 52px);
+    gap: 0.4rem;
   }
 
   .vfgt_actions,
