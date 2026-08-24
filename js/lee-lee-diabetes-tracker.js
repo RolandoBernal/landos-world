@@ -30,7 +30,9 @@
     EVENT_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
   ));
   const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
-  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Other']);
+  const ACTIVE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Bedtime', 'Correction']);
+  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Other']);
+  const SINGLE_USE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime']);
   const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
   const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
   const ACTIVITY_INTENSITY_OPTIONS = Object.freeze(['Easy', 'Moderate', 'Hard']);
@@ -41,6 +43,7 @@
     { type: 'Bedtime', label: 'Bedtime', clinicalLogPrimary: true, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: '2 AM', label: '2 AM', clinicalLogPrimary: true, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Correction', label: 'Correction', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
+    { type: 'Snacks', label: 'Snacks', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Snack', label: 'Snack', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Exercise', label: 'Exercise', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Other', label: 'Other', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
@@ -88,7 +91,9 @@
     { label: 'Breakfast Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Breakfast', classification: 'SHARED' },
     { label: 'Lunch Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Lunch', classification: 'SHARED' },
     { label: 'Dinner Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Dinner', classification: 'SHARED' },
+    { label: 'Insulin-to-Carb Ratio', key: 'insulinPlans[].insulinCarbRatioGrams', classification: 'SHARED' },
     { label: 'Bedtime Base Dose', key: 'insulinPlans[].bedtimeBaseUnits', classification: 'SHARED' },
+    { label: 'Saved Foods', key: 'insulinPlans[].savedFoods', classification: 'SHARED' },
     { label: 'Correction Table', key: 'insulinPlans[].correctionRanges', classification: 'SHARED' },
     { label: 'Plan Notes', key: 'insulinPlans[].notes', classification: 'SHARED' },
     { label: 'History Initial Window', key: 'settings.historyInitialWindowDays', classification: 'LOCAL' },
@@ -104,7 +109,10 @@
     Dinner: 6,
   });
   const BEDTIME_CONTEXT_TYPE = 'Bedtime';
-  const DEFAULT_BEDTIME_BASE_UNITS = 15;
+  const DEFAULT_BEDTIME_BASE_UNITS = 17;
+  const LEGACY_BEDTIME_BASE_UNITS = 15;
+  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
+  const SNACK_CARB_COVERAGE_THRESHOLD_GRAMS = 15;
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
@@ -114,6 +122,8 @@
     mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
+    insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+    savedFoods: [],
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -253,6 +263,9 @@
       mealBaseUnitsByType: getMealBaseUnitsByType(plan),
       mealBaseUnits: getMealBaseUnitsForType(plan, 'Breakfast'),
       bedtimeBaseUnits: getBedtimeBaseUnits(plan),
+      bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true,
+      insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
+      savedFoods: normalizeSavedFoods(plan.savedFoods),
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -287,6 +300,12 @@
   function normalizeWholeNumber(value) {
     const number = normalizeNumber(value);
     return number == null ? null : Math.round(number);
+  }
+
+  function roundToNearestHalf(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.floor(number * 2 + 0.5 + Number.EPSILON) / 2;
   }
 
   function sanitizeShortText(value, maxLength = 160) {
@@ -334,14 +353,14 @@
 
   function getContextOptionsForEventType(eventType) {
     if (eventType === 'meal') return [...MEAL_CONTEXT_TYPES];
-    if (eventType === 'check-insulin') return [...CHECK_CONTEXT_TYPES];
+    if (eventType === 'check-insulin') return [...ACTIVE_CHECK_CONTEXT_TYPES];
     if (eventType === 'activity') return [...ACTIVITY_CONTEXT_TYPES];
     if (eventType === 'note') return [...NOTE_CONTEXT_TYPES];
-    return [...CHECK_CONTEXT_TYPES];
+    return [...ACTIVE_CHECK_CONTEXT_TYPES];
   }
 
   function normalizeRecordContext(type, eventType) {
-    const options = getContextOptionsForEventType(eventType);
+    const options = eventType === 'check-insulin' ? CHECK_CONTEXT_TYPES : getContextOptionsForEventType(eventType);
     if (options.includes(type)) return type;
     return getEventTypeConfig(eventType).defaultContext;
   }
@@ -355,7 +374,11 @@
   }
 
   function entryTypeUsesDoseGuidance(type) {
-    return entryTypeUsesMealGuidance(type) || type === BEDTIME_CONTEXT_TYPE;
+    return entryTypeUsesMealGuidance(type) || ['Snacks', 'Snack', 'Correction', BEDTIME_CONTEXT_TYPE].includes(type);
+  }
+
+  function entryTypeUsesFoodCalculator(type, eventType = 'check-insulin') {
+    return eventType === 'check-insulin' && ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
   }
 
   function normalizeCorrectionRange(range) {
@@ -408,7 +431,171 @@
   }
 
   function getBedtimeBaseUnits(plan = {}) {
-    return normalizeNumber(plan.bedtimeBaseUnits) ?? DEFAULT_BEDTIME_BASE_UNITS;
+    const value = normalizeNumber(plan.bedtimeBaseUnits);
+    if (value == null) return DEFAULT_BEDTIME_BASE_UNITS;
+    if (value === LEGACY_BEDTIME_BASE_UNITS && plan.bedtimeBaseUnitsMigratedTo17 !== true) return DEFAULT_BEDTIME_BASE_UNITS;
+    return value;
+  }
+
+  function getInsulinCarbRatioGrams(plan = {}) {
+    return normalizeNumber(plan.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS;
+  }
+
+  function normalizeFoodItem(food = {}) {
+    const source = food && typeof food === 'object' ? food : {};
+    const inputMode = source.inputMode === 'servings' ? 'servings' : 'direct';
+    const servings = normalizeNumber(source.servings);
+    const carbsPerServing = normalizeNumber(source.carbsPerServing);
+    const directCarbs = normalizeNumber(source.directCarbs ?? source.calculatedCarbs);
+    const calculatedCarbs = calculateFoodCarbs({ inputMode, servings, carbsPerServing, directCarbs });
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      name: sanitizeShortText(source.name, 80),
+      inputMode,
+      servingDescription: sanitizeShortText(source.servingDescription, 80),
+      servings,
+      carbsPerServing,
+      directCarbs,
+      calculatedCarbs,
+      savedFoodId: typeof source.savedFoodId === 'string' ? source.savedFoodId : '',
+    };
+  }
+
+  function normalizeSavedFood(food = {}) {
+    const source = food && typeof food === 'object' ? food : {};
+    const carbsPerServing = normalizeNumber(source.carbsPerServing);
+    if (carbsPerServing == null) return null;
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      name: sanitizeShortText(source.name, 80),
+      servingDescription: sanitizeShortText(source.servingDescription, 80),
+      carbsPerServing,
+      updatedAt: toIsoTimestamp(source.updatedAt, Date.now()),
+    };
+  }
+
+  function normalizeSavedFoods(source) {
+    return (Array.isArray(source) ? source : []).map(normalizeSavedFood).filter(Boolean);
+  }
+
+  function calculateFoodCarbs(food = {}) {
+    const inputMode = food.inputMode === 'servings' ? 'servings' : 'direct';
+    if (inputMode === 'servings') {
+      const servings = normalizeNumber(food.servings);
+      const carbsPerServing = normalizeNumber(food.carbsPerServing);
+      if (servings == null || carbsPerServing == null) return null;
+      return Math.round((servings * carbsPerServing) * 10) / 10;
+    }
+    return normalizeNumber(food.directCarbs);
+  }
+
+  function calculateTotalCarbs(foods = []) {
+    return Math.round((foods || []).reduce((sum, food) => sum + (normalizeNumber(food.calculatedCarbs) ?? calculateFoodCarbs(food) ?? 0), 0) * 10) / 10;
+  }
+
+  function getCorrectionDose({ bloodSugar, insulinPlan }) {
+    const glucoseText = String(bloodSugar ?? '').trim();
+    if (!isWholePositiveGlucose(glucoseText)) {
+      return {
+        status: 'unavailable',
+        correctionUnits: null,
+        matchedRange: null,
+        message: 'Enter a positive whole-number blood sugar to see correction guidance.',
+      };
+    }
+    const glucose = Number(glucoseText);
+    const matches = (insulinPlan?.correctionRanges || []).filter((range) => {
+      const aboveMinimum = range.minGlucose == null || glucose >= range.minGlucose;
+      const belowMaximum = range.maxGlucose == null || glucose <= range.maxGlucose;
+      return aboveMinimum && belowMaximum;
+    });
+    if (matches.length !== 1) {
+      return {
+        status: 'outside-configured-range',
+        correctionUnits: null,
+        matchedRange: null,
+        message: 'Reading is outside the configured correction table.',
+      };
+    }
+    return {
+      status: 'calculated',
+      correctionUnits: Number(matches[0].correctionUnits),
+      matchedRange: { ...matches[0] },
+      message: '',
+    };
+  }
+
+  function calculateCarbDose(totalCarbs, ratioGrams = DEFAULT_INSULIN_CARB_RATIO_GRAMS) {
+    const carbs = normalizeNumber(totalCarbs) ?? 0;
+    const ratio = normalizeNumber(ratioGrams);
+    if (!ratio || ratio <= 0) {
+      return {
+        status: 'unavailable',
+        totalCarbs: carbs,
+        insulinCarbRatioGrams: ratio,
+        rawCarbDose: null,
+        roundedCarbDose: null,
+        message: 'Insulin-to-carb ratio must be greater than zero.',
+      };
+    }
+    const rawCarbDose = carbs / ratio;
+    return {
+      status: 'calculated',
+      totalCarbs: carbs,
+      insulinCarbRatioGrams: ratio,
+      rawCarbDose,
+      roundedCarbDose: roundToNearestHalf(rawCarbDose),
+      message: '',
+    };
+  }
+
+  function calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan }) {
+    const carbDose = calculateCarbDose(totalCarbs, getInsulinCarbRatioGrams(insulinPlan));
+    const correction = getCorrectionDose({ bloodSugar, insulinPlan });
+    if (carbDose.status !== 'calculated' || correction.status !== 'calculated') {
+      return {
+        status: correction.status === 'outside-configured-range' ? correction.status : 'unavailable',
+        ...carbDose,
+        correctionUnits: correction.correctionUnits,
+        suggestedTotalUnits: null,
+        matchedRange: correction.matchedRange,
+        message: correction.message || carbDose.message,
+      };
+    }
+    return {
+      status: 'calculated',
+      ...carbDose,
+      correctionUnits: correction.correctionUnits,
+      suggestedTotalUnits: carbDose.roundedCarbDose + correction.correctionUnits,
+      matchedRange: correction.matchedRange,
+      message: 'Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.',
+    };
+  }
+
+  function calculateSnackSuggestedDose({ totalCarbs, insulinPlan }) {
+    const carbs = normalizeNumber(totalCarbs) ?? 0;
+    if (carbs <= SNACK_CARB_COVERAGE_THRESHOLD_GRAMS) {
+      return {
+        status: 'calculated',
+        totalCarbs: carbs,
+        insulinCarbRatioGrams: getInsulinCarbRatioGrams(insulinPlan),
+        rawCarbDose: 0,
+        roundedCarbDose: 0,
+        correctionUnits: null,
+        suggestedTotalUnits: 0,
+        matchedRange: null,
+        message: 'No fast-acting carb dose is suggested for snacks at 15 g carbs or less.',
+      };
+    }
+    const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan));
+    return {
+      status: carbDose.status,
+      ...carbDose,
+      correctionUnits: null,
+      suggestedTotalUnits: carbDose.roundedCarbDose,
+      matchedRange: null,
+      message: carbDose.message || 'Snack carb coverage only. Correction insulin is logged separately.',
+    };
   }
 
   function normalizeInsulinPlan(plan) {
@@ -437,6 +624,9 @@
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
       bedtimeBaseUnits: getBedtimeBaseUnits(plan),
+      bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true || normalizeNumber(plan.bedtimeBaseUnits) === LEGACY_BEDTIME_BASE_UNITS,
+      insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
+      savedFoods: normalizeSavedFoods(plan.savedFoods),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
@@ -518,7 +708,8 @@
     const date = getLocalDateKey(recordDate);
     const time = getLocalTimeKey(recordDate);
     const administeredInsulinUnits = normalizeNumber(record.administeredInsulinUnits ?? record.insulinUnits);
-    const mealCarbs = normalizeWholeNumber(record.mealCarbs ?? record.carbs);
+    const foods = Array.isArray(record.foods) ? record.foods.map(normalizeFoodItem).filter(Boolean) : [];
+    const mealCarbs = normalizeNumber(record.mealCarbs ?? record.totalCarbs ?? record.carbs) ?? (foods.length ? calculateTotalCarbs(foods) : null);
     const activityDurationMinutes = normalizeWholeNumber(record.activityDurationMinutes);
     const activityIntensity = ACTIVITY_INTENSITY_OPTIONS.includes(record.activityIntensity) ? record.activityIntensity : '';
     return {
@@ -532,11 +723,16 @@
       insulinUnits: administeredInsulinUnits,
       administeredInsulinUnits,
       mealCarbs,
+      foods,
+      totalCarbs: mealCarbs,
       mealDescription: sanitizeShortText(record.mealDescription, 180),
       activityDescription: sanitizeShortText(record.activityDescription, 120),
       activityDurationMinutes,
       activityIntensity,
       suggestedBaseUnits: normalizeNumber(record.suggestedBaseUnits),
+      suggestedCarbDoseUnits: normalizeNumber(record.suggestedCarbDoseUnits ?? record.carbDoseUnits ?? record.roundedCarbDose),
+      rawCarbDose: normalizeNumber(record.rawCarbDose),
+      insulinCarbRatioGrams: normalizeNumber(record.insulinCarbRatioGrams),
       suggestedCorrectionUnits: normalizeNumber(record.suggestedCorrectionUnits),
       suggestedTotalUnits: normalizeNumber(record.suggestedTotalUnits),
       insulinPlanId: typeof record.insulinPlanId === 'string' ? record.insulinPlanId : null,
@@ -1437,7 +1633,7 @@
       .sort((a, b) => b.range.start - a.range.start)[0]?.plan || null;
   }
 
-  function calculateMealInsulinDose({ bloodSugar, entryType, insulinPlan, recordTimestamp }) {
+  function calculateMealInsulinDose({ bloodSugar, entryType, insulinPlan, recordTimestamp, totalCarbs = 0 }) {
     const glucoseText = String(bloodSugar ?? '').trim();
     if (entryType === BEDTIME_CONTEXT_TYPE) {
       if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
@@ -1463,10 +1659,67 @@
       };
     }
     if (!MEAL_TYPES.includes(entryType) || !insulinPlan?.supportedMealTypes?.includes(entryType)) {
+      if (entryType === 'Snacks' || entryType === 'Snack') {
+        if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
+          return {
+            status: 'unavailable',
+            baseUnits: null,
+            carbDoseUnits: null,
+            rawCarbDose: null,
+            insulinCarbRatioGrams: null,
+            totalCarbs: normalizeNumber(totalCarbs) ?? 0,
+            correctionUnits: null,
+            suggestedTotalUnits: null,
+            matchedRange: null,
+            insulinPlanId: insulinPlan?.id || null,
+            message: 'No insulin plan is configured for this date.',
+          };
+        }
+        const snack = calculateSnackSuggestedDose({ totalCarbs, insulinPlan });
+        return {
+          ...snack,
+          baseUnits: null,
+          carbDoseUnits: snack.roundedCarbDose,
+          insulinPlanId: insulinPlan.id,
+        };
+      }
+      if (entryType === 'Correction') {
+        if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
+          return {
+            status: 'unavailable',
+            baseUnits: null,
+            carbDoseUnits: null,
+            rawCarbDose: null,
+            insulinCarbRatioGrams: null,
+            totalCarbs: null,
+            correctionUnits: null,
+            suggestedTotalUnits: null,
+            matchedRange: null,
+            insulinPlanId: insulinPlan?.id || null,
+            message: 'No insulin plan is configured for this date.',
+          };
+        }
+        const correction = getCorrectionDose({ bloodSugar, insulinPlan });
+        return {
+          status: correction.status,
+          baseUnits: null,
+          carbDoseUnits: null,
+          rawCarbDose: null,
+          roundedCarbDose: null,
+          insulinCarbRatioGrams: getInsulinCarbRatioGrams(insulinPlan),
+          totalCarbs: null,
+          correctionUnits: correction.correctionUnits,
+          suggestedTotalUnits: correction.status === 'calculated' ? correction.correctionUnits : null,
+          matchedRange: correction.matchedRange,
+          insulinPlanId: insulinPlan.id,
+          message: correction.message || 'Based on the current correction table. Confirm the dose before giving insulin.',
+        };
+      }
       if (MEAL_TYPES.includes(entryType) && !insulinPlan) {
         return {
           status: 'unavailable',
           baseUnits: null,
+          carbDoseUnits: null,
           correctionUnits: null,
           suggestedTotalUnits: null,
           matchedRange: null,
@@ -1477,17 +1730,19 @@
       return {
         status: 'unsupported-entry-type',
         baseUnits: null,
+        carbDoseUnits: null,
         correctionUnits: null,
         suggestedTotalUnits: null,
         matchedRange: null,
         insulinPlanId: insulinPlan?.id || null,
-        message: 'Automatic dose guidance is available only for Breakfast, Lunch, Dinner, and Bedtime under the current plan.',
+        message: 'Automatic dose guidance is available for Breakfast, Lunch, Dinner, Snacks, Correction, and Bedtime under the current plan.',
       };
     }
     if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
       return {
         status: 'unavailable',
         baseUnits: null,
+        carbDoseUnits: null,
         correctionUnits: null,
         suggestedTotalUnits: null,
         matchedRange: null,
@@ -1499,6 +1754,7 @@
       return {
         status: 'unavailable',
         baseUnits: null,
+        carbDoseUnits: null,
         correctionUnits: null,
         suggestedTotalUnits: null,
         matchedRange: null,
@@ -1506,38 +1762,23 @@
         message: 'Enter a positive whole-number blood sugar to see a suggested dose.',
       };
     }
-    const glucose = Number(glucoseText);
-    const matches = insulinPlan.correctionRanges.filter((range) => {
-      const aboveMinimum = range.minGlucose == null || glucose >= range.minGlucose;
-      const belowMaximum = range.maxGlucose == null || glucose <= range.maxGlucose;
-      return aboveMinimum && belowMaximum;
-    });
-    if (matches.length !== 1) {
-      return {
-        status: 'outside-configured-range',
-        baseUnits: null,
-        correctionUnits: null,
-        suggestedTotalUnits: null,
-        matchedRange: null,
-        insulinPlanId: insulinPlan.id,
-        message: 'Reading is outside the configured correction table.',
-      };
-    }
-    const matchedRange = matches[0];
-    const baseUnits = Number(getMealBaseUnitsForType(insulinPlan, entryType));
-    const correctionUnits = Number(matchedRange.correctionUnits);
+    const calculated = calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan });
     return {
-      status: 'calculated',
-      baseUnits,
-      correctionUnits,
-      suggestedTotalUnits: baseUnits + correctionUnits,
-      matchedRange: { ...matchedRange },
+      ...calculated,
+      baseUnits: null,
+      carbDoseUnits: calculated.roundedCarbDose,
       insulinPlanId: insulinPlan.id,
-      message: 'Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.',
     };
   }
 
   window.LeeLeeTrackerDoseHelper = {
+    calculateFoodCarbs,
+    calculateTotalCarbs,
+    calculateCarbDose,
+    calculateMealSuggestedDose,
+    calculateSnackSuggestedDose,
+    getCorrectionDose,
+    roundToNearestHalf,
     calculateMealInsulinDose,
   };
 
@@ -1557,6 +1798,7 @@
       return { ...config, fields: [...config.fields] };
     },
     entryTypeUsesMealGuidance,
+    entryTypeUsesFoodCalculator,
     entryTypeHasField,
   };
 
@@ -1843,6 +2085,12 @@
     return `${value} ${value === 1 ? 'unit' : 'units'}`;
   }
 
+  function formatDoseNumber(value) {
+    if (value == null) return '';
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, '') : '';
+  }
+
   function formatCarbs(value) {
     return value == null ? '' : `${value} g carbs`;
   }
@@ -1870,6 +2118,13 @@
     if (record.type === BEDTIME_CONTEXT_TYPE) {
       return `Given: ${given} · Suggested: ${suggested}`;
     }
+    if (record.suggestedCarbDoseUnits != null || record.rawCarbDose != null) {
+      const parts = [];
+      if (record.suggestedCarbDoseUnits != null) parts.push(`${formatInsulin(record.suggestedCarbDoseUnits)} carbs`);
+      if (record.suggestedCorrectionUnits != null) parts.push(`${formatInsulin(record.suggestedCorrectionUnits)} correction`);
+      const breakdown = parts.length ? parts.join(' + ') : 'Carb coverage';
+      return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
+    }
     const breakdown = `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
     return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
   }
@@ -1882,7 +2137,8 @@
     if (!record) return '';
     if (record.eventType === 'meal') return formatCarbs(record.mealCarbs);
     if (record.eventType === 'activity') return record.activityDescription || 'Activity';
-    if (record.eventType === 'check-insulin') return formatBloodSugar(record.bloodSugar) || formatInsulin(getRecordActualInsulin(record));
+    if (record.eventType === 'check-insulin' && ['Snacks', 'Snack'].includes(record.type)) return formatCarbs(record.mealCarbs) || formatBloodSugar(record.bloodSugar) || formatInsulin(getRecordActualInsulin(record));
+    if (record.eventType === 'check-insulin') return formatBloodSugar(record.bloodSugar) || formatCarbs(record.mealCarbs) || formatInsulin(getRecordActualInsulin(record));
     if (record.eventType === 'note') return record.notes ? 'Note' : '';
     return formatBloodSugar(record.bloodSugar);
   }
@@ -1905,8 +2161,9 @@
     if (record.eventType === 'check-insulin') {
       const primary = getRecordPrimaryValue(record);
       const actualInsulin = formatInsulin(getRecordActualInsulin(record));
+      const carbs = formatCarbs(record.mealCarbs);
       return [
-        record.type,
+        carbs && carbs !== primary ? carbs : '',
         actualInsulin && actualInsulin !== primary ? actualInsulin : '',
         getMealDoseSummary(record),
         record.notes || '',
@@ -1925,7 +2182,7 @@
   function getRecordDisplayTitle(record) {
     if (record.eventType === 'meal') return record.type;
     if (record.eventType === 'activity') return 'Activity';
-    if (record.eventType === 'check-insulin') return 'Check / Insulin';
+    if (record.eventType === 'check-insulin') return normalizeRecordContext(record.type, 'check-insulin');
     if (record.eventType === 'note') return 'Note';
     return 'Blood Glucose';
   }
@@ -2018,7 +2275,7 @@
       </section>
       ${renderTrackerNav('today')}
       <section class="lee_lee_diabetes_today_actions" aria-label="Log an entry">
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Add Event</button>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Log Entry</button>
       </section>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
@@ -2460,9 +2717,14 @@
   function renderDetailedReportRow(record) {
     const suggestedParts = [
       record.suggestedTotalUnits == null ? '' : formatInsulin(record.suggestedTotalUnits),
+      record.suggestedCarbDoseUnits == null
+        ? ''
+        : `${formatInsulin(record.suggestedCarbDoseUnits)} carb coverage`,
       record.suggestedBaseUnits == null && record.suggestedCorrectionUnits == null
         ? ''
-        : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`,
+        : (record.suggestedBaseUnits == null
+          ? `${formatInsulin(record.suggestedCorrectionUnits)} correction`
+          : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`),
       record.doseCalculationStatus && record.doseCalculationStatus !== 'calculated' && record.doseCalculationStatus !== 'manual'
         ? record.doseCalculationStatus
         : '',
@@ -2483,6 +2745,106 @@
         <td>${escapeHtml(record.notes || '—')}</td>
       </tr>
     `;
+  }
+
+  function renderSavedFoodOptions(plan) {
+    const foods = normalizeSavedFoods(plan?.savedFoods);
+    if (!foods.length) return '';
+    return `
+      <div class="lee_lee_diabetes_saved_foods" aria-label="Saved foods">
+        ${foods.slice(0, 8).map((food) => `
+          <button type="button" class="lee_lee_diabetes_saved_food" data-action="add-saved-food" data-food-id="${escapeHtml(food.id)}">
+            <span>${escapeHtml(food.name || 'Saved food')}</span>
+            <span>${escapeHtml([food.servingDescription, `${food.carbsPerServing} g`].filter(Boolean).join(' · '))}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderFoodCalculator(record = {}, plan = getCurrentPlan()) {
+    const foods = (Array.isArray(record.foods) && record.foods.length)
+      ? record.foods.map(normalizeFoodItem)
+      : [normalizeFoodItem({ inputMode: 'direct' })];
+    return `
+      <section class="lee_lee_diabetes_food_calculator" data-food-calculator aria-labelledby="lee-lee-food-calculator-title">
+        <div class="lee_lee_diabetes_food_header">
+          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-calculator-title">Meal Carbs</h2>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="add-food">+ Add Food</button>
+        </div>
+        ${renderSavedFoodOptions(plan)}
+        <div class="lee_lee_diabetes_food_list" data-food-list>
+          ${foods.map(renderFoodRow).join('')}
+        </div>
+        <input type="hidden" name="mealCarbs" value="${escapeHtml(record.mealCarbs ?? record.totalCarbs ?? calculateTotalCarbs(foods))}">
+        <p class="lee_lee_diabetes_food_total" data-food-total>Total carbs: ${escapeHtml(formatCarbs(record.mealCarbs ?? record.totalCarbs ?? calculateTotalCarbs(foods)) || '0 g carbs')}</p>
+      </section>
+    `;
+  }
+
+  function renderFoodRow(food) {
+    const item = normalizeFoodItem(food);
+    const calculated = item.calculatedCarbs == null ? 'Not calculated yet' : `${item.calculatedCarbs} g carbs`;
+    return `
+      <article class="lee_lee_diabetes_food_row" data-food-row data-food-id="${escapeHtml(item.id)}">
+        <div class="lee_lee_diabetes_food_row_header">
+          <label class="lee_lee_diabetes_field">
+            Food
+            <input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(item.name)}">
+          </label>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="remove-food">Remove</button>
+        </div>
+        <label class="lee_lee_diabetes_field">
+          Carb entry
+          <select class="lee_lee_diabetes_select" name="foodInputMode">
+            <option value="direct" ${item.inputMode === 'direct' ? 'selected' : ''}>Total carbs</option>
+            <option value="servings" ${item.inputMode === 'servings' ? 'selected' : ''}>Servings x label carbs</option>
+          </select>
+        </label>
+        <div class="lee_lee_diabetes_food_direct ${item.inputMode === 'direct' ? '' : 'is-hidden'}" data-food-direct>
+          <label class="lee_lee_diabetes_field">
+            Total carbs
+            <input class="lee_lee_diabetes_input" name="foodDirectCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(item.directCarbs ?? '')}">
+          </label>
+        </div>
+        <div class="lee_lee_diabetes_food_servings ${item.inputMode === 'servings' ? '' : 'is-hidden'}" data-food-servings>
+          <label class="lee_lee_diabetes_field">
+            Servings eaten
+            <input class="lee_lee_diabetes_input" name="foodServings" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(item.servings ?? '')}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Carbs per serving
+            <input class="lee_lee_diabetes_input" name="foodCarbsPerServing" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(item.carbsPerServing ?? '')}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Serving
+            <input class="lee_lee_diabetes_input" name="foodServingDescription" type="text" maxlength="80" autocomplete="off" placeholder="1 cup" value="${escapeHtml(item.servingDescription)}">
+          </label>
+          <label class="lee_lee_diabetes_checkline lee_lee_diabetes_food_save">
+            <span>Save for reuse</span>
+            <input type="checkbox" name="foodSaveForReuse" ${item.name && item.carbsPerServing != null ? 'checked' : ''}>
+          </label>
+        </div>
+        <p class="lee_lee_diabetes_food_result" data-food-result>${escapeHtml(calculated)}</p>
+        <input type="hidden" name="foodSavedFoodId" value="${escapeHtml(item.savedFoodId)}">
+      </article>
+    `;
+  }
+
+  function collectFoodItemsFromForm(form) {
+    return [...(form?.querySelectorAll('[data-food-row]') || [])].map((row) => {
+      const inputMode = row.querySelector('[name="foodInputMode"]')?.value === 'servings' ? 'servings' : 'direct';
+      return normalizeFoodItem({
+        id: row.dataset.foodId || createId(),
+        name: row.querySelector('[name="foodName"]')?.value || '',
+        inputMode,
+        servings: row.querySelector('[name="foodServings"]')?.value,
+        servingDescription: row.querySelector('[name="foodServingDescription"]')?.value || '',
+        carbsPerServing: row.querySelector('[name="foodCarbsPerServing"]')?.value,
+        directCarbs: row.querySelector('[name="foodDirectCarbs"]')?.value,
+        savedFoodId: row.querySelector('[name="foodSavedFoodId"]')?.value || '',
+      });
+    }).filter((food) => food.name || food.calculatedCarbs != null);
   }
 
   function renderEditor(options) {
@@ -2507,11 +2869,14 @@
     const eventTime = record.time || getLocalTimeKey(new Date(recordTimestamp));
     const eventConfig = getEventTypeConfig(currentEditor.eventType);
     const contextType = normalizeRecordContext(currentEditor.type, currentEditor.eventType);
+    const showFoodCalculator = entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
+    const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-lee-lee-editor>
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
-        ${renderEventTypeSelect(currentEditor.eventType)}
+        ${showLegacyEventSelect ? renderEventTypeSelect(currentEditor.eventType) : `<input type="hidden" name="eventType" value="${escapeHtml(currentEditor.eventType)}">`}
         ${renderTypeSelect(contextType)}
+        <p class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" data-editor-error role="alert" hidden>${escapeHtml(options.error || '')}</p>
         ${eventConfig.fields.includes('bloodSugar') ? `
           <label class="lee_lee_diabetes_field">
             Blood Sugar
@@ -2529,6 +2894,7 @@
           </label>
           <p class="lee_lee_diabetes_help">Carbs are recorded for tracking only and are not currently used in dose guidance.</p>
         ` : ''}
+        ${showFoodCalculator ? renderFoodCalculator(record, getActiveInsulinPlan(recordTimestamp) || getCurrentPlan()) : ''}
         ${eventConfig.fields.includes('activityDescription') ? `
           <label class="lee_lee_diabetes_field">
             Activity
@@ -2574,6 +2940,9 @@
       </form>
     `;
     updateEditorState(root.querySelector('[data-lee-lee-editor]'));
+    if (options.error) {
+      showEditorError(root.querySelector('[data-lee-lee-editor]'), options.error);
+    }
     root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
   }
 
@@ -2582,6 +2951,7 @@
       eventType: normalizeEventType(form.elements.eventType?.value),
       type: form.elements.type?.value || '',
       bloodSugar: form.elements.bloodSugar?.value || '',
+      foods: collectFoodItemsFromForm(form),
       mealCarbs: form.elements.mealCarbs?.value || '',
       mealDescription: form.elements.mealDescription?.value || '',
       activityDescription: form.elements.activityDescription?.value || '',
@@ -2643,6 +3013,7 @@
       entryType: type,
       insulinPlan,
       recordTimestamp,
+      totalCarbs: form.elements.mealCarbs?.value || calculateTotalCarbs(collectFoodItemsFromForm(form)),
     });
     return {
       ...result,
@@ -2652,9 +3023,15 @@
 
   function renderDoseHelperResult(result) {
     if (result.status === 'calculated') {
-      const breakdown = result.correctionUnits == null
+      const carbBreakdown = result.carbDoseUnits == null
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Carb coverage: ${escapeHtml(formatCarbs(result.totalCarbs))} ÷ ${escapeHtml(result.insulinCarbRatioGrams)} = ${escapeHtml(formatDoseNumber(result.rawCarbDose))} → ${escapeHtml(formatInsulin(result.carbDoseUnits))}</div>`;
+      const correctionBreakdown = result.correctionUnits == null
+        ? ''
+        : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${escapeHtml(formatInsulin(result.correctionUnits))}</div>`;
+      const legacyBreakdown = result.baseUnits != null && result.correctionUnits != null
+        ? `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>`
+        : '';
       const range = result.matchedRange
         ? `<div class="lee_lee_diabetes_dose_range">${escapeHtml(formatRange(result.matchedRange))}</div>`
         : '';
@@ -2663,7 +3040,9 @@
           <div>
             <div class="lee_lee_diabetes_dose_label">Suggested dose</div>
             <div class="lee_lee_diabetes_dose_total">${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>
-            ${breakdown}
+            ${carbBreakdown}
+            ${correctionBreakdown}
+            ${legacyBreakdown}
             ${range}
           </div>
           <p>${escapeHtml(result.message)}</p>
@@ -2719,7 +3098,27 @@
     return result;
   }
 
+  function refreshFoodCalculator(form) {
+    const foods = collectFoodItemsFromForm(form);
+    const total = calculateTotalCarbs(foods);
+    const mealCarbs = form?.elements.mealCarbs;
+    if (mealCarbs) mealCarbs.value = String(total || 0);
+    form?.querySelectorAll('[data-food-row]').forEach((row) => {
+      const mode = row.querySelector('[name="foodInputMode"]')?.value === 'servings' ? 'servings' : 'direct';
+      row.querySelector('[data-food-direct]')?.classList.toggle('is-hidden', mode !== 'direct');
+      row.querySelector('[data-food-servings]')?.classList.toggle('is-hidden', mode !== 'servings');
+      const food = collectFoodItemsFromForm({ querySelectorAll: () => [row] })[0] || normalizeFoodItem();
+      const result = row.querySelector('[data-food-result]');
+      if (result) result.textContent = food.calculatedCarbs == null ? 'Not calculated yet' : `${food.calculatedCarbs} g carbs`;
+    });
+    const totalElement = form?.querySelector('[data-food-total]');
+    if (totalElement) totalElement.textContent = `Total carbs: ${formatCarbs(total) || '0 g carbs'}`;
+  }
+
   function updateEditorState(form) {
+    showEditorError(form, '');
+    refreshFoodCalculator(form);
+    updateContextSelectAvailability(form);
     updateDoseHelper(form);
     updateEditorSaveState(form);
   }
@@ -2731,21 +3130,100 @@
     const hasDate = Boolean(form.elements.date?.value);
     const hasTime = Boolean(form.elements.time?.value);
     const eventType = getEditorEventType(form);
-    const hasMealCarbs = eventType !== 'meal' || normalizeWholeNumber(form.elements.mealCarbs?.value) != null;
+    const type = getEditorType(form);
+    const requiresCarbs = eventType === 'meal' || ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
+    const hasMealCarbs = !requiresCarbs || normalizeNumber(form.elements.mealCarbs?.value) != null;
     saveButton.disabled = !(hasDate && hasTime && hasMealCarbs);
   }
 
   function renderTypeSelect(selectedType) {
     const eventType = currentEditor?.eventType || DEFAULT_EVENT_TYPE;
-    const options = getContextOptionsForEventType(eventType);
+    const optionStates = getContextOptionStates(eventType, selectedType);
     return `
       <label class="lee_lee_diabetes_field">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
         <select class="lee_lee_diabetes_select" name="type">
-          ${options.map((type) => `<option value="${escapeHtml(type)}" ${type === selectedType ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+          ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
       </label>
     `;
+  }
+
+  function renderContextOption(option) {
+    return `<option value="${escapeHtml(option.type)}" ${option.selected ? 'selected' : ''} ${option.disabled ? 'disabled' : ''}>${escapeHtml(option.label)}</option>`;
+  }
+
+  function getContextOptionStates(eventType, selectedType, form = null) {
+    const normalizedEventType = normalizeEventType(eventType);
+    const baseOptions = getContextOptionsForEventType(normalizedEventType);
+    const options = currentEditor?.id && CHECK_CONTEXT_TYPES.includes(selectedType) && !baseOptions.includes(selectedType)
+      ? [selectedType, ...baseOptions]
+      : baseOptions;
+    const dateKey = form?.elements.date?.value || '';
+    const editingId = currentEditor?.id || null;
+    const selected = options.includes(selectedType) ? selectedType : getEventTypeConfig(normalizedEventType).defaultContext;
+    const loggedContexts = getLoggedSingleUseCheckContextsForDate(dateKey, editingId);
+    const firstAvailable = options.find((type) => !isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts)) || options[0] || selected;
+    const effectiveSelected = isContextUnavailableForCheckDate(selected, normalizedEventType, loggedContexts) ? firstAvailable : selected;
+    return options.map((type) => {
+      const disabled = isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts);
+      return {
+        type,
+        disabled,
+        selected: type === effectiveSelected,
+        label: disabled ? `${type} - ✓ Logged` : type,
+      };
+    });
+  }
+
+  function isContextUnavailableForCheckDate(type, eventType, loggedContexts) {
+    return eventType === 'check-insulin'
+      && SINGLE_USE_CHECK_CONTEXT_TYPES.includes(type)
+      && loggedContexts.has(type);
+  }
+
+  function getLoggedSingleUseCheckContextsForDate(dateKey, excludeRecordId = null) {
+    const logged = new Set();
+    if (!dateKey) return logged;
+    activeRecords().forEach((record) => {
+      if (excludeRecordId && record.id === excludeRecordId) return;
+      if (normalizeEventType(record.eventType, record) !== 'check-insulin') return;
+      const context = normalizeRecordContext(record.type, 'check-insulin');
+      if (!SINGLE_USE_CHECK_CONTEXT_TYPES.includes(context)) return;
+      if (getRecordEventDateKey(record) === dateKey) {
+        logged.add(context);
+      }
+    });
+    return logged;
+  }
+
+  function getDuplicateScheduledContextMessage(record) {
+    if (normalizeEventType(record.eventType, record) !== 'check-insulin') return '';
+    const context = normalizeRecordContext(record.type, 'check-insulin');
+    if (!SINGLE_USE_CHECK_CONTEXT_TYPES.includes(context)) return '';
+    const dateKey = getRecordEventDateKey(record);
+    return getLoggedSingleUseCheckContextsForDate(dateKey, record.id).has(context)
+      ? `${context} has already been logged for this date.`
+      : '';
+  }
+
+  function updateContextSelectAvailability(form) {
+    const select = form?.elements.type;
+    if (!select) return;
+    const eventType = getEditorEventType(form);
+    const currentType = getEditorType(form);
+    const nextOptions = getContextOptionStates(eventType, currentType, form);
+    const nextHtml = nextOptions.map((option) => renderContextOption(option)).join('');
+    if (select.innerHTML !== nextHtml) {
+      select.innerHTML = nextHtml;
+    }
+  }
+
+  function showEditorError(form, message) {
+    const error = form?.querySelector('[data-editor-error]');
+    if (!error) return;
+    error.textContent = message;
+    error.hidden = !message;
   }
 
   function renderEventTypeSelect(selectedEventType) {
@@ -2766,7 +3244,7 @@
     trackerMenuOpen = false;
     root.innerHTML = `
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
-        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Add Event</h1>
+        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Log Entry</h1>
         <div class="lee_lee_diabetes_event_grid">
           ${EVENT_TYPE_DEFINITIONS.map(({ type, label }) => `
             <button type="button" class="lee_lee_diabetes_event_option" data-action="choose-event-type" data-event-type="${escapeHtml(type)}">
@@ -2791,11 +3269,11 @@
   }
 
   function openExtraEditor() {
-    renderEventTypePicker();
+    openEventEditor('check-insulin');
   }
 
   function openLogEntryEditor() {
-    renderEventTypePicker();
+    openEventEditor('check-insulin');
   }
 
   function openEventEditor(eventType, draft = {}) {
@@ -2854,11 +3332,16 @@
       insulinUnits: actualAction.administeredInsulinUnits,
       administeredInsulinUnits: actualAction.administeredInsulinUnits,
       mealCarbs: observedContext.mealCarbs,
+      totalCarbs: observedContext.mealCarbs,
+      foods: observedContext.foods,
       mealDescription: observedContext.mealDescription,
       activityDescription: observedContext.activityDescription,
       activityDurationMinutes: observedContext.activityDurationMinutes,
       activityIntensity: observedContext.activityIntensity,
       suggestedBaseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.baseUnits : null,
+      suggestedCarbDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.carbDoseUnits : null,
+      rawCarbDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawCarbDose : null,
+      insulinCarbRatioGrams: calculatedGuidance.status === 'calculated' ? calculatedGuidance.insulinCarbRatioGrams : null,
       suggestedCorrectionUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.correctionUnits : null,
       suggestedTotalUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.suggestedTotalUnits : null,
       insulinPlanId: calculatedGuidance.insulinPlanId || null,
@@ -2879,13 +3362,19 @@
   }
 
   function getObservedEntryContext(form) {
+    const eventType = getEditorEventType(form);
+    const type = getEditorType(form);
+    const recordsFood = eventType === 'meal' || entryTypeUsesFoodCalculator(type, eventType);
+    const foods = recordsFood ? collectFoodItemsFromForm(form) : [];
+    const mealCarbs = recordsFood ? normalizeNumber(form.elements.mealCarbs?.value) : null;
     return {
-      eventType: getEditorEventType(form),
-      type: getEditorType(form),
+      eventType,
+      type,
       recordTimestamp: getEditorRecordTimestamp(form),
       bloodSugar: normalizeBloodSugar(form.elements.bloodSugar?.value),
-      mealCarbs: normalizeWholeNumber(form.elements.mealCarbs?.value),
-      mealDescription: sanitizeShortText(form.elements.mealDescription?.value, 180),
+      foods,
+      mealCarbs,
+      mealDescription: recordsFood ? sanitizeShortText(form.elements.mealDescription?.value, 180) : '',
       activityDescription: sanitizeShortText(form.elements.activityDescription?.value, 120),
       activityDurationMinutes: normalizeWholeNumber(form.elements.activityDurationMinutes?.value),
       activityIntensity: ACTIVITY_INTENSITY_OPTIONS.includes(form.elements.activityIntensity?.value) ? form.elements.activityIntensity.value : '',
@@ -2901,6 +3390,47 @@
     return {
       administeredInsulinUnits: normalizeNumber(form.elements.insulinUnits?.value),
     };
+  }
+
+  function collectSavedFoodsFromForm(form) {
+    return [...(form?.querySelectorAll('[data-food-row]') || [])].map((row) => {
+      if (!row.querySelector('[name="foodSaveForReuse"]')?.checked) return null;
+      return normalizeSavedFood({
+        id: row.querySelector('[name="foodSavedFoodId"]')?.value || createId(),
+        name: row.querySelector('[name="foodName"]')?.value || '',
+        servingDescription: row.querySelector('[name="foodServingDescription"]')?.value || '',
+        carbsPerServing: row.querySelector('[name="foodCarbsPerServing"]')?.value,
+        updatedAt: new Date().toISOString(),
+      });
+    }).filter((food) => food && food.name);
+  }
+
+  function saveReusableFoodsFromForm(form, planId) {
+    const reusableFoods = collectSavedFoodsFromForm(form);
+    if (!reusableFoods.length || !planId) return;
+    let savedPlan = null;
+    updateTrackerData((current) => {
+      const nextPlans = current.insulinPlans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const byName = new Map(normalizeSavedFoods(plan.savedFoods).map((food) => [food.name.toLowerCase(), food]));
+        reusableFoods.forEach((food) => {
+          byName.set(food.name.toLowerCase(), food);
+        });
+        savedPlan = {
+          ...plan,
+          savedFoods: [...byName.values()].sort((a, b) => String(a.name).localeCompare(String(b.name))),
+          updatedAt: new Date().toISOString(),
+        };
+        return savedPlan;
+      });
+      return {
+        ...current,
+        insulinPlans: nextPlans,
+      };
+    });
+    if (savedPlan && syncRepository?.saveSharedSettings) {
+      syncRepository.saveSharedSettings(createSharedSettingsSnapshot({ plan: savedPlan }));
+    }
   }
 
   function renderRecordConfirmation(record) {
@@ -2950,10 +3480,18 @@
   function handleSave(form) {
     const record = buildRecordFromForm(form);
     if (!record) return;
-    if (record.eventType === 'check-insulin' && MEAL_TYPES.includes(record.type) && record.administeredInsulinUnits != null) {
+    const duplicateMessage = getDuplicateScheduledContextMessage(record);
+    if (duplicateMessage) {
+      showEditorError(form, duplicateMessage);
+      updateContextSelectAvailability(form);
+      return;
+    }
+    if (record.eventType === 'check-insulin' && entryTypeUsesDoseGuidance(record.type) && record.administeredInsulinUnits != null) {
+      saveReusableFoodsFromForm(form, record.insulinPlanId);
       renderRecordConfirmation(record);
       return;
     }
+    saveReusableFoodsFromForm(form, record.insulinPlanId);
     upsertRecord(record);
     renderAfterRecordChange(record);
   }
@@ -3253,19 +3791,17 @@
             Effective Date
             <input class="lee_lee_diabetes_input" name="effectiveFrom" type="date" required value="${escapeHtml(plan.effectiveFrom)}">
           </label>
-          <p class="lee_lee_diabetes_help">Base doses are configured separately for Breakfast, Lunch, Dinner, and Bedtime. Existing glucose correction guidance is added separately for meals only.</p>
-          ${MEAL_TYPES.map((type) => `
-            <label class="lee_lee_diabetes_field">
-              ${escapeHtml(type)} Base Dose
-              <input class="lee_lee_diabetes_input" name="${escapeHtml(type.toLowerCase())}BaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getMealBaseUnitsForType(plan, type))}">
-            </label>
-          `).join('')}
+          <p class="lee_lee_diabetes_help">Meals use carb counting plus the correction table. Legacy fixed meal base doses are preserved for older records but no longer used for new meal calculations.</p>
           <label class="lee_lee_diabetes_field">
-            Bedtime Base Dose
+            Insulin-to-Carb Ratio
+            <span class="lee_lee_diabetes_inline_control">1 unit per <input class="lee_lee_diabetes_input" name="insulinCarbRatioGrams" type="number" inputmode="decimal" min="0.1" step="0.1" required value="${escapeHtml(getInsulinCarbRatioGrams(plan))}"> g carbs</span>
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Bedtime Long-Acting Dose
             <input class="lee_lee_diabetes_input" name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getBedtimeBaseUnits(plan))}">
           </label>
           <div class="lee_lee_diabetes_plan_meta">
-            <span>Supported meals: ${escapeHtml(plan.supportedMealTypes.join(', '))}</span>
+            <span>Active contexts: Breakfast, Lunch, Dinner, Snacks, Bedtime, Correction</span>
             <span>Last updated: ${escapeHtml(formatDate(new Date(plan.updatedAt)))}</span>
           </div>
           <fieldset class="lee_lee_diabetes_ranges">
@@ -3773,17 +4309,15 @@
     }
     const rangeError = validateCorrectionRanges(ranges);
     if (rangeError) return { error: rangeError };
-    const mealBaseUnitsByType = {
-      Breakfast: normalizeNumber(form.elements.breakfastBaseUnits?.value),
-      Lunch: normalizeNumber(form.elements.lunchBaseUnits?.value),
-      Dinner: normalizeNumber(form.elements.dinnerBaseUnits?.value),
-    };
-    if (MEAL_TYPES.some((type) => mealBaseUnitsByType[type] == null)) {
-      return { error: 'Breakfast, Lunch, and Dinner base doses must be nonnegative numbers.' };
+    const currentPlan = getCurrentPlan() || DEFAULT_INSULIN_PLAN;
+    const mealBaseUnitsByType = getMealBaseUnitsByType(currentPlan);
+    const insulinCarbRatioGrams = normalizeNumber(form.elements.insulinCarbRatioGrams?.value);
+    if (!insulinCarbRatioGrams || insulinCarbRatioGrams <= 0) {
+      return { error: 'Insulin-to-carb ratio must be greater than zero.' };
     }
     const bedtimeBaseUnits = normalizeNumber(form.elements.bedtimeBaseUnits?.value);
     if (bedtimeBaseUnits == null) {
-      return { error: 'Bedtime base dose must be a nonnegative number.' };
+      return { error: 'Bedtime long-acting dose must be a nonnegative number.' };
     }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
@@ -3797,6 +4331,9 @@
         mealBaseUnitsByType,
         mealBaseUnits: mealBaseUnitsByType.Breakfast,
         bedtimeBaseUnits,
+        bedtimeBaseUnitsMigratedTo17: true,
+        insulinCarbRatioGrams,
+        savedFoods: normalizeSavedFoods(currentPlan.savedFoods),
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -3826,14 +4363,12 @@
             <dt>Effective date</dt>
             <dd>${escapeHtml(plan.effectiveFrom)}</dd>
           </div>
-          ${MEAL_TYPES.map((type) => `
-            <div>
-              <dt>${escapeHtml(type)} base dose</dt>
-              <dd>${escapeHtml(formatInsulin(getMealBaseUnitsForType(plan, type)))}</dd>
-            </div>
-          `).join('')}
           <div>
-            <dt>Bedtime base dose</dt>
+            <dt>Insulin-to-carb ratio</dt>
+            <dd>1 unit per ${escapeHtml(getInsulinCarbRatioGrams(plan))} g carbs</dd>
+          </div>
+          <div>
+            <dt>Bedtime long-acting dose</dt>
             <dd>${escapeHtml(formatInsulin(getBedtimeBaseUnits(plan)))}</dd>
           </div>
         </dl>
@@ -4250,6 +4785,39 @@
       if (action === 'extra' || action === 'log-entry') {
         openExtraEditor();
       }
+      if (action === 'add-food') {
+        const form = target.closest('[data-lee-lee-editor]');
+        form?.querySelector('[data-food-list]')?.insertAdjacentHTML('beforeend', renderFoodRow(normalizeFoodItem({ inputMode: 'direct' })));
+        updateEditorState(form);
+      }
+      if (action === 'remove-food') {
+        const form = target.closest('[data-lee-lee-editor]');
+        const rows = [...(form?.querySelectorAll('[data-food-row]') || [])];
+        if (rows.length > 1) target.closest('[data-food-row]')?.remove();
+        else {
+          const row = rows[0];
+          row?.querySelectorAll('input').forEach((input) => {
+            if (input.type === 'checkbox') input.checked = false;
+            else input.value = '';
+          });
+        }
+        updateEditorState(form);
+      }
+      if (action === 'add-saved-food') {
+        const form = target.closest('[data-lee-lee-editor]');
+        const savedFood = normalizeSavedFoods((getCurrentPlan() || {}).savedFoods).find((food) => food.id === target.dataset.foodId);
+        if (savedFood) {
+          form?.querySelector('[data-food-list]')?.insertAdjacentHTML('beforeend', renderFoodRow({
+            name: savedFood.name,
+            inputMode: 'servings',
+            servings: 1,
+            servingDescription: savedFood.servingDescription,
+            carbsPerServing: savedFood.carbsPerServing,
+            savedFoodId: savedFood.id,
+          }));
+          updateEditorState(form);
+        }
+      }
       if (action === 'choose-event-type') {
         openEventEditor(target.dataset.eventType || DEFAULT_EVENT_TYPE);
       }
@@ -4284,6 +4852,19 @@
         });
       }
       if (action === 'confirm-save' && currentEditor?.pendingRecord) {
+        const duplicateMessage = getDuplicateScheduledContextMessage(currentEditor.pendingRecord);
+        if (duplicateMessage) {
+          renderEditor({
+            mode: currentEditor?.mode || 'log-entry',
+            eventType: currentEditor.pendingRecord.eventType,
+            type: currentEditor.pendingRecord.type,
+            record: currentEditor.pendingRecord,
+            returnTo: currentEditor?.returnTo || null,
+            returnDateKey: currentEditor?.returnDateKey || null,
+            error: duplicateMessage,
+          });
+          return;
+        }
         upsertRecord(currentEditor.pendingRecord);
         renderAfterRecordChange(currentEditor.pendingRecord);
       }
@@ -4524,6 +5105,18 @@
           mode: currentEditor?.mode || 'log-entry',
           eventType: event.target.value,
           record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+        });
+        return;
+      }
+      if (event.target.name === 'type') {
+        const draft = buildDraftFromEditor(form);
+        draft.type = event.target.value;
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: draft.eventType,
+          record: draft,
           returnTo: currentEditor?.returnTo || null,
           returnDateKey: currentEditor?.returnDateKey || null,
         });

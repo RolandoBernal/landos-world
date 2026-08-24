@@ -47,6 +47,12 @@ test('PWA shell registers an offline-first service worker through the PWA manage
   assert.equal(existsSync(new URL('../service-worker.js', import.meta.url)), true);
 });
 
+test('PWA shell loads the global theme manager before themed styles', () => {
+  assert.match(html, /<script src="js\/theme-manager\.js\?v=20260822-1"><\/script>/);
+  assert.ok(html.indexOf('js/theme-manager.js') < html.indexOf('css/digital-clock.css'));
+  assert.match(readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8'), /\.\/js\/theme-manager\.js/);
+});
+
 test('GitHub Pages entrypoint is the Lando World app shell', () => {
   assert.match(entryHtml, /id="lando-launcher"/);
   assert.doesNotMatch(entryHtml, /index-digital-clock\.html/);
@@ -76,6 +82,7 @@ test('active local apps expose the shared sticky ecosystem navigation', () => {
     ["id=\"weather-view\"", 'Weather'],
     ["id=\"lee-lees-tracker-view\"", 'Lee-Lee’s Tracker'],
     ["id=\"clock-view\"", 'Digital Clock'],
+    ["id=\"violet-futbol-game-tracker-view\"", 'Violet Futbol Game Tracker'],
     ["id=\"road-bike-checklist-view\"", 'Road Bike Trip Checklist'],
   ].forEach(([viewMarker, appName]) => {
     const viewStart = html.indexOf(viewMarker);
@@ -96,7 +103,17 @@ test('shared page container aligns ecosystem headers, navigation, and app shells
   assert.match(css, /\.app_theme \.daily_briefing_shell,/);
   assert.match(css, /\.app_theme \.lee_lee_diabetes_shell,/);
   assert.match(css, /\.app_theme \.road_bike_shell,/);
-  assert.match(css, /\.app_theme \.sprints-app/);
+  assert.match(css, /\.app_theme \.sprints-app,/);
+  assert.match(css, /\.app_theme \.vfgt_app/);
+});
+
+test('shared app theme constrains iOS native date and time controls', () => {
+  const themeCss = readFileSync(new URL('../css/app-themes.css', import.meta.url), 'utf8');
+  assert.match(html, /css\/app-themes\.css\?v=20260822-3/);
+  assert.match(html, /app_theme app_theme--lee-lees-tracker/);
+  assert.match(html, /app_theme app_theme--violet-futbol-game-tracker/);
+  assert.match(themeCss, /\.app_theme :where\(input\[type="date"\], input\[type="time"\], input\[type="datetime-local"\]\) \{[\s\S]*inline-size: 100%[\s\S]*max-inline-size: 100%[\s\S]*min-inline-size: 0[\s\S]*-webkit-appearance: none[\s\S]*appearance: none/);
+  assert.match(themeCss, /\.app_theme :where\(input\[type="date"\], input\[type="time"\], input\[type="datetime-local"\]\)::-webkit-date-and-time-value \{[\s\S]*inline-size: 100%[\s\S]*min-inline-size: 0[\s\S]*text-align: left/);
 });
 
 test('ecosystem router exposes shared scroll reset behavior for app navigation', () => {

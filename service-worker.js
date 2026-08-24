@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-08-15-1';
+const SW_VERSION = '2026-08-24-7';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -25,7 +25,9 @@ const PRECACHE_URLS = [
   './css/daily-chief-briefing.css',
   './css/lee-lee-diabetes.css',
   './css/sprints.css',
+  './css/violet-futbol-game-tracker.css',
   './css/road-bike-checklist.css',
+  './js/theme-manager.js',
   './js/pwa-manager.js',
   './js/weather-service.js',
   './js/weather-app.js',
@@ -34,6 +36,7 @@ const PRECACHE_URLS = [
   './js/lee-lees-tracker-sync.js',
   './js/lee-lee-diabetes-tracker.js',
   './js/sprints-app.js',
+  './js/violet-futbol-game-tracker.js',
   './js/road-bike-checklist.js',
   './fonts/digital-7.ttf',
   './icons/landos-world.svg',
@@ -48,6 +51,7 @@ const PRECACHE_URLS = [
   './icons/lee-lees-tracker.png',
   './icons/violet-sprints.svg',
   './icons/violet-sprints.png',
+  './icons/violet-futbol-game-tracker.png',
   './icons/road-bike-checklist.svg',
   './icons/road-bike-checklist.png',
   './icons/death-on-notecards.svg',

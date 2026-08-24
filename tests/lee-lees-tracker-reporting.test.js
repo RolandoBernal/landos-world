@@ -327,22 +327,26 @@ test('report registry describes current reports independently from export render
   assert.equal(reports.buildDetailedReportData([record({ id: 'detailed-source' })]).id, 'detailed');
 });
 
-test('entry type configuration preserves canonical labels and meal guidance boundaries', () => {
+test('entry type configuration exposes active carb-counting contexts while preserving legacy labels', () => {
   const runtime = createTrackerRuntime();
   const entryTypes = runtime.LeeLeeTrackerEntryTypes;
   const labels = Array.from(entryTypes.all, (definition) => definition.label);
 
-  assert.deepEqual(labels, ['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise', 'Other']);
+  assert.deepEqual(labels, ['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Exercise', 'Other']);
   assert.deepEqual(Array.from(entryTypes.mealTypes), ['Breakfast', 'Lunch', 'Dinner']);
   assert.equal(entryTypes.getEntryTypeConfig('Bedtime').label, 'Bedtime');
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Breakfast'), true);
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Lunch'), true);
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Dinner'), true);
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Correction'), false);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Breakfast'), true);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Snacks'), true);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Bedtime'), false);
+  assert.equal(entryTypes.entryTypeUsesFoodCalculator('Correction'), false);
   assert.equal(entryTypes.getEntryTypeConfig('Night').type, 'Other');
 });
 
-test('add event configuration exposes one combined check workflow with full check contexts', () => {
+test('log entry configuration exposes one combined check workflow with active contexts', () => {
   const runtime = createTrackerRuntime();
   const entryTypes = runtime.LeeLeeTrackerEntryTypes;
   const eventLabels = Array.from(entryTypes.eventTypes, (definition) => definition.label);
@@ -352,132 +356,63 @@ test('add event configuration exposes one combined check workflow with full chec
     'Breakfast',
     'Lunch',
     'Dinner',
+    'Snacks',
     'Bedtime',
-    '2 AM',
     'Correction',
-    'Snack',
-    'Other',
   ]);
   assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('meal')), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
   assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('bloodSugar'), true);
   assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('insulinUnits'), true);
+  assert.match(trackerSource, /openEventEditor\('check-insulin'\)/);
   assert.doesNotMatch(trackerSource, /label: 'Blood Glucose'/);
   assert.doesNotMatch(trackerSource, /label: 'Insulin'/);
 });
 
-test('meal dose helper keeps the clinician-provided calculation unchanged', () => {
+test('carb ratio and half-unit rounding are deterministic', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+
+  assert.equal(helper.calculateCarbDose(0, 20).roundedCarbDose, 0);
+  assert.equal(helper.calculateCarbDose(20, 20).roundedCarbDose, 1);
+  assert.equal(helper.calculateCarbDose(40, 20).roundedCarbDose, 2);
+  assert.equal(helper.calculateCarbDose(60, 20).roundedCarbDose, 3);
+  [
+    [3.0, 3.0],
+    [3.1, 3.0],
+    [3.24, 3.0],
+    [3.25, 3.5],
+    [3.3, 3.5],
+    [3.49, 3.5],
+    [3.5, 3.5],
+    [3.74, 3.5],
+    [3.75, 4.0],
+    [3.9, 4.0],
+  ].forEach(([input, expected]) => {
+    assert.equal(helper.roundToNearestHalf(input), expected);
+  });
+});
+
+test('food calculator totals direct and serving-based food carbs', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const pasta = { inputMode: 'servings', servings: 2, carbsPerServing: 47 };
+  const foods = [
+    pasta,
+    { inputMode: 'direct', directCarbs: 22 },
+    { inputMode: 'direct', directCarbs: 27 },
+  ];
+
+  assert.equal(helper.calculateFoodCarbs(pasta), 94);
+  assert.equal(helper.calculateTotalCarbs(foods), 143);
+});
+
+test('meal dose helper uses carb coverage plus existing correction table', () => {
   const runtime = createTrackerRuntime();
   const insulinPlan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
     mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-    correctionRanges: [
-      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
-      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
-      { minGlucose: 250, maxGlucose: 324, correctionUnits: 2 },
-    ],
-  };
-  const breakfast = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: 'Breakfast',
-    recordTimestamp: Date.parse('2026-08-01T07:42:00.000Z'),
-    insulinPlan,
-  });
-  const lunch = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: 'Lunch',
-    recordTimestamp: Date.parse('2026-08-01T12:42:00.000Z'),
-    insulinPlan,
-  });
-  const dinner = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: 'Dinner',
-    recordTimestamp: Date.parse('2026-08-01T18:42:00.000Z'),
-    insulinPlan,
-  });
-  const correction = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: 'Correction',
-    recordTimestamp: Date.parse('2026-08-01T13:30:00.000Z'),
-    insulinPlan: {
-      id: 'plan',
-      supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-      correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
-    },
-  });
-
-  assert.equal(breakfast.status, 'calculated');
-  assert.equal(breakfast.baseUnits, 5);
-  assert.equal(breakfast.correctionUnits, 1);
-  assert.equal(breakfast.suggestedTotalUnits, 6);
-  assert.equal(lunch.baseUnits, 6);
-  assert.equal(lunch.correctionUnits, 1);
-  assert.equal(lunch.suggestedTotalUnits, 7);
-  assert.equal(dinner.baseUnits, 6);
-  assert.equal(dinner.correctionUnits, 1);
-  assert.equal(dinner.suggestedTotalUnits, 7);
-  assert.equal(correction.status, 'unsupported-entry-type');
-  assert.equal(correction.suggestedTotalUnits, null);
-});
-
-test('bedtime dose helper uses configured bedtime base dose without glucose correction', () => {
-  const runtime = createTrackerRuntime();
-  const insulinPlan = {
-    id: 'plan',
-    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-    bedtimeBaseUnits: 15,
-    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
-  };
-  const defaultBedtime = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: '',
-    entryType: 'Bedtime',
-    recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
-    insulinPlan,
-  });
-  const updatedBedtime = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 439,
-    entryType: 'Bedtime',
-    recordTimestamp: Date.parse('2026-08-02T21:00:00.000Z'),
-    insulinPlan: { ...insulinPlan, bedtimeBaseUnits: 13 },
-  });
-
-  assert.equal(defaultBedtime.status, 'calculated');
-  assert.equal(defaultBedtime.baseUnits, 15);
-  assert.equal(defaultBedtime.correctionUnits, null);
-  assert.equal(defaultBedtime.suggestedTotalUnits, 15);
-  assert.equal(defaultBedtime.matchedRange, null);
-  assert.equal(updatedBedtime.status, 'calculated');
-  assert.equal(updatedBedtime.baseUnits, 13);
-  assert.equal(updatedBedtime.correctionUnits, null);
-  assert.equal(updatedBedtime.suggestedTotalUnits, 13);
-});
-
-test('bedtime dose helper defaults existing plans to 15 units', () => {
-  const runtime = createTrackerRuntime();
-  const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 210,
-    entryType: 'Bedtime',
-    recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
-    insulinPlan: {
-      id: 'legacy-plan',
-      supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-      mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-      correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
-    },
-  });
-
-  assert.equal(result.status, 'calculated');
-  assert.equal(result.suggestedTotalUnits, 15);
-});
-
-test('meal dose helper uses the open-ended 550 plus correction band', () => {
-  const runtime = createTrackerRuntime();
-  const insulinPlan = {
-    id: 'plan',
-    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+    insulinCarbRatioGrams: 20,
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
       { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
@@ -489,114 +424,109 @@ test('meal dose helper uses the open-ended 550 plus correction band', () => {
     ],
   };
   const timestamp = Date.parse('2026-08-01T12:00:00.000Z');
-  const breakfast549 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 549,
-    entryType: 'Breakfast',
+  const dinner = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 299,
+    entryType: 'Dinner',
     recordTimestamp: timestamp,
     insulinPlan,
+    totalCarbs: 143,
   });
   const breakfast550 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
     bloodSugar: 550,
     entryType: 'Breakfast',
     recordTimestamp: timestamp,
     insulinPlan,
-  });
-  const lunch551 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 551,
-    entryType: 'Lunch',
-    recordTimestamp: timestamp,
-    insulinPlan,
-  });
-  const dinner700 = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 700,
-    entryType: 'Dinner',
-    recordTimestamp: timestamp,
-    insulinPlan,
+    totalCarbs: 0,
   });
 
-  assert.equal(breakfast549.status, 'calculated');
-  assert.equal(breakfast549.correctionUnits, 5);
-  assert.equal(breakfast549.suggestedTotalUnits, 10);
-  assert.equal(breakfast549.matchedRange.minGlucose, 475);
-  assert.equal(breakfast549.matchedRange.maxGlucose, 549);
+  assert.equal(dinner.status, 'calculated');
+  assert.equal(dinner.baseUnits, null);
+  assert.equal(dinner.rawCarbDose, 7.15);
+  assert.equal(dinner.carbDoseUnits, 7);
+  assert.equal(dinner.correctionUnits, 2);
+  assert.equal(dinner.suggestedTotalUnits, 9);
   assert.equal(breakfast550.status, 'calculated');
   assert.equal(breakfast550.correctionUnits, 6);
-  assert.equal(breakfast550.suggestedTotalUnits, 11);
+  assert.equal(breakfast550.suggestedTotalUnits, 6);
   assert.equal(breakfast550.matchedRange.minGlucose, 550);
   assert.equal(breakfast550.matchedRange.maxGlucose, null);
-  assert.equal(lunch551.correctionUnits, 6);
-  assert.equal(lunch551.suggestedTotalUnits, 12);
-  assert.equal(dinner700.correctionUnits, 6);
-  assert.equal(dinner700.suggestedTotalUnits, 12);
 });
 
-test('carb entries do not change clinician-provided insulin guidance', () => {
+test('snack boundary uses carb coverage only over 15 grams', () => {
   const runtime = createTrackerRuntime();
   const plan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-    correctionRanges: [
-      { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
-      { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
-    ],
+    insulinCarbRatioGrams: 20,
+    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
   };
-  const lowCarbMeal = { eventType: 'meal', type: 'Lunch', mealCarbs: 20 };
-  const highCarbMeal = { eventType: 'meal', type: 'Lunch', mealCarbs: 80 };
-  const lowCarbResult = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: lowCarbMeal.type,
-    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
+  const calc = (totalCarbs) => runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 220,
+    entryType: 'Snacks',
+    recordTimestamp: Date.parse('2026-08-01T15:00:00.000Z'),
     insulinPlan: plan,
-  });
-  const highCarbResult = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-    bloodSugar: 198,
-    entryType: highCarbMeal.type,
-    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
-    insulinPlan: plan,
+    totalCarbs,
   });
 
-  assert.equal(lowCarbResult.baseUnits, 6);
-  assert.equal(lowCarbResult.correctionUnits, 1);
-  assert.equal(lowCarbResult.suggestedTotalUnits, 7);
-  assert.deepEqual(highCarbResult, lowCarbResult);
-  assert.doesNotMatch(trackerSource, /insulin-to-carb|carb bolus|carbs\s*\/|carbs\s*÷/i);
+  assert.equal(calc(0).suggestedTotalUnits, 0);
+  assert.equal(calc(12).suggestedTotalUnits, 0);
+  assert.equal(calc(15).suggestedTotalUnits, 0);
+  assert.equal(calc(15.0).suggestedTotalUnits, 0);
+  assert.equal(calc(16).suggestedTotalUnits, 1);
+  assert.equal(calc(20).suggestedTotalUnits, 1);
+  assert.equal(calc(28).suggestedTotalUnits, 1.5);
+  assert.equal(calc(28).correctionUnits, null);
 });
 
-test('non-guidance contexts do not receive meal or bedtime base doses', () => {
+test('correction and bedtime contexts use their dedicated dosing paths', () => {
   const runtime = createTrackerRuntime();
   const insulinPlan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-    bedtimeBaseUnits: 15,
+    bedtimeBaseUnits: 17,
+    bedtimeBaseUnitsMigratedTo17: true,
+    insulinCarbRatioGrams: 20,
     correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
   };
-  ['2 AM', 'Correction', 'Snack', 'Other'].forEach((entryType) => {
-    const result = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
-      bloodSugar: 198,
-      entryType,
-      recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
-      insulinPlan,
-    });
-
-    assert.equal(result.status, 'unsupported-entry-type');
-    assert.equal(result.baseUnits, null);
-    assert.equal(result.suggestedTotalUnits, null);
+  const correction = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Correction',
+    recordTimestamp: Date.parse('2026-08-01T14:00:00.000Z'),
+    insulinPlan,
   });
+  const bedtime = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Bedtime',
+    recordTimestamp: Date.parse('2026-08-01T21:00:00.000Z'),
+    insulinPlan,
+  });
+  const overnight = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: '2 AM',
+    recordTimestamp: Date.parse('2026-08-01T02:00:00.000Z'),
+    insulinPlan,
+  });
+
+  assert.equal(correction.suggestedTotalUnits, 1);
+  assert.equal(correction.baseUnits, null);
+  assert.equal(bedtime.suggestedTotalUnits, 17);
+  assert.equal(bedtime.correctionUnits, null);
+  assert.equal(overnight.status, 'unsupported-entry-type');
 });
 
-test('settings UI exposes independent meal base dose controls', () => {
-  assert.match(trackerSource, /\$\{escapeHtml\(type\)\} Base Dose/);
-  assert.match(trackerSource, /name="\$\{escapeHtml\(type\.toLowerCase\(\)\)\}BaseUnits"/);
+test('settings UI exposes carb ratio and hides active fixed meal base dose controls', () => {
+  assert.match(trackerSource, /Insulin-to-Carb Ratio/);
+  assert.match(trackerSource, /name="insulinCarbRatioGrams"/);
+  assert.doesNotMatch(trackerSource, /\$\{escapeHtml\(type\)\} Base Dose/);
+  assert.doesNotMatch(trackerSource, /name="\$\{escapeHtml\(type\.toLowerCase\(\)\)\}BaseUnits"/);
   assert.doesNotMatch(trackerSource, /name="mealBaseUnits" type="number"/);
 });
 
-test('settings UI exposes independent bedtime base dose control', () => {
-  assert.match(trackerSource, /Bedtime Base Dose/);
+test('settings UI exposes bedtime long-acting dose control', () => {
+  assert.match(trackerSource, /Bedtime Long-Acting Dose/);
   assert.match(trackerSource, /name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0\.5" required/);
   assert.match(trackerSource, /bedtimeBaseUnits = normalizeNumber\(form\.elements\.bedtimeBaseUnits\?\.value\)/);
-  assert.match(trackerSource, /Bedtime base dose must be a nonnegative number\./);
+  assert.match(trackerSource, /Bedtime long-acting dose must be a nonnegative number\./);
 });
 
 test('settings plan activation closes an existing plan with the same effective date', () => {
@@ -635,7 +565,10 @@ test('shared settings contract applies restored patient and dose settings to cal
       effectiveFrom: '2026-08-14',
       effectiveTo: null,
       mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
-      bedtimeBaseUnits: 15,
+      bedtimeBaseUnits: 17,
+      bedtimeBaseUnitsMigratedTo17: true,
+      insulinCarbRatioGrams: 20,
+      savedFoods: [{ id: 'pasta', name: 'Pasta', servingDescription: '1 cup', carbsPerServing: 47 }],
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -662,19 +595,23 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(plan.mealBaseUnitsByType.Breakfast, 5);
   assert.equal(plan.mealBaseUnitsByType.Lunch, 6);
   assert.equal(plan.mealBaseUnitsByType.Dinner, 6);
+  assert.equal(plan.insulinCarbRatioGrams, 20);
+  assert.equal(plan.bedtimeBaseUnits, 17);
+  assert.equal(plan.savedFoods[0].name, 'Pasta');
   assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(plan.correctionRanges.at(-1).correctionUnits, 6);
-  assert.equal(lunch550.baseUnits, 6);
+  assert.equal(lunch550.baseUnits, null);
+  assert.equal(lunch550.carbDoseUnits, 0);
   assert.equal(lunch550.correctionUnits, 6);
-  assert.equal(lunch550.suggestedTotalUnits, 12);
+  assert.equal(lunch550.suggestedTotalUnits, 6);
 });
 
 test('shared settings inventory classifies every current LLT settings control', () => {
   const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
   const byLabel = new Map(inventory.map((item) => [item.label, item]));
 
-  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Breakfast Base Dose', 'Lunch Base Dose', 'Dinner Base Dose', 'Correction Table'].forEach((label) => {
+  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Insulin-to-Carb Ratio', 'Bedtime Base Dose', 'Saved Foods', 'Correction Table'].forEach((label) => {
     assert.equal(byLabel.get(label)?.classification, 'SHARED');
   });
   ['History Initial Window', 'This device is used by', 'Shared Sync status/diagnostics', 'Local Backup import/export controls', 'Recently Deleted controls'].forEach((label) => {
@@ -733,10 +670,9 @@ test('canonical entry cards render check insulin dinner once in today and histor
   });
 
   const content = reports.getEntryCardContent(dinner);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, 'Dinner');
   assert.equal(content.primary, '269 mg/dL');
   assert.deepEqual(Array.from(content.secondary), [
-    'Dinner',
     '8 units',
     'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction',
   ]);
@@ -758,6 +694,7 @@ test('canonical entry cards render check insulin dinner once in today and histor
 
   for (const html of [todayHtml, historyHtml]) {
     assert.equal(countOccurrences(html, '269 mg/dL'), 1);
+    assert.equal(countOccurrences(html, 'Dinner'), 1);
     assert.equal(countOccurrences(html, '<div class="lee_lee_diabetes_timeline_notes">8 units</div>'), 1);
     assert.equal(countOccurrences(html, 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
@@ -780,10 +717,9 @@ test('canonical entry cards show bedtime manual override against suggested dose'
   });
 
   const content = reports.getEntryCardContent(bedtime);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, 'Bedtime');
   assert.equal(content.primary, '439 mg/dL');
   assert.deepEqual(Array.from(content.secondary), [
-    'Bedtime',
     '14 units',
     'Given: 14 units · Suggested: 15 units',
   ]);
@@ -813,9 +749,9 @@ test('canonical entry cards keep other check insulin records free of dose guidan
   });
 
   const content = reports.getEntryCardContent(overnight);
-  assert.equal(content.title, 'Check / Insulin');
+  assert.equal(content.title, '2 AM');
   assert.equal(content.primary, '139 mg/dL');
-  assert.deepEqual(Array.from(content.secondary), ['2 AM', '0 units']);
+  assert.deepEqual(Array.from(content.secondary), ['0 units']);
 
   const historyHtml = reports.renderHistoryRecord(overnight);
   assert.match(historyHtml, /2 AM/);
@@ -868,7 +804,8 @@ test('canonical entry cards keep meal activity note and legacy records clean', (
   assert.deepEqual(Array.from(reports.getEntryCardContent(meal).secondary), ['Lunch', 'Turkey sandwich, chips, apple']);
   assert.deepEqual(Array.from(reports.getEntryCardContent(activity).secondary), ['45 min · Moderate']);
   assert.deepEqual(Array.from(reports.getEntryCardContent(note).secondary), ['Felt steady before bed.']);
-  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['Correction', '3 units']);
+  assert.equal(reports.getEntryCardContent(legacy).title, 'Correction');
+  assert.deepEqual(Array.from(reports.getEntryCardContent(legacy).secondary), ['3 units']);
 
   for (const html of [meal, activity, note, legacy].map((item) => reports.renderHistoryRecord(item))) {
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>/);
@@ -890,12 +827,29 @@ test('today activity helper returns only current-day active records newest first
 test('today UI uses one log-entry CTA and responsive navigation contracts', () => {
   assert.match(trackerSource, /Today’s Activity/);
   assert.match(trackerSource, /data-action="log-entry"/);
+  assert.match(trackerSource, />\+ Log Entry<\/button>/);
+  assert.match(trackerSource, /id="lee-lee-diabetes-title">Log Entry<\/h1>/);
+  assert.doesNotMatch(trackerSource, />\+ Add Event<\/button>/);
+  assert.doesNotMatch(trackerSource, /id="lee-lee-diabetes-title">Add Event<\/h1>/);
   assert.doesNotMatch(trackerSource, /PRIMARY_TYPES\.map\(renderPrimaryCard\)/);
   assert.match(trackerSource, /data-action="toggle-tracker-nav"/);
   assert.match(trackerSource, /aria-expanded/);
   assert.match(cssSource, /\.lee_lee_diabetes_mobile_nav_button/);
   assert.match(cssSource, /max-width: 520px[\s\S]*\.lee_lee_diabetes_nav_shell\.is-open \.lee_lee_diabetes_nav/);
   assert.match(cssSource, /min-width: 680px[\s\S]*\.lee_lee_diabetes_cards/);
+});
+
+test('check insulin scheduled contexts are marked logged and rechecked before save', () => {
+  assert.match(trackerSource, /SINGLE_USE_CHECK_CONTEXT_TYPES = Object\.freeze\(\['Breakfast', 'Lunch', 'Dinner', 'Bedtime'\]\)/);
+  assert.match(trackerSource, /getLoggedSingleUseCheckContextsForDate\(dateKey, excludeRecordId = null\)/);
+  assert.match(trackerSource, /activeRecords\(\)\.forEach\(\(record\) =>/);
+  assert.match(trackerSource, /normalizeEventType\(record\.eventType, record\) !== 'check-insulin'/);
+  assert.match(trackerSource, /getRecordEventDateKey\(record\) === dateKey/);
+  assert.match(trackerSource, /\$\{type\} - ✓ Logged/);
+  assert.match(trackerSource, /getDuplicateScheduledContextMessage\(record\)/);
+  assert.match(trackerSource, /\$\{context\} has already been logged for this date\./);
+  assert.match(trackerSource, /showEditorError\(form, duplicateMessage\)/);
+  assert.match(trackerSource, /if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\)[\s\S]*getDuplicateScheduledContextMessage\(currentEditor\.pendingRecord\)/);
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {

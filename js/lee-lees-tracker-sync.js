@@ -18,7 +18,9 @@
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
   const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({ Breakfast: 5, Lunch: 6, Dinner: 6 });
-  const DEFAULT_BEDTIME_BASE_UNITS = 15;
+  const DEFAULT_BEDTIME_BASE_UNITS = 17;
+  const LEGACY_BEDTIME_BASE_UNITS = 15;
+  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_SHARED_INSULIN_PLAN = Object.freeze({
     id: 'meal_plan_2026_07_31',
@@ -28,6 +30,8 @@
     mealBaseUnitsByType: { ...DEFAULT_MEAL_BASE_UNITS_BY_TYPE },
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
+    insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+    savedFoods: [],
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -205,6 +209,23 @@
     ]));
   }
 
+  function normalizeSharedSavedFood(food = {}) {
+    const source = food && typeof food === 'object' ? food : {};
+    const carbsPerServing = normalizeSharedNumber(source.carbsPerServing);
+    if (carbsPerServing == null) return null;
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      name: String(source.name || '').trim().slice(0, 80),
+      servingDescription: String(source.servingDescription || '').trim().slice(0, 80),
+      carbsPerServing,
+      updatedAt: source.updatedAt || nowIso(),
+    };
+  }
+
+  function normalizeSharedSavedFoods(source) {
+    return (Array.isArray(source) ? source : []).map(normalizeSharedSavedFood).filter(Boolean);
+  }
+
   function normalizeSharedInsulinPlan(plan) {
     const source = plan && typeof plan === 'object' ? plan : DEFAULT_SHARED_INSULIN_PLAN;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(source.effectiveFrom || ''))
@@ -221,6 +242,7 @@
       ? source.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
     const mealBaseUnitsByType = normalizeSharedMealBaseUnitsByType(source);
+    const bedtimeValue = normalizeSharedNumber(source.bedtimeBaseUnits);
     return {
       id: typeof source.id === 'string' && source.id ? source.id : DEFAULT_SHARED_INSULIN_PLAN.id,
       name: String(source.name || DEFAULT_SHARED_INSULIN_PLAN.name).trim().slice(0, 80),
@@ -228,7 +250,12 @@
       effectiveTo,
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
-      bedtimeBaseUnits: normalizeSharedNumber(source.bedtimeBaseUnits) ?? DEFAULT_BEDTIME_BASE_UNITS,
+      bedtimeBaseUnits: bedtimeValue === LEGACY_BEDTIME_BASE_UNITS && source.bedtimeBaseUnitsMigratedTo17 !== true
+        ? DEFAULT_BEDTIME_BASE_UNITS
+        : (bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS),
+      bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true || bedtimeValue === LEGACY_BEDTIME_BASE_UNITS,
+      insulinCarbRatioGrams: normalizeSharedNumber(source.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+      savedFoods: normalizeSharedSavedFoods(source.savedFoods),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length
         ? normalizedCorrectionRanges
@@ -248,6 +275,9 @@
       mealBaseUnitsByType: normalized.mealBaseUnitsByType,
       mealBaseUnits: normalized.mealBaseUnits,
       bedtimeBaseUnits: normalized.bedtimeBaseUnits,
+      bedtimeBaseUnitsMigratedTo17: normalized.bedtimeBaseUnitsMigratedTo17,
+      insulinCarbRatioGrams: normalized.insulinCarbRatioGrams,
+      savedFoods: normalized.savedFoods,
       supportedMealTypes: normalized.supportedMealTypes,
       correctionRanges: normalized.correctionRanges,
       notes: normalized.notes,
@@ -594,6 +624,8 @@
       record.insulinUnits ?? '',
       record.administeredInsulinUnits ?? '',
       record.mealCarbs ?? '',
+      record.totalCarbs ?? '',
+      stableJson(record.foods || []),
       record.mealDescription || '',
       record.activityDescription || '',
       record.activityDurationMinutes ?? '',
@@ -620,11 +652,16 @@
       source.insulinUnits ?? '',
       source.administeredInsulinUnits ?? '',
       source.mealCarbs ?? '',
+      source.totalCarbs ?? '',
+      stableJson(source.foods || []),
       source.mealDescription || '',
       source.activityDescription || '',
       source.activityDurationMinutes ?? '',
       source.activityIntensity || '',
       source.suggestedBaseUnits ?? '',
+      source.suggestedCarbDoseUnits ?? '',
+      source.rawCarbDose ?? '',
+      source.insulinCarbRatioGrams ?? '',
       source.suggestedCorrectionUnits ?? '',
       source.suggestedTotalUnits ?? '',
       source.insulinPlanId || '',
