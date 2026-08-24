@@ -48,6 +48,15 @@
   text-align: center;
 }
 
+.lee_lee_diabetes_sr_only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .lee_lee_diabetes_top {
   margin-bottom: 1rem;
 }
@@ -621,7 +630,8 @@
   font-weight: 800;
 }
 
-.lee_lee_diabetes_food_calculator {
+.lee_lee_diabetes_carb_entry,
+.lee_lee_diabetes_carb_calculator {
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem;
@@ -630,87 +640,101 @@
   background: rgb(255 255 255 / 5%);
 }
 
-.lee_lee_diabetes_food_header,
-.lee_lee_diabetes_food_row_header {
+.lee_lee_diabetes_carb_entry .lee_lee_diabetes_section_title {
+  margin: 0;
+}
+
+.lee_lee_diabetes_unit_input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lee_lee_diabetes_unit_input span {
+  color: var(--lee-lee-muted);
+  font-weight: 900;
+}
+
+.lee_lee_diabetes_carb_calculator_header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
 }
 
-.lee_lee_diabetes_food_header .lee_lee_diabetes_section_title {
+.lee_lee_diabetes_carb_calculator_header .lee_lee_diabetes_section_title {
   margin: 0;
 }
 
-.lee_lee_diabetes_saved_foods {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.1rem;
+.lee_lee_diabetes_carb_calc_grid {
+  display: grid;
+  grid-template-columns: minmax(3.1rem, 0.45fr) minmax(4.6rem, 1fr) minmax(4.2rem, auto) 2rem;
+  align-items: center;
+  gap: 0.45rem;
 }
 
-.lee_lee_diabetes_saved_food {
-  min-width: 9rem;
-  border: 1px solid var(--lee-lee-border);
-  border-radius: 8px;
-  background: rgb(0 0 0 / 18%);
-  color: var(--lee-lee-text);
-  padding: 0.6rem;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.lee_lee_diabetes_saved_food span {
-  display: block;
-}
-
-.lee_lee_diabetes_saved_food span:first-child {
-  font-weight: 900;
-}
-
-.lee_lee_diabetes_saved_food span:last-child {
+.lee_lee_diabetes_carb_calc_heading {
   color: var(--lee-lee-muted);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.lee_lee_diabetes_food_list {
-  display: grid;
-  gap: 0.75rem;
+.lee_lee_diabetes_carb_calc_total_heading {
+  text-align: right;
 }
 
-.lee_lee_diabetes_food_row {
-  display: grid;
-  gap: 0.65rem;
-  padding: 0.75rem;
+.lee_lee_diabetes_carb_calc_cell .lee_lee_diabetes_input {
+  min-height: 40px;
+  padding: 0.55rem 0.5rem;
+}
+
+.lee_lee_diabetes_carb_calc_row_total {
+  color: var(--lee-lee-muted);
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lee_lee_diabetes_carb_calc_remove_slot {
+  display: flex;
+  justify-content: end;
+}
+
+.lee_lee_diabetes_icon_button {
+  inline-size: 30px;
+  block-size: 30px;
   border: 1px solid var(--lee-lee-border);
-  border-radius: 8px;
+  border-radius: 999px;
   background: rgb(0 0 0 / 16%);
+  color: var(--lee-lee-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.lee_lee_diabetes_food_servings {
-  display: grid;
-  gap: 0.65rem;
+.lee_lee_diabetes_icon_button--danger {
+  color: #fca5a5;
 }
 
-.lee_lee_diabetes_food_direct.is-hidden,
-.lee_lee_diabetes_food_servings.is-hidden {
-  display: none;
-}
-
-.lee_lee_diabetes_food_result,
-.lee_lee_diabetes_food_total {
-  margin: 0;
+.lee_lee_diabetes_carb_calc_sum {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--lee-lee-border-strong);
   color: var(--lee-lee-text);
   font-weight: 900;
+  text-transform: uppercase;
 }
 
-.lee_lee_diabetes_food_total {
-  font-size: 1.05rem;
-}
-
-.lee_lee_diabetes_food_save {
-  margin-top: 0.1rem;
+.lee_lee_diabetes_carb_calc_sum strong {
+  font-size: 1.4rem;
 }
 
 .lee_lee_diabetes_confirm_list {
@@ -973,8 +997,7 @@
 :root[data-theme="light"] .lee_lee_diabetes_dose_total,
 :root[data-theme="light"] .lee_lee_diabetes_summary_grid dd,
 :root[data-theme="light"] .lee_lee_diabetes_status_grid dd,
-:root[data-theme="light"] .lee_lee_diabetes_food_result,
-:root[data-theme="light"] .lee_lee_diabetes_food_total,
+:root[data-theme="light"] .lee_lee_diabetes_carb_calc_sum,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list dd {
   color: var(--lee-lee-text);
 }
@@ -987,7 +1010,8 @@
 :root[data-theme="light"] .lee_lee_diabetes_dose_card p,
 :root[data-theme="light"] .lee_lee_diabetes_dose_breakdown,
 :root[data-theme="light"] .lee_lee_diabetes_dose_range,
-:root[data-theme="light"] .lee_lee_diabetes_saved_food span:last-child,
+:root[data-theme="light"] .lee_lee_diabetes_carb_calc_heading,
+:root[data-theme="light"] .lee_lee_diabetes_carb_calc_row_total,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list dt,
 :root[data-theme="light"] .lee_lee_diabetes_range_row label,
 :root[data-theme="light"] .lee_lee_diabetes_plan_meta,
@@ -1015,9 +1039,8 @@
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
 :root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
-:root[data-theme="light"] .lee_lee_diabetes_food_calculator,
-:root[data-theme="light"] .lee_lee_diabetes_saved_food,
-:root[data-theme="light"] .lee_lee_diabetes_food_row,
+:root[data-theme="light"] .lee_lee_diabetes_carb_entry,
+:root[data-theme="light"] .lee_lee_diabetes_carb_calculator,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
 :root[data-theme="light"] .lee_lee_diabetes_range_row,
 :root[data-theme="light"] .lee_lee_diabetes_status_grid div {
@@ -1062,9 +1085,8 @@
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
 :root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
-:root[data-theme="light"] .lee_lee_diabetes_food_calculator,
-:root[data-theme="light"] .lee_lee_diabetes_saved_food,
-:root[data-theme="light"] .lee_lee_diabetes_food_row,
+:root[data-theme="light"] .lee_lee_diabetes_carb_entry,
+:root[data-theme="light"] .lee_lee_diabetes_carb_calculator,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
 :root[data-theme="light"] .lee_lee_diabetes_range_row,
 :root[data-theme="light"] .lee_lee_diabetes_status_grid div {

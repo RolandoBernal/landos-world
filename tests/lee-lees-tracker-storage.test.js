@@ -111,7 +111,7 @@ test('migrates legacy record and plan keys into the stable tracker document with
   assert.equal(migratedPlan.mealBaseUnits, 5);
   assert.equal(migratedPlan.bedtimeBaseUnits, 17);
   assert.equal(migratedPlan.insulinCarbRatioGrams, 20);
-  assert.deepEqual(migratedPlan.savedFoods, []);
+  assert.equal(Object.hasOwn(migratedPlan, 'savedFoods'), false);
   assert.ok(localStorage.getItem(legacyRecordsKey));
   assert.ok(localStorage.getItem(legacyPlansKey));
 });

@@ -392,18 +392,26 @@ test('carb ratio and half-unit rounding are deterministic', () => {
   });
 });
 
-test('food calculator totals direct and serving-based food carbs', () => {
+test('carb calculator totals decimal quantity rows without rounding to whole grams', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
-  const pasta = { inputMode: 'servings', servings: 2, carbsPerServing: 47 };
-  const foods = [
-    pasta,
-    { inputMode: 'direct', directCarbs: 22 },
-    { inputMode: 'direct', directCarbs: 27 },
-  ];
+  const rows = helper.normalizeCarbCalculatorRows([
+    { qty: '1', carbs: '25' },
+    { qty: '2', carbs: '15' },
+    { qty: '1.5', carbs: '19' },
+    { qty: '1', carbs: '46.5' },
+  ]);
 
-  assert.equal(helper.calculateFoodCarbs(pasta), 94);
-  assert.equal(helper.calculateTotalCarbs(foods), 143);
+  assert.equal(rows.length, 5);
+  assert.equal(rows.at(-1).qty, '1');
+  assert.equal(rows.at(-1).carbs, '');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[0]), 25);
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[1]), 30);
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[2]), 28.5);
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows.at(-1)), null);
+  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 130);
+  assert.equal(helper.hasValidCarbCalculatorTotal(rows), true);
+  assert.equal(helper.hasValidCarbCalculatorTotal(helper.normalizeCarbCalculatorRows([])), false);
 });
 
 test('meal dose helper uses carb coverage plus existing correction table', () => {
@@ -568,7 +576,6 @@ test('shared settings contract applies restored patient and dose settings to cal
       bedtimeBaseUnits: 17,
       bedtimeBaseUnitsMigratedTo17: true,
       insulinCarbRatioGrams: 20,
-      savedFoods: [{ id: 'pasta', name: 'Pasta', servingDescription: '1 cup', carbsPerServing: 47 }],
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -597,7 +604,6 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(plan.mealBaseUnitsByType.Dinner, 6);
   assert.equal(plan.insulinCarbRatioGrams, 20);
   assert.equal(plan.bedtimeBaseUnits, 17);
-  assert.equal(plan.savedFoods[0].name, 'Pasta');
   assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(plan.correctionRanges.at(-1).correctionUnits, 6);
@@ -611,9 +617,10 @@ test('shared settings inventory classifies every current LLT settings control', 
   const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
   const byLabel = new Map(inventory.map((item) => [item.label, item]));
 
-  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Insulin-to-Carb Ratio', 'Bedtime Base Dose', 'Saved Foods', 'Correction Table'].forEach((label) => {
+  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Insulin-to-Carb Ratio', 'Bedtime Base Dose', 'Correction Table'].forEach((label) => {
     assert.equal(byLabel.get(label)?.classification, 'SHARED');
   });
+  assert.equal(byLabel.has('Saved Foods'), false);
   ['History Initial Window', 'This device is used by', 'Shared Sync status/diagnostics', 'Local Backup import/export controls', 'Recently Deleted controls'].forEach((label) => {
     assert.equal(byLabel.get(label)?.classification, 'LOCAL');
   });
@@ -649,7 +656,10 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /Meal \/ Carbs/);
   assert.match(trackerSource, /name="mealCarbs"/);
   assert.match(trackerSource, /name="activityDurationMinutes"/);
-  assert.match(trackerSource, /Carbs are recorded for tracking only/);
+  assert.match(trackerSource, /Open Carb Calc/);
+  assert.match(trackerSource, /data-action="use-carb-calculator-total"/);
+  assert.doesNotMatch(trackerSource, /Save for reuse/);
+  assert.doesNotMatch(trackerSource, /data-action="add-food"/);
   assert.match(trackerSource, /<th scope="col">Carbs<\/th>/);
   assert.match(trackerSource, /<th scope="col">Activity<\/th>/);
 });

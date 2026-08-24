@@ -524,19 +524,18 @@ test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb da
   await expect(form.getByLabel('Blood Sugar')).toBeVisible();
 
   await form.getByLabel('Blood Sugar').fill('198');
-  await form.getByLabel('Food').fill('Pasta');
-  await form.getByRole('spinbutton', { name: 'Total carbs' }).fill('46.5');
-  await expect(form.getByText('Total carbs: 46.5 g carbs')).toBeVisible();
+  await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('46.5');
+  await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeVisible();
 
   await form.getByLabel('Context').selectOption('Bedtime');
   await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
-  await expect(form.getByText('Total carbs:', { exact: false })).toHaveCount(0);
+  await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toHaveCount(0);
   await expect(form.getByLabel('Blood Sugar')).toBeVisible();
   await expect(form.getByText('Suggested dose')).toBeVisible();
   await expect(form.getByText('17 units')).toBeVisible();
 
-  const focusableFoodControls = await form.locator('[name^="food"], [name="mealCarbs"], [data-action="add-food"], [data-action="remove-food"]').count();
-  expect(focusableFoodControls).toBe(0);
+  const focusableCarbControls = await form.locator('[name="mealCarbs"], [name^="carbCalc"], [data-action="open-carb-calculator"]').count();
+  expect(focusableCarbControls).toBe(0);
 
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
@@ -570,9 +569,68 @@ test('Lee-Lee context switching restores Meal Carbs for applicable contexts', as
 
   await form.getByLabel('Context').selectOption('Lunch');
   await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toBeVisible();
-  await expect(form.getByRole('button', { name: '+ Add Food' })).toBeVisible();
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeVisible();
+  await expect(form.getByRole('button', { name: '+ Add Food' })).toHaveCount(0);
 
   await form.getByLabel('Context').selectOption('Correction');
   await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
   await expect(form.getByLabel('Blood Sugar')).toBeVisible();
+});
+
+test('Lee-Lee Carb Calc applies temporary receipt rows without saving food details', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByLabel('Blood Sugar').fill('299');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = form.locator('[data-carb-calculator]');
+  await expect(calculator.getByRole('heading', { name: 'Carb Calculator' })).toBeVisible();
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(1);
+  await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveValue('1');
+  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveValue('');
+  await expect(calculator.getByText('Meal Total')).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Use 0 grams' })).toBeDisabled();
+
+  await calculator.locator('[name="carbCalcCarbs"]').first().fill('25');
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(2);
+  await calculator.locator('[name="carbCalcQty"]').nth(1).fill('2');
+  await calculator.locator('[name="carbCalcCarbs"]').nth(1).fill('19');
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(3);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('63 g');
+
+  await calculator.locator('[name="carbCalcQty"]').nth(2).fill('1.5');
+  await calculator.locator('[name="carbCalcCarbs"]').nth(2).fill('19');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('91.5 g');
+  await calculator.getByRole('button', { name: 'Remove row' }).nth(2).click();
+  await expect(form.locator('[data-carb-calculator]').getByLabel('Meal Total')).toHaveText('63 g');
+  await form.getByRole('button', { name: 'Use 63 grams' }).click();
+
+  await expect(form.locator('[data-carb-calculator]')).toHaveCount(0);
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('63');
+  await expect(form.getByText('Carb coverage: 63 g carbs ÷ 20 = 3.15 → 3 units')).toBeVisible();
+
+  await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('70');
+  await expect(form.getByText('Carb coverage: 70 g carbs ÷ 20 = 3.5 → 3.5 units')).toBeVisible();
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  await expect(form.locator('[data-carb-calculator]').getByLabel('Meal Total')).toHaveText('63 g');
+  await form.getByRole('button', { name: 'Cancel Carb Calculator' }).click();
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('70');
+
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+
+  const dinnerRecord = await page.evaluate(() => {
+    const records = window.LeeLeeTrackerStorage.loadTrackerData().records;
+    return records.find((record) => record.type === 'Dinner');
+  });
+  expect(dinnerRecord).toMatchObject({
+    type: 'Dinner',
+    mealCarbs: 70,
+    totalCarbs: 70,
+    foods: [],
+  });
 });
