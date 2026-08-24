@@ -379,6 +379,8 @@ test('live phase actions support one-tap pointer activation and final discard', 
 });
 
 test('saved game UI uses edit and delete terminology without entry-type labels', () => {
+  assert.match(source, /data-vfgt-action="home">Back<\/button>/);
+  assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>/);
   assert.match(source, /data-vfgt-action="edit-saved">Edit Game<\/button>/);
   assert.match(source, /data-vfgt-action="delete-saved">Delete Game<\/button>/);
   assert.match(source, /data-vfgt-action="abandon">Abandon Game<\/button>/);
