@@ -597,6 +597,10 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('×');
   await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);
   await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);
+  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveCSS('text-align', 'left');
+  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveCSS('appearance', 'textfield');
+  await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveCSS('appearance', 'textfield');
+  expect(await calculator.locator('[name="carbCalcCarbs"]').first().evaluate((input) => input.getBoundingClientRect().width)).toBeLessThan(90);
   await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(1);
   await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveValue('1');
   await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveValue('');
@@ -707,4 +711,60 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
   await blankCarbs.pressSequentially('19');
   await expect(blankCarbs).toHaveValue('19');
   await expect(blankCarbs).toBeFocused();
+});
+
+test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
+  const qtyInputs = calculator.locator('[name="carbCalcQty"]');
+
+  await carbInputs.first().click();
+  await carbInputs.first().pressSequentially('23');
+  await expect(carbInputs.first()).toHaveValue('23');
+  await expect(carbInputs.first()).toBeFocused();
+  await expect(carbInputs).toHaveCount(2);
+
+  await carbInputs.first().focus();
+  await page.keyboard.press('Tab');
+  await expect(carbInputs.nth(1)).toBeFocused();
+  await carbInputs.nth(1).pressSequentially('15');
+  await expect(carbInputs.nth(1)).toHaveValue('15');
+  await expect(carbInputs).toHaveCount(3);
+
+  await page.keyboard.press('Tab');
+  await expect(carbInputs.nth(2)).toBeFocused();
+  await carbInputs.nth(2).pressSequentially('47');
+  await expect(carbInputs.nth(2)).toHaveValue('47');
+  await expect(carbInputs).toHaveCount(4);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('85 g');
+
+  await page.keyboard.press('Shift+Tab');
+  await expect(carbInputs.nth(1)).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(carbInputs.first()).toBeFocused();
+
+  await qtyInputs.nth(1).click();
+  await qtyInputs.nth(1).press('ControlOrMeta+A');
+  await qtyInputs.nth(1).pressSequentially('2');
+  await expect(qtyInputs.nth(1)).toHaveValue('2');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('100 g');
+
+  await qtyInputs.nth(2).click();
+  await qtyInputs.nth(2).press('ControlOrMeta+A');
+  await qtyInputs.nth(2).pressSequentially('1.5');
+  await expect(qtyInputs.nth(2)).toHaveValue('1.5');
+  await carbInputs.nth(2).click();
+  await carbInputs.nth(2).press('ControlOrMeta+A');
+  await carbInputs.nth(2).pressSequentially('19');
+  await expect(carbInputs.nth(2)).toHaveValue('19');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('81.5 g');
+
+  expect(await calculator.locator('[tabindex]').count()).toBe(0);
 });

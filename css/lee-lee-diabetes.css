@@ -749,6 +749,11 @@
   min-width: 0;
 }
 
+.lee_lee_diabetes_carb_calc_cell--carbs {
+  justify-self: start;
+  min-width: 0;
+}
+
 .lee_lee_diabetes_carb_calc_operator {
   color: var(--lee-lee-muted);
   font-size: 1rem;
@@ -757,7 +762,7 @@
 }
 
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
-  width: 100%;
+  width: 6.5ch;
   min-height: 34px;
   padding: 0.28rem 0.16rem;
   border: 0;
@@ -768,7 +773,20 @@
   font-size: 1.08rem;
   font-weight: 900;
   line-height: 1.2;
-  text-align: right;
+  text-align: left;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input::-webkit-outer-spin-button,
+.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.lee_lee_diabetes_carb_calc_cell--qty .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
+  width: 4ch;
+  text-align: center;
 }
 
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:hover {
@@ -784,10 +802,11 @@
 }
 
 .lee_lee_diabetes_carb_calc_unit_input {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: inline-flex;
   align-items: baseline;
   gap: 0.2rem;
+  width: max-content;
+  max-width: 100%;
 }
 
 .lee_lee_diabetes_carb_calc_unit_input span {

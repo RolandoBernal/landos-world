@@ -163,6 +163,7 @@
     endDate: '',
   };
   let currentEditor = null;
+  let pendingCarbCalculatorFocusRowId = '';
   let syncRepository = null;
   let syncStatus = {
     configured: false,
@@ -3163,11 +3164,11 @@
     return result;
   }
 
-  function refreshCarbCalculator(form) {
+  function refreshCarbCalculator(form, preserveRowId = '') {
     const calculator = form?.querySelector('[data-carb-calculator]');
     if (!calculator) return;
     const activeElement = document.activeElement;
-    const activeRowId = activeElement?.dataset?.carbRowId || '';
+    const activeRowId = activeElement?.dataset?.carbRowId || pendingCarbCalculatorFocusRowId || preserveRowId || '';
     const rows = collectEditableCarbCalculatorRowsFromForm(form, activeRowId);
     currentEditor.carbCalculatorRows = rows;
     const rowsContainer = calculator.querySelector('[data-carb-calculator-rows]');
@@ -3206,9 +3207,9 @@
     }
   }
 
-  function updateEditorState(form) {
+  function updateEditorState(form, options = {}) {
     showEditorError(form, '');
-    refreshCarbCalculator(form);
+    refreshCarbCalculator(form, options.preserveCarbRowId || '');
     updateContextSelectAvailability(form);
     updateDoseHelper(form);
     updateEditorSaveState(form);
@@ -4711,6 +4712,41 @@
     }
   }
 
+  function handleCarbCalculatorCarbsTab(event) {
+    if (event.key !== 'Tab') return false;
+    const calculator = event.target?.closest?.('[data-carb-calculator]');
+    const activeInput = event.target?.name === 'carbCalcCarbs' && calculator
+      ? event.target
+      : null;
+    if (!activeInput) return false;
+
+    const carbInputs = [...calculator.querySelectorAll('[name="carbCalcCarbs"]')]
+      .filter((input) => !input.disabled);
+    const activeIndex = carbInputs.indexOf(activeInput);
+    if (activeIndex === -1) return false;
+
+    const nextIndex = event.shiftKey ? activeIndex - 1 : activeIndex + 1;
+    const nextInput = carbInputs[nextIndex];
+    if (!nextInput) return false;
+
+    const nextRowId = nextInput.dataset.carbRowId || '';
+    const focusNextInput = () => {
+      const targetInput = nextRowId
+        ? calculator.querySelector(`[name="carbCalcCarbs"]${getCarbRowSelector(nextRowId)}`)
+        : nextInput;
+      targetInput?.focus({ preventScroll: true });
+      if (typeof targetInput?.select === 'function') targetInput.select();
+      if (document.activeElement === targetInput) pendingCarbCalculatorFocusRowId = '';
+    };
+    pendingCarbCalculatorFocusRowId = nextRowId;
+    event.preventDefault();
+    event.stopPropagation();
+    focusNextInput();
+    requestAnimationFrame(focusNextInput);
+    window.setTimeout(focusNextInput, 0);
+    return true;
+  }
+
   function updateExportOptions(root) {
     const filtersForm = root.querySelector('[data-export-filters]');
     const layoutInput = root.querySelector('[name="layout"][data-filter-scope="export"]');
@@ -4828,6 +4864,9 @@
       if (!target) return;
       event.preventDefault();
       removeCarbCalculatorRowFromTarget(target, root);
+    }, true);
+    document.addEventListener('keydown', (event) => {
+      handleCarbCalculatorCarbsTab(event);
     }, true);
     root.addEventListener('click', (event) => {
       const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -5305,6 +5344,7 @@
         });
         return;
       }
+      if (event.defaultPrevented || handleCarbCalculatorCarbsTab(event)) return;
       trapHistorySheetFocus(event);
       trapCarbCalculatorFocus(event);
     });

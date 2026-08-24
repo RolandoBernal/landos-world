@@ -661,6 +661,10 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /data-carb-calculator-layer/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
+  assert.match(cssSource, /-webkit-appearance: none/);
+  assert.match(cssSource, /appearance: textfield/);
+  assert.match(trackerSource, /handleCarbCalculatorCarbsTab/);
+  assert.doesNotMatch(trackerSource, /tabindex="[1-9]/);
   assert.match(trackerSource, /data-action="use-carb-calculator-total"/);
   assert.doesNotMatch(trackerSource, /Save for reuse/);
   assert.doesNotMatch(trackerSource, /data-action="add-food"/);
