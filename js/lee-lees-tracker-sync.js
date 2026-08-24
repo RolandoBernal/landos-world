@@ -13,6 +13,7 @@
   const REMOTE_RECORDS_TABLE = 'lee_lee_records';
   const REMOTE_SHARED_SETTINGS_TABLE = 'lee_lee_shared_settings';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
+  const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict']);
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
@@ -102,6 +103,7 @@
       lastSuccessfulSyncAt: null,
       realtimeStatus: 'idle',
       lastError: '',
+      lastSyncAttempt: null,
       ...readJson(SYNC_METADATA_KEY, {}),
     };
   }
@@ -431,6 +433,111 @@
     };
   }
 
+  function getOperationTarget(operation) {
+    if (operation?.type === 'insert') return `${REMOTE_RECORDS_TABLE}.insert`;
+    if (['update', 'soft-delete', 'restore'].includes(operation?.type)) return 'rpc.update_lee_lee_record_with_version';
+    return REMOTE_RECORDS_TABLE;
+  }
+
+  function sanitizeOperationMetadata(operation) {
+    const payload = operation?.payload && typeof operation.payload === 'object' ? operation.payload : {};
+    return {
+      id: operation?.id || '',
+      recordId: operation?.recordId || payload.id || '',
+      recordType: payload.type || 'Other',
+      eventType: payload.eventType || '',
+      operationType: operation?.type || '',
+      operationCreatedAt: operation?.createdAt || '',
+      recordCreatedAt: payload.createdAt || payload.clientCreatedAt || '',
+      recordUpdatedAt: payload.updatedAt || '',
+      recordTimestamp: payload.recordTimestamp || '',
+      version: Number(payload.version || 1),
+      baseVersion: operation?.baseVersion ?? null,
+      syncState: operation?.state || 'pending',
+      state: operation?.state || 'pending',
+      retryCount: Number(operation?.retryCount || 0),
+      remoteId: operation?.recordId || payload.id || '',
+      deleted: Boolean(payload.deletedAt || payload.deleted_at),
+      expectedTarget: getOperationTarget(operation),
+      schemaVersion: Number(payload.appSchemaVersion || payload.app_schema_version || 1),
+      lastErrorCategory: operation?.lastErrorCategory || '',
+      lastErrorCode: operation?.lastErrorCode || '',
+      lastErrorMessage: operation?.lastErrorMessage || '',
+    };
+  }
+
+  function sanitizeSupabaseError(error) {
+    return {
+      code: String(error?.code || error?.status || '').slice(0, 80),
+      status: error?.status || error?.statusCode || null,
+      message: String(error?.message || error || '').slice(0, 300),
+      details: String(error?.details || '').slice(0, 300),
+      hint: String(error?.hint || '').slice(0, 300),
+    };
+  }
+
+  function categorizeError(error) {
+    const code = String(error?.code || '').toUpperCase();
+    const message = String(error?.message || error || '').toLowerCase();
+    if (code === '28000' || code === 'PGRST301' || message.includes('jwt') || message.includes('auth')) return 'authentication';
+    if (code === '42501' || message.includes('permission') || message.includes('rls') || message.includes('row-level security')) return 'authorization';
+    if (code === '23505' || message.includes('duplicate')) return 'duplicate';
+    if (code === '23514' || code === '22P02' || message.includes('invalid') || message.includes('constraint')) return 'validation';
+    return navigator.onLine ? 'remote' : 'network';
+  }
+
+  function createSyncAttempt(total) {
+    return {
+      createdAt: nowIso(),
+      attempted: total,
+      succeeded: 0,
+      failed: 0,
+      failuresByReason: {},
+      auth: {
+        checked: false,
+        valid: false,
+        userIdAvailable: false,
+        expiresAt: null,
+        error: '',
+      },
+      items: [],
+    };
+  }
+
+  function recordAttemptItem(attempt, operation, result, extras = {}) {
+    const item = {
+      operationId: operation?.id || '',
+      recordId: operation?.recordId || operation?.payload?.id || '',
+      operationType: operation?.type || '',
+      recordType: operation?.payload?.type || 'Other',
+      eventType: operation?.payload?.eventType || '',
+      expectedTarget: getOperationTarget(operation),
+      result,
+      ...extras,
+    };
+    attempt.items.push(item);
+    if (result === 'succeeded') attempt.succeeded += 1;
+    if (result === 'failed') {
+      attempt.failed += 1;
+      const reason = extras.category || 'unknown';
+      attempt.failuresByReason[reason] = (attempt.failuresByReason[reason] || 0) + 1;
+    }
+  }
+
+  function logSyncAttempt(attempt) {
+    setMetadata({ lastSyncAttempt: attempt });
+    if (attempt.failed && globalThis.console?.warn) {
+      console.warn('Lee-Lee sync attempt', {
+        attempted: attempt.attempted,
+        succeeded: attempt.succeeded,
+        failed: attempt.failed,
+        failuresByReason: attempt.failuresByReason,
+        auth: attempt.auth,
+        items: attempt.items,
+      });
+    }
+  }
+
   function createVersionedMutationArgs(remoteRecord, expectedVersion) {
     return {
       p_id: remoteRecord.id,
@@ -669,20 +776,33 @@
         lastSuccessfulSyncAt: metadata.lastSuccessfulSyncAt,
         realtimeStatus: metadata.realtimeStatus || 'idle',
         lastError: metadata.lastError || '',
+        lastSyncAttempt: metadata.lastSyncAttempt || null,
         state,
         message,
       };
     }
 
     function getRecordQueueSnapshot() {
-      return getQueue().map((operation) => ({
-        id: operation.id,
-        recordId: operation.recordId,
-        type: operation.type,
-        retryCount: Number(operation.retryCount || 0),
-        lastErrorCategory: operation.lastErrorCategory || '',
-        state: operation.state || 'pending',
-      }));
+      return getQueue().map(sanitizeOperationMetadata);
+    }
+
+    function getSyncDiagnostics() {
+      const metadata = getMetadata();
+      return {
+        queue: getRecordQueueSnapshot(),
+        sharedSettingsQueue: getSharedSettingsQueue().map(sanitizeOperationMetadata),
+        conflicts: getConflicts().map((conflict) => ({
+          id: conflict.id,
+          recordId: conflict.recordId,
+          entityType: conflict.entityType || 'record',
+          operationType: conflict.operation?.type || '',
+          createdAt: conflict.createdAt || '',
+          localVersion: Number(conflict.localRecord?.version || 1),
+          sharedVersion: conflict.sharedRecord?.version ?? null,
+        })),
+        lastSyncAttempt: metadata.lastSyncAttempt || null,
+        lastError: metadata.lastError || '',
+      };
     }
 
     function subscribe(listener) {
@@ -705,6 +825,13 @@
         });
       }
       return supabaseClient;
+    }
+
+    async function refreshSession(client) {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      session = data?.session || null;
+      return session;
     }
 
     async function initialize() {
@@ -837,14 +964,70 @@
       return queueOperation('restore', nextRecord, record.version || null);
     }
 
-    async function processQueue() {
+    async function processQueue(options = {}) {
       if (processing || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
-      if (!client || !session?.user?.id) return getSyncStatus();
+      if (!client) return getSyncStatus();
+      const queueSnapshot = getQueue();
+      const skipped = queueSnapshot.filter((operation) => operation.state === 'needs-attention' && !options.includeNeedsAttention);
+      const currentQueue = queueSnapshot.filter((operation) => operation.state !== 'needs-attention' || options.includeNeedsAttention);
+      const attempt = createSyncAttempt(currentQueue.length);
+      if (!currentQueue.length) {
+        logSyncAttempt(attempt);
+        return getSyncStatus();
+      }
+      try {
+        const currentSession = await refreshSession(client);
+        attempt.auth = {
+          checked: true,
+          valid: Boolean(currentSession?.user?.id),
+          userIdAvailable: Boolean(currentSession?.user?.id),
+          expiresAt: currentSession?.expires_at || currentSession?.expiresAt || null,
+          error: '',
+        };
+      } catch (error) {
+        const details = sanitizeSupabaseError(error);
+        attempt.auth = {
+          checked: true,
+          valid: false,
+          userIdAvailable: false,
+          expiresAt: null,
+          error: details.message || 'Session could not be refreshed.',
+        };
+        currentQueue.forEach((operation) => recordAttemptItem(attempt, operation, 'failed', {
+          category: 'authentication',
+          error: details,
+        }));
+        setQueue([
+          ...skipped,
+          ...currentQueue.map((operation) => ({
+            ...operation,
+            retryCount: Number(operation.retryCount || 0) + 1,
+            lastErrorCategory: 'authentication',
+            lastErrorCode: details.code,
+            lastErrorMessage: details.message,
+            state: 'needs-attention',
+          })),
+        ]);
+        setMetadata({ lastError: 'Sign in again to sync pending records.' });
+        logSyncAttempt(attempt);
+        emit();
+        return getSyncStatus();
+      }
+      if (!session?.user?.id) {
+        currentQueue.forEach((operation) => recordAttemptItem(attempt, operation, 'failed', {
+          category: 'authentication',
+          error: { code: '', status: null, message: 'No authenticated Supabase session.', details: '', hint: '' },
+        }));
+        setMetadata({ lastError: 'Sign in to sync pending records.' });
+        logSyncAttempt(attempt);
+        emit();
+        return getSyncStatus();
+      }
       processing = true;
       emit();
       const remaining = [];
-      for (const operation of getQueue()) {
+      for (const operation of currentQueue) {
         try {
           const remoteRecord = sanitizeRecordForRemote(operation.payload, session.user.id);
           if (operation.type === 'insert') {
@@ -858,14 +1041,17 @@
                 const existing = await fetchRemoteRecord(operation.recordId);
                 if (existing && recordsHaveSameContent(existing, operation.payload)) {
                   mergeRemoteRecords([existing]);
+                  recordAttemptItem(attempt, operation, 'succeeded', { reconciledDuplicate: true });
                   continue;
                 }
                 await registerConflict(operation, existing);
+                recordAttemptItem(attempt, operation, 'succeeded', { conflictCreated: true, category: 'conflict' });
                 continue;
               }
               throw error;
             }
             mergeRemoteRecords([recordFromRemote(data)]);
+            recordAttemptItem(attempt, operation, 'succeeded');
             continue;
           }
           const expectedVersion = Number(operation.baseVersion || operation.payload.version || 1);
@@ -875,36 +1061,42 @@
           const updatedRow = Array.isArray(data) ? data[0] : data;
           if (!updatedRow) {
             await registerConflict(operation);
+            recordAttemptItem(attempt, operation, 'succeeded', { conflictCreated: true, category: 'conflict' });
             continue;
           }
           mergeRemoteRecords([recordFromRemote(updatedRow)]);
+          recordAttemptItem(attempt, operation, 'succeeded');
         } catch (error) {
+          const category = categorizeError(error);
+          const details = sanitizeSupabaseError(error);
           const failed = {
             ...operation,
             retryCount: Number(operation.retryCount || 0) + 1,
-            lastErrorCategory: categorizeError(error),
-            state: 'pending',
+            lastErrorCategory: category,
+            lastErrorCode: details.code,
+            lastErrorMessage: details.message,
+            lastErrorDetails: details.details,
+            lastErrorHint: details.hint,
+            state: DETERMINISTIC_ERROR_CATEGORIES.has(category) ? 'needs-attention' : 'pending',
           };
           remaining.push(failed);
-          if (failed.lastErrorCategory === 'permission' || failed.lastErrorCategory === 'validation') {
+          recordAttemptItem(attempt, operation, 'failed', {
+            category,
+            error: details,
+          });
+          if (['authentication', 'authorization', 'validation'].includes(failed.lastErrorCategory)) {
             setMetadata({ lastError: 'A sync item needs review before it can be uploaded.' });
           } else {
             setMetadata({ lastError: 'Sync will retry when the connection is available.' });
           }
         }
       }
-      setQueue(remaining);
+      setQueue([...skipped, ...remaining]);
       processing = false;
       if (!remaining.length) setMetadata({ lastSuccessfulSyncAt: nowIso(), lastError: '' });
+      logSyncAttempt(attempt);
       emit();
       return getSyncStatus();
-    }
-
-    function categorizeError(error) {
-      const message = String(error?.message || error || '').toLowerCase();
-      if (message.includes('permission') || message.includes('rls') || message.includes('jwt')) return 'permission';
-      if (message.includes('invalid') || message.includes('constraint')) return 'validation';
-      return navigator.onLine ? 'remote' : 'network';
     }
 
     function isDuplicateKeyError(error) {
@@ -941,7 +1133,7 @@
       markLocalRecord(operation.payload, 'conflict', 'This record changed on another device.');
     }
 
-    async function reconcile() {
+    async function reconcile(options = {}) {
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       const { data, error } = await client
@@ -955,7 +1147,7 @@
         return getSyncStatus();
       }
       mergeRemoteRecords((data || []).map(recordFromRemote));
-      await processQueue();
+      await processQueue(options);
       setMetadata({ lastSuccessfulSyncAt: nowIso(), lastError: '' });
       emit();
       return getSyncStatus();
@@ -1294,8 +1486,8 @@
       return summary;
     }
 
-    async function syncAll() {
-      await reconcile();
+    async function syncAll(options = {}) {
+      await reconcile(options);
       await reconcileSharedSettings();
       return getSyncStatus();
     }
@@ -1442,6 +1634,7 @@
       subscribe,
       getSyncStatus,
       getRecordQueueSnapshot,
+      getSyncDiagnostics,
       getDeviceIdentity,
       setDeviceIdentity,
       queueUpsert,

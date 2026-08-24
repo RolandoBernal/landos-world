@@ -4873,7 +4873,7 @@
       }
       if (action === 'retry-save') {
         retrySave();
-        syncRepository?.processQueue?.();
+        syncRepository?.processQueue?.({ includeNeedsAttention: true });
       }
       if (action === 'export-backup') {
         exportDataBackup();
@@ -4922,7 +4922,7 @@
         renderSettings();
       }
       if (action === 'sync-now') {
-        syncRepository?.syncNow?.();
+        syncRepository?.syncNow?.({ includeNeedsAttention: true });
       }
       if (action === 'begin-local-migration') {
         beginLocalMigration(target.dataset.startedFrom || currentEditor?.mode || 'settings');

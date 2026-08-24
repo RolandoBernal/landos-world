@@ -20,10 +20,10 @@ create table if not exists public.lee_lee_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   version integer not null default 1 check (version > 0),
-  entered_by text not null default 'Unknown' check (entered_by in ('Rolando', 'Emily', 'Unknown')),
-  last_edited_by text check (last_edited_by in ('Rolando', 'Emily', 'Unknown')),
+  entered_by text not null default 'Unknown' check (entered_by in ('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown')),
+  last_edited_by text check (last_edited_by in ('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown')),
   deleted_at timestamptz,
-  deleted_by text check (deleted_by in ('Rolando', 'Emily', 'Unknown')),
+  deleted_by text check (deleted_by in ('Rolando', 'Emily', 'Levi', 'Violet', 'Unknown')),
   source text not null default 'app',
   client_created_at timestamptz,
   migration_fingerprint text,
@@ -118,7 +118,7 @@ begin
     insulin_plan_id = p_insulin_plan_id,
     insulin_plan_snapshot = p_insulin_plan_snapshot,
     dose_calculation_status = p_dose_calculation_status,
-    notes = pg_catalog.coalesce(p_notes, ''),
+    notes = coalesce(p_notes, ''),
     recorded_at = p_recorded_at,
     entered_by = p_entered_by,
     last_edited_by = p_last_edited_by,
@@ -129,7 +129,7 @@ begin
     migration_fingerprint = p_migration_fingerprint,
     import_fingerprint = p_import_fingerprint,
     app_schema_version = p_app_schema_version,
-    payload = pg_catalog.coalesce(p_payload, '{}'::jsonb),
+    payload = coalesce(p_payload, '{}'::jsonb),
     version = public.lee_lee_records.version + 1
   where
     id = p_id

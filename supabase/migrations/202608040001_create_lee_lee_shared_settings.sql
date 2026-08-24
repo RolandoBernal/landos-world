@@ -66,7 +66,7 @@ begin
     clinic_name = p_clinic_name,
     clinic_phone = p_clinic_phone,
     last_edited_by = p_last_edited_by,
-    payload = pg_catalog.coalesce(p_payload, '{}'::jsonb),
+    payload = coalesce(p_payload, '{}'::jsonb),
     app_schema_version = p_app_schema_version,
     version = public.lee_lee_shared_settings.version + 1
   where
