@@ -709,7 +709,7 @@
         </section>
       </div>
       <div class="vfgt_actions vfgt_actions--sticky">
-        ${includeSave ? '<button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="discard-final">Abandon Game</button><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="save">Save Game</button>' : '<button type="button" class="vfgt_button" data-vfgt-action="home">History</button><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="edit-saved">Edit Game</button><button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved">Delete Game</button>'}
+        ${includeSave ? '<button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="discard-final">Abandon Game</button><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="save">Save Game</button>' : '<button type="button" class="vfgt_button" data-vfgt-action="home">Back</button><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="edit-saved">Edit Game</button><button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved">Delete Game</button>'}
       </div>
     </section>`;
   }
