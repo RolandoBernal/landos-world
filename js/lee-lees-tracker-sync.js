@@ -31,7 +31,6 @@
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
     insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS,
-    savedFoods: [],
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -209,23 +208,6 @@
     ]));
   }
 
-  function normalizeSharedSavedFood(food = {}) {
-    const source = food && typeof food === 'object' ? food : {};
-    const carbsPerServing = normalizeSharedNumber(source.carbsPerServing);
-    if (carbsPerServing == null) return null;
-    return {
-      id: typeof source.id === 'string' && source.id ? source.id : createId(),
-      name: String(source.name || '').trim().slice(0, 80),
-      servingDescription: String(source.servingDescription || '').trim().slice(0, 80),
-      carbsPerServing,
-      updatedAt: source.updatedAt || nowIso(),
-    };
-  }
-
-  function normalizeSharedSavedFoods(source) {
-    return (Array.isArray(source) ? source : []).map(normalizeSharedSavedFood).filter(Boolean);
-  }
-
   function normalizeSharedInsulinPlan(plan) {
     const source = plan && typeof plan === 'object' ? plan : DEFAULT_SHARED_INSULIN_PLAN;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(source.effectiveFrom || ''))
@@ -255,7 +237,6 @@
         : (bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS),
       bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true || bedtimeValue === LEGACY_BEDTIME_BASE_UNITS,
       insulinCarbRatioGrams: normalizeSharedNumber(source.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
-      savedFoods: normalizeSharedSavedFoods(source.savedFoods),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length
         ? normalizedCorrectionRanges
@@ -277,7 +258,6 @@
       bedtimeBaseUnits: normalized.bedtimeBaseUnits,
       bedtimeBaseUnitsMigratedTo17: normalized.bedtimeBaseUnitsMigratedTo17,
       insulinCarbRatioGrams: normalized.insulinCarbRatioGrams,
-      savedFoods: normalized.savedFoods,
       supportedMealTypes: normalized.supportedMealTypes,
       correctionRanges: normalized.correctionRanges,
       notes: normalized.notes,
