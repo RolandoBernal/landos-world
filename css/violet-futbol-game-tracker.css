@@ -26,6 +26,7 @@
   --vfgt-segment-off: rgb(37 77 133 / 42%);
   --vfgt-segment-glow: 0 0 16px rgb(74 163 255 / 72%), 0 0 34px rgb(74 163 255 / 36%);
   --vfgt-section-gap: 1rem;
+  --vfgt-score-control-height: 60px;
   --vfgt-border: rgb(74 163 255 / 34%);
   --vfgt-border-strong: rgb(74 163 255 / 58%);
   --vfgt-text: #f8fbff;
@@ -599,7 +600,7 @@
 .vfgt_score_button,
 .vfgt_score_input {
   width: 100%;
-  min-height: 56px;
+  min-height: var(--vfgt-score-control-height);
   box-sizing: border-box;
   border-radius: 6px;
   font: inherit;
@@ -662,12 +663,12 @@
 }
 
 .vfgt_vs {
-  align-self: stretch;
+  align-self: end;
   justify-self: center;
   display: grid;
   place-items: center;
   width: 3.5rem;
-  min-height: calc(2.4rem + 0.7rem + 56px);
+  min-height: var(--vfgt-score-control-height);
   color: var(--vfgt-muted-strong);
   font-size: clamp(1rem, 3vw, 1.25rem);
   font-weight: 900;

@@ -341,9 +341,12 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
   assert.match(css, /\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
-  assert.match(css, /\.vfgt_vs \{[\s\S]*align-self: stretch/);
+  assert.match(css, /\.vfgt_vs \{[\s\S]*align-self: end/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*justify-self: center/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*place-items: center/);
+  assert.match(css, /--vfgt-score-control-height: 60px/);
+  assert.match(css, /\.vfgt_score_button,\n\.vfgt_score_input \{[\s\S]*min-height: var\(--vfgt-score-control-height\)/);
+  assert.match(css, /\.vfgt_vs \{[\s\S]*min-height: var\(--vfgt-score-control-height\)/);
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
   assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: var\(--vfgt-section-gap\)/);
 });
