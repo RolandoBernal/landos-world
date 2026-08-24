@@ -2909,8 +2909,12 @@
   function renderEditor(options) {
     const root = getRoot();
     if (!root) return;
+    const previousEditor = currentEditor;
     const record = options.record || {};
     const carbCalculatorRows = normalizeCarbCalculatorRows(options.carbCalculatorRows || currentEditor?.carbCalculatorRows || []);
+    const sameEditorSession = previousEditor
+      && previousEditor.mode === options.mode
+      && previousEditor.id === (record.id || null);
     currentEditor = {
       mode: options.mode,
       id: record.id || null,
@@ -2921,6 +2925,8 @@
       returnDateKey: options.returnDateKey || null,
       carbCalculatorOpen: options.carbCalculatorOpen === true,
       carbCalculatorRows,
+      userEditedInsulin: options.userEditedInsulin === true || (sameEditorSession && previousEditor.userEditedInsulin === true),
+      autofilledInsulinUnits: sameEditorSession ? previousEditor.autofilledInsulinUnits : null,
     };
     trackerMenuOpen = false;
     const now = new Date();
@@ -3142,24 +3148,36 @@
       helper.innerHTML = renderDoseHelperResult(result);
     }
     const insulinInput = form.elements.insulinUnits;
+    const userEditedInsulin = form.dataset.userEditedInsulin === 'true' || currentEditor?.userEditedInsulin === true;
+    const currentInsulinValue = normalizeNumber(insulinInput?.value);
+    const lastAutofilledInsulin = normalizeNumber(form.dataset.autofilledInsulinUnits ?? currentEditor?.autofilledInsulinUnits);
+    const canAutofillInsulin = insulinInput
+      && !currentEditor?.id
+      && !userEditedInsulin
+      && (
+        insulinInput.value === ''
+        || form.dataset.autofilledInsulin === 'true'
+        || (lastAutofilledInsulin != null && currentInsulinValue === lastAutofilledInsulin)
+      );
     if (
       result.status === 'calculated'
-      && insulinInput
-      && (insulinInput.value === '' || form.dataset.autofilledInsulin === 'true')
-      && form.dataset.userEditedInsulin !== 'true'
-      && !currentEditor?.id
+      && canAutofillInsulin
     ) {
       insulinInput.value = String(result.suggestedTotalUnits);
       form.dataset.autofilledInsulin = 'true';
+      form.dataset.autofilledInsulinUnits = String(result.suggestedTotalUnits);
+      if (currentEditor) currentEditor.autofilledInsulinUnits = result.suggestedTotalUnits;
     }
     if (
       result.status !== 'calculated'
       && insulinInput
       && form.dataset.autofilledInsulin === 'true'
-      && form.dataset.userEditedInsulin !== 'true'
+      && !userEditedInsulin
     ) {
       insulinInput.value = '';
       delete form.dataset.autofilledInsulin;
+      delete form.dataset.autofilledInsulinUnits;
+      if (currentEditor) currentEditor.autofilledInsulinUnits = null;
     }
     return result;
   }
@@ -3426,7 +3444,7 @@
     }
     const nowTimestamp = now.toISOString();
     const calculatedGuidance = getCalculatedGuidance(form);
-    const actualAction = getActualRecordedAction(form);
+    const actualAction = getActualRecordedAction(form, calculatedGuidance);
     return {
       id: existing?.id || createId(),
       date: getLocalDateKey(new Date(recordTimestamp)),
@@ -3491,9 +3509,20 @@
     return getEditorDoseResult(form);
   }
 
-  function getActualRecordedAction(form) {
+  function getActualRecordedAction(form, calculatedGuidance = null) {
+    let administeredInsulinUnits = normalizeNumber(form.elements.insulinUnits?.value);
+    const userEditedInsulin = form.dataset.userEditedInsulin === 'true' || currentEditor?.userEditedInsulin === true;
+    if (
+      administeredInsulinUnits == null
+      && calculatedGuidance?.status === 'calculated'
+      && calculatedGuidance.suggestedTotalUnits != null
+      && !userEditedInsulin
+      && !currentEditor?.id
+    ) {
+      administeredInsulinUnits = calculatedGuidance.suggestedTotalUnits;
+    }
     return {
-      administeredInsulinUnits: normalizeNumber(form.elements.insulinUnits?.value),
+      administeredInsulinUnits,
     };
   }
 
@@ -5239,6 +5268,12 @@
       if (!form) return;
       if (event.target.name === 'insulinUnits') {
         form.dataset.userEditedInsulin = 'true';
+        delete form.dataset.autofilledInsulin;
+        delete form.dataset.autofilledInsulinUnits;
+        if (currentEditor) {
+          currentEditor.userEditedInsulin = true;
+          currentEditor.autofilledInsulinUnits = null;
+        }
       }
       updateEditorState(form);
     });

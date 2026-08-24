@@ -533,6 +533,7 @@ test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb da
   await expect(form.getByLabel('Blood Sugar')).toBeVisible();
   await expect(form.getByText('Suggested dose')).toBeVisible();
   await expect(form.getByText('17 units')).toBeVisible();
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('17');
 
   const focusableCarbControls = await form.locator('[name="mealCarbs"], [name^="carbCalc"], [data-action="open-carb-calculator"]').count();
   expect(focusableCarbControls).toBe(0);
@@ -556,6 +557,8 @@ test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb da
     suggestedCarbDoseUnits: null,
     suggestedCorrectionUnits: null,
     suggestedTotalUnits: 17,
+    administeredInsulinUnits: 17,
+    insulinUnits: 17,
   });
 });
 
@@ -643,14 +646,17 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('63');
   await expect(form.getByText('Carb coverage: 63 g carbs ÷ 20 = 3.15 → 3 units')).toBeVisible();
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5');
 
   await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('70');
   await expect(form.getByText('Carb coverage: 70 g carbs ÷ 20 = 3.5 → 3.5 units')).toBeVisible();
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5.5');
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   await expect(page.locator('[data-carb-calculator]').getByLabel('Meal Total')).toHaveText('63 g');
   await page.locator('[data-carb-calculator]').getByRole('button', { name: 'Cancel Carb Calculator' }).click();
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('70');
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5.5');
 
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
@@ -663,6 +669,8 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
     type: 'Dinner',
     mealCarbs: 70,
     totalCarbs: 70,
+    administeredInsulinUnits: 5.5,
+    insulinUnits: 5.5,
     foods: [],
   });
 });
@@ -706,6 +714,9 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
   await expect(blankCarbs).toBeFocused();
   await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(2);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('47 g');
+  await calculator.getByRole('button', { name: 'Use 47 grams' }).click();
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('1.5');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   await blankCarbs.press('ControlOrMeta+A');
   await blankCarbs.pressSequentially('19');
@@ -734,13 +745,13 @@ test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', a
   await carbInputs.first().focus();
   await page.keyboard.press('Tab');
   await expect(carbInputs.nth(1)).toBeFocused();
-  await carbInputs.nth(1).pressSequentially('15');
+  await carbInputs.nth(1).fill('15');
   await expect(carbInputs.nth(1)).toHaveValue('15');
   await expect(carbInputs).toHaveCount(3);
 
   await page.keyboard.press('Tab');
   await expect(carbInputs.nth(2)).toBeFocused();
-  await carbInputs.nth(2).pressSequentially('47');
+  await carbInputs.nth(2).fill('47');
   await expect(carbInputs.nth(2)).toHaveValue('47');
   await expect(carbInputs).toHaveCount(4);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('85 g');
