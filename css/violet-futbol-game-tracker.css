@@ -399,7 +399,7 @@
 
 .vfgt_saved_detail {
   display: grid;
-  gap: var(--vfgt-section-gap);
+  gap: 0.7rem;
 }
 
 .vfgt_saved_detail .vfgt_page_header,
@@ -415,6 +415,10 @@
 }
 
 .vfgt_saved_detail .vfgt_summary_grid + .vfgt_actions {
+  margin-top: 0;
+}
+
+.vfgt_saved_detail .vfgt_summary_grid > section {
   margin-top: 0;
 }
 
@@ -736,9 +740,21 @@
   }
 
   .vfgt_form_grid,
-  .vfgt_summary_grid,
-  .vfgt_final_score {
+  .vfgt_summary_grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vfgt_final_score {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .vfgt_saved_detail .vfgt_final_score {
+    padding-block: 0.8rem;
+  }
+
+  .vfgt_saved_detail .vfgt_summary_grid {
+    gap: 0.7rem;
   }
 
   .vfgt_scoreboard {

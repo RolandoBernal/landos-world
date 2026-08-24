@@ -359,6 +359,15 @@ test('mobile keeps saved history in a row while stacking live score controls', (
   assert.doesNotMatch(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_matchup_title \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 });
 
+test('saved game detail keeps compact mobile final-summary spacing', () => {
+  assert.match(css, /\.vfgt_saved_detail \{[\s\S]*gap: 0\.7rem/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_final_score \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_saved_detail \.vfgt_final_score \{[\s\S]*padding-block: 0\.8rem/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_saved_detail \.vfgt_summary_grid \{[\s\S]*gap: 0\.7rem/);
+  assert.match(css, /\.vfgt_saved_detail \.vfgt_summary_grid > section \{[\s\S]*margin-top: 0/);
+  assert.doesNotMatch(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_final_score \{[\s\S]*grid-template-columns: minmax\(0, 1fr\);\s*\}/);
+});
+
 test('live phase actions support one-tap pointer activation and final discard', () => {
   assert.match(source, /root\.addEventListener\('pointerup', handleClick\)/);
   assert.match(source, /root\.addEventListener\('touchend', handleClick, \{ passive: false \}\)/);
