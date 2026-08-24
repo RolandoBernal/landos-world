@@ -57,6 +57,7 @@ function createRuntime(now = 2_000_000_000_000) {
   vm.runInNewContext(source, context);
   return {
     api: context.VioletFutbolGameTracker,
+    storage,
     advance(seconds) {
       currentTime += seconds * 1000;
     },
@@ -214,6 +215,88 @@ test('saved history sorts by game date and time instead of save time', () => {
   ]);
 });
 
+test('saved game updates replace the same record and preserve internal entry type', () => {
+  const { api, storage } = createRuntime();
+  const saved = api.serializeCompletedGame(api.createManualGame({
+    team1: 'Original Team',
+    team2: 'Hume-Fogg',
+    location: 'Old Field',
+    date: '2026-08-22',
+    time: '11:00',
+    firstHalfGoalsTeam1: 1,
+    firstHalfGoalsTeam2: 0,
+    secondHalfGoalsTeam1: 0,
+    secondHalfGoalsTeam2: 1,
+    firstHalfDurationSeconds: null,
+    secondHalfDurationSeconds: null,
+  }), '2026-08-22T18:00:00.000Z');
+  saved.id = 'same-game-id';
+  saved.createdAt = '2026-08-22T17:59:00.000Z';
+  storage.set(api.SAVED_GAMES_KEY, JSON.stringify([saved]));
+
+  const updated = api.updateSavedGame('same-game-id', (existing) => api.serializeCompletedGame({
+    ...existing,
+    team1: 'Corrected Team',
+    location: '',
+    date: '2026-08-23',
+    startTime: '10:30',
+    firstHalfGoalsTeam1: 2,
+    secondHalfGoalsTeam1: 1,
+    updatedAt: '2026-08-23T15:00:00.000Z',
+  }, existing.savedAt));
+  const stored = JSON.parse(storage.get(api.SAVED_GAMES_KEY));
+
+  assert.equal(updated.id, 'same-game-id');
+  assert.equal(updated.entryType, 'manual');
+  assert.equal(updated.createdAt, '2026-08-22T17:59:00.000Z');
+  assert.equal(updated.savedAt, '2026-08-22T18:00:00.000Z');
+  assert.equal(updated.finalTeam1Score, 3);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].team1, 'Corrected Team');
+});
+
+test('seven-segment digit mapping uses standard active segments', () => {
+  const { api } = createRuntime();
+  const expected = {
+    0: ['top', 'upper-left', 'upper-right', 'lower-left', 'lower-right', 'bottom'],
+    1: ['upper-right', 'lower-right'],
+    2: ['top', 'upper-right', 'middle', 'lower-left', 'bottom'],
+    3: ['top', 'upper-right', 'middle', 'lower-right', 'bottom'],
+    4: ['upper-left', 'upper-right', 'middle', 'lower-right'],
+    5: ['top', 'upper-left', 'middle', 'lower-right', 'bottom'],
+    6: ['top', 'upper-left', 'middle', 'lower-left', 'lower-right', 'bottom'],
+    7: ['top', 'upper-right', 'lower-right'],
+    8: ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'],
+    9: ['top', 'upper-left', 'upper-right', 'middle', 'lower-right', 'bottom'],
+  };
+
+  Object.entries(expected).forEach(([digit, segments]) => {
+    assert.deepEqual(Array.from(api.sevenSegmentActiveSegments(digit)), segments);
+  });
+});
+
+test('seven-segment display keeps a stable four-digit and colon structure', () => {
+  const { api } = createRuntime();
+  ['00:01', '11:11', '12:34', '41:07', '48:27'].forEach((clock) => {
+    const markup = api.renderSevenSegmentDisplay(clock, `Timer ${clock}`);
+    assert.equal((markup.match(/data-vfgt-seven-segment-digit=/g) || []).length, 4);
+    assert.equal((markup.match(/data-vfgt-seven-segment-colon/g) || []).length, 1);
+    assert.equal((markup.match(/class="vfgt_seven_segment /g) || []).length, 28);
+  });
+});
+
+test('seven-segment display renders inactive segments and an accessible timer label', () => {
+  const { api } = createRuntime();
+  const one = api.renderSevenSegmentDigit('1');
+  const display = api.renderSevenSegmentDisplay('00:01', 'First Half timer: 0 minutes, 1 second');
+
+  assert.equal((one.match(/data-state="off"/g) || []).length, 5);
+  assert.equal((one.match(/data-state="on"/g) || []).length, 2);
+  assert.match(display, /role="timer"/);
+  assert.match(display, /aria-label="First Half timer: 0 minutes, 1 second"/);
+  assert.match(display, /class="vfgt_sr_only">First Half timer: 0 minutes, 1 second<\/span>/);
+});
+
 test('normalization recovers unfinished persisted game state', () => {
   const { api } = createRuntime();
   const recovered = api.normalizeGame({
@@ -257,8 +340,10 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: left/);
   assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
+  assert.match(css, /\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.vfgt_vs \{[\s\S]*justify-self: center/);
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
-  assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
+  assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: var\(--vfgt-section-gap\)/);
 });
 
 test('mobile keeps saved history in a row while stacking live score controls', () => {
@@ -274,7 +359,41 @@ test('live phase actions support one-tap pointer activation and final discard', 
   assert.match(source, /root\.addEventListener\('touchend', handleClick, \{ passive: false \}\)/);
   assert.match(source, /lastDirectActivationAt/);
   assert.match(source, /event\.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS/);
-  assert.match(source, /data-vfgt-action="discard-final">Abandon<\/button>/);
+  assert.match(source, /data-vfgt-action="discard-final">Abandon Game<\/button>/);
   assert.match(source, /action === 'discard-final'[\s\S]*clearActiveGame\(\)/);
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
+});
+
+test('saved game UI uses edit and delete terminology without entry-type labels', () => {
+  assert.match(source, /data-vfgt-action="edit-saved">Edit Game<\/button>/);
+  assert.match(source, /data-vfgt-action="delete-saved">Delete Game<\/button>/);
+  assert.match(source, /data-vfgt-action="abandon">Abandon Game<\/button>/);
+  assert.doesNotMatch(source, />Live game</);
+  assert.doesNotMatch(source, />Past game</);
+  assert.doesNotMatch(source, /Manually entered/);
+  assert.match(source, /entryType: 'manual'/);
+  assert.match(source, /entryType: 'live'/);
+});
+
+test('seven-segment timer replaces font-rendered clock text and is responsive', () => {
+  assert.match(source, /renderSevenSegmentDisplay\(clock, accessibleClockLabel/);
+  assert.doesNotMatch(source, /<span class="vfgt_clock">\$\{clock\}<\/span>/);
+  assert.match(css, /\.vfgt_seven_segment_visual[\s\S]*grid-template-columns: repeat\(2, var\(--digit-width\)\) calc\(var\(--digit-width\) \* 0\.28\) repeat\(2, var\(--digit-width\)\)/);
+  assert.match(css, /\.vfgt_seven_segment\.is-off[\s\S]*opacity: 1/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_seven_segment_visual \{/);
+  assert.doesNotMatch(css, /\.vfgt_clock \{[\s\S]{0,260}font-family: 'Digital-7'/);
+});
+
+test('VFGT light mode uses readable semantic foreground and timer tokens', () => {
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-team-text: #071b38/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-score-text: #061a35/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-final-score-text: #064596/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-summary-text: #143a67/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-phase-text: #064596/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-segment-on: #064596/);
+  assert.match(css, /\.vfgt_team_name \{[\s\S]*color: var\(--vfgt-team-text\)/);
+  assert.match(css, /\.vfgt_score_input \{[\s\S]*color: var\(--vfgt-score-text\)[\s\S]*background: var\(--vfgt-score-bg\)/);
+  assert.match(css, /\.vfgt_final_score span \{[\s\S]*color: var\(--vfgt-final-score-text\)/);
+  assert.match(css, /\.vfgt_summary_grid p \{[\s\S]*color: var\(--vfgt-summary-text\)/);
+  assert.match(css, /\.vfgt_phase \{[\s\S]*color: var\(--vfgt-phase-text\)/);
 });
