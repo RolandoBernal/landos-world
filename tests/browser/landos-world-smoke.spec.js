@@ -593,7 +593,7 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator).toHaveAttribute('aria-modal', 'true');
   await expect(form.locator('[data-editor-main]')).toHaveAttribute('inert', '');
   await expect(form.locator('[data-editor-main]')).toHaveAttribute('aria-hidden', 'true');
-  await expect(calculator.getByRole('button', { name: 'Cancel Carb Calculator' })).toBeFocused();
+  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toBeFocused();
   await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('×');
   await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);
   await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);

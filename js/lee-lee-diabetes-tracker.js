@@ -3004,7 +3004,7 @@
       window.setTimeout(applyFocus, 0);
     };
     if (currentEditor.carbCalculatorOpen) {
-      focusTarget('[data-carb-calculator] [data-action="close-carb-calculator"]');
+      focusTarget('[data-carb-calculator] [name="carbCalcCarbs"]');
     } else if (options.focusAction) {
       focusTarget(`[data-action="${options.focusAction}"]`);
     } else {
