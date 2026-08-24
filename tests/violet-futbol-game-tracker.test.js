@@ -340,6 +340,8 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: left/);
   assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
+  assert.match(css, /\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.vfgt_vs \{[\s\S]*justify-self: center/);
   assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
   assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: var\(--vfgt-section-gap\)/);
 });
@@ -380,4 +382,18 @@ test('seven-segment timer replaces font-rendered clock text and is responsive', 
   assert.match(css, /\.vfgt_seven_segment\.is-off[\s\S]*opacity: 1/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_seven_segment_visual \{/);
   assert.doesNotMatch(css, /\.vfgt_clock \{[\s\S]{0,260}font-family: 'Digital-7'/);
+});
+
+test('VFGT light mode uses readable semantic foreground and timer tokens', () => {
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-team-text: #071b38/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-score-text: #061a35/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-final-score-text: #064596/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-summary-text: #143a67/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-phase-text: #064596/);
+  assert.match(css, /:root\[data-theme="light"\] \.app_theme \.vfgt_app \{[\s\S]*--vfgt-segment-on: #064596/);
+  assert.match(css, /\.vfgt_team_name \{[\s\S]*color: var\(--vfgt-team-text\)/);
+  assert.match(css, /\.vfgt_score_input \{[\s\S]*color: var\(--vfgt-score-text\)[\s\S]*background: var\(--vfgt-score-bg\)/);
+  assert.match(css, /\.vfgt_final_score span \{[\s\S]*color: var\(--vfgt-final-score-text\)/);
+  assert.match(css, /\.vfgt_summary_grid p \{[\s\S]*color: var\(--vfgt-summary-text\)/);
+  assert.match(css, /\.vfgt_phase \{[\s\S]*color: var\(--vfgt-phase-text\)/);
 });
