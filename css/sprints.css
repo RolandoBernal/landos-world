@@ -165,7 +165,8 @@
 
 .clock_launch_btn:focus-visible,
 .sprints-btn:focus-visible,
-.sprints-input:focus-visible {
+.sprints-input:focus-visible,
+.sprints-select:focus-visible {
   outline: 2px solid var(--utility-accent-soft, #b49cff);
   outline-offset: 3px;
 }
@@ -230,7 +231,7 @@
 :root[data-theme="light"] .sprints-input,
 :root[data-theme="light"] .sprints-select,
 :root[data-theme="light"] .sprints-textarea {
-  background: rgb(255 255 255 / 92%);
+  background-color: rgb(255 255 255 / 92%);
   border-color: rgb(23 32 51 / 18%);
   color: var(--color-text, #172033);
 }
@@ -366,16 +367,27 @@
   gap: 0.45rem;
 }
 
-.sprints-input {
+.sprints-input,
+.sprints-select {
   min-height: 48px;
   border: 1px solid #333;
   border-radius: 8px;
-  background: #0b0b0e;
+  background-color: #0b0b0e;
   color: #fff;
   box-sizing: border-box;
   padding: 0.75rem;
   font: inherit;
   font-size: 1rem;
+}
+
+.sprints-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.45rem) 50%, calc(100% - 1.05rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 0.42rem 0.42rem, 0.42rem 0.42rem;
+  padding-inline-end: 3rem;
 }
 
 .sprints-input--large {
@@ -465,7 +477,7 @@
 :root[data-theme="light"] .sprints-input,
 :root[data-theme="light"] .sprints-select,
 :root[data-theme="light"] .sprints-textarea {
-  background: rgb(255 255 255 / 92%);
+  background-color: rgb(255 255 255 / 92%);
   border-color: rgb(23 32 51 / 18%);
   color: var(--color-text, #172033);
 }
@@ -902,7 +914,7 @@
 :root[data-theme="light"] .sprints-input,
 :root[data-theme="light"] .sprints-select,
 :root[data-theme="light"] .sprints-textarea {
-  background: rgb(250 246 255 / 94%);
+  background-color: rgb(250 246 255 / 94%);
   border-color: rgb(var(--sprints-accent-rgb) / 26%);
 }
 

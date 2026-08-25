@@ -7,6 +7,8 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const sw = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
 const pwaManager = readFileSync(new URL('../js/pwa-manager.js', import.meta.url), 'utf8');
 const digitalClockCss = readFileSync(new URL('../css/digital-clock.css', import.meta.url), 'utf8');
+const dailyChiefBriefingCss = readFileSync(new URL('../css/daily-chief-briefing.css', import.meta.url), 'utf8');
+const leeLeeDiabetesCss = readFileSync(new URL('../css/lee-lee-diabetes.css', import.meta.url), 'utf8');
 const sprintsCss = readFileSync(new URL('../css/sprints.css', import.meta.url), 'utf8');
 const vfgtCss = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
 const roadBikeCss = readFileSync(new URL('../css/road-bike-checklist.css', import.meta.url), 'utf8');
@@ -157,7 +159,7 @@ test('service worker precaches the app shell and app modules needed for offline 
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-08-25-1'/);
+  assert.match(sw, /const SW_VERSION = '2026-08-25-2'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -166,6 +168,17 @@ test('service worker uses separate versioned caches and strategy-specific runtim
   assert.match(sw, /async function networkFirst/);
   assert.match(sw, /new Request\(url, \{ cache: 'reload' \}\)/);
   assert.match(sw, /WEATHER_HOSTS\.has\(url\.hostname\)/);
+});
+
+test('app dropdowns use padded custom select arrows', () => {
+  [
+    [html, /css\/daily-chief-briefing\.css\?v=20260825-1/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260825-2/],
+    [html, /css\/sprints\.css\?v=20260825-1/],
+    [dailyChiefBriefingCss, /\.daily_briefing_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
+    [leeLeeDiabetesCss, /\.lee_lee_diabetes_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
+    [sprintsCss, /\.sprints-select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
+  ].forEach(([source, pattern]) => assert.match(source, pattern));
 });
 
 test('application cache cleanup is separated from localStorage user data', () => {
