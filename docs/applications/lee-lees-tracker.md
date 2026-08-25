@@ -129,11 +129,21 @@ Export supports:
 
 The default export range is last 7 days.
 
+## Reports
+
+Reports is a first-class LLT section with Summary, Trends, Averages, and Detailed Log views. All views share the same reporting period: 7 Days, 14 Days, 30 Days, or a custom start/end date.
+
+Reports derive statistics from the existing canonical tracker records used by Today and History. They do not create a separate reports database, recalculate historical dose recommendations, or make treatment recommendations. Insulin totals and averages use actual recorded insulin given, falling back to legacy `insulinUnits` only for older records that do not have `administeredInsulinUnits`.
+
+Missing values are excluded from each metric's denominator. For example, a Breakfast record without carbs contributes to Breakfast record count but not to average Breakfast carbs.
+
+Reports includes a print/PDF entry point that reuses the existing printable report preview and can include a concise summary before the detailed log.
+
 ## Report Builder Architecture
 
-Export uses a small report registry. Each report declares an ID, title, description, builder, and print layout. The current registered reports are Clinical Log and Detailed Report.
+Export and Reports use a small report registry. Each printable report declares an ID, title, description, builder, and print layout. The current registered printable reports are Clinical Log and Detailed Report.
 
-This keeps future report types, such as weekly summaries or dose review reports, isolated from the Export screen. Those future reports are not implemented yet.
+This keeps printable report layouts isolated from the interactive Reports views.
 
 ## Clinical Log
 

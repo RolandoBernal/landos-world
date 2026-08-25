@@ -59,6 +59,7 @@
   const TRACKER_NAV_ITEMS = Object.freeze([
     ['today', 'Today'],
     ['history', 'History'],
+    ['reports', 'Reports'],
     ['export', 'Export'],
     ['settings', 'Settings'],
   ]);
@@ -71,6 +72,13 @@
     { value: 'custom', label: 'Custom range', days: null },
   ];
   const EXPORT_RANGE_OPTIONS = DATE_RANGE_OPTIONS.filter((option) => option.value !== 'all');
+  const REPORT_RANGE_OPTIONS = EXPORT_RANGE_OPTIONS.filter((option) => option.value !== 'today');
+  const REPORT_VIEW_ITEMS = Object.freeze([
+    ['summary', 'Summary'],
+    ['trends', 'Trends'],
+    ['averages', 'Averages'],
+    ['detailed-log', 'Detailed Log'],
+  ]);
   const HISTORY_WINDOW_OPTIONS = [
     { value: '7', label: '7 Days', days: 7 },
     { value: '14', label: '14 Days', days: 14 },
@@ -159,6 +167,13 @@
   let exportOptions = {
     range: 'last7',
     layout: 'clinical',
+    startDate: '',
+    endDate: '',
+  };
+  let reportOptions = {
+    range: 'last14',
+    view: 'summary',
+    layout: 'detailed',
     startDate: '',
     endDate: '',
   };
@@ -1649,9 +1664,17 @@
       records = trackerData.records;
       insulinPlans = trackerData.insulinPlans;
       setPersistenceStatus('reloaded');
-      if (!currentEditor || currentEditor.mode === 'settings') {
+      if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
         if (currentEditor?.mode === 'settings') {
           renderSettings();
+        } else if (currentEditor?.mode === 'history') {
+          renderHistory();
+        } else if (currentEditor?.mode === 'history-day') {
+          renderHistoryDay(currentEditor.dateKey);
+        } else if (currentEditor?.mode === 'reports') {
+          renderReports();
+        } else if (currentEditor?.mode === 'export') {
+          renderExport();
         } else {
           renderHome();
         }
@@ -1964,6 +1987,167 @@
     };
     dailySummaryCache.set(cacheKey, summary);
     return summary;
+  }
+
+  function getRecordCarbs(record) {
+    return normalizeNumber(record?.mealCarbs ?? record?.totalCarbs ?? record?.carbs);
+  }
+
+  function average(values) {
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  }
+
+  function sumValues(values) {
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  }
+
+  function uniqueRecordDateKeys(sourceRecords) {
+    return [...new Set(sourceRecords.map(getRecordEventDateKey).filter(Boolean))].sort();
+  }
+
+  function getInclusiveDayCount(startDate, endDate) {
+    const start = createDateStartTimestamp(startDate);
+    const end = createDateStartTimestamp(endDate);
+    if (start == null || end == null || end < start) return null;
+    return Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  }
+
+  function getReportDayCount(sourceRecords, filters = {}) {
+    const bounds = getDateRangeBounds(filters.range, filters.startDate, filters.endDate);
+    const boundedCount = getInclusiveDayCount(bounds.startDate, bounds.endDate);
+    if (boundedCount != null) return boundedCount;
+    return uniqueRecordDateKeys(sourceRecords).length;
+  }
+
+  function getGlucoseTargetRange(settings = trackerData.settings || {}) {
+    const min = normalizeBloodSugar(settings.glucoseTargetMin ?? settings.targetGlucoseMin ?? settings.targetRangeMin);
+    const max = normalizeBloodSugar(settings.glucoseTargetMax ?? settings.targetGlucoseMax ?? settings.targetRangeMax);
+    return min != null && max != null && min <= max ? { min, max } : null;
+  }
+
+  function classifyActualInsulin(record) {
+    const actual = getRecordActualInsulin(record);
+    if (actual == null) return null;
+    const type = normalizeRecordContext(record?.type, normalizeEventType(record?.eventType, record));
+    const isLongActing = type === BEDTIME_CONTEXT_TYPE;
+    const isMealRelated = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
+    const isCorrection = type === 'Correction';
+    return {
+      actual,
+      isFastActing: !isLongActing,
+      isLongActing,
+      isMealRelated,
+      isCorrection,
+      type,
+    };
+  }
+
+  function createValueSummary(values) {
+    const validValues = values.filter((value) => value != null);
+    return {
+      count: validValues.length,
+      total: sumValues(validValues),
+      average: average(validValues),
+      min: validValues.length ? Math.min(...validValues) : null,
+      max: validValues.length ? Math.max(...validValues) : null,
+    };
+  }
+
+  function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}) {
+    const visibleRecords = sourceRecords.filter((record) => !isRecordDeleted(record));
+    const dayCount = getReportDayCount(visibleRecords, filters);
+    const glucoseValues = visibleRecords.map((record) => normalizeBloodSugar(record.bloodSugar)).filter((value) => value != null);
+    const insulinEvents = visibleRecords.map(classifyActualInsulin).filter(Boolean);
+    const carbValues = visibleRecords.map(getRecordCarbs).filter((value) => value != null);
+    const targetRange = getGlucoseTargetRange(settings);
+    const targetCounts = targetRange && glucoseValues.length
+      ? glucoseValues.reduce((counts, value) => {
+        if (value < targetRange.min) counts.below += 1;
+        else if (value > targetRange.max) counts.above += 1;
+        else counts.inRange += 1;
+        return counts;
+      }, { inRange: 0, below: 0, above: 0 })
+      : null;
+    const insulinValues = insulinEvents.map((event) => event.actual);
+    const fastActingValues = insulinEvents.filter((event) => event.isFastActing).map((event) => event.actual);
+    const longActingValues = insulinEvents.filter((event) => event.isLongActing).map((event) => event.actual);
+    const mealValues = insulinEvents.filter((event) => event.isMealRelated).map((event) => event.actual);
+    const correctionValues = insulinEvents.filter((event) => event.isCorrection).map((event) => event.actual);
+    return {
+      dayCount,
+      entryCount: visibleRecords.length,
+      calendarDateCount: uniqueRecordDateKeys(visibleRecords).length,
+      glucose: {
+        ...createValueSummary(glucoseValues),
+        targetRange,
+        targetCounts,
+        inRangePercent: targetCounts ? (targetCounts.inRange / glucoseValues.length) * 100 : null,
+        belowRangePercent: targetCounts ? (targetCounts.below / glucoseValues.length) * 100 : null,
+        aboveRangePercent: targetCounts ? (targetCounts.above / glucoseValues.length) * 100 : null,
+      },
+      insulin: {
+        ...createValueSummary(insulinValues),
+        averagePerDay: insulinValues.length && dayCount ? sumValues(insulinValues) / dayCount : null,
+        fastActing: createValueSummary(fastActingValues),
+        fastActingAveragePerDay: fastActingValues.length && dayCount ? sumValues(fastActingValues) / dayCount : null,
+        longActing: createValueSummary(longActingValues),
+        longActingAveragePerDay: longActingValues.length && dayCount ? sumValues(longActingValues) / dayCount : null,
+        mealRelated: createValueSummary(mealValues),
+        mealRelatedAverage: average(mealValues),
+        correction: createValueSummary(correctionValues),
+        correctionAverage: average(correctionValues),
+      },
+      carbs: {
+        ...createValueSummary(carbValues),
+        averagePerDay: carbValues.length && dayCount ? sumValues(carbValues) / dayCount : null,
+        averagePerEntry: average(carbValues),
+      },
+    };
+  }
+
+  function calculateContextAverages(sourceRecords) {
+    return EXTRA_TYPES.map((type) => {
+      const contextRecords = sourceRecords.filter((record) => record.type === type);
+      if (!contextRecords.length) return null;
+      const glucose = createValueSummary(contextRecords.map((record) => normalizeBloodSugar(record.bloodSugar)));
+      const carbs = createValueSummary(contextRecords.map(getRecordCarbs));
+      const insulin = createValueSummary(contextRecords.map(getRecordActualInsulin));
+      return {
+        type,
+        recordCount: contextRecords.length,
+        glucose,
+        carbs,
+        insulin,
+      };
+    }).filter(Boolean);
+  }
+
+  function buildAveragesReport(sourceRecords, filters = {}) {
+    const summary = calculateReportSummary(sourceRecords, filters);
+    return {
+      summary,
+      contexts: calculateContextAverages(sourceRecords),
+      typicalDay: calculateContextAverages(sourceRecords)
+        .filter((context) => ['Breakfast', 'Lunch', 'Dinner', BEDTIME_CONTEXT_TYPE].includes(context.type)),
+    };
+  }
+
+  function buildTrendSeries(sourceRecords) {
+    const sorted = sortRecordsChronologically(sourceRecords);
+    return {
+      glucose: sorted
+        .map((record) => ({ record, value: normalizeBloodSugar(record.bloodSugar), timestamp: getRecordTimestamp(record) }))
+        .filter((point) => point.value != null),
+      insulin: sorted
+        .map((record) => {
+          const insulin = classifyActualInsulin(record);
+          return insulin ? { record, value: insulin.actual, timestamp: getRecordTimestamp(record), category: insulin.isLongActing ? 'Long-acting' : 'Fast-acting' } : null;
+        })
+        .filter(Boolean),
+      carbs: sorted
+        .map((record) => ({ record, value: getRecordCarbs(record), timestamp: getRecordTimestamp(record) }))
+        .filter((point) => point.value != null),
+    };
   }
 
   function getDailySummaryCacheSize() {
@@ -2353,8 +2537,8 @@
   }
 
   function renderFilterControls(filters, scope) {
-    const prefix = scope === 'export' ? 'export' : 'history';
-    const dateOptions = (scope === 'export' ? EXPORT_RANGE_OPTIONS : DATE_RANGE_OPTIONS)
+    const prefix = scope === 'export' ? 'export' : (scope === 'reports' ? 'reports' : 'history');
+    const dateOptions = (scope === 'export' ? EXPORT_RANGE_OPTIONS : (scope === 'reports' ? REPORT_RANGE_OPTIONS : DATE_RANGE_OPTIONS))
       .map((option) => `<option value="${escapeHtml(option.value)}" ${filters.range === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`)
       .join('');
     const typeControl = scope === 'history'
@@ -2590,6 +2774,300 @@
     return filterRecordsByDateRange(activeRecords(), exportOptions);
   }
 
+  function getReportRecords() {
+    return filterRecordsByDateRange(activeRecords(), reportOptions);
+  }
+
+  function renderReportRangeControls() {
+    return `
+      <section class="lee_lee_diabetes_editor lee_lee_diabetes_report_controls" aria-label="Report options">
+        ${renderFilterControls(reportOptions, 'reports')}
+        <p class="lee_lee_diabetes_filter_summary" aria-live="polite">${escapeHtml(formatDateRangeText(reportOptions))}</p>
+      </section>
+    `;
+  }
+
+  function renderReportViewTabs() {
+    return `
+      <div class="lee_lee_diabetes_report_tabs" role="tablist" aria-label="Report views">
+        ${REPORT_VIEW_ITEMS.map(([view, label]) => `
+          <button
+            type="button"
+            class="lee_lee_diabetes_nav_button ${reportOptions.view === view ? 'is-active' : ''}"
+            data-action="report-view"
+            data-view="${escapeHtml(view)}"
+            role="tab"
+            aria-selected="${reportOptions.view === view ? 'true' : 'false'}"
+          >${escapeHtml(label)}</button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderMetricGrid(items) {
+    const visibleItems = items.filter((item) => item && item.value !== '');
+    if (!visibleItems.length) return '<p class="lee_lee_diabetes_empty" role="status">No data for this section.</p>';
+    return `
+      <dl class="lee_lee_diabetes_summary_grid lee_lee_diabetes_report_metric_grid">
+        ${visibleItems.map(({ label, value, detail = '' }) => `
+          <div>
+            <dt>${escapeHtml(label)}</dt>
+            <dd>${escapeHtml(value)}</dd>
+            ${detail ? `<p>${escapeHtml(detail)}</p>` : ''}
+          </div>
+        `).join('')}
+      </dl>
+    `;
+  }
+
+  function pluralize(count, singular, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+
+  function formatAverageGlucose(value) {
+    return value == null ? 'No data' : formatBloodSugar(Math.round(value));
+  }
+
+  function formatAverageCarbs(value) {
+    return value == null ? 'No data' : formatCarbs(Math.round(value));
+  }
+
+  function formatAverageInsulin(value) {
+    return value == null ? 'No data' : formatInsulin(Number(value.toFixed(1)));
+  }
+
+  function formatPercent(value) {
+    return value == null ? 'No data' : `${Math.round(value)}%`;
+  }
+
+  function renderReportsSummary(reportRecords) {
+    const summary = calculateReportSummary(reportRecords, reportOptions);
+    const targetItems = summary.glucose.targetRange ? [
+      { label: 'In target range', value: formatPercent(summary.glucose.inRangePercent), detail: pluralize(summary.glucose.targetCounts.inRange, 'reading') },
+      { label: 'Below target', value: formatPercent(summary.glucose.belowRangePercent), detail: pluralize(summary.glucose.targetCounts.below, 'reading') },
+      { label: 'Above target', value: formatPercent(summary.glucose.aboveRangePercent), detail: pluralize(summary.glucose.targetCounts.above, 'reading') },
+    ] : [
+      { label: 'Target range', value: 'Not configured', detail: 'Target percentages will appear when settings include a target range.' },
+    ];
+    return `
+      <section aria-labelledby="lee-lee-reports-summary-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-reports-summary-title">Summary</h2>
+        ${renderMetricGrid([
+          { label: 'Calendar days', value: String(summary.dayCount || 0), detail: `${summary.calendarDateCount} with entries` },
+          { label: 'Entries', value: String(summary.entryCount) },
+          { label: 'Glucose readings', value: String(summary.glucose.count) },
+          { label: 'Insulin administrations', value: String(summary.insulin.count) },
+          { label: 'Carb entries', value: String(summary.carbs.count) },
+        ])}
+        <h3 class="lee_lee_diabetes_section_title">Glucose</h3>
+        ${renderMetricGrid([
+          { label: 'Average glucose', value: formatAverageGlucose(summary.glucose.average), detail: summary.glucose.count ? pluralize(summary.glucose.count, 'reading') : '' },
+          { label: 'Lowest glucose', value: formatSummaryValue(summary.glucose.min, formatBloodSugar) },
+          { label: 'Highest glucose', value: formatSummaryValue(summary.glucose.max, formatBloodSugar) },
+          ...targetItems,
+        ])}
+        <h3 class="lee_lee_diabetes_section_title">Insulin</h3>
+        ${renderMetricGrid([
+          { label: 'Total insulin given', value: formatSummaryValue(summary.insulin.total, formatInsulin) },
+          { label: 'Average per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
+          { label: 'Fast-acting total', value: formatSummaryValue(summary.insulin.fastActing.total, formatInsulin), detail: summary.insulin.fastActing.count ? pluralize(summary.insulin.fastActing.count, 'administration') : '' },
+          { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
+          { label: 'Long-acting total', value: formatSummaryValue(summary.insulin.longActing.total, formatInsulin), detail: summary.insulin.longActing.count ? pluralize(summary.insulin.longActing.count, 'administration') : '' },
+          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Meal-related total', value: formatSummaryValue(summary.insulin.mealRelated.total, formatInsulin), detail: summary.insulin.mealRelated.count ? pluralize(summary.insulin.mealRelated.count, 'administration') : '' },
+          { label: 'Meal-related average', value: formatAverageInsulin(summary.insulin.mealRelatedAverage) },
+          { label: 'Correction total', value: formatSummaryValue(summary.insulin.correction.total, formatInsulin), detail: summary.insulin.correction.count ? pluralize(summary.insulin.correction.count, 'administration') : '' },
+          { label: 'Correction average', value: formatAverageInsulin(summary.insulin.correctionAverage) },
+        ])}
+        <h3 class="lee_lee_diabetes_section_title">Carbohydrates</h3>
+        ${renderMetricGrid([
+          { label: 'Total carbs', value: formatSummaryValue(summary.carbs.total, formatCarbs) },
+          { label: 'Average per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
+          { label: 'Average per carb entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
+          { label: 'Carb entries', value: String(summary.carbs.count) },
+        ])}
+      </section>
+    `;
+  }
+
+  function getChartBounds(series) {
+    const timestamps = series.map((point) => point.timestamp);
+    const values = series.map((point) => point.value);
+    const minX = Math.min(...timestamps);
+    const maxX = Math.max(...timestamps);
+    const minY = Math.min(0, ...values);
+    const maxY = Math.max(...values);
+    return {
+      minX,
+      maxX: maxX === minX ? minX + 1 : maxX,
+      minY,
+      maxY: maxY === minY ? minY + 1 : maxY,
+    };
+  }
+
+  function renderTrendChart(title, series, formatter, { targetRange = null } = {}) {
+    if (!series.length) return `<p class="lee_lee_diabetes_empty" role="status">No ${escapeHtml(title.toLowerCase())} data for this range.</p>`;
+    const width = 640;
+    const height = 220;
+    const pad = 32;
+    const bounds = getChartBounds(series);
+    const xFor = (timestamp) => pad + ((timestamp - bounds.minX) / (bounds.maxX - bounds.minX)) * (width - pad * 2);
+    const yFor = (value) => height - pad - ((value - bounds.minY) / (bounds.maxY - bounds.minY)) * (height - pad * 2);
+    const line = series.map((point) => `${xFor(point.timestamp).toFixed(1)},${yFor(point.value).toFixed(1)}`).join(' ');
+    const targetBand = targetRange
+      ? `<rect class="lee_lee_diabetes_chart_target" x="${pad}" y="${Math.min(yFor(targetRange.min), yFor(targetRange.max)).toFixed(1)}" width="${width - pad * 2}" height="${Math.abs(yFor(targetRange.min) - yFor(targetRange.max)).toFixed(1)}"></rect>`
+      : '';
+    return `
+      <figure class="lee_lee_diabetes_chart">
+        <figcaption>${escapeHtml(title)}</figcaption>
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)} chart with ${escapeHtml(series.length)} recorded values" preserveAspectRatio="none">
+          ${targetBand}
+          <line class="lee_lee_diabetes_chart_axis" x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}"></line>
+          <line class="lee_lee_diabetes_chart_axis" x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}"></line>
+          ${series.length > 1 ? `<polyline class="lee_lee_diabetes_chart_line" points="${line}"></polyline>` : ''}
+          ${series.map((point) => `
+            <circle class="lee_lee_diabetes_chart_point ${point.category === 'Long-acting' ? 'is-long-acting' : ''}" cx="${xFor(point.timestamp).toFixed(1)}" cy="${yFor(point.value).toFixed(1)}" r="5">
+              <title>${escapeHtml(formatDateKey(getRecordEventDateKey(point.record)))} ${escapeHtml(formatTime(point.timestamp))} - ${escapeHtml(point.record.type)} - ${escapeHtml(formatter(point.value))}</title>
+            </circle>
+          `).join('')}
+        </svg>
+        <table class="lee_lee_diabetes_chart_table">
+          <thead><tr><th scope="col">Time</th><th scope="col">Context</th><th scope="col">Value</th></tr></thead>
+          <tbody>
+            ${series.map((point) => `<tr><td>${escapeHtml(formatShortDateKey(getRecordEventDateKey(point.record)))} ${escapeHtml(formatTime(point.timestamp))}</td><td>${escapeHtml(point.record.type)}</td><td>${escapeHtml(formatter(point.value))}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </figure>
+    `;
+  }
+
+  function renderReportsTrends(reportRecords) {
+    const series = buildTrendSeries(reportRecords);
+    const targetRange = getGlucoseTargetRange();
+    return `
+      <section aria-labelledby="lee-lee-reports-trends-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-reports-trends-title">Trends</h2>
+        ${renderTrendChart('Glucose Trend', series.glucose, formatBloodSugar, { targetRange })}
+        ${renderTrendChart('Insulin Trend', series.insulin, formatInsulin)}
+        ${renderTrendChart('Carbohydrate Trend', series.carbs, formatCarbs)}
+      </section>
+    `;
+  }
+
+  function renderContextAverageCard(context) {
+    const metrics = [
+      context.glucose.count ? `${formatAverageGlucose(context.glucose.average)} avg glucose (${pluralize(context.glucose.count, 'reading')})` : '',
+      context.carbs.count ? `${formatAverageCarbs(context.carbs.average)} avg carbs (${pluralize(context.carbs.count, 'entry', 'entries')})` : '',
+      context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg insulin (${pluralize(context.insulin.count, 'administration')})` : '',
+    ].filter(Boolean);
+    return `
+      <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_timeline_item--history">
+        <div>
+          <div class="lee_lee_diabetes_timeline_type">${escapeHtml(context.type)}</div>
+          <div class="lee_lee_diabetes_timeline_values">${escapeHtml(pluralize(context.recordCount, 'record'))}</div>
+          ${metrics.map((metric) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(metric)}</div>`).join('')}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderReportsAverages(reportRecords) {
+    const averages = buildAveragesReport(reportRecords, reportOptions);
+    const summary = averages.summary;
+    return `
+      <section aria-labelledby="lee-lee-reports-averages-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-reports-averages-title">Averages</h2>
+        ${renderMetricGrid([
+          { label: 'Average glucose', value: formatAverageGlucose(summary.glucose.average), detail: summary.glucose.count ? pluralize(summary.glucose.count, 'reading') : '' },
+          { label: 'Insulin per administration', value: formatAverageInsulin(summary.insulin.average), detail: summary.insulin.count ? pluralize(summary.insulin.count, 'administration') : '' },
+          { label: 'Insulin per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
+          { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
+          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Carbs per entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
+          { label: 'Carbs per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
+          { label: 'Entries per day', value: summary.dayCount ? String(Math.round((summary.entryCount / summary.dayCount) * 10) / 10) : 'No data' },
+          { label: 'Glucose readings per day', value: summary.dayCount ? String(Math.round((summary.glucose.count / summary.dayCount) * 10) / 10) : 'No data' },
+          { label: 'Insulin administrations per day', value: summary.dayCount ? String(Math.round((summary.insulin.count / summary.dayCount) * 10) / 10) : 'No data' },
+        ])}
+        <h3 class="lee_lee_diabetes_section_title">Typical Day Averages</h3>
+        <div class="lee_lee_diabetes_typical_day" aria-label="Typical day averages">
+          ${averages.typicalDay.length ? averages.typicalDay.map((context) => `
+            <article>
+              <h4>${escapeHtml(context.type)}</h4>
+              <p>${[
+                context.glucose.count ? `${formatAverageGlucose(context.glucose.average)} avg` : '',
+                context.carbs.count ? `${formatAverageCarbs(context.carbs.average)} avg` : '',
+                context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg${context.type === BEDTIME_CONTEXT_TYPE ? ' long-acting' : ''}` : '',
+              ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+            </article>
+          `).join('') : '<p class="lee_lee_diabetes_empty">No Breakfast, Lunch, Dinner, or Bedtime averages for this range.</p>'}
+        </div>
+        <h3 class="lee_lee_diabetes_section_title">Context Averages</h3>
+        <div class="lee_lee_diabetes_timeline">
+          ${averages.contexts.length ? averages.contexts.map(renderContextAverageCard).join('') : '<p class="lee_lee_diabetes_empty">No context averages for this range.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderReportsDetailedLog(reportRecords) {
+    const groups = buildDetailedReport(reportRecords);
+    return `
+      <section aria-labelledby="lee-lee-reports-detail-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-reports-detail-title">Detailed Log</h2>
+        <div class="lee_lee_diabetes_timeline">
+          ${groups.length ? groups.map((group) => `
+            <section>
+              <h3 class="lee_lee_diabetes_section_title">${escapeHtml(formatDateKey(group.dateKey))}</h3>
+              ${group.records.map((record) => renderTrackerEntryCard(record, { variant: 'history' })).join('')}
+            </section>
+          `).join('') : '<p class="lee_lee_diabetes_empty" role="status">No records are available for this date range.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderReportsView(reportRecords) {
+    if (reportOptions.view === 'trends') return renderReportsTrends(reportRecords);
+    if (reportOptions.view === 'averages') return renderReportsAverages(reportRecords);
+    if (reportOptions.view === 'detailed-log') return renderReportsDetailedLog(reportRecords);
+    return renderReportsSummary(reportRecords);
+  }
+
+  function renderReports() {
+    currentEditor = { mode: 'reports' };
+    const root = getRoot();
+    if (!root) return;
+    const reportRecords = getReportRecords();
+    const rangeText = formatDateRangeText(reportOptions);
+    root.innerHTML = `
+      <section class="lee_lee_diabetes_top">
+        <p class="lee_lee_diabetes_date">${escapeHtml(formatDate())}</p>
+        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Reports</h1>
+        ${renderPersistenceStatus()}
+      </section>
+      ${renderTrackerNav('reports')}
+      ${renderReportRangeControls()}
+      ${renderReportViewTabs()}
+      <section class="lee_lee_diabetes_report_actions" aria-label="Report export">
+        <label class="lee_lee_diabetes_field">
+          Print Layout
+          <select class="lee_lee_diabetes_select" name="layout" data-filter-scope="reports">
+            ${REPORT_REGISTRY.map((layout) => `<option value="${escapeHtml(layout.id)}" ${reportOptions.layout === layout.id ? 'selected' : ''}>${escapeHtml(layout.title)}</option>`).join('')}
+          </select>
+        </label>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="print-report" ${reportRecords.length ? '' : 'disabled'}>Print or Save as PDF</button>
+      </section>
+      <p class="lee_lee_diabetes_help">${escapeHtml(reportRecords.length)} ${reportRecords.length === 1 ? 'record' : 'records'} from ${escapeHtml(rangeText)}.</p>
+      <div class="lee_lee_diabetes_reports_body">
+        ${renderReportsView(reportRecords)}
+      </div>
+      <section class="lee_lee_diabetes_report_preview" aria-label="Printable report preview">
+        ${renderReportDocument(reportOptions.layout, reportRecords, rangeText, { includeSummary: true, filters: reportOptions })}
+      </section>
+    `;
+  }
+
   function renderExport() {
     currentEditor = { mode: 'export' };
     const root = getRoot();
@@ -2625,16 +3103,46 @@
     return renderReportDocument(exportOptions.layout, exportRecords, rangeText);
   }
 
-  function renderReportDocument(reportId, exportRecords, rangeText) {
+  function renderReportDocument(reportId, exportRecords, rangeText, options = {}) {
     const selectedReport = getReportDefinition(reportId);
     const reportData = selectedReport.builder(exportRecords);
     return `
       <article class="lee_lee_diabetes_report ${selectedReport.printLayout === 'landscape' ? 'lee_lee_diabetes_report--landscape' : ''}">
         ${renderReportHeader(rangeText)}
+        ${options.includeSummary ? renderPrintableReportSummary(exportRecords, options.filters || reportOptions) : ''}
         ${selectedReport.id === 'clinical'
           ? renderClinicalLogReport(reportData)
           : renderDetailedReport(reportData)}
       </article>
+    `;
+  }
+
+  function renderPrintableReportSummary(sourceRecords, filters = reportOptions) {
+    const summary = calculateReportSummary(sourceRecords, filters);
+    if (!sourceRecords.length) return '';
+    return `
+      <section class="lee_lee_diabetes_report_section lee_lee_diabetes_report_summary">
+        <h3>Summary</h3>
+        <dl class="lee_lee_diabetes_report_summary_grid">
+          ${[
+            ['Days', summary.dayCount || 0],
+            ['Entries', summary.entryCount],
+            ['Glucose readings', summary.glucose.count],
+            ['Average glucose', formatAverageGlucose(summary.glucose.average)],
+            ['Lowest glucose', formatSummaryValue(summary.glucose.min, formatBloodSugar)],
+            ['Highest glucose', formatSummaryValue(summary.glucose.max, formatBloodSugar)],
+            ['Insulin given', formatSummaryValue(summary.insulin.total, formatInsulin)],
+            ['Fast-acting insulin', formatSummaryValue(summary.insulin.fastActing.total, formatInsulin)],
+            ['Long-acting insulin', formatSummaryValue(summary.insulin.longActing.total, formatInsulin)],
+            ['Total carbs', formatSummaryValue(summary.carbs.total, formatCarbs)],
+          ].map(([label, value]) => `
+            <div>
+              <dt>${escapeHtml(label)}</dt>
+              <dd>${escapeHtml(value)}</dd>
+            </div>
+          `).join('')}
+        </dl>
+      </section>
     `;
   }
 
@@ -4788,6 +5296,19 @@
     renderExport();
   }
 
+  function updateReportOptions(root) {
+    const filtersForm = root.querySelector('[data-reports-filters]');
+    const layoutInput = root.querySelector('[name="layout"][data-filter-scope="reports"]');
+    reportOptions = {
+      range: filtersForm?.elements.range?.value || 'last14',
+      view: reportOptions.view || 'summary',
+      layout: layoutInput?.value || reportOptions.layout || 'detailed',
+      startDate: filtersForm?.elements.startDate?.value || '',
+      endDate: filtersForm?.elements.endDate?.value || '',
+    };
+    renderReports();
+  }
+
   function createSyncRepository() {
     if (!window.LeeLeeTrackerSync?.createRepository) return null;
     return window.LeeLeeTrackerSync.createRepository({
@@ -4801,9 +5322,10 @@
         trackerData = nextData;
         records = trackerData.records;
         insulinPlans = trackerData.insulinPlans;
-        if (!currentEditor || ['history', 'history-day', 'export', 'settings'].includes(currentEditor.mode)) {
+        if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
+          else if (currentEditor?.mode === 'reports') renderReports();
           else if (currentEditor?.mode === 'export') renderExport();
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
@@ -4813,9 +5335,10 @@
         applySharedSettingsToLocal(settings);
         patientSettingsMessage = '';
         patientSettingsError = '';
-        if (!currentEditor || ['history', 'history-day', 'export', 'settings'].includes(currentEditor.mode)) {
+        if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
+          else if (currentEditor?.mode === 'reports') renderReports();
           else if (currentEditor?.mode === 'export') renderExport();
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
@@ -4872,6 +5395,7 @@
     if (!currentEditor) return;
     if (currentEditor.mode === 'settings') renderSettings();
     if (currentEditor.mode === 'history') renderHistory();
+    if (currentEditor.mode === 'reports') renderReports();
     if (currentEditor.mode === 'export') renderExport();
   }
 
@@ -4926,9 +5450,10 @@
         trackerMenuOpen = !trackerMenuOpen;
         const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
           ? 'history'
-          : (['export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
+          : (['reports', 'export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
         if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
         else if (active === 'history') renderHistory();
+        else if (active === 'reports') renderReports();
         else if (active === 'export') renderExport();
         else if (active === 'settings') renderSettings();
         else renderHome();
@@ -5006,6 +5531,17 @@
         trackerMenuOpen = false;
         resetHistoryVisibleWindow();
         renderHistory();
+      }
+      if (action === 'reports') {
+        trackerMenuOpen = false;
+        renderReports();
+      }
+      if (action === 'report-view') {
+        reportOptions = {
+          ...reportOptions,
+          view: REPORT_VIEW_ITEMS.some(([view]) => view === target.dataset.view) ? target.dataset.view : 'summary',
+        };
+        renderReports();
       }
       if (action === 'export') {
         trackerMenuOpen = false;
@@ -5342,6 +5878,9 @@
       if (event.target.closest('[data-export-filters]') || event.target.matches('[name="layout"][data-filter-scope="export"]')) {
         updateExportOptions(root);
       }
+      if (event.target.closest('[data-reports-filters]') || event.target.matches('[name="layout"][data-filter-scope="reports"]')) {
+        updateReportOptions(root);
+      }
     });
     root.addEventListener('keydown', (event) => {
       if (trackerMenuOpen && event.key === 'Escape') {
@@ -5349,9 +5888,10 @@
         trackerMenuOpen = false;
         const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
           ? 'history'
-          : (['export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
+          : (['reports', 'export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
         if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
         else if (active === 'history') renderHistory();
+        else if (active === 'reports') renderReports();
         else if (active === 'export') renderExport();
         else if (active === 'settings') renderSettings();
         else renderHome();
@@ -5423,6 +5963,12 @@
     filterRecordsByDateRange,
     filterRecordsByEntryType,
     calculateDailySummary,
+    calculateReportSummary,
+    calculateContextAverages,
+    buildAveragesReport,
+    buildTrendSeries,
+    getRecordCarbs,
+    getGlucoseTargetRange,
     buildClinicalLog,
     buildDetailedReport,
     formatTime,

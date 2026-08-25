@@ -110,7 +110,7 @@
 
 .lee_lee_diabetes_nav {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.45rem;
   margin: 0 0 1rem;
 }
@@ -494,6 +494,119 @@
   font-weight: 900;
 }
 
+.lee_lee_diabetes_report_tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+}
+
+.lee_lee_diabetes_report_actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin: 0 0 0.85rem;
+}
+
+.lee_lee_diabetes_report_metric_grid div p {
+  margin: 0.25rem 0 0;
+  color: var(--lee-lee-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.lee_lee_diabetes_chart {
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 14%);
+}
+
+.lee_lee_diabetes_chart figcaption {
+  margin-bottom: 0.65rem;
+  color: var(--lee-lee-soft);
+  font-weight: 900;
+}
+
+.lee_lee_diabetes_chart svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
+.lee_lee_diabetes_chart_axis {
+  stroke: var(--lee-lee-border-strong);
+  stroke-width: 1.5;
+}
+
+.lee_lee_diabetes_chart_line {
+  fill: none;
+  stroke: var(--lee-lee-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lee_lee_diabetes_chart_point {
+  fill: var(--lee-lee-accent);
+  stroke: var(--lee-lee-text);
+  stroke-width: 2;
+}
+
+.lee_lee_diabetes_chart_point.is-long-acting {
+  fill: var(--lee-lee-green);
+}
+
+.lee_lee_diabetes_chart_target {
+  fill: rgb(var(--app-accent-rgb, 58 160 255) / 12%);
+}
+
+.lee_lee_diabetes_chart_table {
+  width: 100%;
+  margin-top: 0.65rem;
+  border-collapse: collapse;
+  color: var(--lee-lee-muted);
+  font-size: 0.78rem;
+}
+
+.lee_lee_diabetes_chart_table th,
+.lee_lee_diabetes_chart_table td {
+  padding: 0.35rem;
+  border-top: 1px solid var(--lee-lee-border);
+  text-align: left;
+}
+
+.lee_lee_diabetes_typical_day {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.lee_lee_diabetes_typical_day article {
+  padding: 0.75rem;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 14%);
+}
+
+.lee_lee_diabetes_typical_day h4,
+.lee_lee_diabetes_typical_day p {
+  margin: 0;
+}
+
+.lee_lee_diabetes_typical_day h4 {
+  color: var(--lee-lee-text);
+}
+
+.lee_lee_diabetes_typical_day p {
+  margin-top: 0.25rem;
+  color: var(--lee-lee-muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .lee_lee_diabetes_editor {
   display: grid;
   gap: 0.85rem;
@@ -530,11 +643,21 @@
   box-sizing: border-box;
   border: 1px solid var(--lee-lee-border);
   border-radius: 8px;
-  background: rgb(0 0 0 / 26%);
+  background-color: rgb(0 0 0 / 26%);
   color: var(--lee-lee-text);
   padding: 0.75rem;
   font: inherit;
   font-size: 1rem;
+}
+
+.lee_lee_diabetes_select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.45rem) 50%, calc(100% - 1.05rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 0.42rem 0.42rem, 0.42rem 0.42rem;
+  padding-inline-end: 3rem;
 }
 
 .lee_lee_diabetes_textarea {
@@ -1174,7 +1297,7 @@
 :root[data-theme="light"] .lee_lee_diabetes_input,
 :root[data-theme="light"] .lee_lee_diabetes_textarea,
 :root[data-theme="light"] .lee_lee_diabetes_select {
-  background: rgb(255 255 255 / 96%);
+  background-color: rgb(255 255 255 / 96%);
   border-color: rgb(15 63 110 / 24%);
   color: var(--lee-lee-text);
 }
@@ -1201,6 +1324,8 @@
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
 :root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_chart,
+:root[data-theme="light"] .lee_lee_diabetes_typical_day article,
 :root[data-theme="light"] .lee_lee_diabetes_carb_entry,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
 :root[data-theme="light"] .lee_lee_diabetes_range_row,
@@ -1246,6 +1371,8 @@
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
 :root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_chart,
+:root[data-theme="light"] .lee_lee_diabetes_typical_day article,
 :root[data-theme="light"] .lee_lee_diabetes_carb_entry,
 :root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
 :root[data-theme="light"] .lee_lee_diabetes_range_row,
@@ -1257,7 +1384,7 @@
 :root[data-theme="light"] .lee_lee_diabetes_input,
 :root[data-theme="light"] .lee_lee_diabetes_textarea,
 :root[data-theme="light"] .lee_lee_diabetes_select {
-  background: rgb(247 251 255 / 94%);
+  background-color: rgb(247 251 255 / 94%);
   border-color: rgb(9 104 195 / 28%);
 }
 
@@ -1337,6 +1464,32 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.78rem;
+}
+
+.lee_lee_diabetes_report_summary_grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0 0 0.9rem;
+}
+
+.lee_lee_diabetes_report_summary_grid div {
+  padding: 0.38rem;
+  border: 1px solid #c9d2e3;
+  background: #f8fbff;
+}
+
+.lee_lee_diabetes_report_summary_grid dt {
+  color: #59667a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.lee_lee_diabetes_report_summary_grid dd {
+  margin: 0.12rem 0 0;
+  color: #10213f;
+  font-weight: 800;
 }
 
 .lee_lee_diabetes_clinical_table th,
@@ -1442,6 +1595,15 @@
     grid-template-columns: 1fr 1fr;
     width: 100%;
   }
+
+  .lee_lee_diabetes_report_tabs,
+  .lee_lee_diabetes_report_actions {
+    grid-template-columns: 1fr;
+  }
+
+  .lee_lee_diabetes_chart_table {
+    font-size: 0.72rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1476,6 +1638,11 @@
   .lee_lee_diabetes_nav_shell,
   .lee_lee_diabetes_nav,
   .lee_lee_diabetes_export_controls,
+  .lee_lee_diabetes_report_controls,
+  .lee_lee_diabetes_report_tabs,
+  .lee_lee_diabetes_report_actions,
+  .lee_lee_diabetes_reports_body,
+  .lee_lee_diabetes_help,
   .lee_lee_diabetes_filters,
   .lee_lee_diabetes_button,
   .lee_lee_diabetes_record_actions,

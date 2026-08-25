@@ -327,6 +327,115 @@ test('report registry describes current reports independently from export render
   assert.equal(reports.buildDetailedReportData([record({ id: 'detailed-source' })]).id, 'detailed');
 });
 
+test('reports summary uses actual recorded insulin and missing values do not become zero', () => {
+  const reports = createTrackerReports();
+  const summary = reports.calculateReportSummary([
+    record({
+      id: 'breakfast',
+      type: 'Breakfast',
+      bloodSugar: 160,
+      mealCarbs: 42,
+      administeredInsulinUnits: 6,
+      suggestedTotalUnits: 5.5,
+      recordTimestamp: '2026-08-01T07:30:00.000Z',
+    }),
+    record({
+      id: 'lunch-missing-carbs',
+      type: 'Lunch',
+      bloodSugar: 120,
+      mealCarbs: null,
+      administeredInsulinUnits: null,
+      insulinUnits: null,
+      suggestedTotalUnits: 4,
+      recordTimestamp: '2026-08-01T12:00:00.000Z',
+    }),
+    record({
+      id: 'bedtime',
+      type: 'Bedtime',
+      bloodSugar: null,
+      administeredInsulinUnits: 17,
+      suggestedTotalUnits: 13,
+      recordTimestamp: '2026-08-02T21:00:00.000Z',
+    }),
+  ], { range: 'custom', startDate: '2026-08-01', endDate: '2026-08-02' });
+
+  assert.equal(summary.dayCount, 2);
+  assert.equal(summary.entryCount, 3);
+  assert.equal(summary.glucose.count, 2);
+  assert.equal(summary.glucose.average, 140);
+  assert.equal(summary.insulin.total, 23);
+  assert.equal(summary.insulin.fastActing.total, 6);
+  assert.equal(summary.insulin.longActing.total, 17);
+  assert.equal(summary.carbs.total, 42);
+  assert.equal(summary.carbs.count, 1);
+  assert.equal(summary.carbs.averagePerEntry, 42);
+});
+
+test('reports target percentages require explicit min and max settings', () => {
+  const reports = createTrackerReports();
+  const source = [
+    record({ id: 'low', bloodSugar: 70 }),
+    record({ id: 'in', bloodSugar: 110 }),
+    record({ id: 'high', bloodSugar: 190 }),
+  ];
+
+  assert.equal(reports.calculateReportSummary(source).glucose.targetRange, null);
+  const summary = reports.calculateReportSummary(source, {}, { glucoseTargetMin: 80, glucoseTargetMax: 150 });
+  assert.equal(summary.glucose.targetCounts.inRange, 1);
+  assert.equal(summary.glucose.targetCounts.below, 1);
+  assert.equal(summary.glucose.targetCounts.above, 1);
+  assert.equal(Math.round(summary.glucose.inRangePercent), 33);
+});
+
+test('context averages use only present values for each metric', () => {
+  const reports = createTrackerReports();
+  const averages = reports.calculateContextAverages([
+    record({ id: 'breakfast-a', type: 'Breakfast', bloodSugar: 100, mealCarbs: 30, administeredInsulinUnits: 4 }),
+    record({ id: 'breakfast-b', type: 'Breakfast', bloodSugar: 200, mealCarbs: null, administeredInsulinUnits: 6 }),
+    record({ id: 'correction', type: 'Correction', bloodSugar: 250, mealCarbs: null, administeredInsulinUnits: 2 }),
+  ]);
+  const breakfast = averages.find((item) => item.type === 'Breakfast');
+  const correction = averages.find((item) => item.type === 'Correction');
+
+  assert.equal(breakfast.recordCount, 2);
+  assert.equal(breakfast.glucose.average, 150);
+  assert.equal(breakfast.carbs.count, 1);
+  assert.equal(breakfast.carbs.average, 30);
+  assert.equal(breakfast.insulin.average, 5);
+  assert.equal(correction.carbs.count, 0);
+  assert.equal(correction.insulin.average, 2);
+});
+
+test('trend series include only recorded values and classify bedtime insulin as long acting', () => {
+  const reports = createTrackerReports();
+  const trends = reports.buildTrendSeries([
+    record({ id: 'breakfast', type: 'Breakfast', bloodSugar: 140, mealCarbs: 35, administeredInsulinUnits: 5 }),
+    record({ id: 'bedtime', type: 'Bedtime', bloodSugar: 130, mealCarbs: null, administeredInsulinUnits: 17 }),
+    record({ id: 'note', type: 'Other', eventType: 'note', bloodSugar: null, mealCarbs: null, administeredInsulinUnits: null, insulinUnits: null }),
+  ]);
+
+  assert.deepEqual(trends.glucose.map((point) => point.record.id), ['breakfast', 'bedtime']);
+  assert.deepEqual(trends.carbs.map((point) => point.record.id), ['breakfast']);
+  assert.deepEqual(trends.insulin.map((point) => [point.record.id, point.category]), [
+    ['breakfast', 'Fast-acting'],
+    ['bedtime', 'Long-acting'],
+  ]);
+});
+
+test('reports navigation and print summary are wired into the app', () => {
+  const reports = createTrackerReports();
+  const html = reports.renderReportDocument('detailed', [
+    record({ id: 'breakfast', type: 'Breakfast', bloodSugar: 124, mealCarbs: 40, administeredInsulinUnits: 6, suggestedTotalUnits: 5 }),
+  ], 'Aug 1, 2026', { includeSummary: true });
+
+  assert.match(trackerSource, /\['reports', 'Reports'\]/);
+  assert.match(trackerSource, /REPORT_VIEW_ITEMS/);
+  assert.match(trackerSource, /renderReports\(\)/);
+  assert.match(compactHtml(html), /<h3>Summary<\/h3>/);
+  assert.match(compactHtml(html), /<dt>Insulin given<\/dt> <dd>6 units<\/dd>/);
+  assert.doesNotMatch(compactHtml(html), /<dt>Insulin given<\/dt> <dd>5 units<\/dd>/);
+});
+
 test('entry type configuration exposes active carb-counting contexts while preserving legacy labels', () => {
   const runtime = createTrackerRuntime();
   const entryTypes = runtime.LeeLeeTrackerEntryTypes;

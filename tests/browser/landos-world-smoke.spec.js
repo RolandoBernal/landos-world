@@ -514,6 +514,64 @@ async function openProtectedLeeLeeTracker(page) {
   await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
 }
 
+async function chooseLeeLeeSection(page, name) {
+  const mobileNav = page.locator('.lee_lee_diabetes_mobile_nav_button');
+  if (await mobileNav.isVisible()) {
+    await mobileNav.click();
+  }
+  await page.getByRole('button', { name }).click();
+}
+
+test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      records: [
+        {
+          id: 'reports-breakfast',
+          type: 'Breakfast',
+          eventType: 'check-insulin',
+          bloodSugar: 160,
+          mealCarbs: 42,
+          administeredInsulinUnits: 6,
+          suggestedTotalUnits: 5.5,
+          recordTimestamp: '2026-08-24T12:30:00.000Z',
+          createdAt: '2026-08-24T12:35:00.000Z',
+          updatedAt: '2026-08-24T12:35:00.000Z',
+          notes: '',
+        },
+        {
+          id: 'reports-bedtime',
+          type: 'Bedtime',
+          eventType: 'check-insulin',
+          bloodSugar: 130,
+          mealCarbs: null,
+          administeredInsulinUnits: 17,
+          suggestedTotalUnits: 13,
+          recordTimestamp: '2026-08-24T02:30:00.000Z',
+          createdAt: '2026-08-24T02:35:00.000Z',
+          updatedAt: '2026-08-24T02:35:00.000Z',
+          notes: '',
+        },
+      ],
+    }));
+  });
+
+  await chooseLeeLeeSection(page, 'Reports');
+  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
+  const summarySection = page.getByLabel('Summary');
+  await expect(page.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
+  await expect(summarySection.getByText('Total insulin given')).toBeVisible();
+  await expect(summarySection.getByText('23 units')).toBeVisible();
+  await expect(summarySection.getByText('Total carbs')).toBeVisible();
+  expect(await summarySection.getByText('42 g carbs').count()).toBeGreaterThan(0);
+  await page.getByRole('tab', { name: 'Trends' }).click();
+  await expect(page.getByRole('img', { name: /Glucose Trend chart/ })).toBeVisible();
+  await expect(page.getByText('Carbohydrate Trend')).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_chart_point')).toHaveCount(5);
+});
+
 test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb data', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: '+ Log Entry' }).click();
