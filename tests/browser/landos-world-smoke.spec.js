@@ -563,9 +563,22 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: null,
           administeredInsulinUnits: 17,
           suggestedTotalUnits: 13,
-          recordTimestamp: '2026-08-24T02:30:00.000Z',
-          createdAt: '2026-08-24T02:35:00.000Z',
-          updatedAt: '2026-08-24T02:35:00.000Z',
+          recordTimestamp: '2026-08-24T18:30:00.000Z',
+          createdAt: '2026-08-24T18:35:00.000Z',
+          updatedAt: '2026-08-24T18:35:00.000Z',
+          notes: '',
+        },
+        {
+          id: 'reports-older-correction',
+          type: 'Correction',
+          eventType: 'check-insulin',
+          bloodSugar: 210,
+          mealCarbs: null,
+          administeredInsulinUnits: 4,
+          suggestedTotalUnits: 4,
+          recordTimestamp: '2026-08-13T18:30:00.000Z',
+          createdAt: '2026-08-13T18:35:00.000Z',
+          updatedAt: '2026-08-13T18:35:00.000Z',
           notes: '',
         },
       ],
@@ -574,6 +587,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
 
   await chooseLeeLeeSection(page, 'Reports');
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
+  const reportsFilters = page.locator('[data-reports-filters]');
+  await expect(reportsFilters.getByLabel('Date Range')).toHaveValue('last7');
+  await expect(page.getByText('2 records from')).toBeVisible();
   const summarySection = page.getByLabel('Summary');
   await expect(page.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
   await expect(summarySection.getByText('Total insulin given')).toBeVisible();
@@ -584,6 +600,24 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await expect(page.getByRole('img', { name: /Glucose Trend chart/ })).toBeVisible();
   await expect(page.getByText('Carbohydrate Trend')).toBeVisible();
   await expect(page.locator('.lee_lee_diabetes_chart_point')).toHaveCount(5);
+  expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).display)).toBe('grid');
+  expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).rowGap)).toBe(
+    await page.locator('.lee_lee_diabetes_report_tabs').evaluate((node) => getComputedStyle(node).rowGap),
+  );
+  let previewText = await page.locator('.lee_lee_diabetes_report_preview').evaluate((node) => node.textContent || '');
+  expect(previewText).toContain('23 units');
+  expect(previewText).not.toContain('27 units');
+
+  await reportsFilters.getByLabel('Date Range').selectOption('last14');
+  await expect(page.getByText('3 records from')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Trends' })).toHaveAttribute('aria-selected', 'true');
+  previewText = await page.locator('.lee_lee_diabetes_report_preview').evaluate((node) => node.textContent || '');
+  expect(previewText).toContain('27 units');
+
+  await reportsFilters.getByLabel('Date Range').selectOption('custom');
+  await reportsFilters.getByLabel('Start Date').fill('2026-08-24');
+  await reportsFilters.getByLabel('End Date').fill('2026-08-24');
+  await expect(page.getByText('2 records from')).toBeVisible();
 });
 
 test('Lee-Lee editing context updates the same record after confirmation', async ({ page }) => {
@@ -889,6 +923,79 @@ test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first poi
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
+});
+
+test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByLabel('Blood Sugar').fill('188');
+  await page.evaluate(() => window.scrollTo(0, 180));
+  const scrollBeforeOpen = await page.evaluate(() => window.scrollY);
+
+  let consoleErrorCount = 0;
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrorCount += 1;
+  });
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
+  const qtyInputs = calculator.locator('[name="carbCalcQty"]');
+  const focusedCarbInputIndex = () => page.evaluate(() => (
+    Array.from(document.querySelectorAll('[data-carb-calculator] [name="carbCalcCarbs"]')).indexOf(document.activeElement)
+  ));
+  const focusedQtyInputIndex = () => page.evaluate(() => (
+    Array.from(document.querySelectorAll('[data-carb-calculator] [name="carbCalcQty"]')).indexOf(document.activeElement)
+  ));
+  await expect(calculator).toBeVisible();
+  await expect(carbInputs.first()).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+
+  await page.evaluate(() => {
+    window.__leeLeeEditorSubmitCount = 0;
+    document.querySelector('[data-lee-lee-editor]')?.addEventListener('submit', () => {
+      window.__leeLeeEditorSubmitCount += 1;
+    });
+  });
+
+  await carbInputs.first().pressSequentially('20');
+  await expect(calculator).toBeVisible();
+  await expect(carbInputs.first()).toHaveValue('20');
+  await expect(carbInputs).toHaveCount(2);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+
+  await carbInputs.nth(1).click();
+  await expect(calculator).toBeVisible();
+  await expect.poll(focusedCarbInputIndex).toBe(1);
+  await carbInputs.nth(1).pressSequentially('15');
+  await expect(carbInputs).toHaveCount(3);
+
+  await qtyInputs.nth(1).click();
+  await expect(calculator).toBeVisible();
+  await expect.poll(focusedQtyInputIndex).toBe(1);
+  await qtyInputs.nth(1).press('ControlOrMeta+A');
+  await qtyInputs.nth(1).pressSequentially('2');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('50 g');
+
+  await carbInputs.nth(2).click();
+  await expect(calculator).toBeVisible();
+  await expect.poll(focusedCarbInputIndex).toBe(2);
+  await carbInputs.nth(2).pressSequentially('10');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('60 g');
+  expect(await page.evaluate(() => window.__leeLeeEditorSubmitCount)).toBe(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+
+  await calculator.getByRole('button', { name: 'Use 60 grams' }).click();
+
+  await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('60');
+  await page.waitForFunction((expected) => window.scrollY === expected, scrollBeforeOpen);
+  expect(await page.evaluate(() => window.__leeLeeEditorSubmitCount)).toBe(0);
+  expect(consoleErrorCount).toBe(0);
 });
 
 test('Lee-Lee entry inputs preserve typed digit order during live updates', async ({ page }) => {
