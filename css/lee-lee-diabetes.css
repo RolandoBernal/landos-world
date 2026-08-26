@@ -498,7 +498,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.45rem;
-  margin: 0 0 1rem;
+  margin: 0;
 }
 
 .lee_lee_diabetes_report_actions {
@@ -507,6 +507,16 @@
   gap: 0.75rem;
   align-items: end;
   margin: 0 0 0.85rem;
+}
+
+.lee_lee_diabetes_report_control_stack {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.lee_lee_diabetes_report_control_stack .lee_lee_diabetes_report_controls {
+  margin: 0;
 }
 
 .lee_lee_diabetes_report_metric_grid div p {

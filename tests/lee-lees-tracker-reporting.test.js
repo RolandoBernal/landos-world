@@ -430,6 +430,9 @@ test('reports navigation and print summary are wired into the app', () => {
 
   assert.match(trackerSource, /\['reports', 'Reports'\]/);
   assert.match(trackerSource, /REPORT_VIEW_ITEMS/);
+  assert.match(trackerSource, /let reportOptions = \{\s*range: 'last7'/);
+  assert.match(trackerSource, /range: filtersForm\?\.elements\.range\?\.value \|\| 'last7'/);
+  assert.match(trackerSource, /lee_lee_diabetes_report_control_stack/);
   assert.match(trackerSource, /renderReports\(\)/);
   assert.match(compactHtml(html), /<h3>Summary<\/h3>/);
   assert.match(compactHtml(html), /<dt>Insulin given<\/dt> <dd>6 units<\/dd>/);
