@@ -519,7 +519,21 @@ async function chooseLeeLeeSection(page, name) {
   if (await mobileNav.isVisible()) {
     await mobileNav.click();
   }
-  await page.getByRole('button', { name }).click();
+  await page.getByLabel("Lee-Lee’s Tracker sections").getByRole('button', { name }).click();
+}
+
+async function seedLeeLeeRecords(page, records) {
+  await page.evaluate((seedRecords) => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      records: seedRecords,
+    }));
+  }, records);
+}
+
+async function openSeededLeeLeeHistoryDay(page, dateKey = '2026-08-25') {
+  await chooseLeeLeeSection(page, 'History');
+  await page.locator(`[data-action="history-date"][data-date="${dateKey}"]`).click();
 }
 
 test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
@@ -570,6 +584,103 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await expect(page.getByRole('img', { name: /Glucose Trend chart/ })).toBeVisible();
   await expect(page.getByText('Carbohydrate Trend')).toBeVisible();
   await expect(page.locator('.lee_lee_diabetes_chart_point')).toHaveCount(5);
+});
+
+test('Lee-Lee editing context updates the same record after confirmation', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await seedLeeLeeRecords(page, [{
+    id: 'edit-same-record',
+    type: 'Breakfast',
+    eventType: 'check-insulin',
+    bloodSugar: 160,
+    mealCarbs: 42,
+    totalCarbs: 42,
+    administeredInsulinUnits: 6,
+    insulinUnits: 6,
+    suggestedTotalUnits: 6,
+    recordTimestamp: '2026-08-25T12:30:00.000Z',
+    createdAt: '2026-08-25T12:35:00.000Z',
+    updatedAt: '2026-08-25T12:35:00.000Z',
+    version: 3,
+    enteredBy: 'Rolando',
+    lastEditedBy: null,
+    notes: '',
+  }]);
+
+  await openSeededLeeLeeHistoryDay(page);
+  await expect(page.locator('.lee_lee_diabetes_timeline_type').filter({ hasText: 'Breakfast' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await expect(form.getByRole('heading', { name: 'Edit Entry' })).toBeVisible();
+  await form.getByLabel('Context').selectOption('Lunch');
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+
+  const result = await page.evaluate(() => ({
+    records: window.LeeLeeTrackerStorage.loadTrackerData().records,
+    queue: JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:sync-queue:v1') || '[]'),
+  }));
+  expect(result.records).toHaveLength(1);
+  expect(result.records[0]).toMatchObject({
+    id: 'edit-same-record',
+    type: 'Lunch',
+    createdAt: '2026-08-25T12:35:00.000Z',
+    enteredBy: 'Rolando',
+    lastEditedBy: 'Rolando',
+  });
+  expect(result.records[0].updatedAt).not.toBe('2026-08-25T12:35:00.000Z');
+  expect(result.queue.at(-1)).toMatchObject({
+    type: 'update',
+    recordId: 'edit-same-record',
+    baseVersion: 3,
+  });
+  await expect(page.locator('.lee_lee_diabetes_timeline_type').filter({ hasText: 'Lunch' })).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_timeline_type').filter({ hasText: 'Breakfast' })).toHaveCount(0);
+});
+
+test('Lee-Lee repeated edits preserve record identity and count', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await seedLeeLeeRecords(page, [{
+    id: 'edit-repeat-record',
+    type: 'Dinner',
+    eventType: 'check-insulin',
+    bloodSugar: 180,
+    mealCarbs: 50,
+    totalCarbs: 50,
+    administeredInsulinUnits: null,
+    insulinUnits: null,
+    suggestedTotalUnits: 5,
+    recordTimestamp: '2026-08-25T23:30:00.000Z',
+    createdAt: '2026-08-25T23:35:00.000Z',
+    updatedAt: '2026-08-25T23:35:00.000Z',
+    version: 2,
+    enteredBy: 'Rolando',
+    notes: '',
+  }]);
+
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+  let form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Blood Sugar').fill('190');
+  await form.getByRole('button', { name: 'Save' }).click();
+
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+  form = page.locator('[data-lee-lee-editor]');
+  await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('64');
+  await form.getByRole('button', { name: 'Save' }).click();
+
+  const records = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records);
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({
+    id: 'edit-repeat-record',
+    type: 'Dinner',
+    bloodSugar: 190,
+    mealCarbs: 64,
+    totalCarbs: 64,
+    createdAt: '2026-08-25T23:35:00.000Z',
+  });
 });
 
 test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb data', async ({ page }) => {
@@ -731,6 +842,53 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
     insulinUnits: 5.5,
     foods: [],
   });
+});
+
+test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
+  await expect(carbInputs.first()).toBeFocused();
+
+  const firstNodeStableAfterInput = await carbInputs.first().evaluate((input) => {
+    window.__leeLeeFirstCarbInput = input;
+    input.value = '20';
+    input.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      data: '20',
+      inputType: 'insertText',
+    }));
+    return window.__leeLeeFirstCarbInput === input && input.isConnected;
+  });
+  expect(firstNodeStableAfterInput).toBe(true);
+  await expect(carbInputs.first()).toHaveValue('20');
+  await expect(carbInputs).toHaveCount(2);
+
+  const secondCarbs = carbInputs.nth(1);
+  await carbInputs.first().focus();
+  await secondCarbs.click();
+  await expect(secondCarbs).toBeFocused();
+  await secondCarbs.pressSequentially('15');
+  await expect(secondCarbs).toHaveValue('15');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('35 g');
+
+  const nodesStableAfterSwitching = await carbInputs.first().evaluate((input) => (
+    window.__leeLeeFirstCarbInput === input && input.isConnected
+  ));
+  expect(nodesStableAfterSwitching).toBe(true);
+
+  await secondCarbs.focus();
+  await calculator.getByRole('button', { name: 'Use 35 grams' }).click();
+
+  await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
+  await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
 });
 
 test('Lee-Lee entry inputs preserve typed digit order during live updates', async ({ page }) => {
