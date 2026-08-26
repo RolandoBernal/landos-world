@@ -787,13 +787,20 @@
 
 .lee_lee_diabetes_carb_calc_layer {
   position: fixed;
-  inset: 0;
+  inset: auto;
+  inset-block-start: var(--lee-lee-carb-calc-viewport-top, 0);
+  inset-inline-start: var(--lee-lee-carb-calc-viewport-left, 0);
   z-index: 80;
   display: grid;
-  align-items: end;
+  align-items: center;
   justify-items: center;
+  inline-size: var(--lee-lee-carb-calc-viewport-width, 100vw);
+  block-size: var(--lee-lee-carb-calc-viewport-height, 100dvh);
   padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
   box-sizing: border-box;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .lee_lee_diabetes_carb_calc_backdrop {
@@ -814,16 +821,18 @@
   display: grid;
   gap: 0.9rem;
   width: min(100%, 34rem);
-  max-height: min(88dvh, 42rem);
+  max-height: min(calc(100% - 1.5rem), 42rem);
   padding: 1rem;
   box-sizing: border-box;
   border: 1px solid var(--lee-lee-border-strong);
-  border-radius: 18px 18px 0 0;
+  border-radius: 18px;
   background: #06142b;
   color: var(--lee-lee-text);
-  box-shadow: 0 -18px 50px rgb(0 0 0 / 48%);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 44%);
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .lee_lee_diabetes_unit_input {
@@ -996,13 +1005,7 @@
 
 @media (min-width: 680px) {
   .lee_lee_diabetes_carb_calc_layer {
-    align-items: center;
     padding: 1.5rem;
-  }
-
-  .lee_lee_diabetes_carb_calculator {
-    border-radius: 14px;
-    box-shadow: 0 24px 70px rgb(0 0 0 / 44%);
   }
 }
 
