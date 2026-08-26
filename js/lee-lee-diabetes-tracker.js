@@ -3528,6 +3528,7 @@
 
   function buildDraftFromEditor(form) {
     return {
+      id: currentEditor?.id || '',
       eventType: normalizeEventType(form.elements.eventType?.value),
       type: form.elements.type?.value || '',
       bloodSugar: form.elements.bloodSugar?.value || '',
@@ -3764,6 +3765,35 @@
     currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
     refreshCarbCalculator(form);
     form.querySelector('[data-carb-calculator] [name="carbCalcCarbs"], [data-carb-calculator] [data-action="use-carb-calculator-total"]')?.focus();
+    return true;
+  }
+
+  function focusCarbCalculatorInputOnPointer(event) {
+    if (currentEditor?.carbCalculatorOpen !== true) return;
+    const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const input = eventTarget?.closest?.('[data-carb-calculator] input[name="carbCalcCarbs"], [data-carb-calculator] input[name="carbCalcQty"]');
+    if (!input || document.activeElement === input) return;
+    input.focus({ preventScroll: true });
+  }
+
+  function handleUseCarbCalculatorTotal(root, target) {
+    const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+    const rows = collectCarbCalculatorRowsFromForm(form);
+    if (!hasValidCarbCalculatorTotal(rows)) return false;
+    const draft = buildDraftFromEditor(form);
+    draft.mealCarbs = formatCarbAmount(calculateCarbCalculatorMealTotal(rows));
+    currentEditor.carbCalculatorRows = rows;
+    renderEditor({
+      mode: currentEditor?.mode || 'log-entry',
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      record: draft,
+      returnTo: currentEditor?.returnTo || null,
+      returnDateKey: currentEditor?.returnDateKey || null,
+      carbCalculatorOpen: false,
+      carbCalculatorRows: rows,
+      focusAction: 'open-carb-calculator',
+    });
     return true;
   }
 
@@ -5413,6 +5443,13 @@
     }
     root.addEventListener('pointerdown', (event) => {
       const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+      focusCarbCalculatorInputOnPointer(event);
+      const useTarget = eventTarget?.closest?.('[data-action="use-carb-calculator-total"]');
+      if (useTarget && currentEditor?.carbCalculatorOpen === true && !useTarget.disabled) {
+        event.preventDefault();
+        handleUseCarbCalculatorTotal(root, useTarget);
+        return;
+      }
       const target = eventTarget?.closest?.('[data-action="remove-carb-calculator-row"]');
       if (!target) return;
       event.preventDefault();
@@ -5501,23 +5538,7 @@
         return;
       }
       if (action === 'use-carb-calculator-total') {
-        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
-        const rows = collectCarbCalculatorRowsFromForm(form);
-        if (!hasValidCarbCalculatorTotal(rows)) return;
-        const draft = buildDraftFromEditor(form);
-        draft.mealCarbs = formatCarbAmount(calculateCarbCalculatorMealTotal(rows));
-        currentEditor.carbCalculatorRows = rows;
-        renderEditor({
-          mode: currentEditor?.mode || 'log-entry',
-          eventType: getEditorEventType(form),
-          type: getEditorType(form),
-          record: draft,
-          returnTo: currentEditor?.returnTo || null,
-          returnDateKey: currentEditor?.returnDateKey || null,
-          carbCalculatorOpen: false,
-          carbCalculatorRows: rows,
-          focusAction: 'open-carb-calculator',
-        });
+        handleUseCarbCalculatorTotal(root, target);
         return;
       }
       if (action === 'choose-event-type') {
