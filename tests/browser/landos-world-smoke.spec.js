@@ -178,6 +178,89 @@ for (const route of LOCAL_APP_ROUTES) {
   });
 }
 
+test('Digital Clock seven-segment time stays centered and contained for representative values', async ({ page }) => {
+  const cases = [
+    { hour: '00', minute: '00', second: '00', ampm: '' },
+    { hour: '01', minute: '11', second: '11', ampm: 'AM' },
+    { hour: '08', minute: '08', second: '08', ampm: 'AM' },
+    { hour: '09', minute: '05', second: '07', ampm: 'AM' },
+    { hour: '10', minute: '00', second: '00', ampm: 'AM' },
+    { hour: '11', minute: '11', second: '11', ampm: 'AM' },
+    { hour: '12', minute: '59', second: '59', ampm: 'PM' },
+    { hour: '18', minute: '38', second: '58', ampm: '' },
+    { hour: '20', minute: '20', second: '20', ampm: '' },
+    { hour: '23', minute: '59', second: '59', ampm: '' },
+  ];
+
+  await page.goto('/#/digital-clock');
+  const firstClock = page.locator('[data-clock-id="nashville"] .digit_clock_time');
+  await expect(firstClock.locator('.vfgt_seven_segment_digit').first()).toBeVisible();
+
+  for (const timeCase of cases) {
+    await page.evaluate(({ hour, minute, second, ampm }) => {
+      const names = ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'];
+      const digits = {
+        0: ['top', 'upper-left', 'upper-right', 'lower-left', 'lower-right', 'bottom'],
+        1: ['upper-right', 'lower-right'],
+        2: ['top', 'upper-right', 'middle', 'lower-left', 'bottom'],
+        3: ['top', 'upper-right', 'middle', 'lower-right', 'bottom'],
+        4: ['upper-left', 'upper-right', 'middle', 'lower-right'],
+        5: ['top', 'upper-left', 'middle', 'lower-right', 'bottom'],
+        6: ['top', 'upper-left', 'middle', 'lower-left', 'lower-right', 'bottom'],
+        7: ['top', 'upper-right', 'lower-right'],
+        8: ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'],
+        9: ['top', 'upper-left', 'upper-right', 'middle', 'lower-right', 'bottom'],
+      };
+      const renderDigit = (digit) => {
+        const active = new Set(digits[Number(digit)] || []);
+        return `<span class="vfgt_seven_segment_digit" data-vfgt-seven-segment-digit="${digit}" aria-hidden="true">${names.map((segment) => `<span class="vfgt_seven_segment vfgt_seven_segment--${segment} ${active.has(segment) ? 'is-on' : 'is-off'}" data-segment="${segment}" data-state="${active.has(segment) ? 'on' : 'off'}"></span>`).join('')}</span>`;
+      };
+      const renderPart = (part) => `<span class="vfgt_seven_segment_visual" aria-hidden="true">${part.split('').map(renderDigit).join('')}</span>`;
+      const renderColon = () => '<span class="vfgt_seven_segment_colon" aria-hidden="true" data-vfgt-seven-segment-colon><span></span><span></span></span>';
+      document.querySelectorAll('.digit_clock_time').forEach((clock) => {
+        [
+          ['.hour', hour],
+          ['.minute', minute],
+          ['.second', second],
+        ].forEach(([selector, value]) => {
+          const part = clock.querySelector(selector);
+          part.innerHTML = renderPart(value);
+          part.setAttribute('aria-label', value);
+          part.style.setProperty('--digit-count', String(value.length));
+          part.style.setProperty('--digit-slot-count', String(Math.max(2, value.length)));
+        });
+        clock.querySelectorAll('.time_separator').forEach((separator) => {
+          separator.innerHTML = renderColon();
+          separator.setAttribute('aria-label', ':');
+        });
+        clock.querySelector('.ampm').textContent = ampm;
+        clock.setAttribute('aria-label', `${hour}:${minute}:${second}${ampm ? ` ${ampm}` : ''}`);
+      });
+    }, timeCase);
+
+    const layout = await page.locator('#clock-view .digital_clock_wrapper').evaluateAll((cards) => cards.map((card) => {
+      const time = card.querySelector('.digit_clock_time');
+      const cardBox = card.getBoundingClientRect();
+      const timeBox = time.getBoundingClientRect();
+      const childBoxes = Array.from(time.children).map((child) => child.getBoundingClientRect());
+      const digitBoxes = Array.from(time.querySelectorAll('.vfgt_seven_segment_digit')).map((digit) => digit.getBoundingClientRect());
+      const digitGaps = digitBoxes.slice(1).map((box, index) => box.left - digitBoxes[index].right);
+      const centerLines = childBoxes.map((box) => Math.round((box.top + box.bottom) / 2));
+      return {
+        overflowsCard: timeBox.left < cardBox.left || timeBox.right > cardBox.right,
+        wraps: time.scrollWidth > time.clientWidth + 1 || new Set(centerLines).size > 1,
+        centered: Math.abs(((cardBox.left + cardBox.right) / 2) - ((timeBox.left + timeBox.right) / 2)) < 8,
+        separatedDigits: digitGaps.every((gap) => gap > 2),
+      };
+    }));
+
+    expect(layout.every((item) => !item.overflowsCard), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} should fit inside each card`).toBe(true);
+    expect(layout.every((item) => !item.wraps), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} should stay on one line`).toBe(true);
+    expect(layout.every((item) => item.centered), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} should remain centered`).toBe(true);
+    expect(layout.every((item) => item.separatedDigits), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} digits should not collide`).toBe(true);
+  }
+});
+
 test('launcher opens every local app route from its cards', async ({ page }) => {
   const launcherTargets = [
     ['Open Weather', /#\/weather$/],
