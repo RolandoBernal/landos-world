@@ -26,7 +26,7 @@ Weather: Open-Meteo (no API key). Optional future provider:
 <script>window.__WEATHER_API_KEY__ = 'your-key';</script>
 const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
 -->
-  <link rel="stylesheet" href="css/digital-clock.css?v=20260822-7">
+  <link rel="stylesheet" href="css/digital-clock.css?v=20260827-2">
   <link rel="stylesheet" href="css/app-themes.css?v=20260822-3">
   <link rel="stylesheet" href="css/weather-app.css?v=20260822-4">
   <link rel="stylesheet" href="css/daily-chief-briefing.css?v=20260825-1">
@@ -413,6 +413,19 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       { id: 'tepic', city: 'Tepic, MX', timeZone: 'America/Mazatlan' },
       { id: 'vancouver', city: 'Vancouver, BC', timeZone: 'America/Vancouver' },
     ];
+    const CLOCK_SEVEN_SEGMENT_NAMES = ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'];
+    const CLOCK_SEVEN_SEGMENT_DIGITS = {
+      0: ['top', 'upper-left', 'upper-right', 'lower-left', 'lower-right', 'bottom'],
+      1: ['upper-right', 'lower-right'],
+      2: ['top', 'upper-right', 'middle', 'lower-left', 'bottom'],
+      3: ['top', 'upper-right', 'middle', 'lower-right', 'bottom'],
+      4: ['upper-left', 'upper-right', 'middle', 'lower-right'],
+      5: ['top', 'upper-left', 'middle', 'lower-right', 'bottom'],
+      6: ['top', 'upper-left', 'middle', 'lower-left', 'lower-right', 'bottom'],
+      7: ['top', 'upper-right', 'lower-right'],
+      8: ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'],
+      9: ['top', 'upper-left', 'upper-right', 'middle', 'lower-right', 'bottom'],
+    };
     const DEATH_ON_NOTECARDS_URL = 'https://rolandobernal.github.io/death-on-notecards/';
     const APP_CARDS = [
       {
@@ -979,8 +992,40 @@ ${dateLongParts.year}`;
         element.textContent = value;
       }
     }
+    function sevenSegmentActiveSegments(digit) {
+      return CLOCK_SEVEN_SEGMENT_DIGITS[Number(digit)] || [];
+    }
+    function renderSevenSegmentDigit(digit) {
+      const active = new Set(sevenSegmentActiveSegments(digit));
+      return `<span class="vfgt_seven_segment_digit" data-vfgt-seven-segment-digit="${digit}" aria-hidden="true">
+        ${CLOCK_SEVEN_SEGMENT_NAMES.map((segment) => `<span class="vfgt_seven_segment vfgt_seven_segment--${segment} ${active.has(segment) ? 'is-on' : 'is-off'}" data-segment="${segment}" data-state="${active.has(segment) ? 'on' : 'off'}"></span>`).join('')}
+      </span>`;
+    }
+    function renderClockPartSevenSegment(value) {
+      const digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return String(value ?? '');
+      return `<span class="vfgt_seven_segment_visual" aria-hidden="true">${digits.split('').map(renderSevenSegmentDigit).join('')}</span>`;
+    }
+    function setClockPartMarkup(element, value) {
+      if (!element) return;
+      const nextValue = String(value ?? '');
+      if (element.dataset.clockValue !== nextValue) {
+        element.innerHTML = renderClockPartSevenSegment(nextValue);
+        element.dataset.clockValue = nextValue;
+        element.setAttribute('aria-label', nextValue);
+        const digitCount = nextValue.replace(/\D/g, '').length || 1;
+        element.style.setProperty('--digit-count', String(digitCount));
+        element.style.setProperty('--digit-slot-count', String(Math.max(2, digitCount)));
+      }
+    }
+    function setClockSeparatorMarkup(element) {
+      if (!element || element.dataset.clockSeparator === 'ready') return;
+      element.innerHTML = '<span class="vfgt_seven_segment_colon" aria-hidden="true" data-vfgt-seven-segment-colon><span></span><span></span></span>';
+      element.dataset.clockSeparator = 'ready';
+      element.setAttribute('aria-label', ':');
+    }
     function setClockPartText(element, value) {
-      setTextIfChanged(element, value);
+      setClockPartMarkup(element, value);
       if (element) {
         const text = String(value);
         element.classList.toggle('is_double_one', text === '11');
@@ -995,8 +1040,10 @@ ${dateLongParts.year}`;
             return null;
           }
           const timeEl = root.querySelector('.digit_clock_time');
+          timeEl.querySelectorAll('.time_separator').forEach(setClockSeparatorMarkup);
           return {
             config: entry,
+            time: timeEl,
             hour: timeEl.querySelector('.hour'),
             minute: timeEl.querySelector('.minute'),
             second: timeEl.querySelector('.second'),
@@ -1012,6 +1059,9 @@ ${dateLongParts.year}`;
       setClockPartText(refs.minute, data.minute);
       setClockPartText(refs.second, data.second);
       setTextIfChanged(refs.ampm, data.ampm);
+      if (refs.time) {
+        refs.time.setAttribute('aria-label', `${data.hour}:${data.minute}:${data.second}${data.ampm ? ` ${data.ampm}` : ''}`);
+      }
       setTextIfChanged(refs.date,
         data.dateLong);
       setTextIfChanged(refs.dateShort, data.dateShort);

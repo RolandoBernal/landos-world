@@ -158,6 +158,27 @@ test('service worker precaches the app shell and app modules needed for offline 
   ].forEach((asset) => assert.match(sw, new RegExp(asset.replaceAll('.', '\\.'))));
 });
 
+test('Digital Clock reuses the VFGT seven-segment renderer only for time digits', () => {
+  assert.match(html, /const CLOCK_SEVEN_SEGMENT_NAMES = \['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'\]/);
+  assert.match(html, /class="vfgt_seven_segment_digit" data-vfgt-seven-segment-digit="\$\{digit\}" aria-hidden="true"/);
+  assert.match(html, /class="vfgt_seven_segment vfgt_seven_segment--\$\{segment\} \$\{active\.has\(segment\) \? 'is-on' : 'is-off'\}"/);
+  assert.match(html, /timeEl\.querySelectorAll\('\.time_separator'\)\.forEach\(setClockSeparatorMarkup\)/);
+  assert.match(html, /setClockPartText\(refs\.hour, data\.hour\)/);
+  assert.match(html, /setClockPartText\(refs\.minute, data\.minute\)/);
+  assert.match(html, /setClockPartText\(refs\.second, data\.second\)/);
+  assert.match(html, /setTextIfChanged\(refs\.ampm, data\.ampm\)/);
+});
+
+test('Digital Clock seven-segment CSS is scoped away from normal interface text', () => {
+  assert.match(digitalClockCss, /\.digit_clock_time \{[\s\S]*--vfgt-segment-on: currentColor/);
+  assert.match(digitalClockCss, /\.digit_clock_time \.vfgt_seven_segment_digit \{[\s\S]*height: var\(--digit-height\)/);
+  assert.match(digitalClockCss, /\.digit_clock_time \.vfgt_seven_segment_colon span \{[\s\S]*box-shadow: var\(--vfgt-segment-glow\)/);
+  assert.match(digitalClockCss, /--digital-clock-ui-font: 'Orbitron', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif/);
+  assert.match(digitalClockCss, /\.digit_clock_time \.ampm \{[\s\S]*font-family: var\(--digital-clock-ui-font\)/);
+  assert.match(digitalClockCss, /\.digit_clock_date,[\s\S]*\.digit_clock_date_short \{[\s\S]*font-family: var\(--digital-clock-ui-font\)/);
+  assert.doesNotMatch(digitalClockCss, /\.digit_clock_app \{[\s\S]{0,220}font-family: 'Digital-7'/);
+});
+
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
   assert.match(sw, /const SW_VERSION = '2026-08-26-4'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
@@ -414,8 +435,8 @@ test('service worker reports real cache metadata rather than current render time
   assert.doesNotMatch(sw, /updatedAt: new Date\(\)\.toISOString\(\),\n\s*};\n}/);
 });
 
-test('offline-first shell avoids external render-blocking font CSS', () => {
-  assert.doesNotMatch(digitalClockCss, /fonts\.googleapis\.com/);
+test('offline-first shell keeps Google font CSS limited to Digital Clock Orbitron', () => {
+  assert.match(digitalClockCss, /@import url\('https:\/\/fonts\.googleapis\.com\/css\?family=Orbitron&display=swap'\);/);
   assert.doesNotMatch(sprintsCss, /fonts\.googleapis\.com/);
   assert.doesNotMatch(roadBikeCss, /fonts\.googleapis\.com/);
 });

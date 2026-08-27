@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css?family=Orbitron&display=swap');
+
 @font-face {
   font-family: 'Digital-7';
   src: url('../fonts/digital-7.ttf') format('truetype');
@@ -46,6 +48,7 @@ body {
   --color-warning: #ffe566;
   --color-error: #ff9b9b;
   --theme-chrome-color: #000000;
+  --digital-clock-ui-font: 'Orbitron', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -340,7 +343,7 @@ body {
   border: 2px solid var(--color-border);
   border-radius: 10px;
   box-shadow: 0 6px 16px 0 var(--color-shadow-inverse);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--digital-clock-ui-font);
 }
 
 .toggle_group {
@@ -666,7 +669,7 @@ body {
 
 .digit_clock_city_name,
 .digit_clock_current_weather {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--digital-clock-ui-font);
   color: var(--app-accent, #66ff99);
   font-size: 20px;
   text-align: center;
@@ -693,20 +696,37 @@ body {
 }
 
 .digit_clock_time {
-  font-family: 'Roboto Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  --vfgt-segment-on: currentColor;
+  --vfgt-segment-off: rgb(102 255 153 / 18%);
+  --vfgt-segment-glow: 0 0 14px rgb(102 255 153 / 64%), 0 0 30px rgb(102 255 153 / 30%);
+  --digit-width: clamp(1.2rem, 6vw, 2.05rem);
+  --digit-height: calc(var(--digit-width) * 1.72);
+  --segment-thickness: calc(var(--digit-width) * 0.15);
+  --digit-gap: calc(var(--digit-width) * 0.2);
+  --colon-width: calc(var(--digit-width) * 0.32);
+  --colon-gap: calc(var(--digit-width) * 0.22);
+  font-family: var(--digital-clock-ui-font);
   color: var(--app-accent, #66ff99);
-  font-size: 35px;
+  font-size: 26px;
   text-align: center;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
-  display: flex;
-  align-items: baseline;
+  display: grid;
+  grid-template-columns:
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    var(--colon-width)
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    var(--colon-width)
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    auto;
+  align-items: center;
   justify-content: center;
-  column-gap: 0.18em;
+  column-gap: var(--colon-gap);
+  max-width: 100%;
   white-space: nowrap;
 }
 
-.digit_clock_time span {
+.digit_clock_time > span {
   display: inline-block;
   min-width: 0;
   margin: 0;
@@ -716,8 +736,9 @@ body {
 .digit_clock_time .hour,
 .digit_clock_time .minute,
 .digit_clock_time .second {
-  width: 2ch;
-  text-align: right;
+  display: grid;
+  justify-content: end;
+  width: calc(var(--digit-slot-count, 2) * var(--digit-width) + (var(--digit-slot-count, 2) - 1) * var(--digit-gap));
 }
 
 .digit_clock_time .is_double_one {
@@ -729,18 +750,75 @@ body {
 }
 
 .digit_clock_time .time_separator {
-  text-align: center;
+  display: grid;
+  justify-content: center;
+  width: var(--colon-width);
   letter-spacing: 0;
 }
 
+.digit_clock_time .vfgt_seven_segment_visual {
+  --digit-width: inherit;
+  --digit-height: inherit;
+  --segment-thickness: inherit;
+  display: grid;
+  grid-template-columns: repeat(var(--digit-count, 2), var(--digit-width));
+  column-gap: var(--digit-gap);
+  justify-content: end;
+  width: 100%;
+}
+
+.digit_clock_time .vfgt_seven_segment_digit {
+  position: relative;
+  display: block;
+  width: var(--digit-width);
+  height: var(--digit-height);
+}
+
+.digit_clock_time .vfgt_seven_segment {
+  position: absolute;
+  display: block;
+  background: var(--vfgt-segment-off);
+  border-radius: 999px;
+  transition: background-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.digit_clock_time .vfgt_seven_segment.is-on {
+  background: var(--vfgt-segment-on);
+  box-shadow: var(--vfgt-segment-glow);
+}
+
+.digit_clock_time .vfgt_seven_segment.is-off {
+  opacity: 1;
+}
+
+.digit_clock_time .vfgt_seven_segment_colon {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: calc(var(--digit-width) * 0.34);
+  width: var(--colon-width);
+  height: var(--digit-height);
+}
+
+.digit_clock_time .vfgt_seven_segment_colon span {
+  display: block;
+  width: calc(var(--segment-thickness) * 1.15);
+  aspect-ratio: 1;
+  background: var(--vfgt-segment-on);
+  border-radius: 999px;
+  box-shadow: var(--vfgt-segment-glow);
+}
+
 .digit_clock_time .ampm {
-  font-size: 26px;
+  font-family: var(--digital-clock-ui-font);
+  font-size: 18px;
+  line-height: 1;
   margin-left: 0.25em;
 }
 
 .digit_clock_date,
 .digit_clock_date_short {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--digital-clock-ui-font);
   color: var(--app-accent, #66ff99);
   font-size: 20px;
   text-align: center;
@@ -981,15 +1059,16 @@ body {
   .digit_clock_time .hour,
   .digit_clock_time .minute,
   .digit_clock_time .second {
-    width: 2ch;
+    width: calc(var(--digit-slot-count, 2) * var(--digit-width) + (var(--digit-slot-count, 2) - 1) * var(--digit-gap));
   }
 
   .digit_clock_time {
-    font-size: 35px;
+    --digit-width: clamp(1.45rem, 4vw, 2.2rem);
+    font-size: 28px;
   }
 
   .digit_clock_time .ampm {
-    font-size: 30px;
+    font-size: 20px;
   }
 
   .digit_clock_date,
@@ -1061,15 +1140,16 @@ body {
   .digit_clock_time .hour,
   .digit_clock_time .minute,
   .digit_clock_time .second {
-    width: 2ch;
+    width: calc(var(--digit-slot-count, 2) * var(--digit-width) + (var(--digit-slot-count, 2) - 1) * var(--digit-gap));
   }
 
   .digit_clock_time {
-    font-size: 45px;
+    --digit-width: 2.25rem;
+    font-size: 30px;
   }
 
   .digit_clock_time .ampm {
-    font-size: 30px;
+    font-size: 21px;
   }
 
   .digit_clock_date,
