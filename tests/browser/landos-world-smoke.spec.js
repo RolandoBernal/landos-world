@@ -998,6 +998,115 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   expect(consoleErrorCount).toBe(0);
 });
 
+test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.addInitScript(() => {
+    const listeners = new Map();
+    const frame = {
+      width: 390,
+      height: 640,
+      offsetLeft: 0,
+      offsetTop: 0,
+    };
+    const dispatch = (type) => {
+      const event = new Event(type);
+      listeners.get(type)?.forEach((listener) => listener.call(mockVisualViewport, event));
+    };
+    const mockVisualViewport = {
+      get width() { return frame.width; },
+      get height() { return frame.height; },
+      get offsetLeft() { return frame.offsetLeft; },
+      get offsetTop() { return frame.offsetTop; },
+      get scale() { return 1; },
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(listener);
+      },
+      removeEventListener(type, listener) {
+        listeners.get(type)?.delete(listener);
+      },
+      setFrame(nextFrame) {
+        Object.assign(frame, nextFrame);
+        dispatch('resize');
+        dispatch('scroll');
+      },
+    };
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: mockVisualViewport,
+    });
+    window.__setLeeLeeVisualViewportFrame = (nextFrame) => mockVisualViewport.setFrame(nextFrame);
+  });
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByLabel('Blood Sugar').fill('188');
+  await page.evaluate(() => window.scrollTo(0, 180));
+  const scrollBeforeOpen = await page.evaluate(() => window.scrollY);
+
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const layer = page.locator('[data-carb-calculator-layer]');
+  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
+  await expect(calculator).toBeVisible();
+  await expect(carbInputs.first()).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
+  await expect.poll(() => calculator.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return Math.round(rect.top + (rect.height / 2));
+  })).toBe(320);
+
+  await page.evaluate(() => window.scrollTo(0, 420));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+
+  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
+  await expect.poll(() => layer.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      height: Math.round(rect.height),
+      overflow: getComputedStyle(node).overflow,
+    };
+  })).toEqual({
+    top: 18,
+    bottom: 198,
+    height: 180,
+    overflow: 'hidden',
+  });
+  await expect.poll(() => calculator.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return Math.round(rect.top + (rect.height / 2));
+  })).toBe(108);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
+  await expect(calculator).toBeVisible();
+  await expect(carbInputs.first()).toBeFocused();
+
+  const modalScrollMetrics = await calculator.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+    return {
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      scrollTop: node.scrollTop,
+    };
+  });
+  expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);
+  expect(modalScrollMetrics.scrollTop).toBeGreaterThan(0);
+
+  await calculator.getByRole('button', { name: 'Cancel Carb Calculator' }).click();
+
+  await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('');
+  await page.waitForFunction((expected) => window.scrollY === expected, scrollBeforeOpen);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe('hidden');
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden');
+});
+
 test('Lee-Lee entry inputs preserve typed digit order during live updates', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: '+ Log Entry' }).click();

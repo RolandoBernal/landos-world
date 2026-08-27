@@ -181,6 +181,8 @@
   let pendingCarbCalculatorFocusRowId = '';
   let pendingCarbCalculatorFocusFieldName = '';
   let pendingCarbCalculatorUsePointerId = null;
+  let carbCalculatorScrollLock = null;
+  let carbCalculatorViewportListenerCleanup = null;
   let syncRepository = null;
   let syncStatus = {
     configured: false,
@@ -3518,6 +3520,9 @@
     if (options.error) {
       showEditorError(root.querySelector('[data-lee-lee-editor]'), options.error);
     }
+    if (currentEditor.carbCalculatorOpen) {
+      enableCarbCalculatorModalViewport(currentEditor.carbCalculatorScrollSnapshot || getScrollSnapshot());
+    }
     const focusTarget = (selector) => {
       const applyFocus = () => {
         const target = root.querySelector(selector);
@@ -3527,6 +3532,9 @@
           return;
         }
         target.focus({ preventScroll: options.preventFocusScroll === true });
+        if (target.closest?.('[data-carb-calculator]')) {
+          keepCarbCalculatorInputVisible(target);
+        }
       };
       applyFocus();
       requestAnimationFrame(applyFocus);
@@ -3823,6 +3831,120 @@
     apply();
   }
 
+  function getCarbCalculatorViewportFrame() {
+    const visualViewport = window.visualViewport;
+    const viewportWidth = visualViewport?.width || window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+    return {
+      left: Math.max(0, visualViewport?.offsetLeft || 0),
+      top: Math.max(0, visualViewport?.offsetTop || 0),
+      width: Math.max(0, viewportWidth),
+      height: Math.max(160, viewportHeight),
+    };
+  }
+
+  function keepCarbCalculatorInputVisible(input) {
+    const calculator = input?.closest?.('[data-carb-calculator]');
+    if (!calculator) return;
+    const inputRect = input.getBoundingClientRect();
+    const calculatorRect = calculator.getBoundingClientRect();
+    const breathingRoom = 14;
+    if (inputRect.bottom > calculatorRect.bottom - breathingRoom) {
+      calculator.scrollTop += inputRect.bottom - calculatorRect.bottom + breathingRoom;
+    } else if (inputRect.top < calculatorRect.top + breathingRoom) {
+      calculator.scrollTop -= calculatorRect.top - inputRect.top + breathingRoom;
+    }
+  }
+
+  function applyCarbCalculatorViewportFrame() {
+    const layer = document.querySelector('[data-carb-calculator-layer]');
+    if (!layer) return;
+    const frame = getCarbCalculatorViewportFrame();
+    layer.style.setProperty('--lee-lee-carb-calc-viewport-left', `${frame.left}px`);
+    layer.style.setProperty('--lee-lee-carb-calc-viewport-top', `${frame.top}px`);
+    layer.style.setProperty('--lee-lee-carb-calc-viewport-width', `${frame.width}px`);
+    layer.style.setProperty('--lee-lee-carb-calc-viewport-height', `${frame.height}px`);
+    const activeElement = document.activeElement;
+    if (activeElement?.closest?.('[data-carb-calculator]')) {
+      keepCarbCalculatorInputVisible(activeElement);
+    }
+  }
+
+  function scheduleCarbCalculatorViewportFrame() {
+    requestAnimationFrame(() => {
+      applyCarbCalculatorViewportFrame();
+      restoreLockedCarbCalculatorScroll();
+    });
+  }
+
+  function lockCarbCalculatorDocumentScroll(snapshot) {
+    const lockedSnapshot = snapshot || getScrollSnapshot();
+    if (!carbCalculatorScrollLock) {
+      carbCalculatorScrollLock = {
+        x: lockedSnapshot.x,
+        y: lockedSnapshot.y,
+        htmlOverflow: document.documentElement.style.overflow,
+        htmlOverscrollBehavior: document.documentElement.style.overscrollBehavior,
+        bodyOverflow: document.body.style.overflow,
+        bodyOverscrollBehavior: document.body.style.overscrollBehavior,
+      };
+      document.documentElement.style.overflow = 'hidden';
+      document.documentElement.style.overscrollBehavior = 'none';
+      document.body.style.overflow = 'hidden';
+      document.body.style.overscrollBehavior = 'none';
+      window.addEventListener('scroll', restoreLockedCarbCalculatorScroll, { passive: true });
+    }
+    restoreLockedCarbCalculatorScroll();
+  }
+
+  function restoreLockedCarbCalculatorScroll() {
+    if (!carbCalculatorScrollLock) return;
+    const targetX = Number.isFinite(carbCalculatorScrollLock.x) ? carbCalculatorScrollLock.x : 0;
+    const targetY = Number.isFinite(carbCalculatorScrollLock.y) ? carbCalculatorScrollLock.y : 0;
+    if (window.scrollX !== targetX || window.scrollY !== targetY) {
+      window.scrollTo?.(targetX, targetY);
+    }
+  }
+
+  function unlockCarbCalculatorDocumentScroll() {
+    const lock = carbCalculatorScrollLock;
+    if (!lock) return null;
+    window.removeEventListener('scroll', restoreLockedCarbCalculatorScroll);
+    document.documentElement.style.overflow = lock.htmlOverflow;
+    document.documentElement.style.overscrollBehavior = lock.htmlOverscrollBehavior;
+    document.body.style.overflow = lock.bodyOverflow;
+    document.body.style.overscrollBehavior = lock.bodyOverscrollBehavior;
+    carbCalculatorScrollLock = null;
+    const snapshot = { x: lock.x, y: lock.y, viewportHeight: window.visualViewport?.height || window.innerHeight || 0 };
+    restoreScrollSnapshot(snapshot);
+    return snapshot;
+  }
+
+  function attachCarbCalculatorViewportListeners() {
+    if (carbCalculatorViewportListenerCleanup) return;
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener?.('resize', scheduleCarbCalculatorViewportFrame);
+    visualViewport?.addEventListener?.('scroll', scheduleCarbCalculatorViewportFrame);
+    window.addEventListener('resize', scheduleCarbCalculatorViewportFrame);
+    carbCalculatorViewportListenerCleanup = () => {
+      visualViewport?.removeEventListener?.('resize', scheduleCarbCalculatorViewportFrame);
+      visualViewport?.removeEventListener?.('scroll', scheduleCarbCalculatorViewportFrame);
+      window.removeEventListener('resize', scheduleCarbCalculatorViewportFrame);
+      carbCalculatorViewportListenerCleanup = null;
+    };
+  }
+
+  function enableCarbCalculatorModalViewport(snapshot) {
+    lockCarbCalculatorDocumentScroll(snapshot);
+    attachCarbCalculatorViewportListeners();
+    applyCarbCalculatorViewportFrame();
+  }
+
+  function disableCarbCalculatorModalViewport() {
+    carbCalculatorViewportListenerCleanup?.();
+    return unlockCarbCalculatorDocumentScroll();
+  }
+
   function focusCarbCalculatorInputOnPointer(event) {
     if (currentEditor?.carbCalculatorOpen !== true) return;
     const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -3846,12 +3968,13 @@
     const form = target?.closest?.('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
     const rows = collectCarbCalculatorRowsFromForm(form);
     if (applyTotal && !hasValidCarbCalculatorTotal(rows)) return false;
-    const snapshot = currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot();
+    const snapshot = currentEditor?.carbCalculatorScrollSnapshot || carbCalculatorScrollLock || getScrollSnapshot();
     const draft = buildDraftFromEditor(form);
     if (applyTotal) {
       draft.mealCarbs = formatCarbAmount(calculateCarbCalculatorMealTotal(rows));
     }
     currentEditor.carbCalculatorRows = rows;
+    const unlockedSnapshot = disableCarbCalculatorModalViewport();
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
       eventType: getEditorEventType(form),
@@ -3863,7 +3986,7 @@
       carbCalculatorRows: rows,
       focusAction: 'open-carb-calculator',
       preventFocusScroll: true,
-      restoreScrollSnapshot: snapshot,
+      restoreScrollSnapshot: unlockedSnapshot || snapshot,
     });
     return true;
   }
