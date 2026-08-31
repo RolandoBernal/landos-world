@@ -8,10 +8,13 @@
   const SHARED_SETTINGS_CACHE_KEY = 'lando-world:lee-lees-tracker:shared-settings-cache:v1';
   const SHARED_SETTINGS_QUEUE_KEY = 'lando-world:lee-lees-tracker:shared-settings-queue:v1';
   const SHARED_SETTINGS_MIGRATION_KEY = 'lando-world:lee-lees-tracker:shared-settings-migration:v1';
+  const FOOD_LIBRARY_QUEUE_KEY = 'lando-world:lee-lees-tracker:food-library-queue:v1';
   const LEGACY_MIGRATION_KEY = 'lando-world:lee-lees-tracker:legacy-migration:v1';
   const LEGACY_SNAPSHOT_PREFIX = 'lando-world:lee-lees-tracker:legacy-snapshot:';
   const REMOTE_RECORDS_TABLE = 'lee_lee_records';
   const REMOTE_SHARED_SETTINGS_TABLE = 'lee_lee_shared_settings';
+  const REMOTE_FOODS_TABLE = 'lee_lee_foods';
+  const REMOTE_SAVED_MEALS_TABLE = 'lee_lee_saved_meals';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
   const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict']);
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
@@ -145,6 +148,14 @@
 
   function setSharedSettingsQueue(queue) {
     writeJson(SHARED_SETTINGS_QUEUE_KEY, queue);
+  }
+
+  function getFoodLibraryQueue() {
+    return readJson(FOOD_LIBRARY_QUEUE_KEY, []).filter((operation) => operation && operation.id);
+  }
+
+  function setFoodLibraryQueue(queue) {
+    writeJson(FOOD_LIBRARY_QUEUE_KEY, queue);
   }
 
   function getSharedSettingsMigration() {
@@ -381,6 +392,56 @@
       ...rest
     } = record || {};
     return rest;
+  }
+
+  function publicLibraryItem(item) {
+    const {
+      syncStatus,
+      syncError,
+      pendingOperationId,
+      ...rest
+    } = item || {};
+    return rest;
+  }
+
+  function sanitizeLibraryItemForRemote(item, userId, entityType) {
+    return {
+      id: item.id,
+      user_id: userId,
+      name: item.name,
+      is_favorite: item.favorite === true,
+      last_used_at: item.lastUsedAt || null,
+      deleted_at: item.deletedAt || null,
+      deleted_by: item.deletedBy || null,
+      entered_by: item.enteredBy || 'Unknown',
+      last_edited_by: item.lastEditedBy || null,
+      version: Number(item.version || 1),
+      payload: publicLibraryItem(item),
+      total_carbs: entityType === 'saved-meal' ? item.totalCarbs : null,
+      carb_grams: entityType === 'food' ? item.carbs : null,
+    };
+  }
+
+  function libraryItemFromRemote(row, entityType) {
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    return {
+      ...payload,
+      id: row.id,
+      name: row.name || payload.name || '',
+      favorite: row.is_favorite === true || payload.favorite === true,
+      carbs: entityType === 'food' ? (row.carb_grams ?? payload.carbs) : payload.carbs,
+      totalCarbs: entityType === 'saved-meal' ? (row.total_carbs ?? payload.totalCarbs) : payload.totalCarbs,
+      lastUsedAt: row.last_used_at || payload.lastUsedAt || null,
+      version: Number(row.version || payload.version || 1),
+      enteredBy: row.entered_by || payload.enteredBy || 'Unknown',
+      lastEditedBy: row.last_edited_by || payload.lastEditedBy || null,
+      deletedAt: row.deleted_at || payload.deletedAt || null,
+      deletedBy: row.deleted_by || payload.deletedBy || null,
+      createdAt: row.created_at || payload.createdAt || null,
+      updatedAt: row.updated_at || payload.updatedAt || null,
+      syncStatus: 'synced',
+      syncError: '',
+    };
   }
 
   function sanitizeRecordForRemote(record, userId) {
@@ -663,6 +724,8 @@
       getDocument,
       saveDocument,
       normalizeRecord,
+      normalizeFood,
+      normalizeSavedMeal,
       mergeDocuments,
       onRemoteChange,
       onSharedSettingsChange,
@@ -675,6 +738,7 @@
     let initialized = false;
     let processing = false;
     let processingSharedSettings = false;
+    let processingFoodLibrary = false;
     let realtimeChannel = null;
     let sharedSettingsChannel = null;
 
@@ -718,11 +782,13 @@
       const config = getConfig();
       const queue = getQueue();
       const sharedSettingsQueue = getSharedSettingsQueue();
+      const foodLibraryQueue = getFoodLibraryQueue();
       const conflicts = getConflicts();
       const metadata = getMetadata();
       const pendingCount = queue.filter((operation) => operation.state !== 'conflicted').length;
       const sharedPendingCount = sharedSettingsQueue.filter((operation) => operation.state !== 'conflicted').length;
-      const totalPendingCount = pendingCount + sharedPendingCount;
+      const foodLibraryPendingCount = foodLibraryQueue.filter((operation) => operation.state !== 'conflicted').length;
+      const totalPendingCount = pendingCount + sharedPendingCount + foodLibraryPendingCount;
       let state = 'saved';
       let message = 'Saved on this device';
       if (!config.configured) {
@@ -738,8 +804,8 @@
         state = 'offline';
         message = `Offline — ${totalPendingCount} waiting to sync`;
       } else if (totalPendingCount) {
-        state = processing || processingSharedSettings ? 'syncing' : 'waiting';
-        message = processing || processingSharedSettings ? 'Syncing…' : `${totalPendingCount} waiting to sync`;
+        state = processing || processingSharedSettings || processingFoodLibrary ? 'syncing' : 'waiting';
+        message = processing || processingSharedSettings || processingFoodLibrary ? 'Syncing…' : `${totalPendingCount} waiting to sync`;
       } else if (metadata.lastSuccessfulSyncAt) {
         state = 'synced';
         message = 'Synced';
@@ -751,6 +817,7 @@
         pendingCount: totalPendingCount,
         recordPendingCount: pendingCount,
         sharedSettingsPendingCount: sharedPendingCount,
+        foodLibraryPendingCount,
         conflictCount: conflicts.length,
         sharedSettingsStatus: getSharedSettingsStatus(),
         lastSuccessfulSyncAt: metadata.lastSuccessfulSyncAt,
@@ -771,6 +838,16 @@
       return {
         queue: getRecordQueueSnapshot(),
         sharedSettingsQueue: getSharedSettingsQueue().map(sanitizeOperationMetadata),
+        foodLibraryQueue: getFoodLibraryQueue().map((operation) => ({
+          id: operation.id,
+          recordId: operation.recordId,
+          entityType: operation.entityType,
+          operationType: operation.type,
+          state: operation.state || 'pending',
+          retryCount: Number(operation.retryCount || 0),
+          updatedAt: operation.payload?.updatedAt || '',
+          deleted: Boolean(operation.payload?.deletedAt),
+        })),
         conflicts: getConflicts().map((conflict) => ({
           id: conflict.id,
           recordId: conflict.recordId,
@@ -827,6 +904,7 @@
             if (session) {
               reconcile().catch(() => {});
               reconcileSharedSettings().catch(() => {});
+              reconcileFoodLibrary().catch(() => {});
               subscribeRealtime();
               subscribeSharedSettingsRealtime();
             } else {
@@ -840,6 +918,7 @@
             subscribeSharedSettingsRealtime();
             await reconcile();
             await reconcileSharedSettings();
+            await reconcileFoodLibrary();
           }
         }
       } catch (error) {
@@ -861,6 +940,7 @@
       session = data?.session || null;
       await reconcile();
       await reconcileSharedSettings();
+      await reconcileFoodLibrary();
       subscribeRealtime();
       subscribeSharedSettingsRealtime();
       emit();
@@ -1305,6 +1385,113 @@
       onRemoteChange?.(merged);
     }
 
+    function normalizeLibraryItem(entityType, item) {
+      const normalizer = entityType === 'saved-meal' ? normalizeSavedMeal : normalizeFood;
+      return normalizer ? normalizer(item) : item;
+    }
+
+    function tableForLibraryEntity(entityType) {
+      return entityType === 'saved-meal' ? REMOTE_SAVED_MEALS_TABLE : REMOTE_FOODS_TABLE;
+    }
+
+    function mergeRemoteLibraryItems(entityType, remoteItems) {
+      if (!remoteItems.length) return;
+      const current = getDocument();
+      const key = entityType === 'saved-meal' ? 'savedMeals' : 'foodLibrary';
+      const pendingIds = new Set(getFoodLibraryQueue().filter((operation) => operation.entityType === entityType).map((operation) => operation.recordId));
+      const safeRemote = remoteItems.filter((item) => !pendingIds.has(item.id));
+      const merged = mergeDocuments(current, { ...current, [key]: safeRemote });
+      saveDocument(merged, { keepStatus: true });
+      onRemoteChange?.(merged);
+    }
+
+    function createLibraryOperation(entityType, item, baseVersion = null) {
+      const normalized = normalizeLibraryItem(entityType, item);
+      return {
+        id: createId(),
+        recordId: normalized.id,
+        entityType,
+        type: 'upsert-library-item',
+        payload: publicLibraryItem(normalized),
+        baseVersion,
+        createdAt: nowIso(),
+        retryCount: 0,
+        lastErrorCategory: '',
+        state: 'pending',
+      };
+    }
+
+    function queueLibraryUpsert(entityType, item, existingItem = null) {
+      const operation = createLibraryOperation(entityType, item, existingItem?.version || null);
+      setFoodLibraryQueue([...getFoodLibraryQueue().filter((queued) => queued.recordId !== operation.recordId || queued.entityType !== entityType), operation]);
+      emit();
+      processFoodLibraryQueue().catch(() => {});
+      return operation;
+    }
+
+    function queueFoodUpsert(item, existingItem = null) {
+      return queueLibraryUpsert('food', item, existingItem);
+    }
+
+    function queueSavedMealUpsert(item, existingItem = null) {
+      return queueLibraryUpsert('saved-meal', item, existingItem);
+    }
+
+    async function reconcileFoodLibrary() {
+      const client = await ensureClient();
+      if (!client || !session?.user?.id) return getSyncStatus();
+      try {
+        const [{ data: foodRows, error: foodError }, { data: mealRows, error: mealError }] = await Promise.all([
+          client.from(REMOTE_FOODS_TABLE).select('*').eq('user_id', session.user.id).order('updated_at', { ascending: false }),
+          client.from(REMOTE_SAVED_MEALS_TABLE).select('*').eq('user_id', session.user.id).order('updated_at', { ascending: false }),
+        ]);
+        if (foodError) throw foodError;
+        if (mealError) throw mealError;
+        mergeRemoteLibraryItems('food', (foodRows || []).map((row) => normalizeLibraryItem('food', libraryItemFromRemote(row, 'food'))).filter(Boolean));
+        mergeRemoteLibraryItems('saved-meal', (mealRows || []).map((row) => normalizeLibraryItem('saved-meal', libraryItemFromRemote(row, 'saved-meal'))).filter(Boolean));
+        await processFoodLibraryQueue();
+      } catch (error) {
+        setMetadata({ lastError: 'Food Library could not be refreshed.' });
+      }
+      emit();
+      return getSyncStatus();
+    }
+
+    async function processFoodLibraryQueue() {
+      if (processingFoodLibrary || !navigator.onLine) return getSyncStatus();
+      const client = await ensureClient();
+      if (!client || !session?.user?.id) return getSyncStatus();
+      processingFoodLibrary = true;
+      emit();
+      const remaining = [];
+      for (const operation of getFoodLibraryQueue()) {
+        try {
+          const normalized = normalizeLibraryItem(operation.entityType, operation.payload);
+          const remote = sanitizeLibraryItemForRemote(normalized, session.user.id, operation.entityType);
+          const { data, error } = await client
+            .from(tableForLibraryEntity(operation.entityType))
+            .upsert(remote, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw error;
+          const mergedItem = normalizeLibraryItem(operation.entityType, libraryItemFromRemote(data, operation.entityType));
+          if (mergedItem) mergeRemoteLibraryItems(operation.entityType, [mergedItem]);
+        } catch (error) {
+          remaining.push({
+            ...operation,
+            retryCount: Number(operation.retryCount || 0) + 1,
+            lastErrorCategory: categorizeError(error),
+            state: 'pending',
+          });
+          setMetadata({ lastError: 'Food Library sync will retry when the connection is available.' });
+        }
+      }
+      setFoodLibraryQueue(remaining);
+      processingFoodLibrary = false;
+      emit();
+      return getSyncStatus();
+    }
+
     function subscribeRealtime() {
       if (!supabaseClient || !session?.user?.id || realtimeChannel) return;
       setMetadata({ realtimeStatus: 'connecting' });
@@ -1469,6 +1656,7 @@
     async function syncAll(options = {}) {
       await reconcile(options);
       await reconcileSharedSettings();
+      await reconcileFoodLibrary();
       return getSyncStatus();
     }
 
@@ -1592,17 +1780,20 @@
     globalThis.addEventListener?.('online', () => {
       processQueue().catch(() => {});
       processSharedSettingsQueue().catch(() => {});
+      processFoodLibraryQueue().catch(() => {});
     });
     globalThis.addEventListener?.('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         reconcile().catch(() => {});
         reconcileSharedSettings().catch(() => {});
+        reconcileFoodLibrary().catch(() => {});
       }
     });
     globalThis.setInterval?.(() => {
       if (session) {
         reconcile().catch(() => {});
         reconcileSharedSettings().catch(() => {});
+        reconcileFoodLibrary().catch(() => {});
       }
     }, 5 * 60 * 1000);
 
@@ -1622,8 +1813,10 @@
       queueRestore,
       processQueue,
       processSharedSettingsQueue,
+      processFoodLibraryQueue,
       syncNow: syncAll,
       syncSharedSettings: reconcileSharedSettings,
+      syncFoodLibrary: reconcileFoodLibrary,
       getConflicts,
       keepSharedVersion,
       useLocalVersion,
@@ -1632,6 +1825,8 @@
       cleanupIdenticalConflicts,
       getSharedSettings: getSharedSettingsCache,
       saveSharedSettings,
+      queueFoodUpsert,
+      queueSavedMealUpsert,
       normalizeSharedSettings,
       getSharedSettingsStatus,
       getSharedSettingsMigration,
@@ -1647,6 +1842,7 @@
         conflicts: SYNC_CONFLICTS_KEY,
         sharedSettingsCache: SHARED_SETTINGS_CACHE_KEY,
         sharedSettingsQueue: SHARED_SETTINGS_QUEUE_KEY,
+        foodLibraryQueue: FOOD_LIBRARY_QUEUE_KEY,
         sharedSettingsMigration: SHARED_SETTINGS_MIGRATION_KEY,
         migration: LEGACY_MIGRATION_KEY,
       },
@@ -1661,8 +1857,12 @@
     DEVICE_USERS,
     REMOTE_RECORDS_TABLE,
     REMOTE_SHARED_SETTINGS_TABLE,
+    REMOTE_FOODS_TABLE,
+    REMOTE_SAVED_MEALS_TABLE,
     sanitizeRecordForRemote,
     recordFromRemote,
+    sanitizeLibraryItemForRemote,
+    libraryItemFromRemote,
     normalizeSharedSettings,
     normalizeSharedInsulinPlan,
     sharedSettingsToRemote,

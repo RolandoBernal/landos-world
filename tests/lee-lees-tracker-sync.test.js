@@ -24,6 +24,10 @@ const rpcCoalesceRepairMigrationSource = readFileSync(
   new URL('../supabase/migrations/202608150002_fix_versioned_rpc_coalesce.sql', import.meta.url),
   'utf8',
 );
+const foodLibraryMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202608310001_create_lee_lee_food_library.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -109,6 +113,8 @@ function createDocumentStore(initial = { records: [] }) {
 function createMockSupabase(remoteRows = [], options = {}) {
   const rows = [...remoteRows];
   const sharedSettingsRows = [...(options.sharedSettingsRows || [])];
+  const foodRows = [...(options.foodRows || [])];
+  const savedMealRows = [...(options.savedMealRows || [])];
   const rpcCalls = [];
   const userId = options.userId || 'user-1';
   const client = {
@@ -120,7 +126,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
       resetPasswordForEmail: () => Promise.resolve({}),
     },
     from(tableName) {
-      const tableRows = tableName === 'lee_lee_shared_settings' ? sharedSettingsRows : rows;
+      const tableRows = tableName === 'lee_lee_shared_settings'
+        ? sharedSettingsRows
+        : (tableName === 'lee_lee_foods' ? foodRows : (tableName === 'lee_lee_saved_meals' ? savedMealRows : rows));
       const builder = {
         insert(payload) {
           if (tableName === 'lee_lee_records' && options.recordInsertError) {
@@ -145,6 +153,27 @@ function createMockSupabase(remoteRows = [], options = {}) {
           builder.current = tableName === 'lee_lee_shared_settings'
             ? tableRows.find((row) => row.user_id === payload.user_id)
             : tableRows.find((row) => row.id === payload.id);
+          return builder;
+        },
+        upsert(payload) {
+          const index = tableRows.findIndex((row) => row.id === payload.id && row.user_id === payload.user_id);
+          if (index >= 0) {
+            tableRows[index] = {
+              ...tableRows[index],
+              ...payload,
+              version: Number(tableRows[index].version || 1) + 1,
+              updated_at: '2026-08-01T13:15:00.000Z',
+            };
+            builder.current = tableRows[index];
+            return builder;
+          }
+          tableRows.push({
+            ...payload,
+            version: payload.version || 1,
+            created_at: payload.payload?.createdAt || '2026-08-01T12:45:00.000Z',
+            updated_at: payload.payload?.updatedAt || '2026-08-01T12:45:00.000Z',
+          });
+          builder.current = tableRows.at(-1);
           return builder;
         },
         select() {
@@ -242,6 +271,8 @@ function createMockSupabase(remoteRows = [], options = {}) {
     removeChannel() {},
     rows,
     sharedSettingsRows,
+    foodRows,
+    savedMealRows,
     rpcCalls,
   };
   return { createClient: () => client, client };
@@ -1150,4 +1181,96 @@ test('versioned RPC mock succeeds for owner and returns no row for another user'
   assert.equal(ownerResult.data.blood_sugar, 190);
   assert.equal(ownerResult.data.version, 2);
   assert.equal(otherResult.data, null);
+});
+
+test('food library migration creates owned shared tables without food-name uniqueness', () => {
+  assert.match(foodLibraryMigrationSource, /create table if not exists public\.lee_lee_foods/);
+  assert.match(foodLibraryMigrationSource, /create table if not exists public\.lee_lee_saved_meals/);
+  assert.match(foodLibraryMigrationSource, /carb_grams numeric\(8,2\) not null check \(carb_grams >= 0\)/);
+  assert.match(foodLibraryMigrationSource, /total_carbs numeric\(8,2\) not null default 0 check \(total_carbs >= 0\)/);
+  assert.match(foodLibraryMigrationSource, /alter table public\.lee_lee_foods enable row level security/);
+  assert.match(foodLibraryMigrationSource, /alter table public\.lee_lee_saved_meals enable row level security/);
+  assert.doesNotMatch(foodLibraryMigrationSource, /unique .*name/i);
+  assert.doesNotMatch(foodLibraryMigrationSource, /grant .*service_role|disable row level security/i);
+});
+
+test('food and saved meal sync serialization preserves carb payload snapshots', () => {
+  const context = createSyncContext();
+  const foodRemote = context.LeeLeeTrackerSync.sanitizeLibraryItemForRemote({
+    id: 'food-1',
+    name: 'Ketchup',
+    carbs: 4,
+    servingLabel: 'packet',
+    favorite: true,
+    createdAt: '2026-08-31T12:00:00.000Z',
+    updatedAt: '2026-08-31T12:00:00.000Z',
+    enteredBy: 'Levi',
+    version: 1,
+  }, 'user-1', 'food');
+  const mealRemote = context.LeeLeeTrackerSync.sanitizeLibraryItemForRemote({
+    id: 'meal-1',
+    name: 'Hot Dog Meal',
+    totalCarbs: 28,
+    components: [{ componentType: 'food', foodId: 'food-1', nameSnapshot: 'Ketchup', quantity: 1, carbsPerServing: 4, carbTotal: 4 }],
+    createdAt: '2026-08-31T12:00:00.000Z',
+    updatedAt: '2026-08-31T12:00:00.000Z',
+    enteredBy: 'Levi',
+    version: 1,
+  }, 'user-1', 'saved-meal');
+
+  assert.equal(foodRemote.user_id, 'user-1');
+  assert.equal(foodRemote.carb_grams, 4);
+  assert.equal(foodRemote.payload.servingLabel, 'packet');
+  assert.equal(mealRemote.total_carbs, 28);
+  assert.equal(mealRemote.payload.components[0].nameSnapshot, 'Ketchup');
+});
+
+test('food library queue syncs offline-created foods and saved meals without record queue coupling', async () => {
+  const store = createDocumentStore({
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+  });
+  let document = {
+    schemaVersion: 1,
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+    settings: {},
+    insulinPlans: [],
+    metadata: {},
+  };
+  store.getDocument = () => document;
+  store.saveDocument = (nextDocument) => {
+    document = nextDocument;
+    return { ok: true, data: document };
+  };
+  store.mergeDocuments = (base, incoming) => ({
+    ...base,
+    records: [...new Map([...(base.records || []), ...(incoming.records || [])].map((item) => [item.id, item])).values()],
+    foodLibrary: [...new Map([...(base.foodLibrary || []), ...(incoming.foodLibrary || [])].map((item) => [item.id, item])).values()],
+    savedMeals: [...new Map([...(base.savedMeals || []), ...(incoming.savedMeals || [])].map((item) => [item.id, item])).values()],
+  });
+  const supabase = createMockSupabase([], { userId: 'user-1' });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+  });
+  const repo = context.LeeLeeTrackerSync.createRepository({
+    ...store,
+    normalizeRecord: (item) => ({ ...item }),
+    normalizeFood: (item) => item && item.name ? { ...item } : null,
+    normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+  });
+
+  await repo.initialize();
+  repo.queueFoodUpsert({ id: 'food-1', name: 'Mustard', carbs: 0, createdAt: '2026-08-31T12:00:00.000Z', updatedAt: '2026-08-31T12:00:00.000Z', version: 1 });
+  repo.queueSavedMealUpsert({ id: 'meal-1', name: 'Hot Dog Meal', totalCarbs: 0, components: [], createdAt: '2026-08-31T12:00:00.000Z', updatedAt: '2026-08-31T12:00:00.000Z', version: 1 });
+  await repo.processFoodLibraryQueue();
+
+  assert.equal(repo.getSyncStatus().foodLibraryPendingCount, 0);
+  assert.equal(supabase.client.foodRows[0].name, 'Mustard');
+  assert.equal(supabase.client.foodRows[0].carb_grams, 0);
+  assert.equal(supabase.client.savedMealRows[0].name, 'Hot Dog Meal');
+  assert.equal(repo.getRecordQueueSnapshot().length, 0);
 });
