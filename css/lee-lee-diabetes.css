@@ -868,23 +868,18 @@
 }
 
 .lee_lee_diabetes_carb_tabs {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
-  overflow-x: auto;
   padding-bottom: 0.15rem;
-  scrollbar-width: none;
 }
 
 .lee_lee_diabetes_carb_tabs .lee_lee_diabetes_nav_button {
-  flex: 1 1 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
   text-align: center;
-  min-width: min(8.5rem, 100%);
-}
-
-.lee_lee_diabetes_carb_tabs::-webkit-scrollbar {
-  display: none;
+  min-width: 0;
 }
 
 .lee_lee_diabetes_carb_food_row,
@@ -1118,6 +1113,10 @@
 }
 
 @media (max-width: 420px) {
+  .lee_lee_diabetes_carb_tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .lee_lee_diabetes_carb_selected_row,
   .lee_lee_diabetes_food_item {
     grid-template-columns: minmax(0, 1fr);
