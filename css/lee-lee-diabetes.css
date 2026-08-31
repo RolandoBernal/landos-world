@@ -87,18 +87,25 @@
 }
 
 .lee_lee_diabetes_settings_shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   margin-top: 1.35rem;
+  inline-size: 44px;
+  block-size: 44px;
   min-height: 40px;
-  padding: 0.58rem 0.82rem;
+  padding: 0;
   border: 1px solid var(--lee-lee-border);
   border-radius: 8px;
   background: rgb(255 255 255 / 6%);
   color: var(--lee-lee-muted);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 900;
   cursor: pointer;
+}
+
+.lee_lee_diabetes_settings_shortcut svg {
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
 }
 
 .lee_lee_diabetes_settings_shortcut.is-active {
