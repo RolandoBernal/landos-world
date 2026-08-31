@@ -88,10 +88,10 @@ const LOCAL_APP_ROUTES = [
     hash: '#/digital-clock',
     root: '#clock-view',
     visible: [
-      { text: 'Nashville, TN' },
-      { text: 'Puerto Vallarta, MX' },
-      { text: 'Tepic, MX' },
-      { text: 'Vancouver, BC' },
+      { text: 'Nashville' },
+      { text: 'Puerto Vallarta' },
+      { text: 'Tepic' },
+      { text: 'Vancouver' },
     ],
   },
   {
@@ -259,6 +259,33 @@ test('Digital Clock seven-segment time stays centered and contained for represen
     expect(layout.every((item) => item.centered), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} should remain centered`).toBe(true);
     expect(layout.every((item) => item.separatedDigits), `${timeCase.hour}:${timeCase.minute}:${timeCase.second} digits should not collide`).toBe(true);
   }
+});
+
+test('Digital Clock desktop cards stay square while containing Orbitron clock content', async ({ page }) => {
+  await page.setViewportSize({ width: 1472, height: 1684 });
+  await page.goto('/#/digital-clock');
+  await expect(page.locator('[data-clock-id="nashville"] .digit_clock_current_weather')).toBeVisible();
+
+  const layout = await page.locator('#clock-view .digital_clock_wrapper').evaluateAll((cards) => cards.map((card) => {
+    const cardBox = card.getBoundingClientRect();
+    const childBoxes = Array.from(card.children)
+      .filter((child) => {
+        const style = window.getComputedStyle(child);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      })
+      .map((child) => child.getBoundingClientRect());
+    const contentBottom = Math.max(...childBoxes.map((box) => box.bottom));
+
+    return {
+      contentOverflowsBox: contentBottom > cardBox.bottom + 1,
+      scrollOverflowsBox: card.scrollHeight > card.clientHeight + 1,
+      square: Math.abs(cardBox.width - cardBox.height) <= 1,
+    };
+  }));
+
+  expect(layout.every((item) => !item.contentOverflowsBox), 'visible clock content should stay inside every desktop card').toBe(true);
+  expect(layout.every((item) => !item.scrollOverflowsBox), 'desktop clock card content should not overflow its square').toBe(true);
+  expect(layout.every((item) => item.square), 'desktop clock cards should remain square').toBe(true);
 });
 
 test('launcher opens every local app route from its cards', async ({ page }) => {
