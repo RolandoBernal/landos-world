@@ -27,8 +27,8 @@ body {
   --landos-section-gap: 1rem;
   --launcher-content-max-width: var(--landos-page-max-width);
   --launcher-card-max-size: 420px;
-  --clock-content-max-width: var(--landos-page-max-width);
-  --clock-card-max-size: 420px;
+  --clock-content-max-width: 1160px;
+  --clock-card-max-size: 560px;
   --color-bg: #000;
   --color-bg-rgb: 0 0 0;
   --color-surface: #0a0a0a;
