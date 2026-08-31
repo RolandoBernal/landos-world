@@ -2926,6 +2926,7 @@
   }
 
   function renderTrackerTop({ active = 'today', kicker = formatDate(), title = 'Lee-Lee’s Tracker' } = {}) {
+    const settingsActive = active === 'settings';
     return `
       <section class="lee_lee_diabetes_top">
         <div class="lee_lee_diabetes_top_row">
@@ -2936,10 +2937,11 @@
           </div>
           <button
             type="button"
-            class="lee_lee_diabetes_settings_shortcut ${active === 'settings' ? 'is-active' : ''}"
+            class="lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
             data-action="settings"
-            aria-label="Settings"
-            aria-current="${active === 'settings' ? 'page' : 'false'}"
+            aria-label="${settingsActive ? 'Close Settings' : 'Settings'}"
+            aria-pressed="${settingsActive ? 'true' : 'false'}"
+            aria-current="${settingsActive ? 'page' : 'false'}"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -6695,6 +6697,10 @@
       }
       if (action === 'settings') {
         trackerMenuOpen = false;
+        if (currentEditor?.mode === 'settings') {
+          handleCancel();
+          return;
+        }
         renderSettings();
       }
       if (action === 'cancel') {
