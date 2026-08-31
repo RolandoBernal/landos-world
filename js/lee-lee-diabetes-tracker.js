@@ -62,7 +62,6 @@
     ['reports', 'Reports'],
     ['export', 'Export'],
     ['foods', 'Foods'],
-    ['settings', 'Settings'],
   ]);
   const FOOD_LIBRARY_TABS = Object.freeze([
     ['favorites', 'Favorites'],
@@ -1794,11 +1793,7 @@
     conflictSelection = new Set([...conflictSelection].filter((id) => conflicts.some((conflict) => conflict.recordId === id)));
     const selectedCount = conflictSelection.size;
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">Sync</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Records Needing Review</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'settings', kicker: 'Sync', title: 'Records Needing Review' })}
       ${renderTrackerNav('settings')}
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-conflict-summary-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-conflict-summary-title">${escapeHtml(conflicts.length)} ${conflicts.length === 1 ? 'conflict needs' : 'conflicts need'} review</h2>
@@ -2930,17 +2925,34 @@
     `;
   }
 
+  function renderTrackerTop({ active = 'today', kicker = formatDate(), title = 'Lee-Lee’s Tracker' } = {}) {
+    return `
+      <section class="lee_lee_diabetes_top">
+        <div class="lee_lee_diabetes_top_row">
+          <div class="lee_lee_diabetes_top_title_group">
+            <p class="lee_lee_diabetes_date">${escapeHtml(kicker)}</p>
+            <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">${escapeHtml(title)}</h1>
+            ${renderPersistenceStatus()}
+          </div>
+          <button
+            type="button"
+            class="lee_lee_diabetes_settings_shortcut ${active === 'settings' ? 'is-active' : ''}"
+            data-action="settings"
+            aria-label="Settings"
+            aria-current="${active === 'settings' ? 'page' : 'false'}"
+          >Settings</button>
+        </div>
+      </section>
+    `;
+  }
+
   function renderHome() {
     currentEditor = null;
     const root = getRoot();
     if (!root) return;
     const timeline = todaysRecords();
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">${escapeHtml(formatDate())}</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Lee-Lee’s Tracker</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'today' })}
       ${renderTrackerNav('today')}
       <section class="lee_lee_diabetes_today_actions" aria-label="Log an entry">
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Log Entry</button>
@@ -3102,11 +3114,7 @@
         <p class="lee_lee_diabetes_help">Saved blood-sugar and insulin entries will appear here.</p>
       `;
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">${escapeHtml(formatDate())}</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">History</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'history', title: 'History' })}
       ${renderTrackerNav('history')}
       ${renderHistoryFilterTrigger(visibleGroups)}
       <section class="lee_lee_diabetes_history_list" aria-label="History dates">
@@ -3143,11 +3151,7 @@
       dateKey,
     };
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">History</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">${escapeHtml(formatDateKey(dateKey))}</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'history', kicker: 'History', title: formatDateKey(dateKey) })}
       ${renderTrackerNav('history')}
       <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_extra" data-action="history">← All Dates</button>
       ${renderSummaryGrid(summary)}
@@ -3178,11 +3182,7 @@
       .filter((meal) => searchTextMatches(meal.name, savedMealsSearch))
       .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">Food Library</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Foods</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
       ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved">${escapeHtml(foodLibraryMessage)}</p>` : ''}
@@ -3556,11 +3556,7 @@
     const reportRecords = getReportRecords();
     const rangeText = formatDateRangeText(reportOptions);
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">${escapeHtml(formatDate())}</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Reports</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'reports', title: 'Reports' })}
       ${renderTrackerNav('reports')}
       <div class="lee_lee_diabetes_report_control_stack">
         ${renderReportRangeControls()}
@@ -3592,11 +3588,7 @@
     const exportRecords = getExportRecords();
     const rangeText = formatDateRangeText(exportOptions);
     root.innerHTML = `
-      <section class="lee_lee_diabetes_top">
-        <p class="lee_lee_diabetes_date">${escapeHtml(formatDate())}</p>
-        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Export</h1>
-        ${renderPersistenceStatus()}
-      </section>
+      ${renderTrackerTop({ active: 'export', title: 'Export' })}
       ${renderTrackerNav('export')}
       <section class="lee_lee_diabetes_editor lee_lee_diabetes_export_controls" aria-label="Export options">
         ${renderFilterControls(exportOptions, 'export')}
@@ -5360,9 +5352,8 @@
     const sharedSettingsStatus = getSharedSettingsStatus();
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-plan-editor>
-        <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Settings</h1>
+        ${renderTrackerTop({ active: 'settings', kicker: 'Lee-Lee’s Tracker', title: 'Settings' })}
         ${renderTrackerNav('settings')}
-        ${renderPersistenceStatus()}
         <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-patient-title">
           <h2 class="lee_lee_diabetes_section_title" id="lee-lee-patient-title">Patient & Clinic</h2>
           <p class="lee_lee_diabetes_help">Patient and clinic information syncs across signed-in devices.</p>
