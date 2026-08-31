@@ -390,3 +390,97 @@ test('failed stable-key writes keep the in-memory document available without cle
   assert.equal(storage.createBackupDocument().records.some((record) => record.id === 'unsaved-visible'), true);
   assert.equal(JSON.parse(localStorage.getItem(storageKey)).records.length, 1);
 });
+
+test('food library normalizes user-managed foods and rejects malformed carb values', () => {
+  const { storage } = createTracker();
+  const helpers = storage.helpers;
+  const zeroCarb = helpers.normalizeFoodLibraryItem({
+    id: 'food-1',
+    name: 'Mustard',
+    carbs: '0',
+    servingLabel: 'packet',
+    favorite: true,
+    createdAt: '2026-08-31T12:00:00.000Z',
+  });
+
+  assert.equal(zeroCarb.name, 'Mustard');
+  assert.equal(zeroCarb.carbs, 0);
+  assert.equal(zeroCarb.favorite, true);
+  assert.equal(helpers.normalizeFoodLibraryItem({ name: '', carbs: 2 }), null);
+  assert.equal(helpers.normalizeFoodLibraryItem({ name: 'Bad', carbs: -1 }), null);
+  assert.equal(helpers.normalizeFoodLibraryItem({ name: 'Bad', carbs: 'nope' }), null);
+});
+
+test('food library search, favorites, and recents use normalized user data', () => {
+  const { storage } = createTracker();
+  const helpers = storage.helpers;
+  const foods = [
+    helpers.normalizeFoodLibraryItem({ id: 'food-1', name: 'Ketchup', carbs: 4, favorite: true, lastUsedAt: '2026-08-31T14:00:00.000Z' }),
+    helpers.normalizeFoodLibraryItem({ id: 'food-2', name: 'Footlong hot dog', carbs: 24, servingLabel: 'one', lastUsedAt: '2026-08-30T14:00:00.000Z' }),
+    helpers.normalizeFoodLibraryItem({ id: 'food-3', name: 'Mustard', carbs: 0, deletedAt: '2026-08-31T15:00:00.000Z' }),
+  ];
+
+  assert.deepEqual(helpers.searchFoodItems(foods, ' hot ').map((food) => food.id), ['food-2']);
+  assert.deepEqual(helpers.searchFoodItems(foods, '').map((food) => food.id), ['food-1', 'food-2']);
+  assert.deepEqual(helpers.getRecentFoodItems(foods).map((food) => food.id), ['food-1', 'food-2']);
+});
+
+test('carb calculator merges duplicate foods and combines manual amounts', () => {
+  const { storage } = createTracker();
+  const helpers = storage.helpers;
+  const merged = helpers.mergeCarbCalculatorRows([
+    { id: 'manual-1', sourceType: 'manual', qty: '2', carbs: '5' },
+    { id: 'food-row-1', sourceType: 'food', foodId: 'food-1', name: 'Ketchup', qty: '1', carbs: '4' },
+  ], [
+    { id: 'food-row-2', sourceType: 'food', foodId: 'food-1', name: 'Ketchup', qty: '2', carbs: '4' },
+  ]);
+
+  const foodRow = merged.find((row) => row.foodId === 'food-1');
+  assert.equal(foodRow.qty, '3');
+  assert.equal(helpers.calculateCarbCalculatorMealTotal(merged), 22);
+});
+
+test('saved meal totals and entry components are derived from snapshots', () => {
+  const { storage } = createTracker();
+  const helpers = storage.helpers;
+  const rows = [
+    { id: 'food-1-row', sourceType: 'food', foodId: 'food-1', name: 'Footlong hot dog', servingLabel: 'one', qty: '1', carbs: '24' },
+    { id: 'food-2-row', sourceType: 'food', foodId: 'food-2', name: 'Ketchup', qty: '1.5', carbs: '4' },
+    { id: 'manual-row', sourceType: 'manual', qty: '1', carbs: '3' },
+  ];
+  const components = helpers.buildMealComponentsFromCarbCalculatorRows(rows);
+  const meal = helpers.normalizeSavedMeal({ id: 'meal-1', name: 'Hot Dog Meal', components });
+
+  assert.equal(components.length, 3);
+  assert.equal(components.find((item) => item.foodId === 'food-1').nameSnapshot, 'Footlong hot dog');
+  assert.equal(components.find((item) => item.componentType === 'manual').carbTotal, 3);
+  assert.equal(meal.totalCarbs, 33);
+});
+
+test('tracker document preserves food library, saved meals, and historical meal components', () => {
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({
+      schemaVersion: 1,
+      records: [sampleRecord({
+        id: 'meal-components',
+        mealCarbs: 28,
+        mealComponents: [
+          { componentType: 'food', foodId: 'food-1', nameSnapshot: 'Original Name', quantity: 1, carbsPerServing: 24, carbTotal: 24 },
+          { componentType: 'manual', nameSnapshot: 'Manual amount', carbTotal: 4 },
+        ],
+      })],
+      foodLibrary: [{ id: 'food-1', name: 'Edited Name', carbs: 30 }],
+      savedMeals: [{ id: 'meal-1', name: 'Saved', components: [{ componentType: 'food', foodId: 'food-1', nameSnapshot: 'Edited Name', quantity: 1, carbsPerServing: 30 }] }],
+      settings: {},
+      insulinPlans: [],
+      metadata: {},
+    }),
+  });
+
+  createTracker({ localStorage });
+  const stored = JSON.parse(localStorage.getItem(storageKey));
+  assert.equal(stored.foodLibrary[0].name, 'Edited Name');
+  assert.equal(stored.savedMeals[0].totalCarbs, 30);
+  assert.equal(stored.records[0].mealComponents[0].nameSnapshot, 'Original Name');
+  assert.equal(stored.records[0].mealCarbs, 28);
+});

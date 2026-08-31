@@ -61,7 +61,14 @@
     ['history', 'History'],
     ['reports', 'Reports'],
     ['export', 'Export'],
+    ['foods', 'Foods'],
     ['settings', 'Settings'],
+  ]);
+  const FOOD_LIBRARY_TABS = Object.freeze([
+    ['favorites', 'Favorites'],
+    ['recent', 'Recent'],
+    ['foods', 'My Foods'],
+    ['meals', 'Saved Meals'],
   ]);
   const DATE_RANGE_OPTIONS = [
     { value: 'today', label: 'Today', days: 1 },
@@ -153,6 +160,8 @@
   let trackerData = loadTrackerData();
   let records = trackerData.records;
   let insulinPlans = trackerData.insulinPlans;
+  let foodLibrary = trackerData.foodLibrary;
+  let savedMeals = trackerData.savedMeals;
   let historyFilters = {
     range: 'all',
     type: 'All',
@@ -177,10 +186,15 @@
     startDate: '',
     endDate: '',
   };
+  let foodLibrarySearch = '';
+  let savedMealsSearch = '';
+  let foodLibraryMessage = '';
+  let foodLibraryError = '';
   let currentEditor = null;
   let pendingCarbCalculatorFocusRowId = '';
   let pendingCarbCalculatorFocusFieldName = '';
   let pendingCarbCalculatorUsePointerId = null;
+  let lastCarbCalculatorSelection = { id: '', at: 0 };
   let carbCalculatorScrollLock = null;
   let carbCalculatorViewportListenerCleanup = null;
   let syncRepository = null;
@@ -499,15 +513,179 @@
     return String(Math.round((number + Number.EPSILON) * 100) / 100).replace(/\.0$/, '');
   }
 
+  function normalizeQuantity(value, fallback = 1) {
+    const number = normalizeNumber(value);
+    if (number == null) return fallback;
+    return Math.round((number + Number.EPSILON) * 100) / 100;
+  }
+
+  function normalizeFoodLibraryItem(food = {}) {
+    const source = food && typeof food === 'object' ? food : {};
+    const now = new Date().toISOString();
+    const createdAt = toIsoTimestamp(source.createdAt || source.created_at, now);
+    const updatedAt = toIsoTimestamp(source.updatedAt || source.updated_at, createdAt);
+    const name = sanitizeShortText(source.name, 80);
+    const carbs = normalizeNumber(source.carbs ?? source.carbGrams ?? source.carbsPerServing);
+    if (!name || carbs == null) return null;
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      name,
+      carbs,
+      servingLabel: sanitizeShortText(source.servingLabel ?? source.serving_label ?? source.servingDescription, 80),
+      brand: sanitizeShortText(source.brand, 80),
+      notes: sanitizeNotes(source.notes),
+      favorite: source.favorite === true || source.is_favorite === true,
+      lastUsedAt: source.lastUsedAt || source.last_used_at || null,
+      useCount: Math.max(0, Number(source.useCount ?? source.use_count ?? 0) || 0),
+      sourceProvider: sanitizeShortText(source.sourceProvider ?? source.source_provider, 80),
+      externalId: sanitizeShortText(source.externalId ?? source.external_id, 120),
+      barcodeId: sanitizeShortText(source.barcodeId ?? source.barcode_id, 120),
+      createdAt,
+      updatedAt,
+      version: Number(source.version || 1),
+      enteredBy: typeof source.enteredBy === 'string' ? source.enteredBy : (typeof source.entered_by === 'string' ? source.entered_by : 'Unknown'),
+      lastEditedBy: typeof source.lastEditedBy === 'string' ? source.lastEditedBy : (typeof source.last_edited_by === 'string' ? source.last_edited_by : null),
+      deletedAt: source.deletedAt || source.deleted_at || null,
+      deletedBy: source.deletedBy || source.deleted_by || null,
+      syncStatus: source.syncStatus || 'local',
+      syncError: source.syncError || '',
+    };
+  }
+
+  function getFoodSnapshot(food, quantity = 1) {
+    const normalized = normalizeFoodLibraryItem(food);
+    if (!normalized) return null;
+    const qty = normalizeQuantity(quantity);
+    const carbTotal = Math.round((qty * normalized.carbs + Number.EPSILON) * 100) / 100;
+    return {
+      id: createId(),
+      componentType: 'food',
+      foodId: normalized.id,
+      nameSnapshot: normalized.name,
+      servingLabelSnapshot: normalized.servingLabel,
+      brandSnapshot: normalized.brand,
+      quantity: qty,
+      carbsPerServing: normalized.carbs,
+      carbTotal,
+    };
+  }
+
+  function normalizeMealComponent(component = {}) {
+    const source = component && typeof component === 'object' ? component : {};
+    const componentType = source.componentType === 'manual' || source.type === 'manual' ? 'manual' : 'food';
+    const quantity = normalizeQuantity(source.quantity ?? source.qty);
+    const carbsPerServing = normalizeNumber(source.carbsPerServing ?? source.carbs ?? source.carbGrams);
+    const explicitTotal = normalizeNumber(source.carbTotal ?? source.calculatedCarbs);
+    if (componentType === 'manual') {
+      const carbTotal = explicitTotal ?? carbsPerServing;
+      if (carbTotal == null) return null;
+      return {
+        id: typeof source.id === 'string' && source.id ? source.id : createId(),
+        componentType: 'manual',
+        foodId: '',
+        nameSnapshot: sanitizeShortText(source.nameSnapshot || source.name || 'Manual amount', 80) || 'Manual amount',
+        servingLabelSnapshot: '',
+        brandSnapshot: '',
+        quantity: 1,
+        carbsPerServing: carbTotal,
+        carbTotal,
+      };
+    }
+    if (carbsPerServing == null) return null;
+    const carbTotal = explicitTotal ?? Math.round((quantity * carbsPerServing + Number.EPSILON) * 100) / 100;
+    const nameSnapshot = sanitizeShortText(source.nameSnapshot || source.name, 80);
+    if (!nameSnapshot) return null;
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      componentType: 'food',
+      foodId: typeof source.foodId === 'string' ? source.foodId : (typeof source.food_id === 'string' ? source.food_id : ''),
+      nameSnapshot,
+      servingLabelSnapshot: sanitizeShortText(source.servingLabelSnapshot || source.servingLabel || source.serving_label, 80),
+      brandSnapshot: sanitizeShortText(source.brandSnapshot || source.brand, 80),
+      quantity,
+      carbsPerServing,
+      carbTotal,
+    };
+  }
+
+  function calculateMealComponentTotal(components = []) {
+    return Math.round((components || []).reduce((sum, component) => {
+      const normalized = normalizeMealComponent(component);
+      return sum + (normalized?.carbTotal ?? 0);
+    }, 0) * 100) / 100;
+  }
+
+  function normalizeSavedMeal(meal = {}) {
+    const source = meal && typeof meal === 'object' ? meal : {};
+    const now = new Date().toISOString();
+    const name = sanitizeShortText(source.name, 80);
+    if (!name) return null;
+    const components = (Array.isArray(source.components) ? source.components : [])
+      .map(normalizeMealComponent)
+      .filter(Boolean);
+    return {
+      id: typeof source.id === 'string' && source.id ? source.id : createId(),
+      name,
+      components,
+      favorite: source.favorite === true || source.is_favorite === true,
+      totalCarbs: calculateMealComponentTotal(components),
+      createdAt: toIsoTimestamp(source.createdAt || source.created_at, now),
+      updatedAt: toIsoTimestamp(source.updatedAt || source.updated_at, now),
+      version: Number(source.version || 1),
+      enteredBy: typeof source.enteredBy === 'string' ? source.enteredBy : (typeof source.entered_by === 'string' ? source.entered_by : 'Unknown'),
+      lastEditedBy: typeof source.lastEditedBy === 'string' ? source.lastEditedBy : (typeof source.last_edited_by === 'string' ? source.last_edited_by : null),
+      deletedAt: source.deletedAt || source.deleted_at || null,
+      deletedBy: source.deletedBy || source.deleted_by || null,
+      syncStatus: source.syncStatus || 'local',
+      syncError: source.syncError || '',
+    };
+  }
+
+  function isLibraryItemDeleted(item) {
+    return Boolean(item?.deletedAt || item?.deleted_at);
+  }
+
+  function activeFoodItems(source = trackerData.foodLibrary || []) {
+    return source.map(normalizeFoodLibraryItem).filter((item) => item && !isLibraryItemDeleted(item));
+  }
+
+  function activeSavedMeals(source = trackerData.savedMeals || []) {
+    return source.map(normalizeSavedMeal).filter((item) => item && !isLibraryItemDeleted(item));
+  }
+
+  function searchTextMatches(value, query) {
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    if (!normalizedQuery) return true;
+    return String(value || '').toLowerCase().includes(normalizedQuery);
+  }
+
+  function searchFoodItems(foods = [], query = '') {
+    return activeFoodItems(foods)
+      .filter((food) => searchTextMatches([food.name, food.brand, food.servingLabel].filter(Boolean).join(' '), query))
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+  }
+
+  function getRecentFoodItems(foods = []) {
+    return activeFoodItems(foods)
+      .filter((food) => food.lastUsedAt)
+      .sort((a, b) => (parseTimestamp(b.lastUsedAt) || 0) - (parseTimestamp(a.lastUsedAt) || 0));
+  }
+
   function createBlankCarbCalculatorRow() {
-    return { id: createId(), qty: '1', carbs: '' };
+    return { id: createId(), sourceType: 'manual', qty: '1', carbs: '' };
   }
 
   function normalizeCarbCalculatorRow(row = {}) {
+    const sourceType = row.sourceType === 'food' ? 'food' : 'manual';
     const qtyText = row.qty == null ? '' : String(row.qty);
     const carbsText = row.carbs == null ? '' : String(row.carbs);
     return {
       id: typeof row.id === 'string' && row.id ? row.id : createId(),
+      sourceType,
+      foodId: sourceType === 'food' && typeof row.foodId === 'string' ? row.foodId : '',
+      name: sourceType === 'food' ? sanitizeShortText(row.name || row.nameSnapshot, 80) : '',
+      servingLabel: sourceType === 'food' ? sanitizeShortText(row.servingLabel || row.servingLabelSnapshot, 80) : '',
+      brand: sourceType === 'food' ? sanitizeShortText(row.brand || row.brandSnapshot, 80) : '',
       qty: qtyText,
       carbs: carbsText,
     };
@@ -534,17 +712,31 @@
 
   function normalizeCarbCalculatorRows(rows = []) {
     const normalized = (Array.isArray(rows) ? rows : []).map(normalizeCarbCalculatorRow);
-    const activeRows = normalized.filter(isCarbCalculatorRowStarted);
+    const activeRows = dedupeDuplicateFoodRows(normalized.filter(isCarbCalculatorRowStarted));
     return [...activeRows, createBlankCarbCalculatorRow()];
   }
 
   function normalizeCarbCalculatorRowsForEditing(rows = [], preserveRowId = '') {
     const normalized = (Array.isArray(rows) ? rows : []).map(normalizeCarbCalculatorRow);
-    const editableRows = normalized.filter((row) => isCarbCalculatorRowStarted(row) || row.id === preserveRowId);
+    const editableRows = dedupeDuplicateFoodRows(normalized.filter((row) => isCarbCalculatorRowStarted(row) || row.id === preserveRowId));
     if (!editableRows.some((row) => !isCarbCalculatorRowStarted(row))) {
       editableRows.push(createBlankCarbCalculatorRow());
     }
     return editableRows.length ? editableRows : [createBlankCarbCalculatorRow()];
+  }
+
+  function dedupeDuplicateFoodRows(rows = []) {
+    const seenFoodIds = new Set();
+    return rows.filter((row) => {
+      if (row.sourceType !== 'food' || !row.foodId) {
+        return true;
+      }
+      if (seenFoodIds.has(row.foodId)) {
+        return false;
+      }
+      seenFoodIds.add(row.foodId);
+      return true;
+    });
   }
 
   function calculateCarbCalculatorMealTotal(rows = []) {
@@ -553,6 +745,80 @@
 
   function hasValidCarbCalculatorTotal(rows = []) {
     return (rows || []).some((row) => calculateCarbCalculatorRowTotal(row) != null && isCarbCalculatorRowStarted(row));
+  }
+
+  function buildMealComponentsFromCarbCalculatorRows(rows = []) {
+    return normalizeCarbCalculatorRows(rows)
+      .filter(isCarbCalculatorRowStarted)
+      .map((row) => {
+        const total = calculateCarbCalculatorRowTotal(row);
+        if (total == null) return null;
+        if (row.sourceType === 'food') {
+          return normalizeMealComponent({
+            componentType: 'food',
+            foodId: row.foodId,
+            nameSnapshot: row.name,
+            servingLabelSnapshot: row.servingLabel,
+            brandSnapshot: row.brand,
+            quantity: row.qty,
+            carbsPerServing: row.carbs,
+            carbTotal: total,
+          });
+        }
+        return normalizeMealComponent({
+          componentType: 'manual',
+          nameSnapshot: 'Manual amount',
+          carbTotal: total,
+        });
+      })
+      .filter(Boolean);
+  }
+
+  function mergeCarbCalculatorRows(rows = [], incomingRows = []) {
+    const merged = normalizeCarbCalculatorRows(rows).filter(isCarbCalculatorRowStarted);
+    normalizeCarbCalculatorRows(incomingRows).filter(isCarbCalculatorRowStarted).forEach((incoming) => {
+      const existing = incoming.sourceType === 'food' && incoming.foodId
+        ? merged.find((row) => row.sourceType === 'food' && row.foodId === incoming.foodId)
+        : null;
+      if (existing) {
+        existing.qty = formatCarbAmount(normalizeQuantity(existing.qty, 0) + normalizeQuantity(incoming.qty, 0));
+      } else {
+        merged.push({ ...incoming, id: incoming.id || createId() });
+      }
+    });
+    return normalizeCarbCalculatorRows(merged);
+  }
+
+  function carbRowsFromMealComponents(components = []) {
+    const rows = (Array.isArray(components) ? components : [])
+      .map(normalizeMealComponent)
+      .filter(Boolean)
+      .map((component) => ({
+        id: createId(),
+        sourceType: component.componentType === 'food' ? 'food' : 'manual',
+        foodId: component.foodId || '',
+        name: component.nameSnapshot || '',
+        servingLabel: component.servingLabelSnapshot || '',
+        brand: component.brandSnapshot || '',
+        qty: component.componentType === 'food' ? formatCarbAmount(component.quantity) : '1',
+        carbs: component.componentType === 'food' ? formatCarbAmount(component.carbsPerServing) : formatCarbAmount(component.carbTotal),
+      }));
+    return normalizeCarbCalculatorRows(rows);
+  }
+
+  function carbRowFromFood(food) {
+    const normalized = normalizeFoodLibraryItem(food);
+    if (!normalized) return null;
+    return normalizeCarbCalculatorRow({
+      id: createId(),
+      sourceType: 'food',
+      foodId: normalized.id,
+      name: normalized.name,
+      servingLabel: normalized.servingLabel,
+      brand: normalized.brand,
+      qty: '1',
+      carbs: formatCarbAmount(normalized.carbs),
+    });
   }
 
   function getCorrectionDose({ bloodSugar, insulinPlan }) {
@@ -769,8 +1035,14 @@
     const date = getLocalDateKey(recordDate);
     const time = getLocalTimeKey(recordDate);
     const administeredInsulinUnits = normalizeNumber(record.administeredInsulinUnits ?? record.insulinUnits);
+    const mealComponentsSource = Array.isArray(record.mealComponents)
+      ? record.mealComponents
+      : (Array.isArray(record.carbComponents) ? record.carbComponents : []);
+    const mealComponents = mealComponentsSource.map(normalizeMealComponent).filter(Boolean);
     const foods = Array.isArray(record.foods) ? record.foods.map(normalizeFoodItem).filter(Boolean) : [];
-    const mealCarbs = normalizeNumber(record.mealCarbs ?? record.totalCarbs ?? record.carbs) ?? (foods.length ? calculateTotalCarbs(foods) : null);
+    const mealCarbs = normalizeNumber(record.mealCarbs ?? record.totalCarbs ?? record.carbs)
+      ?? (mealComponents.length ? calculateMealComponentTotal(mealComponents) : null)
+      ?? (foods.length ? calculateTotalCarbs(foods) : null);
     const activityDurationMinutes = normalizeWholeNumber(record.activityDurationMinutes);
     const activityIntensity = ACTIVITY_INTENSITY_OPTIONS.includes(record.activityIntensity) ? record.activityIntensity : '';
     return {
@@ -785,6 +1057,8 @@
       administeredInsulinUnits,
       mealCarbs,
       foods,
+      mealComponents,
+      carbComponents: mealComponents,
       totalCarbs: mealCarbs,
       mealDescription: sanitizeShortText(record.mealDescription, 180),
       activityDescription: sanitizeShortText(record.activityDescription, 120),
@@ -1043,6 +1317,8 @@
     return {
       schemaVersion: TRACKER_SCHEMA_VERSION,
       records: [],
+      foodLibrary: [],
+      savedMeals: [],
       settings: {},
       insulinPlans: [clonePlanSnapshot(DEFAULT_INSULIN_PLAN)],
       activeInsulinPlanId: DEFAULT_INSULIN_PLAN.id,
@@ -1067,8 +1343,12 @@
       }
       : { malformedRecords: [], malformedPlans: [] };
     const recordsSource = Array.isArray(source.records) ? source.records : [];
+    const foodsSource = Array.isArray(source.foodLibrary) ? source.foodLibrary : [];
+    const savedMealsSource = Array.isArray(source.savedMeals) ? source.savedMeals : [];
     const plansSource = Array.isArray(source.insulinPlans) ? source.insulinPlans : [];
     const normalizedRecords = [];
+    const normalizedFoodLibrary = [];
+    const normalizedSavedMeals = [];
     const normalizedPlans = [];
     recordsSource.forEach((record, index) => {
       const normalized = normalizeRecord(record);
@@ -1086,11 +1366,21 @@
         recovery.malformedPlans.push({ index, value: plan, recoveredAt: now });
       }
     });
+    foodsSource.forEach((food) => {
+      const normalized = normalizeFoodLibraryItem(food);
+      if (normalized) normalizedFoodLibrary.push(normalized);
+    });
+    savedMealsSource.forEach((meal) => {
+      const normalized = normalizeSavedMeal(meal);
+      if (normalized) normalizedSavedMeals.push(normalized);
+    });
     const plans = normalizedPlans.length ? normalizedPlans : [clonePlanSnapshot(DEFAULT_INSULIN_PLAN)];
     return {
       ...source,
       schemaVersion: TRACKER_SCHEMA_VERSION,
       records: dedupeRecords(normalizedRecords),
+      foodLibrary: dedupeLibraryItems(normalizedFoodLibrary),
+      savedMeals: dedupeLibraryItems(normalizedSavedMeals),
       settings: source.settings && typeof source.settings === 'object' ? { ...source.settings } : {},
       insulinPlans: dedupePlans(plans),
       activeInsulinPlanId: typeof source.activeInsulinPlanId === 'string'
@@ -1140,12 +1430,26 @@
     return [...byId.values()];
   }
 
+  function dedupeLibraryItems(sourceItems) {
+    const byId = new Map();
+    sourceItems.forEach((item) => {
+      if (!item?.id) return;
+      const existing = byId.get(item.id);
+      const existingUpdatedAt = parseTimestamp(existing?.updatedAt) || 0;
+      const itemUpdatedAt = parseTimestamp(item.updatedAt) || 0;
+      if (!existing || itemUpdatedAt >= existingUpdatedAt) byId.set(item.id, item);
+    });
+    return [...byId.values()];
+  }
+
   function mergeTrackerDocuments(baseData, incomingData) {
     const base = normalizeTrackerDataDocument(baseData);
     const incoming = normalizeTrackerDataDocument(incomingData);
     return normalizeTrackerDataDocument({
       ...base,
       records: dedupeRecords([...base.records, ...incoming.records]),
+      foodLibrary: dedupeLibraryItems([...(base.foodLibrary || []), ...(incoming.foodLibrary || [])]),
+      savedMeals: dedupeLibraryItems([...(base.savedMeals || []), ...(incoming.savedMeals || [])]),
       settings: {
         ...base.settings,
         ...incoming.settings,
@@ -1232,6 +1536,8 @@
       trackerData = written.data;
       records = trackerData.records;
       insulinPlans = trackerData.insulinPlans;
+      foodLibrary = trackerData.foodLibrary;
+      savedMeals = trackerData.savedMeals;
       if (!options.keepStatus) setPersistenceStatus('saved');
       return { ok: true, data: trackerData };
     }
@@ -1250,8 +1556,105 @@
       trackerData = nextData;
       records = trackerData.records;
       insulinPlans = trackerData.insulinPlans;
+      foodLibrary = trackerData.foodLibrary;
+      savedMeals = trackerData.savedMeals;
     }
     return saved;
+  }
+
+  function queueLibrarySync(entityType, item, existingItem = null) {
+    const queueMethod = entityType === 'saved-meal' ? 'queueSavedMealUpsert' : 'queueFoodUpsert';
+    syncRepository?.[queueMethod]?.(item, existingItem);
+  }
+
+  function saveFoodLibraryItem(food, { addToCalculator = false } = {}) {
+    const existing = food.id ? foodLibrary.find((item) => item.id === food.id) : null;
+    const now = new Date().toISOString();
+    const identity = syncRepository?.getDeviceIdentity?.() || 'Unknown';
+    const normalized = normalizeFoodLibraryItem({
+      ...existing,
+      ...food,
+      id: existing?.id || food.id || createId(),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      enteredBy: existing?.enteredBy || identity,
+      lastEditedBy: existing ? identity : null,
+    });
+    if (!normalized) return { error: 'Food name and carb grams are required.' };
+    updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: dedupeLibraryItems([...(current.foodLibrary || []).filter((item) => item.id !== normalized.id), normalized]),
+    }));
+    queueLibrarySync('food', normalized, existing);
+    if (addToCalculator && currentEditor?.carbCalculatorOpen) {
+      const row = carbRowFromFood(normalized);
+      currentEditor.carbCalculatorRows = mergeCarbCalculatorRows(currentEditor.carbCalculatorRows || [], row ? [row] : []);
+    }
+    return { food: normalized };
+  }
+
+  function saveSavedMeal(meal) {
+    const existing = meal.id ? savedMeals.find((item) => item.id === meal.id) : null;
+    const now = new Date().toISOString();
+    const identity = syncRepository?.getDeviceIdentity?.() || 'Unknown';
+    const normalized = normalizeSavedMeal({
+      ...existing,
+      ...meal,
+      id: existing?.id || meal.id || createId(),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      enteredBy: existing?.enteredBy || identity,
+      lastEditedBy: existing ? identity : null,
+    });
+    if (!normalized || !normalized.components.length) return { error: 'Saved meals need a name and at least one carb item.' };
+    updateTrackerData((current) => ({
+      ...current,
+      savedMeals: dedupeLibraryItems([...(current.savedMeals || []).filter((item) => item.id !== normalized.id), normalized]),
+    }));
+    queueLibrarySync('saved-meal', normalized, existing);
+    return { meal: normalized };
+  }
+
+  function softDeleteLibraryItem(entityType, id) {
+    const source = entityType === 'saved-meal' ? savedMeals : foodLibrary;
+    const existing = source.find((item) => item.id === id);
+    if (!existing) return false;
+    const now = new Date().toISOString();
+    const identity = syncRepository?.getDeviceIdentity?.() || 'Unknown';
+    const deleted = {
+      ...existing,
+      deletedAt: now,
+      deletedBy: identity,
+      lastEditedBy: identity,
+      updatedAt: now,
+    };
+    updateTrackerData((current) => ({
+      ...current,
+      [entityType === 'saved-meal' ? 'savedMeals' : 'foodLibrary']: (current[entityType === 'saved-meal' ? 'savedMeals' : 'foodLibrary'] || [])
+        .map((item) => (item.id === id ? deleted : item)),
+    }));
+    queueLibrarySync(entityType, deleted, existing);
+    return true;
+  }
+
+  function updateRecentFoodsFromComponents(components = []) {
+    const usedIds = [...new Set((components || []).map((component) => component.foodId).filter(Boolean))];
+    if (!usedIds.length) return;
+    const now = new Date().toISOString();
+    updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: (current.foodLibrary || []).map((food) => {
+        if (!usedIds.includes(food.id)) return food;
+        const updated = normalizeFoodLibraryItem({
+          ...food,
+          lastUsedAt: now,
+          useCount: Number(food.useCount || 0) + 1,
+          updatedAt: now,
+        });
+        queueLibrarySync('food', updated, food);
+        return updated;
+      }).filter(Boolean),
+    }));
   }
 
   function setPersistenceStatus(status) {
@@ -1667,6 +2070,8 @@
       trackerData = mergeTrackerDocuments(trackerData, incoming);
       records = trackerData.records;
       insulinPlans = trackerData.insulinPlans;
+      foodLibrary = trackerData.foodLibrary;
+      savedMeals = trackerData.savedMeals;
       setPersistenceStatus('reloaded');
       if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
         if (currentEditor?.mode === 'settings') {
@@ -1847,6 +2252,14 @@
     calculateCarbCalculatorRowTotal,
     calculateCarbCalculatorMealTotal,
     hasValidCarbCalculatorTotal,
+    normalizeFoodLibraryItem,
+    normalizeSavedMeal,
+    normalizeMealComponent,
+    searchFoodItems,
+    getRecentFoodItems,
+    calculateMealComponentTotal,
+    buildMealComponentsFromCarbCalculatorRows,
+    mergeCarbCalculatorRows,
     calculateCarbDose,
     calculateMealSuggestedDose,
     calculateSnackSuggestedDose,
@@ -2329,6 +2742,25 @@
     return value == null ? '' : `${value} g carbs`;
   }
 
+  function formatMealComponentLabel(component) {
+    const item = normalizeMealComponent(component);
+    if (!item) return '';
+    const name = item.nameSnapshot || 'Manual amount';
+    return item.quantity && item.quantity !== 1 && item.componentType !== 'manual'
+      ? `${formatCarbAmount(item.quantity)}× ${name}`
+      : name;
+  }
+
+  function getMealComponentSummary(record) {
+    const components = Array.isArray(record?.mealComponents)
+      ? record.mealComponents.map(normalizeMealComponent).filter(Boolean)
+      : [];
+    if (components.length) {
+      return components.map(formatMealComponentLabel).filter(Boolean).join(' · ');
+    }
+    return '';
+  }
+
   function formatActivityDuration(value) {
     return value == null ? '' : `${value} min`;
   }
@@ -2396,9 +2828,11 @@
       const primary = getRecordPrimaryValue(record);
       const actualInsulin = formatInsulin(getRecordActualInsulin(record));
       const carbs = formatCarbs(record.mealCarbs);
+      const foodSummary = getMealComponentSummary(record);
       return [
         carbs && carbs !== primary ? carbs : '',
         actualInsulin && actualInsulin !== primary ? actualInsulin : '',
+        foodSummary,
         getMealDoseSummary(record),
         record.notes || '',
       ].filter(Boolean);
@@ -2733,6 +3167,83 @@
         </div>
       `,
     });
+  }
+
+  function renderFoodLibrary() {
+    const root = getRoot();
+    if (!root) return;
+    currentEditor = { mode: 'foods' };
+    const foods = searchFoodItems(foodLibrary, foodLibrarySearch);
+    const meals = activeSavedMeals(savedMeals)
+      .filter((meal) => searchTextMatches(meal.name, savedMealsSearch))
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+    root.innerHTML = `
+      <section class="lee_lee_diabetes_top">
+        <p class="lee_lee_diabetes_date">Food Library</p>
+        <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">Foods</h1>
+        ${renderPersistenceStatus()}
+      </section>
+      ${renderTrackerNav('foods')}
+      ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
+      ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved">${escapeHtml(foodLibraryMessage)}</p>` : ''}
+      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-add-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-add-title">Add Food</h2>
+        <div class="lee_lee_diabetes_food_form" data-food-library-editor>
+          <input type="hidden" name="foodId" value="">
+          <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" required></label>
+          <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required></label>
+          <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off"></label>
+          <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off"></label>
+          <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite"> Favorite</label>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
+        </div>
+      </section>
+      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-list-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-list-title">My Foods</h2>
+        <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
+        <div class="lee_lee_diabetes_food_list">
+          ${foods.length ? foods.map(renderFoodLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No foods yet.</p>'}
+        </div>
+      </section>
+      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-meals-list-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meals-list-title">Saved Meals</h2>
+        <label class="lee_lee_diabetes_field">Search Meals<input class="lee_lee_diabetes_input" name="savedMealsSearch" type="search" value="${escapeHtml(savedMealsSearch)}" autocomplete="off"></label>
+        <div class="lee_lee_diabetes_food_list">
+          ${meals.length ? meals.map(renderSavedMealLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No saved meals yet.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderFoodLibraryRow(food) {
+    return `
+      <article class="lee_lee_diabetes_food_item">
+        <div>
+          <strong>${escapeHtml(food.name)}</strong>
+          <p>${escapeHtml([food.brand, food.servingLabel, formatCarbs(food.carbs)].filter(Boolean).join(' · '))}</p>
+        </div>
+        <div class="lee_lee_diabetes_record_actions">
+          <button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-food-favorite" data-id="${escapeHtml(food.id)}" aria-label="${food.favorite ? 'Remove favorite' : 'Mark favorite'}">${food.favorite ? '★' : '☆'}</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-food-library-item" data-id="${escapeHtml(food.id)}">Edit</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-food-library-item" data-id="${escapeHtml(food.id)}">Delete</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderSavedMealLibraryRow(meal) {
+    return `
+      <article class="lee_lee_diabetes_food_item">
+        <div>
+          <strong>${escapeHtml(meal.name)}</strong>
+          <p>${escapeHtml(formatCarbs(meal.totalCarbs))}</p>
+          <p>${escapeHtml(meal.components.map(formatMealComponentLabel).join(' · '))}</p>
+        </div>
+        <div class="lee_lee_diabetes_record_actions">
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-saved-meal" data-id="${escapeHtml(meal.id)}">Delete</button>
+        </div>
+      </article>
+    `;
   }
 
   function renderDeleteConfirmation(record) {
@@ -3330,6 +3841,8 @@
     const normalizedRows = normalizeCarbCalculatorRows(rows);
     const mealTotal = calculateCarbCalculatorMealTotal(normalizedRows);
     const canUseTotal = hasValidCarbCalculatorTotal(normalizedRows);
+    const activeTab = currentEditor?.carbCalculatorTab || 'favorites';
+    const search = currentEditor?.carbCalculatorSearch || '';
     return `
       <div class="lee_lee_diabetes_carb_calc_layer" data-carb-calculator-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>
@@ -3338,16 +3851,20 @@
             <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator</h2>
             <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>
           </div>
-          <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows>
+          ${renderCarbCalculatorLibrary(activeTab, search)}
+          ${renderSelectedCarbRows(normalizedRows)}
+          <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Manual carb amounts">
             <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
             <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true"></div>
             <div class="lee_lee_diabetes_carb_calc_heading">Carbs</div>
             <div class="lee_lee_diabetes_carb_calc_heading lee_lee_diabetes_carb_calc_total_heading">Total</div>
             <div aria-hidden="true"></div>
-            ${normalizedRows.map((row) => renderCarbCalculatorRow(row)).join('')}
+            ${normalizedRows.filter((row) => row.sourceType !== 'food').map((row) => renderCarbCalculatorRow(row)).join('')}
           </div>
+          ${currentEditor?.carbCalculatorFoodEditorOpen ? renderFoodEditorPanel() : ''}
+          ${currentEditor?.carbCalculatorMealEditorOpen ? renderSavedMealEditorPanel(normalizedRows) : ''}
           <div class="lee_lee_diabetes_carb_calc_sum" aria-live="polite">
-            <span>Meal Total</span>
+            <span>Total Carbs</span>
             <strong data-carb-calculator-total aria-label="Meal Total">${escapeHtml(formatCarbAmount(mealTotal))} g</strong>
           </div>
           <div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single">
@@ -3358,12 +3875,130 @@
     `;
   }
 
+  function renderCarbCalculatorLibrary(activeTab, search) {
+    return `
+      <div class="lee_lee_diabetes_carb_library">
+        <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_search">
+          Search foods
+          <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" value="${escapeHtml(search)}">
+        </label>
+        <div class="lee_lee_diabetes_carb_tabs" role="tablist" aria-label="Carb Calculator food filters">
+          ${FOOD_LIBRARY_TABS.map(([tab, label]) => `
+            <button type="button" class="lee_lee_diabetes_nav_button ${activeTab === tab ? 'is-active' : ''}" data-action="set-carb-calculator-tab" data-tab="${escapeHtml(tab)}" role="tab" aria-selected="${activeTab === tab ? 'true' : 'false'}">${escapeHtml(label)}</button>
+          `).join('')}
+        </div>
+        <div class="lee_lee_diabetes_carb_library_list">
+          ${renderCarbCalculatorLibraryList(activeTab, search)}
+        </div>
+        <div class="lee_lee_diabetes_backup_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-food-editor">Add New Food</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-meal-editor" ${hasValidCarbCalculatorTotal(currentEditor?.carbCalculatorRows || []) ? '' : 'disabled'}>Save as Meal</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCarbCalculatorLibraryList(activeTab, search) {
+    if (activeTab === 'meals') {
+      const meals = activeSavedMeals(savedMeals)
+        .filter((meal) => searchTextMatches(meal.name, search))
+        .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+      return meals.length ? meals.map((meal) => `
+        <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}">
+          <span><strong>${escapeHtml(meal.name)}</strong><small>${escapeHtml(formatCarbs(meal.totalCarbs))}</small></span>
+          <span aria-hidden="true">+</span>
+        </button>
+      `).join('') : '<p class="lee_lee_diabetes_empty">No saved meals yet.</p>';
+    }
+    let foods = searchFoodItems(foodLibrary, search);
+    if (activeTab === 'favorites') foods = foods.filter((food) => food.favorite);
+    if (activeTab === 'recent') foods = getRecentFoodItems(foodLibrary).filter((food) => searchFoodItems([food], search).length);
+    return foods.length ? foods.map((food) => `
+      <div class="lee_lee_diabetes_carb_food_row">
+        <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-food-to-carb-calculator" data-id="${escapeHtml(food.id)}">
+          <span><strong>${escapeHtml(food.name)}</strong><small>${escapeHtml([food.brand, food.servingLabel, formatCarbs(food.carbs)].filter(Boolean).join(' · '))}</small></span>
+          <span aria-hidden="true">+</span>
+        </button>
+        <button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-food-favorite" data-id="${escapeHtml(food.id)}" aria-label="${food.favorite ? 'Remove favorite' : 'Mark favorite'}">${food.favorite ? '★' : '☆'}</button>
+      </div>
+    `).join('') : '<p class="lee_lee_diabetes_empty">No foods match.</p>';
+  }
+
+  function renderSelectedCarbRows(rows) {
+    const selected = rows.filter((row) => row.sourceType === 'food' && isCarbCalculatorRowStarted(row));
+    if (!selected.length) return '';
+    return `
+      <div class="lee_lee_diabetes_carb_selected" aria-label="Selected foods">
+        ${selected.map((row) => {
+          const total = calculateCarbCalculatorRowTotal(row) ?? 0;
+          return `
+            <div class="lee_lee_diabetes_carb_selected_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcSourceType" value="food" data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcFoodId" value="${escapeHtml(row.foodId)}" data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcName" value="${escapeHtml(row.name)}" data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcServingLabel" value="${escapeHtml(row.servingLabel)}" data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcBrand" value="${escapeHtml(row.brand)}" data-carb-row-id="${escapeHtml(row.id)}">
+              <input type="hidden" name="carbCalcCarbs" value="${escapeHtml(row.carbs)}" data-carb-row-id="${escapeHtml(row.id)}">
+              <div>
+                <strong>${escapeHtml(row.name)}</strong>
+                <small>${escapeHtml([row.brand, row.servingLabel, `${formatCarbAmount(row.carbs)} g each`].filter(Boolean).join(' · '))}</small>
+              </div>
+              <div class="lee_lee_diabetes_quantity_control">
+                <button type="button" class="lee_lee_diabetes_icon_button" data-action="decrement-carb-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Decrease ${escapeHtml(row.name)} quantity">−</button>
+                <label>
+                  <span class="lee_lee_diabetes_sr_only">Quantity for ${escapeHtml(row.name)}</span>
+                  <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcQty" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(row.qty)}" data-carb-row-id="${escapeHtml(row.id)}">
+                </label>
+                <button type="button" class="lee_lee_diabetes_icon_button" data-action="increment-carb-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Increase ${escapeHtml(row.name)} quantity">+</button>
+              </div>
+              <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="${escapeHtml(row.name)} carbs">${escapeHtml(formatCarbAmount(total))} g</output>
+              <button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Remove ${escapeHtml(row.name)}">×</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderFoodEditorPanel(food = {}) {
+    return `
+      <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-food-editor-title">
+        <h3 id="lee-lee-carb-food-editor-title">Add Food</h3>
+        <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.name || '')}" required></label>
+        <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(food.carbs ?? '')}" required></label>
+        <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.servingLabel || '')}"></label>
+        <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.brand || '')}"></label>
+        <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food.favorite ? 'checked' : ''}> Favorite</label>
+        <div class="lee_lee_diabetes_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-food-editor">Cancel</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-food-editor">Save Food</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSavedMealEditorPanel(rows = []) {
+    const total = calculateCarbCalculatorMealTotal(rows);
+    return `
+      <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-meal-editor-title">
+        <h3 id="lee-lee-carb-meal-editor-title">Save Meal</h3>
+        <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" maxlength="80" autocomplete="off" required></label>
+        <p class="lee_lee_diabetes_help">${escapeHtml(formatCarbs(total))}</p>
+        <div class="lee_lee_diabetes_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-meal-editor">Cancel</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save Meal</button>
+        </div>
+      </section>
+    `;
+  }
+
   function renderCarbCalculatorRow(row) {
     const item = normalizeCarbCalculatorRow(row);
     const rowTotal = calculateCarbCalculatorRowTotal(item);
     const started = isCarbCalculatorRowStarted(item);
     return `
       <div class="lee_lee_diabetes_carb_calc_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcSourceType" value="manual" data-carb-row-id="${escapeHtml(item.id)}">
       <div class="lee_lee_diabetes_carb_calc_cell lee_lee_diabetes_carb_calc_cell--qty">
         <label>
           <span class="lee_lee_diabetes_sr_only">Quantity</span>
@@ -3393,8 +4028,18 @@
     form?.querySelectorAll('[name="carbCalcQty"]').forEach((qtyInput) => {
       const id = qtyInput.dataset.carbRowId || createId();
       const carbsInput = form.querySelector(`[name="carbCalcCarbs"]${getCarbRowSelector(id)}`);
+      const sourceInput = form.querySelector(`[name="carbCalcSourceType"]${getCarbRowSelector(id)}`);
+      const foodIdInput = form.querySelector(`[name="carbCalcFoodId"]${getCarbRowSelector(id)}`);
+      const nameInput = form.querySelector(`[name="carbCalcName"]${getCarbRowSelector(id)}`);
+      const servingInput = form.querySelector(`[name="carbCalcServingLabel"]${getCarbRowSelector(id)}`);
+      const brandInput = form.querySelector(`[name="carbCalcBrand"]${getCarbRowSelector(id)}`);
       rows.push(normalizeCarbCalculatorRow({
         id,
+        sourceType: sourceInput?.value || 'manual',
+        foodId: foodIdInput?.value || '',
+        name: nameInput?.value || '',
+        servingLabel: servingInput?.value || '',
+        brand: brandInput?.value || '',
         qty: qtyInput.value,
         carbs: carbsInput?.value ?? '',
       }));
@@ -3407,8 +4052,18 @@
     form?.querySelectorAll('[name="carbCalcQty"]').forEach((qtyInput) => {
       const id = qtyInput.dataset.carbRowId || createId();
       const carbsInput = form.querySelector(`[name="carbCalcCarbs"]${getCarbRowSelector(id)}`);
+      const sourceInput = form.querySelector(`[name="carbCalcSourceType"]${getCarbRowSelector(id)}`);
+      const foodIdInput = form.querySelector(`[name="carbCalcFoodId"]${getCarbRowSelector(id)}`);
+      const nameInput = form.querySelector(`[name="carbCalcName"]${getCarbRowSelector(id)}`);
+      const servingInput = form.querySelector(`[name="carbCalcServingLabel"]${getCarbRowSelector(id)}`);
+      const brandInput = form.querySelector(`[name="carbCalcBrand"]${getCarbRowSelector(id)}`);
       rows.push(normalizeCarbCalculatorRow({
         id,
+        sourceType: sourceInput?.value || 'manual',
+        foodId: foodIdInput?.value || '',
+        name: nameInput?.value || '',
+        servingLabel: servingInput?.value || '',
+        brand: brandInput?.value || '',
         qty: qtyInput.value,
         carbs: carbsInput?.value ?? '',
       }));
@@ -3416,8 +4071,19 @@
     return normalizeCarbCalculatorRowsForEditing(rows, preserveRowId);
   }
 
-  function collectFoodItemsFromForm() {
-    return [];
+  function collectFoodItemsFromForm(form = null) {
+    const components = currentEditor?.mealComponents || buildMealComponentsFromCarbCalculatorRows(currentEditor?.carbCalculatorRows || []);
+    return components
+      .filter((component) => component.componentType === 'food')
+      .map((component) => normalizeFoodItem({
+        id: component.id,
+        name: component.nameSnapshot,
+        inputMode: 'direct',
+        directCarbs: component.carbTotal,
+        calculatedCarbs: component.carbTotal,
+        savedFoodId: component.foodId,
+      }))
+      .filter(Boolean);
   }
 
   function renderEditor(options) {
@@ -3425,7 +4091,10 @@
     if (!root) return;
     const previousEditor = currentEditor;
     const record = options.record || {};
-    const carbCalculatorRows = normalizeCarbCalculatorRows(options.carbCalculatorRows || currentEditor?.carbCalculatorRows || []);
+    const recordComponentRows = record.id && Array.isArray(record.mealComponents) && record.mealComponents.length
+      ? carbRowsFromMealComponents(record.mealComponents)
+      : [];
+    const carbCalculatorRows = normalizeCarbCalculatorRows(options.carbCalculatorRows || currentEditor?.carbCalculatorRows || recordComponentRows || []);
     const sameEditorSession = previousEditor
       && previousEditor.mode === options.mode
       && previousEditor.id === (record.id || null);
@@ -3439,6 +4108,13 @@
       returnDateKey: options.returnDateKey || null,
       carbCalculatorOpen: options.carbCalculatorOpen === true,
       carbCalculatorRows,
+      mealComponents: Array.isArray(options.mealComponents)
+        ? options.mealComponents
+        : (Array.isArray(record.mealComponents) ? record.mealComponents.map(normalizeMealComponent).filter(Boolean) : []),
+      carbCalculatorTab: options.carbCalculatorTab || previousEditor?.carbCalculatorTab || 'favorites',
+      carbCalculatorSearch: options.carbCalculatorSearch ?? previousEditor?.carbCalculatorSearch ?? '',
+      carbCalculatorFoodEditorOpen: options.carbCalculatorFoodEditorOpen === true,
+      carbCalculatorMealEditorOpen: options.carbCalculatorMealEditorOpen === true,
       carbCalculatorScrollSnapshot: options.carbCalculatorOpen === true
         ? (options.carbCalculatorScrollSnapshot || previousEditor?.carbCalculatorScrollSnapshot || null)
         : null,
@@ -3541,7 +4217,7 @@
       window.setTimeout(applyFocus, 0);
     };
     if (currentEditor.carbCalculatorOpen) {
-      focusTarget('[data-carb-calculator] [name="carbCalcCarbs"]');
+      focusTarget('[data-carb-calculator-rows] [name="carbCalcCarbs"]');
     } else if (options.focusAction) {
       focusTarget(`[data-action="${options.focusAction}"]`);
     } else {
@@ -3559,6 +4235,7 @@
       type: form.elements.type?.value || '',
       bloodSugar: form.elements.bloodSugar?.value || '',
       foods: [],
+      mealComponents: currentEditor?.mealComponents || [],
       mealCarbs: form.elements.mealCarbs?.value || '',
       mealDescription: '',
       activityDescription: form.elements.activityDescription?.value || '',
@@ -3750,6 +4427,11 @@
       });
     }
     const mealTotal = calculateCarbCalculatorMealTotal(rows);
+    calculator.querySelectorAll('.lee_lee_diabetes_carb_selected_row').forEach((rowElement) => {
+      const row = rows.find((item) => item.id === rowElement.dataset.carbRowId);
+      const totalElement = rowElement.querySelector('.lee_lee_diabetes_carb_calc_row_total');
+      if (row && totalElement) totalElement.textContent = `${formatCarbAmount(calculateCarbCalculatorRowTotal(row) ?? 0)} g`;
+    });
     const formattedTotal = formatCarbAmount(mealTotal);
     const totalElement = calculator.querySelector('[data-carb-calculator-total]');
     if (totalElement) totalElement.textContent = `${formattedTotal} g`;
@@ -3801,7 +4483,7 @@
     else form.querySelector(`[data-carb-calculator-row]${getCarbRowSelector(rowId)}`)?.remove();
     currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
     refreshCarbCalculator(form);
-    form.querySelector('[data-carb-calculator] [name="carbCalcCarbs"], [data-carb-calculator] [data-action="use-carb-calculator-total"]')?.focus();
+    form.querySelector('[data-carb-calculator-rows] [name="carbCalcCarbs"], [data-carb-calculator] [data-action="use-carb-calculator-total"]')?.focus();
     return true;
   }
 
@@ -3972,8 +4654,10 @@
     const draft = buildDraftFromEditor(form);
     if (applyTotal) {
       draft.mealCarbs = formatCarbAmount(calculateCarbCalculatorMealTotal(rows));
+      draft.mealComponents = buildMealComponentsFromCarbCalculatorRows(rows);
     }
     currentEditor.carbCalculatorRows = rows;
+    if (applyTotal) currentEditor.mealComponents = draft.mealComponents;
     const unlockedSnapshot = disableCarbCalculatorModalViewport();
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
@@ -3984,6 +4668,7 @@
       returnDateKey: currentEditor?.returnDateKey || null,
       carbCalculatorOpen: false,
       carbCalculatorRows: rows,
+      mealComponents: draft.mealComponents,
       focusAction: 'open-carb-calculator',
       preventFocusScroll: true,
       restoreScrollSnapshot: unlockedSnapshot || snapshot,
@@ -3993,6 +4678,133 @@
 
   function handleUseCarbCalculatorTotal(root, target) {
     return closeCarbCalculator(root, target, { applyTotal: true });
+  }
+
+  function setCarbRowQuantity(form, rowId, delta) {
+    const input = form?.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(rowId)}`);
+    if (!input) return;
+    const next = Math.max(0, normalizeQuantity(input.value, 0) + delta);
+    input.value = formatCarbAmount(next);
+    if (next === 0) {
+      form.querySelector(`[data-carb-calculator-row]${getCarbRowSelector(rowId)}`)?.remove();
+    }
+    currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+    refreshCarbCalculator(form, rowId);
+  }
+
+  function addFoodToCarbCalculator(form, foodId) {
+    const now = Date.now();
+    if (lastCarbCalculatorSelection.id === foodId && now - lastCarbCalculatorSelection.at < 350) return;
+    lastCarbCalculatorSelection = { id: foodId, at: now };
+    const food = foodLibrary.find((item) => item.id === foodId && !isLibraryItemDeleted(item));
+    const row = carbRowFromFood(food);
+    if (!row) return;
+    currentEditor.carbCalculatorRows = mergeCarbCalculatorRows(collectCarbCalculatorRowsFromForm(form), [row]);
+    renderEditor({
+      mode: currentEditor?.mode || 'log-entry',
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      record: buildDraftFromEditor(form),
+      returnTo: currentEditor?.returnTo || null,
+      returnDateKey: currentEditor?.returnDateKey || null,
+      carbCalculatorOpen: true,
+      carbCalculatorRows: currentEditor.carbCalculatorRows,
+      mealComponents: currentEditor?.mealComponents || [],
+      carbCalculatorTab: currentEditor?.carbCalculatorTab || 'favorites',
+      carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+      preventFocusScroll: true,
+    });
+  }
+
+  function addSavedMealToCarbCalculator(form, mealId) {
+    const meal = activeSavedMeals(savedMeals).find((item) => item.id === mealId);
+    if (!meal) return;
+    currentEditor.carbCalculatorRows = mergeCarbCalculatorRows(
+      collectCarbCalculatorRowsFromForm(form),
+      carbRowsFromMealComponents(meal.components),
+    );
+    renderEditor({
+      mode: currentEditor?.mode || 'log-entry',
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      record: buildDraftFromEditor(form),
+      returnTo: currentEditor?.returnTo || null,
+      returnDateKey: currentEditor?.returnDateKey || null,
+      carbCalculatorOpen: true,
+      carbCalculatorRows: currentEditor.carbCalculatorRows,
+      mealComponents: currentEditor?.mealComponents || [],
+      carbCalculatorTab: 'meals',
+      carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+      preventFocusScroll: true,
+    });
+  }
+
+  function saveFoodFromCarbCalculator(form) {
+    const calculator = form?.querySelector('[data-carb-calculator]');
+    const result = saveFoodLibraryItem({
+      name: calculator?.querySelector('[name="foodName"]')?.value || '',
+      carbs: calculator?.querySelector('[name="foodCarbs"]')?.value || '',
+      servingLabel: calculator?.querySelector('[name="foodServingLabel"]')?.value || '',
+      brand: calculator?.querySelector('[name="foodBrand"]')?.value || '',
+      favorite: calculator?.querySelector('[name="foodFavorite"]')?.checked === true,
+    }, { addToCalculator: true });
+    if (result.error) {
+      foodLibraryError = result.error;
+    } else {
+      foodLibraryError = '';
+      currentEditor.carbCalculatorFoodEditorOpen = false;
+    }
+    renderEditor({
+      mode: currentEditor?.mode || 'log-entry',
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      record: buildDraftFromEditor(form),
+      returnTo: currentEditor?.returnTo || null,
+      returnDateKey: currentEditor?.returnDateKey || null,
+      carbCalculatorOpen: true,
+      carbCalculatorRows: currentEditor.carbCalculatorRows,
+      mealComponents: currentEditor?.mealComponents || [],
+      carbCalculatorTab: currentEditor?.carbCalculatorTab || 'foods',
+      carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+      carbCalculatorFoodEditorOpen: currentEditor.carbCalculatorFoodEditorOpen,
+      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+      preventFocusScroll: true,
+    });
+  }
+
+  function saveMealFromCarbCalculator(form) {
+    const rows = collectCarbCalculatorRowsFromForm(form);
+    const components = buildMealComponentsFromCarbCalculatorRows(rows);
+    const calculator = form?.querySelector('[data-carb-calculator]');
+    const result = saveSavedMeal({
+      name: calculator?.querySelector('[name="savedMealName"]')?.value || '',
+      components,
+    });
+    if (result.error) foodLibraryError = result.error;
+    else {
+      foodLibraryError = '';
+      currentEditor.carbCalculatorMealEditorOpen = false;
+      currentEditor.carbCalculatorTab = 'meals';
+      currentEditor.carbCalculatorSearch = '';
+    }
+    renderEditor({
+      mode: currentEditor?.mode || 'log-entry',
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      record: buildDraftFromEditor(form),
+      returnTo: currentEditor?.returnTo || null,
+      returnDateKey: currentEditor?.returnDateKey || null,
+      carbCalculatorOpen: true,
+      carbCalculatorRows: rows,
+      mealComponents: currentEditor?.mealComponents || [],
+      carbCalculatorTab: currentEditor?.carbCalculatorTab || 'meals',
+      carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+      carbCalculatorMealEditorOpen: currentEditor.carbCalculatorMealEditorOpen,
+      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+      preventFocusScroll: true,
+    });
   }
 
   function renderTypeSelect(selectedType) {
@@ -4165,6 +4977,7 @@
       };
     });
     syncRepository?.queueUpsert(record, existingRecord);
+    updateRecentFoodsFromComponents(record.mealComponents || []);
   }
 
   function buildRecordFromForm(form) {
@@ -4193,6 +5006,8 @@
       mealCarbs: observedContext.mealCarbs,
       totalCarbs: observedContext.mealCarbs,
       foods: observedContext.foods,
+      mealComponents: observedContext.mealComponents,
+      carbComponents: observedContext.mealComponents,
       mealDescription: observedContext.mealDescription,
       activityDescription: observedContext.activityDescription,
       activityDurationMinutes: observedContext.activityDurationMinutes,
@@ -4224,6 +5039,7 @@
     const eventType = getEditorEventType(form);
     const type = getEditorType(form);
     const recordsFood = eventType === 'meal' || entryTypeUsesFoodCalculator(type, eventType);
+    const mealComponents = recordsFood ? (currentEditor?.mealComponents || []) : [];
     const foods = recordsFood ? collectFoodItemsFromForm(form) : [];
     const mealCarbs = recordsFood ? normalizeNumber(form.elements.mealCarbs?.value) : null;
     return {
@@ -4232,6 +5048,7 @@
       recordTimestamp: getEditorRecordTimestamp(form),
       bloodSugar: normalizeBloodSugar(form.elements.bloodSugar?.value),
       foods,
+      mealComponents,
       mealCarbs,
       mealDescription: recordsFood ? sanitizeShortText(form.elements.mealDescription?.value, 180) : '',
       activityDescription: sanitizeShortText(form.elements.activityDescription?.value, 120),
@@ -5485,7 +6302,7 @@
       : null;
     if (!activeInput) return false;
 
-    const carbInputs = [...calculator.querySelectorAll('[name="carbCalcCarbs"]')]
+    const carbInputs = [...calculator.querySelectorAll('[data-carb-calculator-rows] [name="carbCalcCarbs"]')]
       .filter((input) => !input.disabled);
     const activeIndex = carbInputs.indexOf(activeInput);
     if (activeIndex === -1) return false;
@@ -5547,6 +6364,8 @@
       getDocument: () => trackerData,
       saveDocument: (data, options = {}) => saveTrackerData(data, { keepStatus: true, ...options }),
       normalizeRecord,
+      normalizeFood: normalizeFoodLibraryItem,
+      normalizeSavedMeal,
       mergeDocuments: mergeTrackerDocuments,
       legacyRecordKeys: LEGACY_RECORD_STORAGE_KEYS,
       getLocalSharedSettings,
@@ -5554,11 +6373,14 @@
         trackerData = nextData;
         records = trackerData.records;
         insulinPlans = trackerData.insulinPlans;
-        if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
+        foodLibrary = trackerData.foodLibrary;
+        savedMeals = trackerData.savedMeals;
+        if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'foods', 'settings'].includes(currentEditor.mode)) {
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
           else if (currentEditor?.mode === 'reports') renderReports();
           else if (currentEditor?.mode === 'export') renderExport();
+          else if (currentEditor?.mode === 'foods') renderFoodLibrary();
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
         }
@@ -5626,9 +6448,11 @@
     }
     if (!currentEditor) return;
     if (currentEditor.mode === 'settings') renderSettings();
+    if (currentEditor.mode === 'foods') renderFoodLibrary();
     if (currentEditor.mode === 'history') renderHistory();
     if (currentEditor.mode === 'reports') renderReports();
     if (currentEditor.mode === 'export') renderExport();
+    if (currentEditor.mode === 'foods') renderFoodLibrary();
   }
 
   async function init() {
@@ -5704,11 +6528,12 @@
         trackerMenuOpen = !trackerMenuOpen;
         const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
           ? 'history'
-          : (['reports', 'export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
+          : (['reports', 'export', 'foods', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
         if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
         else if (active === 'history') renderHistory();
         else if (active === 'reports') renderReports();
         else if (active === 'export') renderExport();
+        else if (active === 'foods') renderFoodLibrary();
         else if (active === 'settings') renderSettings();
         else renderHome();
         return;
@@ -5750,6 +6575,92 @@
         handleUseCarbCalculatorTotal(root, target);
         return;
       }
+      if (action === 'set-carb-calculator-tab') {
+        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        currentEditor.carbCalculatorTab = FOOD_LIBRARY_TABS.some(([tab]) => tab === target.dataset.tab) ? target.dataset.tab : 'foods';
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorTab: currentEditor.carbCalculatorTab,
+          carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          preventFocusScroll: true,
+        });
+        return;
+      }
+      if (action === 'add-food-to-carb-calculator') {
+        addFoodToCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'), target.dataset.id);
+        return;
+      }
+      if (action === 'add-saved-meal-to-carb-calculator') {
+        addSavedMealToCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'), target.dataset.id);
+        return;
+      }
+      if (action === 'increment-carb-row' || action === 'decrement-carb-row') {
+        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        setCarbRowQuantity(form, target.dataset.carbRowId || '', action === 'increment-carb-row' ? 1 : -1);
+        return;
+      }
+      if (action === 'open-carb-food-editor' || action === 'cancel-carb-food-editor') {
+        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        currentEditor.carbCalculatorFoodEditorOpen = action === 'open-carb-food-editor';
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorTab: currentEditor?.carbCalculatorTab || 'foods',
+          carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+          carbCalculatorFoodEditorOpen: currentEditor.carbCalculatorFoodEditorOpen,
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          preventFocusScroll: true,
+        });
+        return;
+      }
+      if (action === 'save-carb-food-editor') {
+        saveFoodFromCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
+        return;
+      }
+      if (action === 'open-carb-meal-editor' || action === 'cancel-carb-meal-editor') {
+        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        currentEditor.carbCalculatorMealEditorOpen = action === 'open-carb-meal-editor';
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorTab: currentEditor?.carbCalculatorTab || 'meals',
+          carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+          carbCalculatorMealEditorOpen: currentEditor.carbCalculatorMealEditorOpen,
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          preventFocusScroll: true,
+        });
+        return;
+      }
+      if (action === 'save-carb-meal-editor') {
+        saveMealFromCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
+        return;
+      }
       if (action === 'choose-event-type') {
         openEventEditor(target.dataset.eventType || DEFAULT_EVENT_TYPE);
       }
@@ -5776,6 +6687,12 @@
       if (action === 'export') {
         trackerMenuOpen = false;
         renderExport();
+      }
+      if (action === 'foods') {
+        trackerMenuOpen = false;
+        foodLibraryMessage = '';
+        foodLibraryError = '';
+        renderFoodLibrary();
       }
       if (action === 'settings') {
         trackerMenuOpen = false;
@@ -5860,6 +6777,76 @@
       }
       if (action === 'save-history-preference') {
         saveHistoryPreference(target.closest('[data-plan-editor]'));
+      }
+      if (action === 'save-food-library-item') {
+        const panel = target.closest('[data-food-library-editor]');
+        const id = panel?.querySelector('[name="foodId"]')?.value || '';
+        const result = saveFoodLibraryItem({
+          id,
+          name: panel?.querySelector('[name="foodName"]')?.value || '',
+          carbs: panel?.querySelector('[name="foodCarbs"]')?.value || '',
+          servingLabel: panel?.querySelector('[name="foodServingLabel"]')?.value || '',
+          brand: panel?.querySelector('[name="foodBrand"]')?.value || '',
+          favorite: panel?.querySelector('[name="foodFavorite"]')?.checked === true,
+        });
+        foodLibraryError = result.error || '';
+        foodLibraryMessage = result.food ? 'Food saved.' : '';
+        renderFoodLibrary();
+      }
+      if (action === 'edit-food-library-item') {
+        const food = foodLibrary.find((item) => item.id === target.dataset.id);
+        if (food) {
+          const panel = root.querySelector('[data-food-library-editor]');
+          if (panel) {
+            panel.querySelector('[name="foodId"]').value = food.id;
+            panel.querySelector('[name="foodName"]').value = food.name;
+            panel.querySelector('[name="foodCarbs"]').value = formatCarbAmount(food.carbs);
+            panel.querySelector('[name="foodServingLabel"]').value = food.servingLabel || '';
+            panel.querySelector('[name="foodBrand"]').value = food.brand || '';
+            panel.querySelector('[name="foodFavorite"]').checked = food.favorite === true;
+            panel.querySelector('[name="foodName"]')?.focus();
+          }
+        }
+      }
+      if (action === 'toggle-food-favorite') {
+        const food = foodLibrary.find((item) => item.id === target.dataset.id);
+        if (food) saveFoodLibraryItem({ ...food, favorite: !food.favorite });
+        if (currentEditor?.carbCalculatorOpen) {
+          const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+          currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+          renderEditor({
+            mode: currentEditor?.mode || 'log-entry',
+            eventType: getEditorEventType(form),
+            type: getEditorType(form),
+            record: buildDraftFromEditor(form),
+            returnTo: currentEditor?.returnTo || null,
+            returnDateKey: currentEditor?.returnDateKey || null,
+            carbCalculatorOpen: true,
+            carbCalculatorRows: currentEditor.carbCalculatorRows,
+            carbCalculatorTab: currentEditor?.carbCalculatorTab || 'favorites',
+            carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+            carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+            preventFocusScroll: true,
+          });
+        } else {
+          renderFoodLibrary();
+        }
+      }
+      if (action === 'delete-food-library-item') {
+        const food = foodLibrary.find((item) => item.id === target.dataset.id);
+        if (food && window.confirm(`Delete ${food.name}? History entries will keep their saved food snapshot.`)) {
+          softDeleteLibraryItem('food', food.id);
+          foodLibraryMessage = 'Food deleted.';
+          renderFoodLibrary();
+        }
+      }
+      if (action === 'delete-saved-meal') {
+        const meal = savedMeals.find((item) => item.id === target.dataset.id);
+        if (meal && window.confirm(`Delete ${meal.name}?`)) {
+          softDeleteLibraryItem('saved-meal', meal.id);
+          foodLibraryMessage = 'Saved meal deleted.';
+          renderFoodLibrary();
+        }
       }
       if (action === 'save-device-identity') {
         const form = target.closest('[data-plan-editor]');
@@ -6030,8 +7017,41 @@
       handleSave(event.target);
     });
     root.addEventListener('input', (event) => {
+      if (event.target.name === 'foodLibrarySearch') {
+        foodLibrarySearch = event.target.value;
+        renderFoodLibrary();
+        return;
+      }
+      if (event.target.name === 'savedMealsSearch') {
+        savedMealsSearch = event.target.value;
+        renderFoodLibrary();
+        return;
+      }
       const form = event.target.closest('[data-lee-lee-editor]');
       if (!form) return;
+      if (event.target.name === 'carbFoodSearch') {
+        currentEditor.carbCalculatorSearch = event.target.value;
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorTab: currentEditor?.carbCalculatorTab || 'foods',
+          carbCalculatorSearch: currentEditor.carbCalculatorSearch,
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          preventFocusScroll: true,
+        });
+        return;
+      }
+      if (event.target.name === 'mealCarbs') {
+        currentEditor.mealComponents = [];
+      }
       if (event.target.name === 'insulinUnits') {
         form.dataset.userEditedInsulin = 'true';
         delete form.dataset.autofilledInsulin;
@@ -6120,11 +7140,12 @@
         trackerMenuOpen = false;
         const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
           ? 'history'
-          : (['reports', 'export', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
+          : (['reports', 'export', 'foods', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
         if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
         else if (active === 'history') renderHistory();
         else if (active === 'reports') renderReports();
         else if (active === 'export') renderExport();
+        else if (active === 'foods') renderFoodLibrary();
         else if (active === 'settings') renderSettings();
         else renderHome();
         return;
@@ -6160,6 +7181,7 @@
     mergeTrackerDocuments,
     validateBackupPayload,
     createBackupDocument,
+    helpers: window.LeeLeeTrackerDoseHelper,
   };
 
   window.LeeLeeTrackerSharedSettings = {

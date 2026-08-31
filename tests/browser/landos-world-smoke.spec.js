@@ -920,7 +920,7 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(1);
   await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveValue('1');
   await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveValue('');
-  await expect(calculator.getByText('Meal Total')).toBeVisible();
+  await expect(calculator.getByText('Total Carbs')).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Use 0 grams' })).toBeDisabled();
 
   const firstCarbs = calculator.locator('[name="carbCalcCarbs"]').first();
@@ -986,6 +986,101 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
     insulinUnits: 5.5,
     foods: [],
   });
+});
+
+test('Lee-Lee Food Library builds carb totals and saves historical snapshots', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Footlong hot dog',
+          carbs: 24,
+          servingLabel: 'one',
+          favorite: true,
+          createdAt: '2026-08-31T12:00:00.000Z',
+          updatedAt: '2026-08-31T12:00:00.000Z',
+        },
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          name: 'Ketchup',
+          carbs: 4,
+          servingLabel: 'packet',
+          createdAt: '2026-08-31T12:00:00.000Z',
+          updatedAt: '2026-08-31T12:00:00.000Z',
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          name: 'Mustard',
+          carbs: 0,
+          favorite: true,
+          createdAt: '2026-08-31T12:00:00.000Z',
+          updatedAt: '2026-08-31T12:00:00.000Z',
+        },
+      ],
+      savedMeals: [],
+    }));
+  });
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByLabel('Blood Sugar').fill('299');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const libraryOptions = calculator.locator('.lee_lee_diabetes_carb_library_list .lee_lee_diabetes_carb_food_option');
+  await expect(calculator.getByRole('tab', { name: 'Favorites' })).toHaveAttribute('aria-selected', 'true');
+  await libraryOptions.filter({ hasText: 'Footlong hot dog' }).click();
+  await calculator.getByRole('tab', { name: 'My Foods' }).click();
+  await calculator.getByLabel('Search foods').fill('ket');
+  await libraryOptions.filter({ hasText: 'Ketchup' }).click();
+  await calculator.getByLabel('Search foods').fill('must');
+  await libraryOptions.filter({ hasText: 'Mustard' }).click();
+
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('28 g');
+  const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });
+  await ketchupRow.getByRole('button', { name: /Increase Ketchup quantity/ }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('32 g');
+
+  const manualCarbs = calculator.locator('[name="carbCalcCarbs"]').last();
+  await manualCarbs.fill('3');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('35 g');
+  await calculator.getByRole('button', { name: 'Save as Meal' }).click();
+  await calculator.getByLabel('Meal Name').fill('Hot Dog Meal');
+  await calculator.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(calculator.getByRole('button', { name: /Hot Dog Meal/ })).toBeVisible();
+  await calculator.getByRole('button', { name: 'Use 35 grams' }).click();
+
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
+  await expect(form.getByText('Carb coverage: 35 g carbs ÷ 20 = 1.75 → 2 units')).toBeVisible();
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+
+  const savedState = await page.evaluate(() => {
+    const data = window.LeeLeeTrackerStorage.loadTrackerData();
+    const record = data.records.find((item) => item.type === 'Dinner');
+    return {
+      record,
+      foodLibrary: data.foodLibrary,
+      savedMeals: data.savedMeals,
+    };
+  });
+  expect(savedState.record.mealCarbs).toBe(35);
+  expect(savedState.record.mealComponents.map((item) => item.nameSnapshot)).toEqual([
+    'Footlong hot dog',
+    'Ketchup',
+    'Mustard',
+    'Manual amount',
+  ]);
+  expect(savedState.savedMeals[0].totalCarbs).toBe(35);
+  expect(savedState.foodLibrary.find((food) => food.name === 'Ketchup').lastUsedAt).toBeTruthy();
+
+  await chooseLeeLeeSection(page, 'History');
+  await page.getByRole('button', { name: /1 entry/ }).click();
+  await expect(page.getByText('Footlong hot dog · 2× Ketchup · Mustard · Manual amount')).toBeVisible();
 });
 
 test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
