@@ -878,6 +878,8 @@
 
 .lee_lee_diabetes_carb_tabs .lee_lee_diabetes_nav_button {
   flex: 1 1 0;
+  justify-content: center;
+  text-align: center;
   min-width: min(8.5rem, 100%);
 }
 
