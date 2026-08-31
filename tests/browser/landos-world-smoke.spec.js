@@ -646,6 +646,20 @@ async function openSeededLeeLeeHistoryDay(page, dateKey = '2026-08-25') {
   await page.locator(`[data-action="history-date"][data-date="${dateKey}"]`).click();
 }
 
+test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  const app = page.locator('#lee-lees-tracker-view');
+  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+
+  await app.getByRole('button', { name: 'Settings' }).click();
+  await expect(app.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Close Settings' })).toHaveAttribute('aria-pressed', 'true');
+
+  await app.getByRole('button', { name: 'Close Settings' }).click();
+  await expect(app.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.evaluate(() => {

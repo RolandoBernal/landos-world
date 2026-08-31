@@ -61,6 +61,17 @@
   margin-bottom: 1rem;
 }
 
+.lee_lee_diabetes_top_row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.lee_lee_diabetes_top_title_group {
+  min-width: 0;
+}
+
 .lee_lee_diabetes_date {
   margin: 0;
   color: var(--lee-lee-soft);
@@ -73,6 +84,34 @@
   color: var(--lee-lee-text);
   font-size: clamp(2rem, 9vw, 3.2rem);
   line-height: 1;
+}
+
+.lee_lee_diabetes_settings_shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-top: 1.35rem;
+  inline-size: 44px;
+  block-size: 44px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--lee-lee-muted);
+  cursor: pointer;
+}
+
+.lee_lee_diabetes_settings_shortcut svg {
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+}
+
+.lee_lee_diabetes_settings_shortcut.is-active {
+  border-color: var(--lee-lee-border-strong);
+  background: rgb(var(--app-accent-rgb, 58 160 255) / 16%);
+  color: var(--lee-lee-soft);
 }
 
 .lee_lee_diabetes_cards,
@@ -139,6 +178,7 @@
 
 .lee_lee_diabetes_card:focus-visible,
 .lee_lee_diabetes_button:focus-visible,
+.lee_lee_diabetes_settings_shortcut:focus-visible,
 .lee_lee_diabetes_mobile_nav_button:focus-visible,
 .lee_lee_diabetes_nav_button:focus-visible,
 .lee_lee_diabetes_timeline_edit:focus-visible,
@@ -1459,6 +1499,7 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_nav_button,
+:root[data-theme="light"] .lee_lee_diabetes_settings_shortcut,
 :root[data-theme="light"] .lee_lee_diabetes_event_option,
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
@@ -1474,6 +1515,7 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_nav_button.is-active,
+:root[data-theme="light"] .lee_lee_diabetes_settings_shortcut.is-active,
 :root[data-theme="light"] .lee_lee_diabetes_dose_card,
 :root[data-theme="light"] .lee_lee_diabetes_banner {
   background: rgb(var(--app-accent-rgb, 9 104 195) / 10%);
