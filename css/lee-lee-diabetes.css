@@ -907,6 +907,10 @@
   gap: 0.65rem;
 }
 
+.lee_lee_diabetes_carb_search {
+  padding-bottom: 0.3rem;
+}
+
 .lee_lee_diabetes_carb_tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
