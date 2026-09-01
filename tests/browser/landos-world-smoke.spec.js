@@ -127,6 +127,20 @@ const LOCAL_APP_ROUTES = [
   },
 ];
 
+function formatLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function relativeLocalDateKey(deltaDays) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + deltaDays);
+  return formatLocalDateKey(date);
+}
+
 test.beforeEach(async ({ page }) => {
   const consoleErrors = [];
   page.on('console', (message) => {
@@ -662,7 +676,9 @@ test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
 
 test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.evaluate(() => {
+  const recentDateKey = relativeLocalDateKey(-1);
+  const olderDateKey = relativeLocalDateKey(-8);
+  await page.evaluate(({ recentDateKey: recentKey, olderDateKey: olderKey }) => {
     window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
       ...current,
       records: [
@@ -674,9 +690,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: 42,
           administeredInsulinUnits: 6,
           suggestedTotalUnits: 5.5,
-          recordTimestamp: '2026-08-24T12:30:00.000Z',
-          createdAt: '2026-08-24T12:35:00.000Z',
-          updatedAt: '2026-08-24T12:35:00.000Z',
+          recordTimestamp: `${recentKey}T12:30:00.000Z`,
+          createdAt: `${recentKey}T12:35:00.000Z`,
+          updatedAt: `${recentKey}T12:35:00.000Z`,
           notes: '',
         },
         {
@@ -687,9 +703,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: null,
           administeredInsulinUnits: 17,
           suggestedTotalUnits: 13,
-          recordTimestamp: '2026-08-24T18:30:00.000Z',
-          createdAt: '2026-08-24T18:35:00.000Z',
-          updatedAt: '2026-08-24T18:35:00.000Z',
+          recordTimestamp: `${recentKey}T18:30:00.000Z`,
+          createdAt: `${recentKey}T18:35:00.000Z`,
+          updatedAt: `${recentKey}T18:35:00.000Z`,
           notes: '',
         },
         {
@@ -700,14 +716,14 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: null,
           administeredInsulinUnits: 4,
           suggestedTotalUnits: 4,
-          recordTimestamp: '2026-08-13T18:30:00.000Z',
-          createdAt: '2026-08-13T18:35:00.000Z',
-          updatedAt: '2026-08-13T18:35:00.000Z',
+          recordTimestamp: `${olderKey}T18:30:00.000Z`,
+          createdAt: `${olderKey}T18:35:00.000Z`,
+          updatedAt: `${olderKey}T18:35:00.000Z`,
           notes: '',
         },
       ],
     }));
-  });
+  }, { recentDateKey, olderDateKey });
 
   await chooseLeeLeeSection(page, 'Reports');
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
@@ -739,8 +755,8 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   expect(previewText).toContain('27 units');
 
   await reportsFilters.getByLabel('Date Range').selectOption('custom');
-  await reportsFilters.getByLabel('Start Date').fill('2026-08-24');
-  await reportsFilters.getByLabel('End Date').fill('2026-08-24');
+  await reportsFilters.getByLabel('Start Date').fill(recentDateKey);
+  await reportsFilters.getByLabel('End Date').fill(recentDateKey);
   await expect(page.getByText('2 records from')).toBeVisible();
 });
 
@@ -1010,31 +1026,48 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
       foodLibrary: [
         {
           id: '11111111-1111-4111-8111-111111111111',
-          name: 'Footlong hot dog',
-          carbs: 24,
-          servingLabel: 'one',
+          name: 'Banana',
+          emoji: '🍌',
+          carbs: 27,
+          servingLabel: '1 medium',
           favorite: true,
           createdAt: '2026-08-31T12:00:00.000Z',
           updatedAt: '2026-08-31T12:00:00.000Z',
         },
         {
           id: '22222222-2222-4222-8222-222222222222',
+          name: 'Pasta',
+          emoji: '🍝',
+          carbs: 15,
+          servingLabel: '1/3 cup cooked',
+          favorite: true,
+          createdAt: '2026-08-31T12:00:00.000Z',
+          updatedAt: '2026-08-31T12:00:00.000Z',
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
           name: 'Ketchup',
           carbs: 4,
           servingLabel: 'packet',
           createdAt: '2026-08-31T12:00:00.000Z',
           updatedAt: '2026-08-31T12:00:00.000Z',
         },
-        {
-          id: '33333333-3333-4333-8333-333333333333',
-          name: 'Mustard',
-          carbs: 0,
-          favorite: true,
-          createdAt: '2026-08-31T12:00:00.000Z',
-          updatedAt: '2026-08-31T12:00:00.000Z',
-        },
       ],
-      savedMeals: [],
+      savedMeals: [{
+        id: '44444444-4444-4444-8444-444444444444',
+        name: 'Lunch Combo',
+        components: [{
+          componentType: 'food',
+          foodId: '33333333-3333-4333-8333-333333333333',
+          nameSnapshot: 'Ketchup',
+          quantity: 1,
+          carbsPerServing: 4,
+          carbTotal: 4,
+        }],
+        totalCarbs: 4,
+        createdAt: '2026-08-31T12:00:00.000Z',
+        updatedAt: '2026-08-31T12:00:00.000Z',
+      }],
     }));
   });
   await page.getByRole('button', { name: '+ Log Entry' }).click();
@@ -1045,31 +1078,112 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  const libraryOptions = calculator.locator('.lee_lee_diabetes_carb_library_list .lee_lee_diabetes_carb_food_option');
-  await expect(calculator.getByRole('tab', { name: 'Favorites' })).toHaveAttribute('aria-selected', 'true');
-  await libraryOptions.filter({ hasText: 'Footlong hot dog' }).click();
-  await calculator.getByRole('tab', { name: 'My Foods' }).click();
-  await calculator.getByLabel('Search foods').fill('ket');
-  await libraryOptions.filter({ hasText: 'Ketchup' }).click();
-  await calculator.getByLabel('Search foods').fill('must');
-  await libraryOptions.filter({ hasText: 'Mustard' }).click();
+  await expect(calculator.getByText('No foods added yet.')).toBeVisible();
+  await expect(calculator.locator('[data-carb-library-list]')).toHaveCount(0);
+  const favoritesToggle = calculator.getByRole('button', { name: 'Favorites' });
+  const recentToggle = calculator.getByRole('button', { name: 'Recent' });
+  const myMealsToggle = calculator.getByRole('button', { name: 'My Meals' });
+  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(favoritesToggle).toHaveAttribute('aria-controls', 'lee-lee-carb-picker-panel');
+  await expect(myMealsToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(myMealsToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(calculator.getByText('Saved Meals')).toHaveCount(0);
+  await expect(calculator.getByRole('button', { name: 'Add New Food' })).toHaveCount(0);
+  await expect(calculator.getByRole('button', { name: 'Save as Meal' })).toHaveCount(0);
 
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('28 g');
+  const manualQty = calculator.locator('[data-carb-calculator-rows] [name="carbCalcQty"]').first();
+  const manualCarbs = calculator.locator('[data-carb-calculator-rows] [name="carbCalcCarbs"]').first();
+  await manualQty.fill('2');
+  await manualCarbs.fill('17');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('34 g');
+  await expect(calculator.getByText('No foods added yet.')).toBeHidden();
+
+  await favoritesToggle.click();
+  const picker = calculator.locator('[data-carb-picker]');
+  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(picker.getByRole('button', { name: /Banana 27 g carbs/ })).toBeVisible();
+  await expect(picker.getByRole('button', { name: /Pasta 15 g carbs/ })).toBeVisible();
+  await expect(picker.getByRole('button', { name: /Mark favorite|Remove favorite/ })).toHaveCount(0);
+  await picker.getByRole('button', { name: /Banana 27 g carbs/ }).click();
+  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await expect(picker.getByRole('button', { name: /Selected Banana 27 g carbs/ })).toBeVisible();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('61 g');
+  await picker.getByRole('button', { name: /Pasta 15 g carbs/ }).click();
+  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await expect(picker.getByRole('button', { name: /Selected Pasta 15 g carbs/ })).toBeVisible();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
+  await favoritesToggle.click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(calculator.getByText('Selected Foods · 2')).toBeVisible();
+  await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Pasta' })).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Save as My Meal' })).toBeVisible();
+
+  await favoritesToggle.click();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await recentToggle.click();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Recent' })).toBeVisible();
+  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(recentToggle).toHaveAttribute('aria-expanded', 'true');
+  await recentToggle.click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  await expect(recentToggle).toHaveAttribute('aria-expanded', 'false');
+
+  await myMealsToggle.click();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Meals' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: /Lunch Combo/ })).toBeVisible();
+  await myMealsToggle.click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+
+  await calculator.getByRole('button', { name: 'My Foods' }).click();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: '+ Add New Food' })).toBeVisible();
+  const foodSearch = calculator.getByLabel('Search foods');
+  await expect(foodSearch).toHaveAttribute('placeholder', 'Search foods...');
+  await expect(calculator.getByRole('button', { name: 'Search' })).toHaveCount(0);
+  await calculator.locator('[data-carb-picker]').getByRole('button', { name: 'Done' }).click();
+
+  await foodSearch.click();
+  await foodSearch.pressSequentially('chicken nugget');
+  await expect(foodSearch).toHaveValue('chicken nugget');
+  await expect(foodSearch).toBeFocused();
+  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Search Results' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Chicken Nuggets \/ Tenders 15 g carbs/ })).toBeVisible();
+  await foodSearch.press('Enter');
+  await expect(calculator).toBeVisible();
+  await expect(foodSearch).toBeFocused();
+  await foodSearch.fill(' no-food-found ');
+  await expect(calculator.getByText('No foods found for “no-food-found”')).toBeVisible();
+  await calculator.locator('.lee_lee_diabetes_carb_search_empty').getByRole('button', { name: '+ Add New Food' }).click();
+  await expect(calculator.getByLabel('Food Name')).toBeVisible();
+  await calculator.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await foodSearch.fill('');
+  await foodSearch.click();
+  await foodSearch.pressSequentially('ket');
+  await expect(foodSearch).toHaveValue('ket');
+  await expect(foodSearch).toBeFocused();
+  await calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Ketchup 4 g carbs/ }).click();
+  await expect(foodSearch).toHaveValue('');
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('80 g');
   const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });
   await ketchupRow.getByRole('button', { name: /Increase Ketchup quantity/ }).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('32 g');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('84 g');
 
-  const manualCarbs = calculator.locator('[name="carbCalcCarbs"]').last();
-  await manualCarbs.fill('3');
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('35 g');
-  await calculator.getByRole('button', { name: 'Save as Meal' }).click();
-  await calculator.getByLabel('Meal Name').fill('Hot Dog Meal');
-  await calculator.getByRole('button', { name: 'Save Meal' }).click();
-  await expect(calculator.getByRole('button', { name: /Hot Dog Meal/ })).toBeVisible();
-  await calculator.getByRole('button', { name: 'Use 35 grams' }).click();
+  await calculator.getByRole('button', { name: 'Save as My Meal' }).click();
+  await calculator.getByLabel('Meal Name').fill('Starter Meal');
+  await calculator.getByRole('button', { name: 'Save My Meal' }).click();
+  await expect(calculator.getByRole('button', { name: /Starter Meal/ })).toBeVisible();
+  await calculator.getByRole('button', { name: 'Use 84 grams' }).click();
 
-  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
-  await expect(form.getByText('Carb coverage: 35 g carbs ÷ 20 = 1.75 → 2 units')).toBeVisible();
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('84');
+  await expect(form.getByText('Carb coverage: 84 g carbs ÷ 20 = 4.2 → 4 units')).toBeVisible();
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
 
@@ -1082,19 +1196,19 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
       savedMeals: data.savedMeals,
     };
   });
-  expect(savedState.record.mealCarbs).toBe(35);
+  expect(savedState.record.mealCarbs).toBe(84);
   expect(savedState.record.mealComponents.map((item) => item.nameSnapshot)).toEqual([
-    'Footlong hot dog',
+    'Banana',
+    'Pasta',
     'Ketchup',
-    'Mustard',
     'Manual amount',
   ]);
-  expect(savedState.savedMeals[0].totalCarbs).toBe(35);
+  expect(savedState.savedMeals.find((meal) => meal.name === 'Starter Meal').totalCarbs).toBe(84);
   expect(savedState.foodLibrary.find((food) => food.name === 'Ketchup').lastUsedAt).toBeTruthy();
 
   await chooseLeeLeeSection(page, 'History');
   await page.getByRole('button', { name: /1 entry/ }).click();
-  await expect(page.getByText('Footlong hot dog · 2× Ketchup · Mustard · Manual amount')).toBeVisible();
+  await expect(page.getByText(/Banana · .*Pasta · 2× Ketchup · Manual amount/)).toBeVisible();
 });
 
 test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
@@ -1172,6 +1286,7 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   ));
   await expect(calculator).toBeVisible();
   await expect(carbInputs.first()).toBeFocused();
+  await expect.poll(() => calculator.evaluate((node) => getComputedStyle(node).maxHeight)).toBe('100%');
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
   await page.evaluate(() => {
