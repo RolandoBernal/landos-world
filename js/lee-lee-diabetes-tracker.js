@@ -60,7 +60,6 @@
     ['today', 'Today'],
     ['history', 'History'],
     ['reports', 'Reports'],
-    ['export', 'Export'],
     ['foods', 'Foods'],
   ]);
   const FOOD_LIBRARY_TABS = Object.freeze([
@@ -105,8 +104,7 @@
     { value: 'all', label: 'All records', days: null },
     { value: 'custom', label: 'Custom range', days: null },
   ];
-  const EXPORT_RANGE_OPTIONS = DATE_RANGE_OPTIONS.filter((option) => option.value !== 'all');
-  const REPORT_RANGE_OPTIONS = EXPORT_RANGE_OPTIONS.filter((option) => option.value !== 'today');
+  const REPORT_RANGE_OPTIONS = DATE_RANGE_OPTIONS.filter((option) => !['today', 'all'].includes(option.value));
   const REPORT_VIEW_ITEMS = Object.freeze([
     ['summary', 'Summary'],
     ['trends', 'Trends'],
@@ -200,12 +198,6 @@
   let historyFilterSheetOpen = false;
   let trackerMenuOpen = false;
   let lastFocusedElement = null;
-  let exportOptions = {
-    range: 'last7',
-    layout: 'clinical',
-    startDate: '',
-    endDate: '',
-  };
   let reportOptions = {
     range: 'last7',
     view: 'summary',
@@ -2265,7 +2257,7 @@
       foodLibrary = trackerData.foodLibrary;
       savedMeals = trackerData.savedMeals;
       setPersistenceStatus('reloaded');
-      if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
+      if (!currentEditor || ['history', 'history-day', 'reports', 'settings'].includes(currentEditor.mode)) {
         if (currentEditor?.mode === 'settings') {
           renderSettings();
         } else if (currentEditor?.mode === 'history') {
@@ -2274,8 +2266,6 @@
           renderHistoryDay(currentEditor.dateKey);
         } else if (currentEditor?.mode === 'reports') {
           renderReports();
-        } else if (currentEditor?.mode === 'export') {
-          renderExport();
         } else {
           renderHome();
         }
@@ -3098,6 +3088,23 @@
     return TRACKER_NAV_ITEMS.find(([action]) => action === active)?.[1] || 'Menu';
   }
 
+  function getCurrentTopLevelSection() {
+    if (currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day') return 'history';
+    if (currentEditor?.mode === 'export') return 'reports';
+    if (['reports', 'foods', 'settings'].includes(currentEditor?.mode)) return currentEditor.mode;
+    return 'today';
+  }
+
+  function renderCurrentTopLevelSection() {
+    const active = getCurrentTopLevelSection();
+    if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
+    else if (active === 'history') renderHistory();
+    else if (active === 'reports') renderReports();
+    else if (active === 'foods') renderFoodLibrary();
+    else if (active === 'settings') renderSettings();
+    else renderHome();
+  }
+
   function renderTrackerNav(active) {
     return `
       <div class="lee_lee_diabetes_nav_shell ${trackerMenuOpen ? 'is-open' : ''}">
@@ -3197,8 +3204,8 @@
   }
 
   function renderFilterControls(filters, scope) {
-    const prefix = scope === 'export' ? 'export' : (scope === 'reports' ? 'reports' : 'history');
-    const dateOptions = (scope === 'export' ? EXPORT_RANGE_OPTIONS : (scope === 'reports' ? REPORT_RANGE_OPTIONS : DATE_RANGE_OPTIONS))
+    const prefix = scope === 'reports' ? 'reports' : 'history';
+    const dateOptions = (scope === 'reports' ? REPORT_RANGE_OPTIONS : DATE_RANGE_OPTIONS)
       .map((option) => `<option value="${escapeHtml(option.value)}" ${filters.range === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`)
       .join('');
     const typeControl = scope === 'history'
@@ -3499,10 +3506,6 @@
     root.querySelector('[data-action="cancel-delete"]')?.focus();
   }
 
-  function getExportRecords() {
-    return filterRecordsByDateRange(activeRecords(), exportOptions);
-  }
-
   function getReportRecords() {
     return filterRecordsByDateRange(activeRecords(), reportOptions);
   }
@@ -3776,7 +3779,7 @@
         ${renderReportRangeControls()}
         ${renderReportViewTabs()}
       </div>
-      <section class="lee_lee_diabetes_report_actions" aria-label="Report export">
+      <section class="lee_lee_diabetes_report_actions" aria-label="Report print controls">
         <label class="lee_lee_diabetes_field">
           Print Layout
           <select class="lee_lee_diabetes_select" name="layout" data-filter-scope="reports">
@@ -3793,37 +3796,6 @@
         ${renderReportDocument(reportOptions.layout, reportRecords, rangeText, { includeSummary: true, filters: reportOptions })}
       </section>
     `;
-  }
-
-  function renderExport() {
-    currentEditor = { mode: 'export' };
-    const root = getRoot();
-    if (!root) return;
-    const exportRecords = getExportRecords();
-    const rangeText = formatDateRangeText(exportOptions);
-    root.innerHTML = `
-      ${renderTrackerTop({ active: 'export', title: 'Export' })}
-      ${renderTrackerNav('export')}
-      <section class="lee_lee_diabetes_editor lee_lee_diabetes_export_controls" aria-label="Export options">
-        ${renderFilterControls(exportOptions, 'export')}
-        <label class="lee_lee_diabetes_field">
-          Report Layout
-          <select class="lee_lee_diabetes_select" name="layout" data-filter-scope="export">
-            ${REPORT_REGISTRY.map((layout) => `<option value="${escapeHtml(layout.id)}" ${exportOptions.layout === layout.id ? 'selected' : ''}>${escapeHtml(layout.title)}</option>`).join('')}
-          </select>
-        </label>
-        <p class="lee_lee_diabetes_help">${escapeHtml(exportRecords.length)} ${exportRecords.length === 1 ? 'record' : 'records'} from ${escapeHtml(rangeText)}.</p>
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="print-report" ${exportRecords.length ? '' : 'disabled'}>Print or Save as PDF</button>
-        ${exportRecords.length ? '' : '<p class="lee_lee_diabetes_empty" role="status">No records are available for this date range.</p>'}
-      </section>
-      <section class="lee_lee_diabetes_report_preview" aria-label="Printable report preview">
-        ${renderReportPreview(exportRecords, rangeText)}
-      </section>
-    `;
-  }
-
-  function renderReportPreview(exportRecords, rangeText) {
-    return renderReportDocument(exportOptions.layout, exportRecords, rangeText);
   }
 
   function renderReportDocument(reportId, exportRecords, rangeText, options = {}) {
@@ -6699,18 +6671,6 @@
     return true;
   }
 
-  function updateExportOptions(root) {
-    const filtersForm = root.querySelector('[data-export-filters]');
-    const layoutInput = root.querySelector('[name="layout"][data-filter-scope="export"]');
-    exportOptions = {
-      range: filtersForm?.elements.range?.value || 'last7',
-      layout: layoutInput?.value || 'clinical',
-      startDate: filtersForm?.elements.startDate?.value || '',
-      endDate: filtersForm?.elements.endDate?.value || '',
-    };
-    renderExport();
-  }
-
   function updateReportOptions(root) {
     const filtersForm = root.querySelector('[data-reports-filters]');
     const layoutInput = root.querySelector('[name="layout"][data-filter-scope="reports"]');
@@ -6745,7 +6705,7 @@
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
           else if (currentEditor?.mode === 'reports') renderReports();
-          else if (currentEditor?.mode === 'export') renderExport();
+          else if (currentEditor?.mode === 'export') renderReports();
           else if (currentEditor?.mode === 'foods') renderFoodLibrary();
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
@@ -6759,7 +6719,7 @@
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
           else if (currentEditor?.mode === 'reports') renderReports();
-          else if (currentEditor?.mode === 'export') renderExport();
+          else if (currentEditor?.mode === 'export') renderReports();
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
         }
@@ -6817,7 +6777,7 @@
     if (currentEditor.mode === 'foods') renderFoodLibrary();
     if (currentEditor.mode === 'history') renderHistory();
     if (currentEditor.mode === 'reports') renderReports();
-    if (currentEditor.mode === 'export') renderExport();
+    if (currentEditor.mode === 'export') renderReports();
     if (currentEditor.mode === 'foods') renderFoodLibrary();
   }
 
@@ -6893,16 +6853,7 @@
       if (!shouldShowProtectedApp() && !['reset-password'].includes(action)) return;
       if (action === 'toggle-tracker-nav') {
         trackerMenuOpen = !trackerMenuOpen;
-        const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
-          ? 'history'
-          : (['reports', 'export', 'foods', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
-        if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
-        else if (active === 'history') renderHistory();
-        else if (active === 'reports') renderReports();
-        else if (active === 'export') renderExport();
-        else if (active === 'foods') renderFoodLibrary();
-        else if (active === 'settings') renderSettings();
-        else renderHome();
+        renderCurrentTopLevelSection();
         return;
       }
       if (action === 'edit-primary') {
@@ -7083,10 +7034,6 @@
           view: REPORT_VIEW_ITEMS.some(([view]) => view === target.dataset.view) ? target.dataset.view : 'summary',
         };
         renderReports();
-      }
-      if (action === 'export') {
-        trackerMenuOpen = false;
-        renderExport();
       }
       if (action === 'foods') {
         trackerMenuOpen = false;
@@ -7518,9 +7465,6 @@
       if (historyDraftForm) {
         updateHistoryDraftFilters(historyDraftForm);
       }
-      if (event.target.closest('[data-export-filters]') || event.target.matches('[name="layout"][data-filter-scope="export"]')) {
-        updateExportOptions(root);
-      }
       if (event.target.closest('[data-reports-filters]') || event.target.matches('[name="layout"][data-filter-scope="reports"]')) {
         updateReportOptions(root);
       }
@@ -7529,16 +7473,7 @@
       if (trackerMenuOpen && event.key === 'Escape') {
         event.preventDefault();
         trackerMenuOpen = false;
-        const active = currentEditor?.mode === 'history' || currentEditor?.mode === 'history-day'
-          ? 'history'
-          : (['reports', 'export', 'foods', 'settings'].includes(currentEditor?.mode) ? currentEditor.mode : 'today');
-        if (active === 'history' && currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
-        else if (active === 'history') renderHistory();
-        else if (active === 'reports') renderReports();
-        else if (active === 'export') renderExport();
-        else if (active === 'foods') renderFoodLibrary();
-        else if (active === 'settings') renderSettings();
-        else renderHome();
+        renderCurrentTopLevelSection();
         return;
       }
       if (historyFilterSheetOpen && event.key === 'Escape') {

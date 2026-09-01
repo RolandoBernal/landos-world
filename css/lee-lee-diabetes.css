@@ -152,7 +152,7 @@
 
 .lee_lee_diabetes_nav {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.45rem;
   margin: 0 0 1rem;
 }
@@ -1522,10 +1522,6 @@
   color: #ff8f8f;
 }
 
-.lee_lee_diabetes_export_controls {
-  margin-bottom: 1rem;
-}
-
 .lee_lee_diabetes_report_preview {
   padding: 1rem;
   overflow-x: auto;
@@ -1975,7 +1971,6 @@
   .lee_lee_diabetes_top,
   .lee_lee_diabetes_nav_shell,
   .lee_lee_diabetes_nav,
-  .lee_lee_diabetes_export_controls,
   .lee_lee_diabetes_report_controls,
   .lee_lee_diabetes_report_tabs,
   .lee_lee_diabetes_report_actions,
