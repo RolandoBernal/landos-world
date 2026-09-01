@@ -1051,6 +1051,13 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByRole('tab', { name: 'My Foods' }).click();
   const foodSearch = calculator.getByLabel('Search foods');
   await foodSearch.click();
+  await foodSearch.pressSequentially('chicken nugget');
+  await foodSearch.press('Enter');
+  await expect(foodSearch).toHaveValue('chicken nugget');
+  await expect(foodSearch).toBeFocused();
+  await expect(libraryOptions.filter({ hasText: 'Chicken Nuggets / Tenders' })).toBeVisible();
+  await foodSearch.fill('');
+  await foodSearch.click();
   await foodSearch.pressSequentially('ket');
   await expect(foodSearch).toHaveValue('ket');
   await expect(foodSearch).toBeFocused();

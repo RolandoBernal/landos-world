@@ -742,10 +742,34 @@
     return source.map(normalizeSavedMeal).filter((item) => item && !isLibraryItemDeleted(item));
   }
 
+  function getSearchTokens(value) {
+    return String(value || '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/u)
+      .map((token) => token.trim())
+      .filter(Boolean);
+  }
+
+  function addSearchTokenVariants(tokens) {
+    const variants = new Set();
+    tokens.forEach((token) => {
+      variants.add(token);
+      if (token.length > 3 && token.endsWith('s')) {
+        variants.add(token.slice(0, -1));
+      }
+    });
+    return variants;
+  }
+
   function searchTextMatches(value, query) {
     const normalizedQuery = String(query || '').trim().toLowerCase();
     if (!normalizedQuery) return true;
-    return String(value || '').toLowerCase().includes(normalizedQuery);
+    const normalizedValue = String(value || '').toLowerCase();
+    if (normalizedValue.includes(normalizedQuery)) return true;
+    const queryTokens = getSearchTokens(query);
+    if (!queryTokens.length) return true;
+    const valueTokens = addSearchTokenVariants(getSearchTokens(value));
+    return queryTokens.every((token) => valueTokens.has(token) || (token.length > 3 && token.endsWith('s') && valueTokens.has(token.slice(0, -1))));
   }
 
   function searchFoodItems(foods = [], query = '') {
@@ -4060,10 +4084,13 @@
   function renderCarbCalculatorLibrary(activeTab, search) {
     return `
       <div class="lee_lee_diabetes_carb_library">
-        <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_search">
-          Search foods
-          <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" value="${escapeHtml(search)}">
-        </label>
+        <div class="lee_lee_diabetes_field lee_lee_diabetes_carb_search">
+          <label for="lee-lee-carb-food-search">Search foods</label>
+          <div class="lee_lee_diabetes_carb_search_controls">
+            <input class="lee_lee_diabetes_input" id="lee-lee-carb-food-search" name="carbFoodSearch" type="search" autocomplete="off" value="${escapeHtml(search)}">
+            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="apply-carb-food-search">Search</button>
+          </div>
+        </div>
         <div class="lee_lee_diabetes_carb_tabs" role="tablist" aria-label="Carb Calculator food filters">
           ${FOOD_LIBRARY_TABS.map(([tab, label]) => `
             <button type="button" class="lee_lee_diabetes_nav_button ${activeTab === tab ? 'is-active' : ''}" data-action="set-carb-calculator-tab" data-tab="${escapeHtml(tab)}" role="tab" aria-selected="${activeTab === tab ? 'true' : 'false'}">${escapeHtml(label)}</button>
@@ -6814,6 +6841,10 @@
         });
         return;
       }
+      if (action === 'apply-carb-food-search') {
+        refreshCarbCalculatorLibrarySearch(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
+        return;
+      }
       if (action === 'add-food-to-carb-calculator') {
         addFoodToCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'), target.dataset.id);
         return;
@@ -7367,6 +7398,11 @@
       if (currentEditor?.carbCalculatorOpen === true && event.key === 'Escape') {
         event.preventDefault();
         closeCarbCalculator(root, root.querySelector('[data-carb-calculator]'));
+        return;
+      }
+      if (currentEditor?.carbCalculatorOpen === true && event.key === 'Enter' && event.target?.name === 'carbFoodSearch') {
+        event.preventDefault();
+        refreshCarbCalculatorLibrarySearch(event.target.closest('[data-lee-lee-editor]'));
         return;
       }
       if (event.defaultPrevented || handleCarbCalculatorCarbsTab(event)) return;

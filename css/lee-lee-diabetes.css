@@ -911,6 +911,22 @@
   padding-bottom: 0.3rem;
 }
 
+.lee_lee_diabetes_carb_search_controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.lee_lee_diabetes_carb_search_controls .lee_lee_diabetes_input {
+  min-width: 0;
+}
+
+.lee_lee_diabetes_carb_search_controls .lee_lee_diabetes_button {
+  flex: 0 0 auto;
+  min-height: 50px;
+  padding-inline: 1rem;
+}
+
 .lee_lee_diabetes_carb_tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
