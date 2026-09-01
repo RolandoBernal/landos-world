@@ -965,6 +965,23 @@
   width: 100%;
 }
 
+.lee_lee_diabetes_carb_calc_empty {
+  padding: 0.65rem 0.25rem 0.1rem;
+  text-align: center;
+}
+
+.lee_lee_diabetes_carb_calc_empty p {
+  margin: 0;
+  font-weight: 900;
+}
+
+.lee_lee_diabetes_carb_calc_empty small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--lee-lee-muted);
+  font-weight: 800;
+}
+
 .lee_lee_diabetes_carb_tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -980,6 +997,39 @@
   min-width: 0;
 }
 
+.lee_lee_diabetes_carb_picker {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--lee-lee-border-strong);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 16%);
+}
+
+.lee_lee_diabetes_carb_picker_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.lee_lee_diabetes_carb_picker_header h3,
+.lee_lee_diabetes_carb_subtitle {
+  margin: 0;
+  color: var(--lee-lee-text);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.lee_lee_diabetes_carb_picker .lee_lee_diabetes_carb_library_list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: min(18rem, 42vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .lee_lee_diabetes_carb_food_row,
 .lee_lee_diabetes_carb_selected_row,
 .lee_lee_diabetes_food_item {
@@ -991,6 +1041,10 @@
   border: 1px solid var(--lee-lee-border);
   border-radius: 8px;
   background: rgb(255 255 255 / 6%);
+}
+
+.lee_lee_diabetes_carb_food_row--picker {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .lee_lee_diabetes_carb_selected_row {
@@ -1010,6 +1064,18 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.lee_lee_diabetes_carb_pick_state {
+  color: var(--lee-lee-soft);
+  font-size: 1.15rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.lee_lee_diabetes_carb_secondary_action {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .lee_lee_diabetes_carb_food_option span:first-child,
@@ -1486,6 +1552,7 @@
 :root[data-theme="light"] .lee_lee_diabetes_carb_food_row,
 :root[data-theme="light"] .lee_lee_diabetes_carb_selected_row,
 :root[data-theme="light"] .lee_lee_diabetes_food_item,
+:root[data-theme="light"] .lee_lee_diabetes_carb_picker,
 :root[data-theme="light"] .lee_lee_diabetes_carb_editor_panel {
   background: var(--lee-lee-panel);
   border-color: var(--lee-lee-border);
