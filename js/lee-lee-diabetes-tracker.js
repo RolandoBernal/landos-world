@@ -4069,7 +4069,7 @@
             <button type="button" class="lee_lee_diabetes_nav_button ${activeTab === tab ? 'is-active' : ''}" data-action="set-carb-calculator-tab" data-tab="${escapeHtml(tab)}" role="tab" aria-selected="${activeTab === tab ? 'true' : 'false'}">${escapeHtml(label)}</button>
           `).join('')}
         </div>
-        <div class="lee_lee_diabetes_carb_library_list">
+        <div class="lee_lee_diabetes_carb_library_list" data-carb-library-list>
           ${renderCarbCalculatorLibraryList(activeTab, search)}
         </div>
         <div class="lee_lee_diabetes_backup_actions">
@@ -4649,6 +4649,23 @@
         pendingCarbCalculatorFocusRowId = '';
         pendingCarbCalculatorFocusFieldName = '';
       }
+    }
+  }
+
+  function refreshCarbCalculatorLibrarySearch(form) {
+    const calculator = form?.querySelector('[data-carb-calculator]');
+    if (!calculator) return;
+    const searchInput = calculator.querySelector('[name="carbFoodSearch"]');
+    const list = calculator.querySelector('[data-carb-library-list]');
+    if (!searchInput || !list) return;
+    const activeTab = currentEditor?.carbCalculatorTab || 'foods';
+    const search = searchInput.value || '';
+    currentEditor.carbCalculatorSearch = search;
+    currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+    list.innerHTML = renderCarbCalculatorLibraryList(activeTab, search);
+    updateEditorState(form);
+    if (document.activeElement !== searchInput) {
+      searchInput.focus({ preventScroll: true });
     }
   }
 
@@ -7238,23 +7255,7 @@
       const form = event.target.closest('[data-lee-lee-editor]');
       if (!form) return;
       if (event.target.name === 'carbFoodSearch') {
-        currentEditor.carbCalculatorSearch = event.target.value;
-        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-        renderEditor({
-          mode: currentEditor?.mode || 'log-entry',
-          eventType: getEditorEventType(form),
-          type: getEditorType(form),
-          record: buildDraftFromEditor(form),
-          returnTo: currentEditor?.returnTo || null,
-          returnDateKey: currentEditor?.returnDateKey || null,
-          carbCalculatorOpen: true,
-          carbCalculatorRows: currentEditor.carbCalculatorRows,
-          mealComponents: currentEditor?.mealComponents || [],
-          carbCalculatorTab: currentEditor?.carbCalculatorTab || 'foods',
-          carbCalculatorSearch: currentEditor.carbCalculatorSearch,
-          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          preventFocusScroll: true,
-        });
+        refreshCarbCalculatorLibrarySearch(form);
         return;
       }
       if (event.target.name === 'mealCarbs') {

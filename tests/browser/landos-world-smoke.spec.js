@@ -1049,9 +1049,17 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByRole('tab', { name: 'Favorites' })).toHaveAttribute('aria-selected', 'true');
   await libraryOptions.filter({ hasText: 'Footlong hot dog' }).click();
   await calculator.getByRole('tab', { name: 'My Foods' }).click();
-  await calculator.getByLabel('Search foods').fill('ket');
+  const foodSearch = calculator.getByLabel('Search foods');
+  await foodSearch.click();
+  await foodSearch.pressSequentially('ket');
+  await expect(foodSearch).toHaveValue('ket');
+  await expect(foodSearch).toBeFocused();
   await libraryOptions.filter({ hasText: 'Ketchup' }).click();
-  await calculator.getByLabel('Search foods').fill('must');
+  await foodSearch.fill('');
+  await foodSearch.click();
+  await foodSearch.pressSequentially('must');
+  await expect(foodSearch).toHaveValue('must');
+  await expect(foodSearch).toBeFocused();
   await calculator.getByRole('button', { name: /^Mustard 0 g carbs/ }).click();
 
   await expect(calculator.getByLabel('Meal Total')).toHaveText('28 g');
