@@ -674,9 +674,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: 42,
           administeredInsulinUnits: 6,
           suggestedTotalUnits: 5.5,
-          recordTimestamp: '2026-08-24T12:30:00.000Z',
-          createdAt: '2026-08-24T12:35:00.000Z',
-          updatedAt: '2026-08-24T12:35:00.000Z',
+          recordTimestamp: '2026-08-25T12:30:00.000Z',
+          createdAt: '2026-08-25T12:35:00.000Z',
+          updatedAt: '2026-08-25T12:35:00.000Z',
           notes: '',
         },
         {
@@ -687,9 +687,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: null,
           administeredInsulinUnits: 17,
           suggestedTotalUnits: 13,
-          recordTimestamp: '2026-08-24T18:30:00.000Z',
-          createdAt: '2026-08-24T18:35:00.000Z',
-          updatedAt: '2026-08-24T18:35:00.000Z',
+          recordTimestamp: '2026-08-25T18:30:00.000Z',
+          createdAt: '2026-08-25T18:35:00.000Z',
+          updatedAt: '2026-08-25T18:35:00.000Z',
           notes: '',
         },
         {
@@ -700,9 +700,9 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
           mealCarbs: null,
           administeredInsulinUnits: 4,
           suggestedTotalUnits: 4,
-          recordTimestamp: '2026-08-13T18:30:00.000Z',
-          createdAt: '2026-08-13T18:35:00.000Z',
-          updatedAt: '2026-08-13T18:35:00.000Z',
+          recordTimestamp: '2026-08-18T18:30:00.000Z',
+          createdAt: '2026-08-18T18:35:00.000Z',
+          updatedAt: '2026-08-18T18:35:00.000Z',
           notes: '',
         },
       ],
@@ -739,8 +739,8 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   expect(previewText).toContain('27 units');
 
   await reportsFilters.getByLabel('Date Range').selectOption('custom');
-  await reportsFilters.getByLabel('Start Date').fill('2026-08-24');
-  await reportsFilters.getByLabel('End Date').fill('2026-08-24');
+  await reportsFilters.getByLabel('Start Date').fill('2026-08-25');
+  await reportsFilters.getByLabel('End Date').fill('2026-08-25');
   await expect(page.getByText('2 records from')).toBeVisible();
 });
 
@@ -1052,7 +1052,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByLabel('Search foods').fill('ket');
   await libraryOptions.filter({ hasText: 'Ketchup' }).click();
   await calculator.getByLabel('Search foods').fill('must');
-  await libraryOptions.filter({ hasText: 'Mustard' }).click();
+  await calculator.getByRole('button', { name: /^Mustard 0 g carbs/ }).click();
 
   await expect(calculator.getByLabel('Meal Total')).toHaveText('28 g');
   const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });

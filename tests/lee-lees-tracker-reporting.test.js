@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const trackerSource = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../css/lee-lee-diabetes.css', import.meta.url), 'utf8');
+const starterFoods = JSON.parse(readFileSync(new URL('../data/llt-starter-foods.json', import.meta.url), 'utf8'));
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -79,6 +80,116 @@ function countOccurrences(text, needle) {
 function compactHtml(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
+
+test('starter food seed data is valid and matches runtime seed normalization', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const ids = new Set();
+
+  starterFoods.forEach((food) => {
+    assert.equal(typeof food.id, 'string');
+    assert.ok(food.id.startsWith('starter-'));
+    assert.ok(food.name);
+    assert.ok(food.servingLabel);
+    assert.equal(food.sourceType, 'reference');
+    assert.ok(food.sourceName);
+    assert.ok(food.sourceUrl);
+    assert.equal(Number.isFinite(food.carbs), true);
+    assert.ok(food.carbs >= 0);
+    assert.equal(ids.has(food.id), false);
+    ids.add(food.id);
+  });
+
+  const normalized = helper.getValidatedStarterFoods();
+  assert.equal(normalized.length, starterFoods.length);
+  assert.equal(normalized.every((food) => food.seedKey.startsWith('starter-')), true);
+  assert.equal(normalized.every((food) => /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(food.id)), true);
+  assert.equal(normalized.every((food) => food.sourceType === 'reference'), true);
+  assert.equal(normalized.every((food) => typeof food.carbs === 'number'), true);
+});
+
+test('starter food seeding is idempotent and preserves same-name user foods', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const userBanana = helper.normalizeFoodLibraryItem({
+    id: 'family-banana',
+    name: 'Banana',
+    emoji: '🍌',
+    carbs: 31,
+    servingLabel: 'our usual banana',
+    sourceType: 'verified-label',
+    sourceName: 'Family label',
+    createdAt: '2026-08-31T12:00:00.000Z',
+    updatedAt: '2026-08-31T12:00:00.000Z',
+  });
+  const first = helper.seedStarterFoodsInDocument({ foodLibrary: [userBanana], metadata: {} });
+  const second = helper.seedStarterFoodsInDocument(first.data);
+  const bananas = second.data.foodLibrary.filter((food) => food.name === 'Banana');
+
+  assert.equal(first.seededFoods.length, starterFoods.length);
+  assert.equal(second.seededFoods.length, 0);
+  assert.equal(second.data.foodLibrary.length, starterFoods.length + 1);
+  assert.equal(bananas.length, 2);
+  assert.equal(bananas.some((food) => food.id === 'family-banana' && food.carbs === 31), true);
+  assert.equal(bananas.some((food) => food.seedKey === 'starter-banana-medium' && food.carbs === 27), true);
+});
+
+test('starter foods participate in search, recents, favorites, saved meals, and carb totals', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const foods = helper.seedStarterFoodsInDocument({ foodLibrary: [], metadata: {} }).data.foodLibrary;
+  const pizza = helper.searchFoodItems(foods, 'pizza')[0];
+  const favoritePizza = helper.normalizeFoodLibraryItem({ ...pizza, favorite: true });
+  const recentPizza = helper.normalizeFoodLibraryItem({ ...pizza, lastUsedAt: '2026-08-31T12:00:00.000Z' });
+  const rows = helper.mergeCarbCalculatorRows([], [{
+    sourceType: 'food',
+    foodId: pizza.id,
+    name: pizza.name,
+    emoji: pizza.emoji,
+    servingLabel: pizza.servingLabel,
+    sourceTypeSnapshot: pizza.sourceType,
+    sourceNameSnapshot: pizza.sourceName,
+    qty: '2',
+    carbs: String(pizza.carbs),
+  }]);
+  const components = helper.buildMealComponentsFromCarbCalculatorRows(rows);
+
+  assert.equal(pizza.seedKey, 'starter-thin-crust-pizza');
+  assert.equal(helper.searchFoodItems([favoritePizza], 'CDC').length, 1);
+  assert.equal(helper.getRecentFoodItems([recentPizza])[0].id, pizza.id);
+  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 60);
+  assert.equal(components[0].emojiSnapshot, '🍕');
+  assert.equal(components[0].sourceTypeSnapshot, 'reference');
+  assert.equal(components[0].sourceNameSnapshot, 'CDC Carb Choices');
+  assert.equal(helper.calculateMealComponentTotal(components), 60);
+});
+
+test('food library keeps emoji optional and source labels backward-compatible', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const legacyFood = helper.normalizeFoodLibraryItem({
+    id: 'legacy-food',
+    name: 'Ketchup',
+    carbs: 4,
+    servingLabel: 'packet',
+    createdAt: '2026-08-31T12:00:00.000Z',
+    updatedAt: '2026-08-31T12:00:00.000Z',
+  });
+  const referenceFood = helper.normalizeFoodLibraryItem({
+    id: 'starter-milk-cup',
+    name: 'Milk',
+    emoji: '🥛',
+    carbs: 12,
+    servingLabel: '1 cup',
+    sourceType: 'reference',
+    sourceName: 'CDC Carb Choices',
+  });
+
+  assert.equal(legacyFood.emoji, '');
+  assert.equal(legacyFood.sourceType, '');
+  assert.equal(helper.formatFoodSourceLabel(legacyFood), '');
+  assert.equal(helper.formatFoodSourceLabel(referenceFood), 'Reference · CDC Carb Choices');
+});
 
 test('history grouping uses recordTimestamp rather than createdAt and sorts days newest first', () => {
   const reports = createTrackerReports();

@@ -967,6 +967,12 @@
   overflow-wrap: anywhere;
 }
 
+.lee_lee_diabetes_food_emoji {
+  display: inline-block;
+  margin-right: 0.35rem;
+  font-size: 0.95em;
+}
+
 .lee_lee_diabetes_carb_food_option small,
 .lee_lee_diabetes_carb_selected_row small,
 .lee_lee_diabetes_food_item p {
@@ -976,6 +982,11 @@
   font-size: 0.82rem;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.lee_lee_diabetes_food_item .lee_lee_diabetes_food_note {
+  color: var(--lee-lee-soft);
+  font-size: 0.76rem;
 }
 
 .lee_lee_diabetes_quantity_control {

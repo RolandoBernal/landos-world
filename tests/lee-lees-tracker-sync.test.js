@@ -1199,9 +1199,15 @@ test('food and saved meal sync serialization preserves carb payload snapshots', 
   const foodRemote = context.LeeLeeTrackerSync.sanitizeLibraryItemForRemote({
     id: 'food-1',
     name: 'Ketchup',
+    emoji: '🍅',
     carbs: 4,
     servingLabel: 'packet',
     favorite: true,
+    sourceType: 'verified-label',
+    sourceName: 'Nutrition Facts label',
+    sourceUrl: 'https://example.test/ketchup',
+    verificationNote: 'Family verified packet label.',
+    seedKey: '',
     createdAt: '2026-08-31T12:00:00.000Z',
     updatedAt: '2026-08-31T12:00:00.000Z',
     enteredBy: 'Levi',
@@ -1211,7 +1217,7 @@ test('food and saved meal sync serialization preserves carb payload snapshots', 
     id: 'meal-1',
     name: 'Hot Dog Meal',
     totalCarbs: 28,
-    components: [{ componentType: 'food', foodId: 'food-1', nameSnapshot: 'Ketchup', quantity: 1, carbsPerServing: 4, carbTotal: 4 }],
+    components: [{ componentType: 'food', foodId: 'food-1', nameSnapshot: 'Ketchup', emojiSnapshot: '🍅', sourceTypeSnapshot: 'verified-label', sourceNameSnapshot: 'Nutrition Facts label', quantity: 1, carbsPerServing: 4, carbTotal: 4 }],
     createdAt: '2026-08-31T12:00:00.000Z',
     updatedAt: '2026-08-31T12:00:00.000Z',
     enteredBy: 'Levi',
@@ -1220,9 +1226,16 @@ test('food and saved meal sync serialization preserves carb payload snapshots', 
 
   assert.equal(foodRemote.user_id, 'user-1');
   assert.equal(foodRemote.carb_grams, 4);
+  assert.equal(foodRemote.payload.emoji, '🍅');
   assert.equal(foodRemote.payload.servingLabel, 'packet');
+  assert.equal(foodRemote.payload.sourceType, 'verified-label');
+  assert.equal(foodRemote.payload.sourceName, 'Nutrition Facts label');
+  assert.equal(foodRemote.payload.sourceUrl, 'https://example.test/ketchup');
+  assert.equal(foodRemote.payload.verificationNote, 'Family verified packet label.');
   assert.equal(mealRemote.total_carbs, 28);
   assert.equal(mealRemote.payload.components[0].nameSnapshot, 'Ketchup');
+  assert.equal(mealRemote.payload.components[0].emojiSnapshot, '🍅');
+  assert.equal(mealRemote.payload.components[0].sourceTypeSnapshot, 'verified-label');
 });
 
 test('food library queue syncs offline-created foods and saved meals without record queue coupling', async () => {
@@ -1273,4 +1286,47 @@ test('food library queue syncs offline-created foods and saved meals without rec
   assert.equal(supabase.client.foodRows[0].carb_grams, 0);
   assert.equal(supabase.client.savedMealRows[0].name, 'Hot Dog Meal');
   assert.equal(repo.getRecordQueueSnapshot().length, 0);
+});
+
+test('starter food sync upserts by stable id so two devices do not create duplicates', async () => {
+  const supabase = createMockSupabase([], { userId: 'user-1' });
+  const createRepo = () => {
+    const store = createDocumentStore({ records: [], foodLibrary: [], savedMeals: [] });
+    const context = createSyncContext({
+      supabase,
+      config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+    });
+    return context.LeeLeeTrackerSync.createRepository({
+      ...store,
+      normalizeRecord: (item) => ({ ...item }),
+      normalizeFood: (item) => item && item.name ? { ...item } : null,
+      normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+    });
+  };
+  const starterFood = {
+    id: '0e95de71-a68c-5b46-8e7f-779d641794be',
+    name: 'Banana',
+    emoji: '🍌',
+    carbs: 27,
+    servingLabel: '1 medium (118 g)',
+    sourceType: 'reference',
+    sourceName: 'USDA SNAP-Ed',
+    seedKey: 'starter-banana-medium',
+    createdAt: '2026-08-31T00:00:00.000Z',
+    updatedAt: '2026-08-31T00:00:00.000Z',
+    version: 1,
+  };
+  const firstRepo = createRepo();
+  const secondRepo = createRepo();
+
+  await firstRepo.initialize();
+  await secondRepo.initialize();
+  firstRepo.queueFoodUpsert(starterFood);
+  secondRepo.queueFoodUpsert(starterFood);
+  await firstRepo.processFoodLibraryQueue();
+  await secondRepo.processFoodLibraryQueue();
+
+  assert.equal(supabase.client.foodRows.filter((row) => row.payload.seedKey === 'starter-banana-medium').length, 1);
+  assert.equal(supabase.client.foodRows[0].payload.sourceType, 'reference');
+  assert.equal(supabase.client.foodRows[0].payload.emoji, '🍌');
 });
