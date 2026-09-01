@@ -421,7 +421,12 @@ test('food library search, favorites, and recents use normalized user data', () 
   ];
 
   assert.deepEqual(helpers.searchFoodItems(foods, ' hot ').map((food) => food.id), ['food-2']);
+  assert.deepEqual(helpers.searchFoodItems(foods, 'HOT DOG').map((food) => food.id), ['food-2']);
+  assert.deepEqual(helpers.searchFoodItems(foods, ' dog ').map((food) => food.id), ['food-2']);
   assert.deepEqual(helpers.searchFoodItems(foods, 'footlong dog').map((food) => food.id), ['food-2']);
+  assert.deepEqual(helpers.searchFoodItems([
+    helpers.normalizeFoodLibraryItem({ id: 'food-4', name: 'Chicken Nuggets/Tenders', carbs: 15 }),
+  ], 'nug').map((food) => food.id), ['food-4']);
   assert.deepEqual(helpers.searchFoodItems([
     helpers.normalizeFoodLibraryItem({ id: 'food-4', name: 'Chicken Nuggets/Tenders', carbs: 15 }),
   ], 'chicken nugget').map((food) => food.id), ['food-4']);
