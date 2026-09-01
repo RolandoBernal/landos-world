@@ -1197,6 +1197,7 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   ));
   await expect(calculator).toBeVisible();
   await expect(carbInputs.first()).toBeFocused();
+  await expect.poll(() => calculator.evaluate((node) => getComputedStyle(node).maxHeight)).toBe('100%');
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
   await page.evaluate(() => {

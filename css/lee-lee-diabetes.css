@@ -865,7 +865,7 @@
   display: grid;
   gap: 0.9rem;
   width: min(100%, 34rem);
-  max-height: min(calc(100% - 1.5rem), 42rem);
+  max-height: 100%;
   padding: 1rem;
   box-sizing: border-box;
   border: 1px solid var(--lee-lee-border-strong);
