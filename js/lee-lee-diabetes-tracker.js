@@ -4099,7 +4099,7 @@
         </div>
         <div class="lee_lee_diabetes_carb_tabs" aria-label="Carb Calculator food pickers">
           ${FOOD_LIBRARY_TABS.map(([tab, label]) => `
-            <button type="button" class="lee_lee_diabetes_nav_button ${activePicker === tab ? 'is-active' : ''}" data-action="open-carb-calculator-picker" data-picker="${escapeHtml(tab)}" aria-pressed="${activePicker === tab ? 'true' : 'false'}">${escapeHtml(label)}</button>
+            <button type="button" class="lee_lee_diabetes_nav_button ${activePicker === tab ? 'is-active' : ''}" data-action="open-carb-calculator-picker" data-picker="${escapeHtml(tab)}" aria-pressed="${activePicker === tab ? 'true' : 'false'}" aria-expanded="${activePicker === tab ? 'true' : 'false'}" aria-controls="lee-lee-carb-picker-panel">${escapeHtml(label)}</button>
           `).join('')}
         </div>
         ${!activePicker && !normalizedSearch && !hasAnyStartedRows ? `
@@ -4120,7 +4120,7 @@
     const hasFoodEditor = currentEditor?.carbCalculatorFoodEditorOpen === true;
     const hasMealEditor = currentEditor?.carbCalculatorMealEditorOpen === true;
     return `
-      <section class="lee_lee_diabetes_carb_picker" data-carb-picker="${escapeHtml(pickerKey)}" aria-labelledby="lee-lee-carb-picker-title">
+      <section class="lee_lee_diabetes_carb_picker" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" aria-labelledby="lee-lee-carb-picker-title">
         <div class="lee_lee_diabetes_carb_picker_header">
           <h3 id="lee-lee-carb-picker-title">${escapeHtml(title)}</h3>
           ${normalizedSearch ? '' : '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">Done</button>'}
@@ -6946,8 +6946,11 @@
       }
       if (action === 'open-carb-calculator-picker') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === target.dataset.picker) ? target.dataset.picker : 'foods';
+        const currentPicker = currentEditor?.carbCalculatorPicker || '';
+        const nextPicker = currentPicker === requestedPicker ? '' : requestedPicker;
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-        currentEditor.carbCalculatorPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === target.dataset.picker) ? target.dataset.picker : 'foods';
+        currentEditor.carbCalculatorPicker = nextPicker;
         renderEditor({
           mode: currentEditor?.mode || 'log-entry',
           eventType: getEditorEventType(form),
@@ -6958,10 +6961,11 @@
           carbCalculatorOpen: true,
           carbCalculatorRows: currentEditor.carbCalculatorRows,
           mealComponents: currentEditor?.mealComponents || [],
-          carbCalculatorTab: currentEditor.carbCalculatorPicker,
-          carbCalculatorPicker: currentEditor.carbCalculatorPicker,
+          carbCalculatorTab: requestedPicker,
+          carbCalculatorPicker: nextPicker,
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          carbCalculatorPickerFocus: `[data-action="open-carb-calculator-picker"][data-picker="${requestedPicker}"]`,
           preventFocusScroll: true,
         });
         return;
