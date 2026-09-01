@@ -674,6 +674,96 @@ test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
   await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('Lee-Lee light mobile navigation menu uses readable light surfaces', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+  const mobileNavButton = page.locator('.lee_lee_diabetes_mobile_nav_button');
+  await expect(mobileNavButton).toBeVisible();
+  await mobileNavButton.click();
+  const nav = page.locator('#lee-lee-diabetes-nav');
+  await expect(nav).toBeVisible();
+
+  const lightStyles = await nav.evaluate((node) => {
+    const parseRgb = (value) => (value.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+    const luminance = ([red, green, blue]) => {
+      const channels = [red, green, blue].map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const contrast = (foreground, background) => {
+      const light = Math.max(luminance(foreground), luminance(background));
+      const dark = Math.min(luminance(foreground), luminance(background));
+      return (light + 0.05) / (dark + 0.05);
+    };
+    const panel = getComputedStyle(node);
+    const inactiveButton = node.querySelector('[data-action="history"]');
+    const activeButton = node.querySelector('[data-action="today"]');
+    const inactive = getComputedStyle(inactiveButton);
+    const active = getComputedStyle(activeButton);
+    const inactiveBackground = parseRgb(inactive.backgroundColor);
+    const inactiveColor = parseRgb(inactive.color);
+    return {
+      panelBackground: panel.backgroundColor,
+      inactiveBackground: inactive.backgroundColor,
+      inactiveColor: inactive.color,
+      activeBackground: active.backgroundColor,
+      activeColor: active.color,
+      inactiveContrast: contrast(inactiveColor, inactiveBackground),
+    };
+  });
+
+  expect(lightStyles.panelBackground).not.toBe('rgb(5, 9, 19)');
+  expect(lightStyles.inactiveBackground).not.toBe('rgb(255, 255, 255)');
+  expect(lightStyles.inactiveContrast).toBeGreaterThanOrEqual(4.5);
+  expect(lightStyles.activeBackground).not.toBe(lightStyles.inactiveBackground);
+  expect(lightStyles.activeColor).not.toBe(lightStyles.inactiveColor);
+
+  for (const [action, label] of [['history', 'History'], ['reports', 'Reports'], ['export', 'Export'], ['foods', 'Foods']]) {
+    await nav.getByRole('button', { name: label }).click();
+    await expect(mobileNavButton).toHaveText(new RegExp(label));
+    await mobileNavButton.click();
+    await expect(nav).toBeVisible();
+    await expect(nav.locator(`[data-action="${action}"]`)).toHaveAttribute('aria-current', 'page');
+    const stateStyles = await nav.evaluate((node, activeAction) => {
+      const parseRgb = (value) => (value.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+      const luminance = ([red, green, blue]) => {
+        const channels = [red, green, blue].map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+      };
+      const contrast = (foreground, background) => {
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return (light + 0.05) / (dark + 0.05);
+      };
+      const activeButton = node.querySelector(`[data-action="${activeAction}"]`);
+      const inactiveButton = Array.from(node.querySelectorAll('.lee_lee_diabetes_nav_button'))
+        .find((button) => button.dataset.action !== activeAction);
+      const active = getComputedStyle(activeButton);
+      const inactive = getComputedStyle(inactiveButton);
+      return {
+        activeBackground: active.backgroundColor,
+        inactiveBackground: inactive.backgroundColor,
+        inactiveContrast: contrast(parseRgb(inactive.color), parseRgb(inactive.backgroundColor)),
+      };
+    }, action);
+    expect(stateStyles.inactiveContrast).toBeGreaterThanOrEqual(4.5);
+    expect(stateStyles.activeBackground).not.toBe(stateStyles.inactiveBackground);
+  }
+
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const darkPanelBackground = await nav.evaluate((node) => getComputedStyle(node).backgroundColor);
+  expect(darkPanelBackground).toBe('rgba(5, 9, 19, 0.94)');
+});
+
 test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   const recentDateKey = relativeLocalDateKey(-1);

@@ -1898,6 +1898,27 @@
     text-align: left;
   }
 
+  :root[data-theme="light"] .lee_lee_diabetes_nav {
+    background:
+      radial-gradient(circle at 16% 0%, rgb(var(--app-accent-rgb, 9 104 195) / 9%), transparent 12rem),
+      linear-gradient(180deg, var(--lee-lee-panel), var(--lee-lee-panel-strong));
+    border-color: var(--lee-lee-border);
+    box-shadow: 0 16px 42px rgb(9 104 195 / 10%);
+  }
+
+  :root[data-theme="light"] .lee_lee_diabetes_mobile_nav_button,
+  :root[data-theme="light"] .lee_lee_diabetes_nav_button {
+    background: rgb(247 251 255 / 88%);
+    border-color: var(--lee-lee-border);
+    color: var(--lee-lee-text);
+  }
+
+  :root[data-theme="light"] .lee_lee_diabetes_nav_button.is-active {
+    background: rgb(var(--app-accent-rgb, 9 104 195) / 10%);
+    border-color: var(--lee-lee-border-strong);
+    color: var(--lee-lee-soft);
+  }
+
   .lee_lee_diabetes_status_grid {
     grid-template-columns: 1fr;
   }
