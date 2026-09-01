@@ -646,6 +646,32 @@ async function chooseLeeLeeSection(page, name) {
   await page.getByLabel("Lee-Lee’s Tracker sections").getByRole('button', { name }).click();
 }
 
+test('Lee-Lee top-level navigation omits the standalone Export section', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openProtectedLeeLeeTracker(page);
+  const desktopNav = page.getByLabel("Lee-Lee’s Tracker sections");
+  await expect(desktopNav.getByRole('button')).toHaveCount(4);
+  await expect(desktopNav.getByRole('button', { name: 'Today' })).toBeVisible();
+  await expect(desktopNav.getByRole('button', { name: 'History' })).toBeVisible();
+  await expect(desktopNav.getByRole('button', { name: 'Reports' })).toBeVisible();
+  await expect(desktopNav.getByRole('button', { name: 'Foods' })).toBeVisible();
+  await expect(desktopNav.getByRole('button', { name: 'Export' })).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await openProtectedLeeLeeTracker(page);
+  const mobileNavButton = page.locator('.lee_lee_diabetes_mobile_nav_button');
+  await expect(mobileNavButton).toBeVisible();
+  await mobileNavButton.click();
+  const mobileNav = page.getByLabel("Lee-Lee’s Tracker sections");
+  await expect(mobileNav.getByRole('button')).toHaveCount(4);
+  await expect(mobileNav.getByRole('button', { name: 'Export' })).toHaveCount(0);
+
+  await mobileNav.getByRole('button', { name: 'Reports' }).click();
+  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Print or Save as PDF' })).toBeVisible();
+});
+
 async function seedLeeLeeRecords(page, records) {
   await page.evaluate((seedRecords) => {
     window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
@@ -723,7 +749,10 @@ test('Lee-Lee light mobile navigation menu uses readable light surfaces', async 
   expect(lightStyles.activeBackground).not.toBe(lightStyles.inactiveBackground);
   expect(lightStyles.activeColor).not.toBe(lightStyles.inactiveColor);
 
-  for (const [action, label] of [['history', 'History'], ['reports', 'Reports'], ['export', 'Export'], ['foods', 'Foods']]) {
+  await expect(nav.getByRole('button')).toHaveCount(4);
+  await expect(nav.getByRole('button', { name: 'Export' })).toHaveCount(0);
+
+  for (const [action, label] of [['history', 'History'], ['reports', 'Reports'], ['foods', 'Foods']]) {
     await nav.getByRole('button', { name: label }).click();
     await expect(mobileNavButton).toHaveText(new RegExp(label));
     await mobileNavButton.click();

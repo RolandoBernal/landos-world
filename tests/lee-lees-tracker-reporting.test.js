@@ -540,11 +540,13 @@ test('reports navigation and print summary are wired into the app', () => {
   ], 'Aug 1, 2026', { includeSummary: true });
 
   assert.match(trackerSource, /\['reports', 'Reports'\]/);
+  assert.doesNotMatch(trackerSource, /\['export', 'Export'\]/);
   assert.match(trackerSource, /REPORT_VIEW_ITEMS/);
   assert.match(trackerSource, /let reportOptions = \{\s*range: 'last7'/);
   assert.match(trackerSource, /range: filtersForm\?\.elements\.range\?\.value \|\| 'last7'/);
   assert.match(trackerSource, /lee_lee_diabetes_report_control_stack/);
   assert.match(trackerSource, /renderReports\(\)/);
+  assert.doesNotMatch(trackerSource, /function renderExport\(\)/);
   assert.match(compactHtml(html), /<h3>Summary<\/h3>/);
   assert.match(compactHtml(html), /<dt>Insulin given<\/dt> <dd>6 units<\/dd>/);
   assert.doesNotMatch(compactHtml(html), /<dt>Insulin given<\/dt> <dd>5 units<\/dd>/);
