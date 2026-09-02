@@ -610,11 +610,26 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
 
 test('seven-segment timer replaces font-rendered clock text and is responsive', () => {
   assert.match(source, /renderSevenSegmentDisplay\(clock, accessibleClockLabel/);
+  assert.match(source, /vfgt_live--running-half/);
   assert.doesNotMatch(source, /<span class="vfgt_clock">\$\{clock\}<\/span>/);
   assert.match(css, /\.vfgt_seven_segment_visual[\s\S]*grid-template-columns: repeat\(2, var\(--digit-width\)\) calc\(var\(--digit-width\) \* 0\.28\) repeat\(2, var\(--digit-width\)\)/);
   assert.match(css, /\.vfgt_seven_segment\.is-off[\s\S]*opacity: 1/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_seven_segment_visual \{/);
   assert.doesNotMatch(css, /\.vfgt_clock \{[\s\S]{0,260}font-family: 'Digital-7'/);
+});
+
+test('mobile landscape scoreboard mode is CSS-only and scoped to running halves', () => {
+  assert.match(css, /@media \(orientation: landscape\) and \(max-width: 950px\) and \(max-height: 520px\)/);
+  assert.match(css, /body:has\(\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\) \.vfgt_live--running-half\) \{[\s\S]*overflow: hidden/);
+  assert.match(css, /\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\):has\(\.vfgt_live--running-half\)[\s\S]*position: fixed[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_actions/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_seven_segment_visual \{[\s\S]*--digit-width: min\(/);
+  assert.match(css, /env\(safe-area-inset-top\)/);
+  assert.match(css, /env\(safe-area-inset-right\)/);
+  assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /env\(safe-area-inset-left\)/);
+  assert.doesNotMatch(source, /orientationchange/);
+  assert.doesNotMatch(source, /screen\.orientation/);
 });
 
 test('VFGT light mode uses readable semantic foreground and timer tokens', () => {
