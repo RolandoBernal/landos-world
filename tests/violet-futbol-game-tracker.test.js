@@ -7,8 +7,9 @@ const source = readFileSync(new URL('../js/violet-futbol-game-tracker.js', impor
 const css = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-function createRuntime(now = 2_000_000_000_000) {
-  let currentTime = now;
+function createRuntime(nowOrOptions = 2_000_000_000_000) {
+  const options = typeof nowOrOptions === 'object' ? nowOrOptions : { now: nowOrOptions };
+  let currentTime = options.now ?? 2_000_000_000_000;
   class MockDate extends Date {
     constructor(...args) {
       super(...(args.length ? args : [currentTime]));
@@ -19,8 +20,13 @@ function createRuntime(now = 2_000_000_000_000) {
     }
   }
   Object.setPrototypeOf(MockDate, Date);
-  const storage = new Map();
+  const storage = options.storage || new Map();
+  let visibilityState = options.visibilityState || 'visible';
+  const wakeLock = options.wakeLock;
   const context = {
+    console: {
+      debug() {},
+    },
     Date: MockDate,
     FormData,
     JSON,
@@ -34,7 +40,9 @@ function createRuntime(now = 2_000_000_000_000) {
       getElementById() {
         return null;
       },
-      visibilityState: 'visible',
+      get visibilityState() {
+        return visibilityState;
+      },
     },
     localStorage: {
       getItem(key) {
@@ -52,6 +60,13 @@ function createRuntime(now = 2_000_000_000_000) {
     },
     window: null,
   };
+  if (wakeLock !== undefined) {
+    context.navigator = {
+      wakeLock,
+    };
+  } else {
+    context.navigator = {};
+  }
   context.window = context;
   context.globalThis = context;
   vm.runInNewContext(source, context);
@@ -63,6 +78,9 @@ function createRuntime(now = 2_000_000_000_000) {
     },
     now() {
       return currentTime;
+    },
+    setVisibility(nextVisibilityState) {
+      visibilityState = nextVisibilityState;
     },
   };
 }
@@ -82,6 +100,205 @@ test('first half starts at zero and continues past 40 minutes with stoppage', ()
   advance(1);
   assert.equal(api.elapsedForHalf(game, 'first_half', now()), 2401);
   assert.equal(api.formatClock(api.elapsedForHalf(game, 'first_half', now()) - api.REGULATION_SECONDS), '00:01');
+});
+
+test('authoritative timer snapshot derives normal progression from timestamps', () => {
+  const { api, advance, now } = createRuntime();
+  const startedAt = now();
+  const game = api.startFirstHalf(api.createGame({ team1: 'Violet', team2: 'Hume-Fogg' }), startedAt);
+
+  advance(10);
+  const timer = api.deriveTimerState(game, now());
+
+  assert.equal(timer.isRunning, true);
+  assert.equal(timer.halfStartedAt, startedAt);
+  assert.equal(timer.elapsedSeconds, 10);
+  assert.equal(api.formatClock(timer.elapsedSeconds), '00:10');
+});
+
+test('background suspension advances elapsed time without interval callbacks', () => {
+  const { api, advance, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+  const beforeSuspension = api.deriveTimerState(game, now());
+
+  advance(5);
+  const afterResume = api.deriveTimerState(game, now());
+
+  assert.equal(beforeSuspension.elapsedSeconds, 0);
+  assert.equal(afterResume.elapsedSeconds, 5);
+});
+
+test('long suspension advances five minutes from the original half start timestamp', () => {
+  const { api, advance, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  advance(5 * 60);
+
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 5 * 60);
+  assert.equal(api.formatClock(api.deriveTimerState(game, now()).elapsedSeconds), '05:00');
+});
+
+test('multiple suspensions continue deriving elapsed time from one half start', () => {
+  const { api, advance, now } = createRuntime();
+  const startedAt = now();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), startedAt);
+
+  advance(30);
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 30);
+  advance(45);
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 75);
+  advance(15);
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 90);
+  assert.equal(game.firstHalfStartedAt, startedAt);
+});
+
+test('lock at 12:15 resumes at 15:15 without rewriting the half start', () => {
+  const { api, advance, now } = createRuntime();
+  const startedAt = now();
+  const game = api.startSecondHalf(api.createGame({ team1: 'A', team2: 'B' }), startedAt);
+
+  advance(12 * 60 + 15);
+  assert.equal(api.formatClock(api.deriveTimerState(game, now()).elapsedSeconds), '12:15');
+
+  advance(3 * 60);
+  const resumed = api.deriveTimerState(game, now());
+
+  assert.equal(resumed.halfStartedAt, startedAt);
+  assert.equal(game.secondHalfStartedAt, startedAt);
+  assert.equal(api.formatClock(resumed.elapsedSeconds), '15:15');
+});
+
+test('40-minute boundary crossed during suspension reconciles to stoppage without clamping', () => {
+  const { api, advance, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  advance(39 * 60 + 45);
+  assert.equal(api.formatClock(api.deriveTimerState(game, now()).elapsedSeconds), '39:45');
+  advance(30);
+  const timer = api.deriveTimerState(game, now());
+
+  assert.equal(api.formatClock(timer.elapsedSeconds), '40:15');
+  assert.equal(api.formatClock(timer.stoppageSeconds), '00:15');
+});
+
+test('regulation alert state marks once and does not repeat on resume events', () => {
+  const { api, advance, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  advance(40 * 60 + 15);
+
+  assert.equal(api.maybeMarkRegulation(game, now()), true);
+  assert.equal(game.firstHalfRegulationWhistlePlayed, true);
+  assert.equal(api.maybeMarkRegulation(game, now()), false);
+  assert.equal(api.maybeMarkRegulation(game, now()), false);
+});
+
+test('active game persistence reload reconstructs elapsed time from stored timestamps', () => {
+  const storage = new Map();
+  const runtime = createRuntime({ storage });
+  const game = runtime.api.startFirstHalf(runtime.api.createGame({ team1: 'A', team2: 'B' }), runtime.now());
+  const startedAt = game.firstHalfStartedAt;
+  storage.set(runtime.api.ACTIVE_GAME_KEY, JSON.stringify(game));
+
+  const reloaded = createRuntime({ now: runtime.now() + 90_000, storage });
+  const restored = reloaded.api.normalizeGame(JSON.parse(storage.get(reloaded.api.ACTIVE_GAME_KEY)));
+  const timer = reloaded.api.deriveTimerState(restored, reloaded.now());
+
+  assert.equal(restored.firstHalfStartedAt, startedAt);
+  assert.equal(timer.elapsedSeconds, 90);
+  assert.equal(reloaded.api.formatClock(timer.elapsedSeconds), '01:30');
+});
+
+test('recovery resume preserves original half start instead of using last rendered elapsed', () => {
+  const storage = new Map();
+  const runtime = createRuntime({ storage });
+  const game = runtime.api.startFirstHalf(runtime.api.createGame({ team1: 'A', team2: 'B' }), runtime.now());
+  const startedAt = game.firstHalfStartedAt;
+  runtime.advance(12 * 60 + 15);
+  const lastRenderedElapsed = runtime.api.deriveTimerState(game, runtime.now()).elapsedSeconds;
+  storage.set(runtime.api.ACTIVE_GAME_KEY, JSON.stringify(game));
+
+  const reloaded = createRuntime({ now: runtime.now() + 3 * 60 * 1000, storage });
+  const resumed = reloaded.api.normalizeGame(JSON.parse(storage.get(reloaded.api.ACTIVE_GAME_KEY)));
+  const timer = reloaded.api.deriveTimerState(resumed, reloaded.now());
+
+  assert.equal(lastRenderedElapsed, 12 * 60 + 15);
+  assert.equal(resumed.firstHalfStartedAt, startedAt);
+  assert.equal(timer.elapsedSeconds, 15 * 60 + 15);
+  assert.equal(reloaded.api.formatClock(timer.elapsedSeconds), '15:15');
+});
+
+test('ending a half freezes elapsed time at the calculated end timestamp', () => {
+  const { api, advance, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  advance(41 * 60 + 12);
+  api.endFirstHalf(game, now());
+  advance(90);
+
+  assert.equal(game.phase, 'halftime');
+  assert.equal(api.elapsedForHalf(game, 'first_half', now()), 41 * 60 + 12);
+});
+
+test('wake lock unsupported does not block timestamp timer behavior', () => {
+  const { api, advance, now } = createRuntime({ wakeLock: undefined });
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  assert.equal(api.shouldHoldScreenWakeLock(game), false);
+  assert.doesNotThrow(() => api.syncScreenWakeLock(game));
+
+  advance(30);
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 30);
+});
+
+test('wake lock rejection is handled without uncaught errors', async () => {
+  let requests = 0;
+  const { api, advance, now } = createRuntime({
+    wakeLock: {
+      request: async () => {
+        requests += 1;
+        throw new Error('denied');
+      },
+    },
+  });
+  const game = api.startFirstHalf(api.createGame({ team1: 'A', team2: 'B' }), now());
+
+  assert.equal(await api.requestScreenWakeLock(game), false);
+  advance(12);
+
+  assert.equal(requests, 1);
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 12);
+});
+
+test('wake lock reacquires when a running half returns to visible', async () => {
+  let requests = 0;
+  const sentinels = [];
+  const runtime = createRuntime({
+    wakeLock: {
+      request: async () => {
+        requests += 1;
+        const sentinel = {
+          addEventListener() {},
+          released: false,
+          async release() {
+            this.released = true;
+          },
+        };
+        sentinels.push(sentinel);
+        return sentinel;
+      },
+    },
+  });
+  const game = runtime.api.startFirstHalf(runtime.api.createGame({ team1: 'A', team2: 'B' }), runtime.now());
+
+  assert.equal(await runtime.api.requestScreenWakeLock(game), true);
+  runtime.setVisibility('hidden');
+  assert.equal(await runtime.api.releaseScreenWakeLock(), true);
+  runtime.setVisibility('visible');
+  assert.equal(await runtime.api.requestScreenWakeLock(game), true);
+
+  assert.equal(requests, 2);
+  assert.equal(sentinels[0].released, true);
 });
 
 test('ending first half records duration and starts a 10 minute halftime countdown without starting second half', () => {

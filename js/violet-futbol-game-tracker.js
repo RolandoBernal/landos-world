@@ -24,6 +24,8 @@
   let refreshTimer = null;
   let audioCtx = null;
   let audioUnlocked = false;
+  let screenWakeLock = null;
+  let screenWakeLockRequest = null;
   let lastDirectActivationAt = 0;
   const guardedActions = new WeakMap();
 
@@ -132,16 +134,81 @@
     return Math.max(0, Math.floor((now - game[startKey]) / 1000));
   }
 
+  function isRunningHalf(game) {
+    return game?.phase === 'first_half' || game?.phase === 'second_half';
+  }
+
+  function activeHalfKeys(phase) {
+    return phase === 'first_half'
+      ? {
+          durationKey: 'firstHalfDurationSeconds',
+          regulationFlag: 'firstHalfRegulationWhistlePlayed',
+          startedAtKey: 'firstHalfStartedAt',
+        }
+      : {
+          durationKey: 'secondHalfDurationSeconds',
+          regulationFlag: 'secondHalfRegulationWhistlePlayed',
+          startedAtKey: 'secondHalfStartedAt',
+        };
+  }
+
+  function deriveTimerState(game, now = Date.now()) {
+    if (!game) {
+      return {
+        elapsedSeconds: 0,
+        halfStartedAt: null,
+        isRunning: false,
+        phase: 'pregame',
+        regulationSeconds: REGULATION_SECONDS,
+        stoppageSeconds: 0,
+      };
+    }
+    const phase = game.phase || 'pregame';
+    if (phase === 'halftime') {
+      const remainingSeconds = halftimeRemaining(game, now);
+      return {
+        elapsedSeconds: HALFTIME_SECONDS - remainingSeconds,
+        halfStartedAt: game.halftimeStartedAt || null,
+        isRunning: false,
+        phase,
+        regulationSeconds: HALFTIME_SECONDS,
+        remainingSeconds,
+        stoppageSeconds: 0,
+      };
+    }
+    if (!isRunningHalf(game)) {
+      return {
+        elapsedSeconds: 0,
+        halfStartedAt: null,
+        isRunning: false,
+        phase,
+        regulationSeconds: REGULATION_SECONDS,
+        stoppageSeconds: 0,
+      };
+    }
+    const { startedAtKey } = activeHalfKeys(phase);
+    const elapsedSeconds = elapsedForHalf(game, phase, now);
+    return {
+      elapsedSeconds,
+      halfStartedAt: game[startedAtKey] || null,
+      isRunning: true,
+      phase,
+      regulationSeconds: REGULATION_SECONDS,
+      remainingSeconds: null,
+      stoppageSeconds: Math.max(0, elapsedSeconds - REGULATION_SECONDS),
+    };
+  }
+
   function halftimeRemaining(game, now = Date.now()) {
     if (game.phase !== 'halftime' || !game.halftimeStartedAt) return HALFTIME_SECONDS;
     return Math.max(0, HALFTIME_SECONDS - Math.floor((now - game.halftimeStartedAt) / 1000));
   }
 
   function maybeMarkRegulation(game, now = Date.now()) {
-    if (game.phase !== 'first_half' && game.phase !== 'second_half') return false;
+    if (!isRunningHalf(game)) return false;
     const phase = game.phase;
     const elapsed = elapsedForHalf(game, phase, now);
-    const flag = phase === 'first_half' ? 'firstHalfRegulationWhistlePlayed' : 'secondHalfRegulationWhistlePlayed';
+    const { regulationFlag: flag } = activeHalfKeys(phase);
     if (elapsed >= REGULATION_SECONDS && !game[flag]) {
       game[flag] = true;
       return true;
@@ -253,6 +320,13 @@
       normalized[key] = normalized[key] === null || normalized[key] === undefined || normalized[key] === ''
         ? null
         : clampScore(normalized[key]);
+    });
+    ['firstHalfStartedAt', 'secondHalfStartedAt', 'halftimeStartedAt'].forEach((key) => {
+      const timestamp = Number(normalized[key]);
+      normalized[key] = Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+    });
+    ['firstHalfRegulationWhistlePlayed', 'secondHalfRegulationWhistlePlayed'].forEach((key) => {
+      normalized[key] = normalized[key] === true;
     });
     return normalized.team1 && normalized.team2 ? normalized : null;
   }
@@ -453,17 +527,83 @@
     stopRefreshTimer();
     refreshTimer = window.setInterval(() => {
       if (!state) return;
-      if (maybeMarkRegulation(state)) {
-        playRegulationWhistle();
-        saveActiveGame();
-      }
-      render();
+      reconcileTimerState({
+        allowRegulationWhistle: true,
+        renderView: true,
+      });
     }, 1000);
   }
 
   function stopRefreshTimer() {
     if (refreshTimer) window.clearInterval(refreshTimer);
     refreshTimer = null;
+  }
+
+  function screenWakeLockSupported() {
+    return !!window.navigator?.wakeLock?.request;
+  }
+
+  function shouldHoldScreenWakeLock(game = state) {
+    return screenWakeLockSupported()
+      && isRunningHalf(game)
+      && document.visibilityState !== 'hidden';
+  }
+
+  async function requestScreenWakeLock(game = state) {
+    if (!shouldHoldScreenWakeLock(game) || screenWakeLock || screenWakeLockRequest) return false;
+    try {
+      screenWakeLockRequest = window.navigator.wakeLock.request('screen');
+      screenWakeLock = await screenWakeLockRequest;
+      screenWakeLock?.addEventListener?.('release', () => {
+        screenWakeLock = null;
+      });
+      return true;
+    } catch (error) {
+      window.console?.debug?.('VFGT screen wake lock unavailable.', error);
+      return false;
+    } finally {
+      screenWakeLockRequest = null;
+    }
+  }
+
+  async function releaseScreenWakeLock() {
+    const lock = screenWakeLock;
+    screenWakeLock = null;
+    screenWakeLockRequest = null;
+    if (!lock?.release) return false;
+    try {
+      await lock.release();
+      return true;
+    } catch (error) {
+      window.console?.debug?.('VFGT screen wake lock release failed.', error);
+      return false;
+    }
+  }
+
+  function syncScreenWakeLock(game = state) {
+    if (shouldHoldScreenWakeLock(game)) {
+      void requestScreenWakeLock(game);
+    } else {
+      void releaseScreenWakeLock();
+    }
+  }
+
+  function reconcileTimerState({ allowRegulationWhistle = false, renderView = false } = {}) {
+    if (!state) {
+      stopRefreshTimer();
+      syncScreenWakeLock(null);
+      if (renderView) renderHome();
+      return null;
+    }
+    const now = Date.now();
+    const regulationJustMarked = maybeMarkRegulation(state, now);
+    saveActiveGame();
+    syncScreenWakeLock(state);
+    if (regulationJustMarked && allowRegulationWhistle && document.visibilityState !== 'hidden') {
+      playRegulationWhistle();
+    }
+    if (renderView) render();
+    return deriveTimerState(state, now);
   }
 
   function resumeStoredGame() {
@@ -473,7 +613,7 @@
     if (state.phase === 'final') renderSummary();
     else {
       startRefreshTimer();
-      render();
+      reconcileTimerState({ renderView: true });
     }
     return true;
   }
@@ -641,13 +781,13 @@
       return;
     }
     const now = Date.now();
-    maybeMarkRegulation(state, now);
-    saveActiveGame();
+    reconcileTimerState();
     const phase = state.phase;
     const halfPhase = phase === 'first_half' || phase === 'second_half';
-    const elapsed = halfPhase ? elapsedForHalf(state, phase, now) : 0;
-    const stoppage = Math.max(0, elapsed - REGULATION_SECONDS);
-    const remaining = halftimeRemaining(state, now);
+    const timerState = deriveTimerState(state, now);
+    const elapsed = halfPhase ? timerState.elapsedSeconds : 0;
+    const stoppage = timerState.stoppageSeconds;
+    const remaining = phase === 'halftime' ? timerState.remainingSeconds : halftimeRemaining(state, now);
     const clock = phase === 'halftime' ? formatClock(remaining) : formatClock(elapsed);
     const action = phase === 'first_half'
       ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-first">End First Half</button>'
@@ -716,6 +856,7 @@
 
   function renderSummary() {
     stopRefreshTimer();
+    syncScreenWakeLock(null);
     getRoot().innerHTML = summaryMarkup(state, true);
   }
 
@@ -900,18 +1041,21 @@
       endFirstHalf(state);
       playEndHalfWhistle();
       saveActiveGame();
+      syncScreenWakeLock(state);
       renderLive();
     }
     if (action === 'start-second' && state?.phase === 'halftime') {
       startSecondHalf(state);
       playNormalBeep();
       saveActiveGame();
+      syncScreenWakeLock(state);
       renderLive();
     }
     if (action === 'end-second' && state?.phase === 'second_half') {
       endSecondHalf(state);
       playEndHalfWhistle();
       saveActiveGame();
+      syncScreenWakeLock(state);
       renderSummary();
     }
     if (action === 'save') saveCompletedGame();
@@ -993,7 +1137,13 @@
     state = startFirstHalf(game);
     void unlockAudio();
     saveActiveGame();
+    syncScreenWakeLock(state);
     renderLive();
+  }
+
+  function handleLifecycleResume() {
+    if (window.location.hash !== '#/violet-futbol-game-tracker' || !state) return;
+    reconcileTimerState({ renderView: true });
   }
 
   function init() {
@@ -1008,14 +1158,22 @@
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('submit', handleSubmit);
-    window.addEventListener('focus', () => {
-      if (window.location.hash === '#/violet-futbol-game-tracker' && state) renderLive();
-    });
+    window.addEventListener('focus', handleLifecycleResume);
+    window.addEventListener('pageshow', handleLifecycleResume);
     window.addEventListener('hashchange', () => {
-      if (window.location.hash === '#/violet-futbol-game-tracker' && !state) renderHome();
+      if (window.location.hash === '#/violet-futbol-game-tracker') {
+        if (state) handleLifecycleResume();
+        else renderHome();
+      } else {
+        syncScreenWakeLock(null);
+      }
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && window.location.hash === '#/violet-futbol-game-tracker' && state) renderLive();
+      if (document.visibilityState === 'visible') {
+        handleLifecycleResume();
+      } else {
+        syncScreenWakeLock(null);
+      }
     });
     if (window.location.hash === '#/violet-futbol-game-tracker') renderHome();
   }
@@ -1029,6 +1187,7 @@
     clampScore,
     createGame,
     createManualGame,
+    deriveTimerState,
     elapsedForHalf,
     endFirstHalf,
     endSecondHalf,
@@ -1037,14 +1196,20 @@
     formatDurationInput,
     gameSortTime,
     halftimeRemaining,
+    isRunningHalf,
     maybeMarkRegulation,
     normalizeGame,
     parseOptionalDuration,
+    reconcileTimerState,
+    releaseScreenWakeLock,
     renderSevenSegmentDigit,
     renderSevenSegmentDisplay,
+    requestScreenWakeLock,
     scoreForPhase,
     serializeCompletedGame,
     setScoreForPhase,
+    shouldHoldScreenWakeLock,
+    syncScreenWakeLock,
     sevenSegmentActiveSegments,
     sortedGames,
     startFirstHalf,
