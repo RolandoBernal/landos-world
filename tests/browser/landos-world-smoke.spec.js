@@ -1276,6 +1276,8 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await foodSearch.press('Enter');
   await expect(calculator).toBeVisible();
   await expect(foodSearch).toBeFocused();
+  await foodSearch.fill('bagel');
+  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Bagel 15 g carbs/ })).toBeVisible();
   await foodSearch.fill(' no-food-found ');
   await expect(calculator.getByText('No foods found for “no-food-found”')).toBeVisible();
   await calculator.locator('.lee_lee_diabetes_carb_search_empty').getByRole('button', { name: '+ Add New Food' }).click();
