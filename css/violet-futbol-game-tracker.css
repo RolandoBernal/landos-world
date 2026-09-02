@@ -825,6 +825,99 @@
   }
 }
 
+@media (orientation: landscape) and (max-width: 950px) and (max-height: 520px) {
+  body:has(.app_theme--violet-futbol-game-tracker:not([hidden]) .vfgt_live--running-half) {
+    overflow: hidden;
+  }
+
+  .app_theme--violet-futbol-game-tracker:not([hidden]):has(.vfgt_live--running-half) {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: var(--vfgt-bg);
+  }
+
+  .app_theme--violet-futbol-game-tracker:not([hidden]):has(.vfgt_live--running-half) .ecosystem_nav,
+  .app_theme--violet-futbol-game-tracker:not([hidden]):has(.vfgt_live--running-half) > .digit_clock_header,
+  body:has(.app_theme--violet-futbol-game-tracker:not([hidden]) .vfgt_live--running-half) .pwa_network_status {
+    display: none;
+  }
+
+  .app_theme--violet-futbol-game-tracker:not([hidden]):has(.vfgt_live--running-half) #violet-futbol-game-tracker-root {
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app_theme .vfgt_live--running-half {
+    --landscape-safe-top: max(0.4rem, env(safe-area-inset-top));
+    --landscape-safe-right: max(0.5rem, env(safe-area-inset-right));
+    --landscape-safe-bottom: max(0.4rem, env(safe-area-inset-bottom));
+    --landscape-safe-left: max(0.5rem, env(safe-area-inset-left));
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    padding: var(--landscape-safe-top) var(--landscape-safe-right) var(--landscape-safe-bottom) var(--landscape-safe-left);
+    overflow: hidden;
+    background: var(--vfgt-bg);
+  }
+
+  .vfgt_live--running-half .vfgt_match_header,
+  .vfgt_live--running-half .vfgt_scoreboard,
+  .vfgt_live--running-half .vfgt_actions,
+  .vfgt_live--running-half .vfgt_stoppage {
+    display: none;
+  }
+
+  .vfgt_live--running-half .vfgt_clock_panel {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: clamp(0.25rem, 2.2dvh, 0.75rem);
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .vfgt_live--running-half .vfgt_phase {
+    color: var(--vfgt-segment-on);
+    font-size: clamp(0.95rem, 5dvh, 1.55rem);
+    line-height: 1;
+  }
+
+  .vfgt_live--running-half .vfgt_clock {
+    width: min(100%, calc((100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 2.65rem) * 2.6));
+    max-height: calc(100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 2.4rem);
+    padding: clamp(0.28rem, 1.5dvh, 0.58rem);
+    overflow: hidden;
+    border-color: rgb(74 163 255 / 34%);
+  }
+
+  .vfgt_live--running-half .vfgt_seven_segment_visual {
+    --digit-width: min(
+      calc((100vw - var(--landscape-safe-left) - var(--landscape-safe-right) - 2.4rem) / 4.8),
+      calc((100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 4.2rem) / 1.72)
+    );
+    gap: min(1.2dvw, calc(var(--digit-width) * 0.08));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vfgt_seven_segment {
     transition: none;

@@ -795,7 +795,7 @@
         ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">Start Second Half</button>'
         : '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-second">End Second Half</button>';
     getRoot().innerHTML = `
-      <section class="vfgt_app vfgt_live" aria-labelledby="vfgt-live-title">
+      <section class="vfgt_app vfgt_live ${halfPhase ? 'vfgt_live--running-half' : ''}" aria-labelledby="vfgt-live-title">
         <header class="vfgt_match_header">
           <p class="vfgt_kicker">${escapeHtml(formatDateLabel(state.date, state.startTime))} · ${escapeHtml(formatTimeLabel(state.startTime))}</p>
           <h1 id="vfgt-live-title" class="vfgt_matchup_title">

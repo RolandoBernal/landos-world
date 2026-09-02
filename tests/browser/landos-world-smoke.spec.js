@@ -192,6 +192,160 @@ for (const route of LOCAL_APP_ROUTES) {
   });
 }
 
+async function startVfgtFirstHalf(page) {
+  await page.goto('/#/violet-futbol-game-tracker');
+  const app = page.locator('#violet-futbol-game-tracker-view');
+  await app.getByRole('button', { name: 'New Game' }).click();
+  await app.getByLabel('School/Team 1').fill('Violet');
+  await app.getByLabel('School/Team 2').fill('Hume-Fogg');
+  await app.getByRole('button', { name: 'Start Game' }).click();
+  await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
+  return app;
+}
+
+test('VFGT active half becomes a fullscreen phone landscape scoreboard without duplicating the timer', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  const app = await startVfgtFirstHalf(page);
+  const live = app.locator('.vfgt_live--running-half');
+  const clockPanel = app.locator('.vfgt_clock_panel');
+  const clock = app.locator('.vfgt_clock');
+  const firstHalfStartedAt = await page.evaluate(() => (
+    JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')).firstHalfStartedAt
+  ));
+
+  await expect(live).toBeVisible();
+  await expect(app.locator('.ecosystem_nav')).toBeHidden();
+  await expect(app.locator('> .digit_clock_header')).toBeHidden();
+  await expect(app.locator('.vfgt_match_header')).toBeHidden();
+  await expect(app.locator('.vfgt_scoreboard')).toBeHidden();
+  await expect(app.locator('.vfgt_actions')).toBeHidden();
+  await expect(app.locator('[data-vfgt-seven-segment-display]')).toHaveCount(1);
+
+  const layout = await page.evaluate(() => {
+    const liveNode = document.querySelector('.vfgt_live--running-half');
+    const panel = document.querySelector('.vfgt_clock_panel');
+    const clockNode = document.querySelector('.vfgt_clock');
+    const display = document.querySelector('[data-vfgt-seven-segment-display]');
+    const phase = document.querySelector('.vfgt_phase');
+    const bodyStyle = getComputedStyle(document.body);
+    const liveStyle = getComputedStyle(liveNode);
+    const phaseStyle = getComputedStyle(phase);
+    const liveBox = liveNode.getBoundingClientRect();
+    const panelBox = panel.getBoundingClientRect();
+    const clockBox = clockNode.getBoundingClientRect();
+    const displayBox = display.getBoundingClientRect();
+    const phaseBox = phase.getBoundingClientRect();
+    return {
+      bodyOverflow: bodyStyle.overflow,
+      livePosition: liveStyle.position,
+      liveBox: {
+        width: liveBox.width,
+        height: liveBox.height,
+        left: liveBox.left,
+        top: liveBox.top,
+      },
+      panelBox: {
+        width: panelBox.width,
+        height: panelBox.height,
+      },
+      clockBox: {
+        width: clockBox.width,
+        height: clockBox.height,
+      },
+      displayBox: {
+        width: displayBox.width,
+        height: displayBox.height,
+        left: displayBox.left,
+        right: displayBox.right,
+        top: displayBox.top,
+        bottom: displayBox.bottom,
+      },
+      phaseText: phase.textContent.trim(),
+      phaseTextTransform: phaseStyle.textTransform,
+      phaseHeight: phaseBox.height,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      },
+    };
+  });
+
+  expect(layout.bodyOverflow).toBe('hidden');
+  expect(layout.livePosition).toBe('fixed');
+  expect(Math.round(layout.liveBox.width)).toBe(layout.viewport.width);
+  expect(Math.round(layout.liveBox.height)).toBe(layout.viewport.height);
+  expect(layout.liveBox.left).toBe(0);
+  expect(layout.liveBox.top).toBe(0);
+  expect(layout.phaseText).toBe('First Half');
+  expect(layout.phaseTextTransform).toBe('uppercase');
+  expect(layout.clockBox.width).toBeGreaterThan(layout.viewport.width * 0.78);
+  expect(layout.displayBox.height).toBeGreaterThan(layout.viewport.height * 0.52);
+  expect(layout.phaseHeight).toBeLessThan(layout.displayBox.height * 0.18);
+  expect(layout.displayBox.left).toBeGreaterThanOrEqual(0);
+  expect(layout.displayBox.right).toBeLessThanOrEqual(layout.viewport.width);
+  expect(layout.displayBox.top).toBeGreaterThanOrEqual(0);
+  expect(layout.displayBox.bottom).toBeLessThanOrEqual(layout.viewport.height);
+  expect(layout.panelBox.height).toBeLessThanOrEqual(layout.viewport.height);
+  await expect.poll(async () => page.evaluate((startedAt) => (
+    JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')).firstHalfStartedAt === startedAt
+  ), firstHalfStartedAt)).toBe(true);
+});
+
+test('VFGT rotation back to portrait keeps game state, score, and the original start timestamp', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const app = await startVfgtFirstHalf(page);
+  await app.getByLabel('Add one goal to Violet').click();
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
+  await expect(app.locator('.vfgt_scoreboard')).toBeHidden();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(app.locator('.vfgt_scoreboard')).toBeVisible();
+  await expect(app.getByRole('button', { name: 'End First Half' })).toBeVisible();
+  await expect(app.getByLabel('Violet score')).toHaveValue('1');
+
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
+  expect(after.phase).toBe('first_half');
+  expect(after.firstHalfStartedAt).toBe(before.firstHalfStartedAt);
+  expect(after.firstHalfGoalsTeam1).toBe(1);
+});
+
+test('VFGT phone landscape mode does not apply to non-running screens or desktop viewports', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto('/#/violet-futbol-game-tracker');
+  const app = page.locator('#violet-futbol-game-tracker-view');
+  await expect(app.getByRole('heading', { name: 'Violet Futbol Game Tracker' })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'New Game' })).toBeVisible();
+  await expect(app.locator('.ecosystem_nav')).toBeVisible();
+  let mode = await page.evaluate(() => {
+    const appNode = document.querySelector('#violet-futbol-game-tracker-view .vfgt_app');
+    return {
+      position: getComputedStyle(appNode).position,
+      timerCount: document.querySelectorAll('[data-vfgt-seven-segment-display]').length,
+    };
+  });
+  expect(mode.position).not.toBe('fixed');
+  expect(mode.timerCount).toBe(0);
+
+  await page.setViewportSize({ width: 1024, height: 500 });
+  await startVfgtFirstHalf(page);
+  mode = await page.evaluate(() => {
+    const liveNode = document.querySelector('.vfgt_live--running-half');
+    return {
+      position: getComputedStyle(liveNode).position,
+      scoreDisplay: getComputedStyle(document.querySelector('.vfgt_scoreboard')).display,
+      navDisplay: getComputedStyle(document.querySelector('#violet-futbol-game-tracker-view .ecosystem_nav')).display,
+      timerCount: document.querySelectorAll('[data-vfgt-seven-segment-display]').length,
+    };
+  });
+  expect(mode.position).not.toBe('fixed');
+  expect(mode.scoreDisplay).not.toBe('none');
+  expect(mode.navDisplay).not.toBe('none');
+  expect(mode.timerCount).toBe(1);
+});
+
 test('Digital Clock seven-segment time stays centered and contained for representative values', async ({ page }) => {
   const cases = [
     { hour: '00', minute: '00', second: '00', ampm: '' },
