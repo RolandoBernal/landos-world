@@ -86,9 +86,10 @@ test('starter food seed data is valid and matches runtime seed normalization', (
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const ids = new Set();
 
+  assert.equal(starterFoods.length, 93);
   starterFoods.forEach((food) => {
     assert.equal(typeof food.id, 'string');
-    assert.ok(food.id.startsWith('starter-'));
+    assert.match(food.id, /^starter\d*-/);
     assert.ok(food.name);
     assert.ok(food.servingLabel);
     assert.equal(food.sourceType, 'reference');
@@ -102,10 +103,12 @@ test('starter food seed data is valid and matches runtime seed normalization', (
 
   const normalized = helper.getValidatedStarterFoods();
   assert.equal(normalized.length, starterFoods.length);
-  assert.equal(normalized.every((food) => food.seedKey.startsWith('starter-')), true);
+  assert.equal(normalized.every((food) => /^starter\d*-/.test(food.seedKey)), true);
   assert.equal(normalized.every((food) => /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(food.id)), true);
   assert.equal(normalized.every((food) => food.sourceType === 'reference'), true);
   assert.equal(normalized.every((food) => typeof food.carbs === 'number'), true);
+  assert.equal(normalized.some((food) => food.seedKey === 'starter2-bagel-quarter' && food.name === 'Bagel'), true);
+  assert.equal(normalized.some((food) => food.seedKey === 'starter2-submarine-sandwich' && food.carbs === 45), true);
 });
 
 test('starter food seeding is idempotent and preserves same-name user foods', () => {
