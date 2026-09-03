@@ -72,6 +72,8 @@
   const LLT_STARTER_FOOD_SOURCE = 'reference';
   const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label']);
   const LLT_STARTER_FOODS_CREATED_AT = '2026-08-31T00:00:00.000Z';
+  // Reports treat today's bedtime dose as expected after 9 PM local time until bedtime scheduling is configurable.
+  const BEDTIME_EXPECTED_DOSE_TIME = '21:00';
   const LLT_STARTER_FOODS = Object.freeze([
     {"id":"starter-banana-medium","name":"Banana","emoji":"🍌","servingLabel":"1 medium (118 g)","carbs":27,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/seasonal-produce-guide/bananas","verificationNote":"Generic USDA reference; actual size varies."},
     {"id":"starter-apple-medium","name":"Apple","emoji":"🍎","servingLabel":"1 medium (182 g)","carbs":25,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/resources/nutrition-education-materials/seasonal-produce-guide/apples","verificationNote":"Generic USDA reference; actual size varies."},
@@ -2731,19 +2733,25 @@
     return '';
   }
 
+  function getTreatmentInsulinTypeForContext(type) {
+    return type === BEDTIME_CONTEXT_TYPE ? 'long-acting' : 'fast-acting';
+  }
+
   function classifyActualInsulin(record) {
     const actual = getRecordActualInsulin(record);
     if (actual == null) return null;
     const type = normalizeRecordContext(record?.type, normalizeEventType(record?.eventType, record));
     const explicitInsulinType = normalizeInsulinType(record?.insulinType ?? record?.insulin_type ?? record?.insulinCategory ?? record?.insulin_category);
-    const isLongActing = explicitInsulinType ? explicitInsulinType === 'long-acting' : type === BEDTIME_CONTEXT_TYPE;
+    const treatmentInsulinType = getTreatmentInsulinTypeForContext(type);
+    const isLongActing = treatmentInsulinType === 'long-acting';
     const isMealRelated = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const isCorrection = type === 'Correction';
     return {
       actual,
       isFastActing: !isLongActing,
       isLongActing,
-      insulinType: explicitInsulinType || (isLongActing ? 'long-acting' : 'fast-acting'),
+      insulinType: treatmentInsulinType,
+      recordedInsulinType: explicitInsulinType,
       isMealRelated,
       isCorrection,
       type,
@@ -2765,7 +2773,26 @@
     return value != null && dayCount ? value / dayCount : null;
   }
 
-  function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}) {
+  function getReportDateKeys(filters = {}) {
+    const bounds = getDateRangeBounds(filters.range, filters.startDate, filters.endDate);
+    const startDay = parseDateKeyToUtcDay(bounds.startDate);
+    const endDay = parseDateKeyToUtcDay(bounds.endDate);
+    if (startDay == null || endDay == null || endDay < startDay) return [];
+    const keys = [];
+    for (let day = startDay; day <= endDay; day += 1) {
+      keys.push(formatUtcDayAsDateKey(day));
+    }
+    return keys;
+  }
+
+  function getExpectedBedtimeDoseDateKeys(filters = {}, now = new Date()) {
+    const todayKey = getLocalDateKey(now);
+    const bedtimeTimestamp = createLocalTimestamp(todayKey, BEDTIME_EXPECTED_DOSE_TIME);
+    const includeToday = bedtimeTimestamp != null && now.getTime() >= bedtimeTimestamp;
+    return getReportDateKeys(filters).filter((dateKey) => dateKey < todayKey || (dateKey === todayKey && includeToday));
+  }
+
+  function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}, options = {}) {
     const visibleRecords = sourceRecords.filter((record) => !isRecordDeleted(record));
     const dayCount = getReportDayCount(visibleRecords, filters);
     const glucoseValues = visibleRecords.map((record) => normalizeBloodSugar(record.bloodSugar)).filter((value) => value != null);
@@ -2783,6 +2810,12 @@
     const insulinValues = insulinEvents.map((event) => event.actual);
     const fastActingValues = insulinEvents.filter((event) => event.isFastActing).map((event) => event.actual);
     const longActingValues = insulinEvents.filter((event) => event.isLongActing).map((event) => event.actual);
+    const bedtimeLongActingValues = insulinEvents.filter((event) => event.isLongActing && event.type === BEDTIME_CONTEXT_TYPE).map((event) => event.actual);
+    const bedtimeLongActingDateKeys = uniqueRecordDateKeys(visibleRecords.filter((record) => {
+      const insulin = classifyActualInsulin(record);
+      return insulin?.isLongActing && insulin.type === BEDTIME_CONTEXT_TYPE;
+    }));
+    const expectedBedtimeDoseDateKeys = getExpectedBedtimeDoseDateKeys(filters, options.now instanceof Date ? options.now : new Date());
     const mealValues = insulinEvents.filter((event) => event.isMealRelated).map((event) => event.actual);
     const correctionValues = insulinEvents.filter((event) => event.isCorrection).map((event) => event.actual);
     return {
@@ -2808,7 +2841,12 @@
         fastActing: createValueSummary(fastActingValues),
         fastActingAveragePerDay: calculatePerDay(sumValues(fastActingValues), dayCount),
         longActing: createValueSummary(longActingValues),
-        longActingAveragePerDay: calculatePerDay(sumValues(longActingValues), dayCount),
+        bedtimeLongActing: {
+          ...createValueSummary(bedtimeLongActingValues),
+          average: average(bedtimeLongActingValues),
+          expectedCount: expectedBedtimeDoseDateKeys.length,
+          recordedExpectedCount: bedtimeLongActingDateKeys.filter((dateKey) => expectedBedtimeDoseDateKeys.includes(dateKey)).length,
+        },
         mealRelated: createValueSummary(mealValues),
         mealRelatedAverage: average(mealValues),
         correction: createValueSummary(correctionValues),
@@ -3687,6 +3725,20 @@
     return value == null ? 'No data' : `${Math.round(value)}%`;
   }
 
+  function formatNumberRate(value) {
+    return value == null ? 'No data' : String(Math.round(value * 10) / 10);
+  }
+
+  function formatBedtimeLongActingDetail(summary) {
+    const bedtime = summary.insulin.bedtimeLongActing;
+    const details = [];
+    if (bedtime.count) details.push(pluralize(bedtime.count, 'administration'));
+    if (bedtime.expectedCount) {
+      details.push(`${bedtime.recordedExpectedCount} of ${bedtime.expectedCount} expected bedtime doses recorded`);
+    }
+    return details.join(' · ');
+  }
+
   function renderReportsSummary(reportRecords) {
     const summary = calculateReportSummary(reportRecords, reportOptions);
     const targetItems = summary.glucose.targetRange ? [
@@ -3720,7 +3772,7 @@
           { label: 'Fast-acting total', value: formatSummaryValue(summary.insulin.fastActing.total, formatInsulin), detail: summary.insulin.fastActing.count ? pluralize(summary.insulin.fastActing.count, 'administration') : '' },
           { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
           { label: 'Long-acting total', value: formatSummaryValue(summary.insulin.longActing.total, formatInsulin), detail: summary.insulin.longActing.count ? pluralize(summary.insulin.longActing.count, 'administration') : '' },
-          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Average bedtime long-acting', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
           { label: 'Meal-related total', value: formatSummaryValue(summary.insulin.mealRelated.total, formatInsulin), detail: summary.insulin.mealRelated.count ? pluralize(summary.insulin.mealRelated.count, 'administration') : '' },
           { label: 'Meal-related average', value: formatAverageInsulin(summary.insulin.mealRelatedAverage) },
           { label: 'Correction total', value: formatSummaryValue(summary.insulin.correction.total, formatInsulin), detail: summary.insulin.correction.count ? pluralize(summary.insulin.correction.count, 'administration') : '' },
@@ -3829,12 +3881,12 @@
           { label: 'Insulin per administration', value: formatAverageInsulin(summary.insulin.average), detail: summary.insulin.count ? pluralize(summary.insulin.count, 'administration') : '' },
           { label: 'Insulin per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
           { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
-          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Average bedtime long-acting', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
           { label: 'Carbs per entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
           { label: 'Carbs per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
-          { label: 'Entries per day', value: summary.rates.entriesPerDay == null ? 'No data' : String(Math.round(summary.rates.entriesPerDay * 10) / 10) },
-          { label: 'Glucose readings per day', value: summary.rates.glucoseReadingsPerDay == null ? 'No data' : String(Math.round(summary.rates.glucoseReadingsPerDay * 10) / 10) },
-          { label: 'Insulin administrations per day', value: summary.rates.insulinAdministrationsPerDay == null ? 'No data' : String(Math.round(summary.rates.insulinAdministrationsPerDay * 10) / 10) },
+          { label: 'Entries per day', value: formatNumberRate(summary.rates.entriesPerDay) },
+          { label: 'Glucose readings per day', value: formatNumberRate(summary.rates.glucoseReadingsPerDay) },
+          { label: 'Insulin administrations per day', value: formatNumberRate(summary.rates.insulinAdministrationsPerDay) },
         ])}
         <h3 class="lee_lee_diabetes_section_title">Typical Day Averages</h3>
         <div class="lee_lee_diabetes_typical_day" aria-label="Typical day averages">
@@ -3844,7 +3896,7 @@
               <p>${[
                 context.glucose.count ? `${formatAverageGlucose(context.glucose.average)} avg` : '',
                 context.carbs.count ? `${formatAverageCarbs(context.carbs.average)} avg` : '',
-                context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg${context.type === BEDTIME_CONTEXT_TYPE ? ' long-acting' : ''}` : '',
+                context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg ${context.type === BEDTIME_CONTEXT_TYPE ? 'bedtime long-acting' : 'fast-acting'}` : '',
               ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
             </article>
           `).join('') : '<p class="lee_lee_diabetes_empty">No Breakfast, Lunch, Dinner, or Bedtime averages for this range.</p>'}
@@ -5457,6 +5509,9 @@
       bloodSugar: observedContext.bloodSugar,
       insulinUnits: actualAction.administeredInsulinUnits,
       administeredInsulinUnits: actualAction.administeredInsulinUnits,
+      insulinType: actualAction.administeredInsulinUnits == null || observedContext.eventType !== 'check-insulin'
+        ? ''
+        : getTreatmentInsulinTypeForContext(observedContext.type),
       mealCarbs: observedContext.mealCarbs,
       totalCarbs: observedContext.mealCarbs,
       foods: observedContext.foods,

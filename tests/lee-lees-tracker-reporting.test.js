@@ -483,6 +483,7 @@ test('reports summary uses actual recorded insulin and missing values do not bec
   assert.equal(summary.insulin.total, 23);
   assert.equal(summary.insulin.fastActing.total, 6);
   assert.equal(summary.insulin.longActing.total, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
   assert.equal(summary.carbs.total, 42);
   assert.equal(summary.carbs.count, 1);
   assert.equal(summary.carbs.averagePerEntry, 42);
@@ -524,7 +525,8 @@ test('reports per-day metrics use the selected inclusive report period', () => {
   assert.equal(summary.insulin.total, 102);
   assert.equal(summary.insulin.averagePerDay, 17);
   assert.equal(summary.insulin.longActing.total, 102);
-  assert.equal(summary.insulin.longActingAveragePerDay, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.count, 6);
   assert.equal(summary.insulin.fastActing.total, null);
   assert.equal(summary.carbs.averagePerDay, null);
   assert.equal(summary.glucose.count / summary.dayCount, 0);
@@ -549,12 +551,12 @@ test('single-day report per-day metrics use a one-day denominator', () => {
   });
 
   assert.equal(summary.dayCount, 1);
-  assert.equal(summary.insulin.longActingAveragePerDay, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
   assert.equal(summary.insulin.averagePerDay, 17);
-  assert.ok(Number.isFinite(summary.insulin.longActingAveragePerDay));
+  assert.ok(Number.isFinite(summary.insulin.bedtimeLongActing.average));
 });
 
-test('missing long-acting days remain in the per-day denominator', () => {
+test('bedtime long-acting average uses recorded bedtime administrations, not calendar days', () => {
   const reports = createTrackerReports();
   const longActingDays = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02'];
   const summary = reports.calculateReportSummary(longActingDays.map((dateKey) => record({
@@ -573,11 +575,37 @@ test('missing long-acting days remain in the per-day denominator', () => {
 
   assert.equal(summary.dayCount, 7);
   assert.equal(summary.insulin.longActing.total, 102);
-  assert.equal(summary.insulin.longActingAveragePerDay, 102 / 7);
-  assert.equal(reports.formatInsulin(Number(summary.insulin.longActingAveragePerDay.toFixed(1))), '14.6 units');
+  assert.equal(summary.insulin.bedtimeLongActing.count, 6);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
+  assert.equal(reports.formatInsulin(Number(summary.insulin.bedtimeLongActing.average.toFixed(1))), '17 units');
 });
 
-test('reports insulin per-day metrics filter by explicit insulin type', () => {
+test('bedtime expected-dose completeness excludes today before bedtime and includes it after bedtime', () => {
+  const reports = createTrackerReports();
+  const records = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
+    .map((dateKey) => record({
+      id: `bedtime-${dateKey}`,
+      type: 'Bedtime',
+      bloodSugar: null,
+      mealCarbs: null,
+      administeredInsulinUnits: 17,
+      recordTimestamp: `${dateKey}T22:00:00.000Z`,
+    }));
+  const filters = {
+    range: 'custom',
+    startDate: '2026-08-28',
+    endDate: '2026-09-03',
+  };
+  const beforeBedtime = reports.calculateReportSummary(records, filters, {}, { now: new Date('2026-09-03T15:00:00') });
+  const afterBedtime = reports.calculateReportSummary(records, filters, {}, { now: new Date('2026-09-03T22:00:00') });
+
+  assert.equal(beforeBedtime.insulin.bedtimeLongActing.recordedExpectedCount, 6);
+  assert.equal(beforeBedtime.insulin.bedtimeLongActing.expectedCount, 6);
+  assert.equal(afterBedtime.insulin.bedtimeLongActing.recordedExpectedCount, 6);
+  assert.equal(afterBedtime.insulin.bedtimeLongActing.expectedCount, 7);
+});
+
+test('reports insulin per-day metrics follow treatment insulin type rules by context', () => {
   const reports = createTrackerReports();
   const summary = reports.calculateReportSummary([
     record({
@@ -616,10 +644,10 @@ test('reports insulin per-day metrics filter by explicit insulin type', () => {
   assert.equal(summary.dayCount, 2);
   assert.equal(summary.insulin.total, 25);
   assert.equal(summary.insulin.averagePerDay, 12.5);
-  assert.equal(summary.insulin.longActing.total, 17);
-  assert.equal(summary.insulin.longActingAveragePerDay, 8.5);
-  assert.equal(summary.insulin.fastActing.total, 8);
-  assert.equal(summary.insulin.fastActingAveragePerDay, 4);
+  assert.equal(summary.insulin.longActing.total, 3);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 3);
+  assert.equal(summary.insulin.fastActing.total, 22);
+  assert.equal(summary.insulin.fastActingAveragePerDay, 11);
   assert.equal(summary.carbs.averagePerDay, 36);
   assert.equal(summary.rates.entriesPerDay, 1.5);
   assert.equal(summary.rates.glucoseReadingsPerDay, 1.5);
