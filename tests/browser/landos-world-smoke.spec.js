@@ -1008,7 +1008,7 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await expect(page.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
   await expect(summarySection.getByText('Total insulin given')).toBeVisible();
   await expect(summarySection.getByText('23 units')).toBeVisible();
-  await expect(summarySection.getByText('Average bedtime long-acting')).toBeVisible();
+  await expect(summarySection.getByText('Long-lasting avg per day')).toBeVisible();
   await expect(summarySection.getByText(/1 administration .* expected bedtime doses recorded/)).toBeVisible();
   await expect(summarySection.getByText('Total carbs')).toBeVisible();
   expect(await summarySection.getByText('42 g carbs').count()).toBeGreaterThan(0);
