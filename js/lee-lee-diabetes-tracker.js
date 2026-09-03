@@ -68,8 +68,9 @@
     ['foods', 'My Foods'],
     ['meals', 'My Meals'],
   ]);
-  const LLT_STARTER_FOODS_VERSION = 2;
+  const LLT_STARTER_FOODS_VERSION = 3;
   const LLT_STARTER_FOOD_SOURCE = 'reference';
+  const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label']);
   const LLT_STARTER_FOODS_CREATED_AT = '2026-08-31T00:00:00.000Z';
   const LLT_STARTER_FOODS = Object.freeze([
     {"id":"starter-banana-medium","name":"Banana","emoji":"🍌","servingLabel":"1 medium (118 g)","carbs":27,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/seasonal-produce-guide/bananas","verificationNote":"Generic USDA reference; actual size varies."},
@@ -165,6 +166,9 @@
     {"id":"starter2-breakfast-sandwich","name":"Breakfast Sandwich","emoji":"🥪","servingLabel":"1 biscuit or English-muffin sandwich","carbs":30,"category":"breakfast","sourceType":"reference","sourceName":"CDC Carb Choices","sourceUrl":"https://www.cdc.gov/diabetes/healthy-eating/carbohydrate-lists-starchy-foods.html","verificationNote":"Generic reference; verify package/restaurant label when available."},
     {"id":"starter2-lo-mein-cup","name":"Lo Mein / Chow Mein","emoji":"🍜","servingLabel":"1 cup","carbs":30,"category":"meal","sourceType":"reference","sourceName":"CDC Carb Choices","sourceUrl":"https://www.cdc.gov/diabetes/healthy-eating/carbohydrate-lists-starchy-foods.html","verificationNote":"Generic reference; verify package/restaurant label when available."},
     {"id":"starter2-submarine-sandwich","name":"6-Inch Sub Sandwich","emoji":"🥪","servingLabel":"1 6-inch sub","carbs":45,"category":"meal","sourceType":"reference","sourceName":"CDC Carb Choices","sourceUrl":"https://www.cdc.gov/diabetes/healthy-eating/carbohydrate-lists-starchy-foods.html","verificationNote":"Generic reference; verify package/restaurant label when available."},
+    {"id":"starter3-pbj-sandwich","name":"PB&J Sandwich","emoji":"🥪","servingLabel":"1 sandwich","carbs":45,"category":"meal","sourceType":"reference","sourceName":"USDA","sourceUrl":"https://fdc.nal.usda.gov/fdc-app.html#/food-details/2707555/nutrients","verificationNote":"Generic estimate for a typical peanut butter and jelly sandwich; bread, peanut butter, jelly, brands, and amounts can significantly change total carbs. Verify ingredient labels when available."},
+    {"id":"starter3-chocolate-milk-cup","name":"Chocolate Milk","emoji":"🥛","servingLabel":"1 cup (8 fl oz)","carbs":26,"category":"dairy","sourceType":"reference","sourceName":"USDA","sourceUrl":"https://fdc.nal.usda.gov/fdc-app.html#/food-details/170879/nutrients","verificationNote":"Generic commercial chocolate-milk reference; formulations vary by brand. Verify the Nutrition Facts label when available."},
+    {"id":"starter3-natures-bakery-fig-bar-twin-pack","name":"Nature's Bakery Fig Bar","emoji":"🧁","servingLabel":"1 package / twin pack (57 g)","carbs":38,"category":"snack","sourceType":"verified-label","sourceName":"Nature's Bakery","sourceUrl":"https://naturesbakery.com/collections/whole-wheat-fig-bars/products/strawberry","verificationNote":"38 g Total Carbohydrate per 57 g twin-pack package (2 bars). Verify the package label if the product formulation changes."},
   ]);
   const DATE_RANGE_OPTIONS = [
     { value: 'today', label: 'Today', days: 1 },
@@ -1637,13 +1641,14 @@
     const servingLabel = sanitizeShortText(food.servingLabel, 80);
     const carbs = normalizeNumber(food.carbs);
     if (!id || !name || !servingLabel || carbs == null || carbs < 0) return null;
-    if (normalizeFoodSourceType(food.sourceType) !== LLT_STARTER_FOOD_SOURCE) return null;
+    const sourceType = normalizeFoodSourceType(food.sourceType);
+    if (!LLT_STARTER_FOOD_SOURCE_TYPES.includes(sourceType)) return null;
     return normalizeFoodLibraryItem({
       ...food,
       id: createStableStarterFoodId(id),
       carbs,
       favorite: false,
-      sourceType: LLT_STARTER_FOOD_SOURCE,
+      sourceType,
       sourceProvider: food.sourceName,
       seedKey: id,
       starterFoodVersion: LLT_STARTER_FOODS_VERSION,

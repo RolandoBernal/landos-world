@@ -86,13 +86,13 @@ test('starter food seed data is valid and matches runtime seed normalization', (
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const ids = new Set();
 
-  assert.equal(starterFoods.length, 93);
+  assert.equal(starterFoods.length, 96);
   starterFoods.forEach((food) => {
     assert.equal(typeof food.id, 'string');
     assert.match(food.id, /^starter\d*-/);
     assert.ok(food.name);
     assert.ok(food.servingLabel);
-    assert.equal(food.sourceType, 'reference');
+    assert.equal(['reference', 'verified-label'].includes(food.sourceType), true);
     assert.ok(food.sourceName);
     assert.ok(food.sourceUrl);
     assert.equal(Number.isFinite(food.carbs), true);
@@ -105,10 +105,13 @@ test('starter food seed data is valid and matches runtime seed normalization', (
   assert.equal(normalized.length, starterFoods.length);
   assert.equal(normalized.every((food) => /^starter\d*-/.test(food.seedKey)), true);
   assert.equal(normalized.every((food) => /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(food.id)), true);
-  assert.equal(normalized.every((food) => food.sourceType === 'reference'), true);
+  assert.equal(normalized.every((food) => ['reference', 'verified-label'].includes(food.sourceType)), true);
   assert.equal(normalized.every((food) => typeof food.carbs === 'number'), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter2-bagel-quarter' && food.name === 'Bagel'), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter2-submarine-sandwich' && food.carbs === 45), true);
+  assert.equal(normalized.some((food) => food.seedKey === 'starter3-pbj-sandwich' && food.carbs === 45), true);
+  assert.equal(normalized.some((food) => food.seedKey === 'starter3-chocolate-milk-cup' && food.carbs === 26), true);
+  assert.equal(normalized.some((food) => food.seedKey === 'starter3-natures-bakery-fig-bar-twin-pack' && food.sourceType === 'verified-label'), true);
 });
 
 test('starter food seeding is idempotent and preserves same-name user foods', () => {
