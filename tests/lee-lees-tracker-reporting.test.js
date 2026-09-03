@@ -498,6 +498,74 @@ test('report day count uses inclusive calendar dates without elapsed-time math',
   assert.equal(reports.getInclusiveCalendarDayCount('2026-09-02', '2026-08-28'), null);
 });
 
+test('standard report presets resolve to completed local calendar days', () => {
+  const reports = createTrackerReports();
+  const now = new Date('2026-09-03T08:00:00');
+  const last7 = reports.resolveReportRange({ range: 'last7' }, now);
+  const last14 = reports.resolveReportRange({ range: 'last14' }, now);
+  const last30 = reports.resolveReportRange({ range: 'last30' }, now);
+
+  assert.deepEqual(
+    [last7.startDate, last7.endDate, last7.dayCount, last7.descriptor, last7.includesToday],
+    ['2026-08-27', '2026-09-02', 7, '7 completed days', false],
+  );
+  assert.deepEqual(
+    [last14.startDate, last14.endDate, last14.dayCount, last14.descriptor, last14.includesToday],
+    ['2026-08-20', '2026-09-02', 14, '14 completed days', false],
+  );
+  assert.deepEqual(
+    [last30.startDate, last30.endDate, last30.dayCount, last30.descriptor, last30.includesToday],
+    ['2026-08-04', '2026-09-02', 30, '30 completed days', false],
+  );
+});
+
+test('standard reports stay stable throughout the current day and roll at midnight', () => {
+  const reports = createTrackerReports();
+  const times = ['08:00:00', '13:00:00', '18:00:00', '23:00:00'];
+  times.forEach((time) => {
+    const range = reports.resolveReportRange({ range: 'last7' }, new Date(`2026-09-03T${time}`));
+    assert.equal(range.startDate, '2026-08-27');
+    assert.equal(range.endDate, '2026-09-02');
+    assert.equal(range.dayCount, 7);
+  });
+
+  const afterRollover = reports.resolveReportRange({ range: 'last7' }, new Date('2026-09-04T00:01:00'));
+  assert.equal(afterRollover.startDate, '2026-08-28');
+  assert.equal(afterRollover.endDate, '2026-09-03');
+  assert.equal(afterRollover.dayCount, 7);
+});
+
+test('today records do not affect a standard completed-days report', () => {
+  const reports = createTrackerReports();
+  const source = [
+    record({ id: 'completed-breakfast', type: 'Breakfast', mealCarbs: 40, administeredInsulinUnits: 5, recordTimestamp: '2026-09-02T08:00:00.000Z' }),
+    record({ id: 'today-breakfast', type: 'Breakfast', mealCarbs: 90, administeredInsulinUnits: 12, recordTimestamp: '2026-09-03T08:00:00.000Z' }),
+  ];
+  const range = reports.resolveReportRange({ range: 'last7' }, new Date('2026-09-03T18:00:00'));
+  const filtered = reports.filterRecordsByResolvedReportRange(source, range);
+  const summary = reports.calculateReportSummary(filtered, range);
+
+  assert.deepEqual(filtered.map((item) => item.id), ['completed-breakfast']);
+  assert.equal(summary.carbs.total, 40);
+  assert.equal(summary.carbs.averagePerDay, 40 / 7);
+  assert.equal(summary.insulin.fastActing.total, 5);
+  assert.equal(summary.insulin.fastActingAveragePerDay, 5 / 7);
+  assert.equal(summary.insulin.averagePerDay, 5 / 7);
+});
+
+test('standard report ranges remain exact calendar days across DST transitions', () => {
+  const reports = createTrackerReports();
+  const spring = reports.resolveReportRange({ range: 'last7' }, new Date('2026-03-09T09:00:00'));
+  const fall = reports.resolveReportRange({ range: 'last7' }, new Date('2026-11-02T09:00:00'));
+
+  assert.equal(spring.dayCount, 7);
+  assert.equal(spring.dateKeys.length, 7);
+  assert.deepEqual([spring.startDate, spring.endDate], ['2026-03-02', '2026-03-08']);
+  assert.equal(fall.dayCount, 7);
+  assert.equal(fall.dateKeys.length, 7);
+  assert.deepEqual([fall.startDate, fall.endDate], ['2026-10-26', '2026-11-01']);
+});
+
 test('reports per-day metrics use the selected inclusive report period', () => {
   const reports = createTrackerReports();
   const bedtimeRecords = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
@@ -580,7 +648,7 @@ test('bedtime long-acting average uses recorded bedtime administrations, not cal
   assert.equal(reports.formatInsulin(Number(summary.insulin.bedtimeLongActing.average.toFixed(1))), '17 units');
 });
 
-test('bedtime expected-dose completeness excludes today before bedtime and includes it after bedtime', () => {
+test('bedtime expected-dose completeness excludes today in custom ranges', () => {
   const reports = createTrackerReports();
   const records = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
     .map((dateKey) => record({
@@ -602,7 +670,101 @@ test('bedtime expected-dose completeness excludes today before bedtime and inclu
   assert.equal(beforeBedtime.insulin.bedtimeLongActing.recordedExpectedCount, 6);
   assert.equal(beforeBedtime.insulin.bedtimeLongActing.expectedCount, 6);
   assert.equal(afterBedtime.insulin.bedtimeLongActing.recordedExpectedCount, 6);
-  assert.equal(afterBedtime.insulin.bedtimeLongActing.expectedCount, 7);
+  assert.equal(afterBedtime.insulin.bedtimeLongActing.expectedCount, 6);
+});
+
+test('standard completed-days report counts every completed bedtime opportunity', () => {
+  const reports = createTrackerReports();
+  const records = ['2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
+    .map((dateKey) => record({
+      id: `bedtime-${dateKey}`,
+      type: 'Bedtime',
+      bloodSugar: null,
+      mealCarbs: null,
+      administeredInsulinUnits: 17,
+      recordTimestamp: `${dateKey}T22:00:00.000Z`,
+    }));
+  const range = reports.resolveReportRange({ range: 'last7' }, new Date('2026-09-03T08:00:00'));
+  const summary = reports.calculateReportSummary(records, range);
+
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.recordedExpectedCount, 7);
+  assert.equal(summary.insulin.bedtimeLongActing.expectedCount, 7);
+});
+
+test('missing completed-day bedtime dose affects completeness but not bedtime dose average', () => {
+  const reports = createTrackerReports();
+  const records = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
+    .map((dateKey) => record({
+      id: `bedtime-${dateKey}`,
+      type: 'Bedtime',
+      bloodSugar: null,
+      mealCarbs: null,
+      administeredInsulinUnits: 17,
+      recordTimestamp: `${dateKey}T22:00:00.000Z`,
+    }));
+  const range = reports.resolveReportRange({ range: 'last7' }, new Date('2026-09-03T08:00:00'));
+  const summary = reports.calculateReportSummary(records, range);
+
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.recordedExpectedCount, 6);
+  assert.equal(summary.insulin.bedtimeLongActing.expectedCount, 7);
+});
+
+test('average bedtime long-acting uses actual historical dose values', () => {
+  const reports = createTrackerReports();
+  const doses = [15, 15, 15, 17, 17, 17, 17];
+  const records = doses.map((dose, index) => record({
+    id: `bedtime-dose-${index}`,
+    type: 'Bedtime',
+    bloodSugar: null,
+    mealCarbs: null,
+    administeredInsulinUnits: dose,
+    recordTimestamp: `2026-08-${String(27 + index).padStart(2, '0')}T22:00:00.000Z`,
+  }));
+  const range = reports.resolveReportRange({ range: 'last7' }, new Date('2026-09-03T08:00:00'));
+  const summary = reports.calculateReportSummary(records, range);
+
+  assert.equal(summary.insulin.bedtimeLongActing.total, 113);
+  assert.equal(summary.insulin.bedtimeLongActing.average, 113 / 7);
+  assert.equal(reports.formatInsulin(Number(summary.insulin.bedtimeLongActing.average.toFixed(1))), '16.1 units');
+});
+
+test('custom report ranges honor today and mark partial current-day ranges', () => {
+  const reports = createTrackerReports();
+  const range = reports.resolveReportRange({
+    range: 'custom',
+    startDate: '2026-08-28',
+    endDate: '2026-09-03',
+  }, new Date('2026-09-03T08:00:00'));
+  const completed = reports.resolveReportRange({
+    range: 'custom',
+    startDate: '2026-08-27',
+    endDate: '2026-09-02',
+  }, new Date('2026-09-03T08:00:00'));
+
+  assert.deepEqual([range.startDate, range.endDate, range.dayCount], ['2026-08-28', '2026-09-03', 7]);
+  assert.equal(range.includesToday, true);
+  assert.equal(range.descriptor, '7 calendar days - includes partial current day');
+  assert.deepEqual([completed.startDate, completed.endDate, completed.dayCount], ['2026-08-27', '2026-09-02', 7]);
+  assert.equal(completed.includesToday, false);
+  assert.equal(completed.descriptor, '7 completed days');
+});
+
+test('older bedtime records without insulin type metadata report as bedtime long-acting', () => {
+  const reports = createTrackerReports();
+  const summary = reports.calculateReportSummary([
+    record({ id: 'legacy-bedtime', type: 'Bedtime', insulinType: undefined, administeredInsulinUnits: 17, recordTimestamp: '2026-09-02T22:00:00.000Z' }),
+    record({ id: 'legacy-correction', type: 'Correction', insulinType: undefined, administeredInsulinUnits: 3, recordTimestamp: '2026-09-02T13:00:00.000Z' }),
+  ], {
+    range: 'custom',
+    startDate: '2026-09-02',
+    endDate: '2026-09-02',
+  }, {}, { now: new Date('2026-09-03T08:00:00') });
+
+  assert.equal(summary.insulin.bedtimeLongActing.average, 17);
+  assert.equal(summary.insulin.longActing.total, 17);
+  assert.equal(summary.insulin.fastActing.total, 3);
 });
 
 test('reports insulin per-day metrics follow treatment insulin type rules by context', () => {
