@@ -1258,6 +1258,7 @@
       suggestedBaseUnits: normalizeNumber(record.suggestedBaseUnits),
       suggestedCarbDoseUnits: normalizeNumber(record.suggestedCarbDoseUnits ?? record.carbDoseUnits ?? record.roundedCarbDose),
       rawCarbDose: normalizeNumber(record.rawCarbDose),
+      insulinType: normalizeInsulinType(record.insulinType ?? record.insulin_type),
       insulinCarbRatioGrams: normalizeNumber(record.insulinCarbRatioGrams),
       suggestedCorrectionUnits: normalizeNumber(record.suggestedCorrectionUnits),
       suggestedTotalUnits: normalizeNumber(record.suggestedTotalUnits),
@@ -2569,9 +2570,30 @@
   }
 
   function addDays(dateKey, delta) {
-    const timestamp = createDateStartTimestamp(dateKey);
-    if (timestamp == null) return '';
-    return getLocalDateKey(new Date(timestamp + delta * 24 * 60 * 60 * 1000));
+    const day = parseDateKeyToUtcDay(dateKey);
+    if (day == null) return '';
+    return formatUtcDayAsDateKey(day + delta);
+  }
+
+  function parseDateKeyToUtcDay(dateKey) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ''));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const timestamp = Date.UTC(year, month - 1, day);
+    const date = new Date(timestamp);
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return Math.floor(timestamp / (24 * 60 * 60 * 1000));
+  }
+
+  function formatUtcDayAsDateKey(utcDay) {
+    if (!Number.isFinite(utcDay)) return '';
+    const date = new Date(utcDay * 24 * 60 * 60 * 1000);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   function getDateRangeBounds(rangeValue, startDate = '', endDate = '') {
@@ -2682,18 +2704,69 @@
     return [...new Set(sourceRecords.map(getRecordEventDateKey).filter(Boolean))].sort();
   }
 
-  function getInclusiveDayCount(startDate, endDate) {
-    const start = createDateStartTimestamp(startDate);
-    const end = createDateStartTimestamp(endDate);
+  function getInclusiveCalendarDayCount(startDate, endDate) {
+    const start = parseDateKeyToUtcDay(startDate);
+    const end = parseDateKeyToUtcDay(endDate);
     if (start == null || end == null || end < start) return null;
-    return Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+    return end - start + 1;
   }
 
   function getReportDayCount(sourceRecords, filters = {}) {
-    const bounds = getDateRangeBounds(filters.range, filters.startDate, filters.endDate);
-    const boundedCount = getInclusiveDayCount(bounds.startDate, bounds.endDate);
+    const resolvedRange = filters?.resolved === true ? filters : resolveReportRange(filters);
+    const boundedCount = resolvedRange.dayCount;
     if (boundedCount != null) return boundedCount;
     return uniqueRecordDateKeys(sourceRecords).length;
+  }
+
+  function resolveReportRange(filters = {}, now = new Date()) {
+    const todayKey = getLocalDateKey(now);
+    const range = filters.range || 'last7';
+    if (range === 'custom') {
+      const startDate = /^\d{4}-\d{2}-\d{2}$/.test(filters.startDate || '') ? filters.startDate : '';
+      const endDate = /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate || '') ? filters.endDate : '';
+      const dayCount = getInclusiveCalendarDayCount(startDate, endDate);
+      const dateKeys = dayCount ? getCalendarDateKeys(startDate, endDate) : [];
+      const includesToday = Boolean(startDate && endDate && startDate <= todayKey && todayKey <= endDate);
+      return {
+        resolved: true,
+        range,
+        startDate,
+        endDate,
+        dayCount,
+        dateKeys,
+        includesToday,
+        isPartial: includesToday,
+        descriptor: formatReportRangeDescriptor(dayCount, includesToday),
+      };
+    }
+    const option = REPORT_RANGE_OPTIONS.find((item) => item.value === range);
+    if (!option || option.days == null) {
+      return {
+        resolved: true,
+        range,
+        startDate: '',
+        endDate: '',
+        dayCount: null,
+        dateKeys: [],
+        includesToday: false,
+        isPartial: false,
+        descriptor: '',
+      };
+    }
+    const endDate = addDays(todayKey, -1);
+    const startDate = addDays(endDate, -(option.days - 1));
+    const dayCount = getInclusiveCalendarDayCount(startDate, endDate);
+    return {
+      resolved: true,
+      range,
+      startDate,
+      endDate,
+      dayCount,
+      dateKeys: dayCount ? getCalendarDateKeys(startDate, endDate) : [],
+      includesToday: false,
+      isPartial: false,
+      descriptor: dayCount ? `${dayCount} completed days` : '',
+    };
   }
 
   function getGlucoseTargetRange(settings = trackerData.settings || {}) {
@@ -2702,17 +2775,32 @@
     return min != null && max != null && min <= max ? { min, max } : null;
   }
 
+  function normalizeInsulinType(value) {
+    const normalized = String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    if (['long-acting', 'longacting', 'long', 'basal'].includes(normalized)) return 'long-acting';
+    if (['fast-acting', 'fastacting', 'rapid-acting', 'rapid', 'bolus', 'short-acting', 'short'].includes(normalized)) return 'fast-acting';
+    return '';
+  }
+
+  function getTreatmentInsulinTypeForContext(type) {
+    return type === BEDTIME_CONTEXT_TYPE ? 'long-acting' : 'fast-acting';
+  }
+
   function classifyActualInsulin(record) {
     const actual = getRecordActualInsulin(record);
     if (actual == null) return null;
     const type = normalizeRecordContext(record?.type, normalizeEventType(record?.eventType, record));
-    const isLongActing = type === BEDTIME_CONTEXT_TYPE;
+    const explicitInsulinType = normalizeInsulinType(record?.insulinType ?? record?.insulin_type ?? record?.insulinCategory ?? record?.insulin_category);
+    const treatmentInsulinType = getTreatmentInsulinTypeForContext(type);
+    const isLongActing = treatmentInsulinType === 'long-acting';
     const isMealRelated = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const isCorrection = type === 'Correction';
     return {
       actual,
       isFastActing: !isLongActing,
       isLongActing,
+      insulinType: treatmentInsulinType,
+      recordedInsulinType: explicitInsulinType,
       isMealRelated,
       isCorrection,
       type,
@@ -2730,9 +2818,43 @@
     };
   }
 
-  function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}) {
+  function calculatePerDay(value, dayCount) {
+    return value != null && dayCount ? value / dayCount : null;
+  }
+
+  function getCalendarDateKeys(startDate, endDate) {
+    const startDay = parseDateKeyToUtcDay(startDate);
+    const endDay = parseDateKeyToUtcDay(endDate);
+    if (startDay == null || endDay == null || endDay < startDay) return [];
+    const keys = [];
+    for (let day = startDay; day <= endDay; day += 1) {
+      keys.push(formatUtcDayAsDateKey(day));
+    }
+    return keys;
+  }
+
+  function formatReportRangeDescriptor(dayCount, includesToday = false) {
+    if (!dayCount) return '';
+    return includesToday
+      ? `${dayCount} calendar days - includes partial current day`
+      : `${dayCount} completed days`;
+  }
+
+  function getReportDateKeys(filters = {}) {
+    const resolvedRange = filters?.resolved === true ? filters : resolveReportRange(filters);
+    return [...resolvedRange.dateKeys];
+  }
+
+  function getExpectedBedtimeDoseDateKeys(filters = {}, now = new Date()) {
+    const resolvedRange = filters?.resolved === true ? filters : resolveReportRange(filters, now);
+    const todayKey = getLocalDateKey(now);
+    return resolvedRange.dateKeys.filter((dateKey) => dateKey < todayKey);
+  }
+
+  function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}, options = {}) {
     const visibleRecords = sourceRecords.filter((record) => !isRecordDeleted(record));
-    const dayCount = getReportDayCount(visibleRecords, filters);
+    const resolvedRange = filters?.resolved === true ? filters : resolveReportRange(filters, options.now instanceof Date ? options.now : new Date());
+    const dayCount = getReportDayCount(visibleRecords, resolvedRange);
     const glucoseValues = visibleRecords.map((record) => normalizeBloodSugar(record.bloodSugar)).filter((value) => value != null);
     const insulinEvents = visibleRecords.map(classifyActualInsulin).filter(Boolean);
     const carbValues = visibleRecords.map(getRecordCarbs).filter((value) => value != null);
@@ -2748,12 +2870,24 @@
     const insulinValues = insulinEvents.map((event) => event.actual);
     const fastActingValues = insulinEvents.filter((event) => event.isFastActing).map((event) => event.actual);
     const longActingValues = insulinEvents.filter((event) => event.isLongActing).map((event) => event.actual);
+    const bedtimeLongActingValues = insulinEvents.filter((event) => event.isLongActing && event.type === BEDTIME_CONTEXT_TYPE).map((event) => event.actual);
+    const bedtimeLongActingDateKeys = uniqueRecordDateKeys(visibleRecords.filter((record) => {
+      const insulin = classifyActualInsulin(record);
+      return insulin?.isLongActing && insulin.type === BEDTIME_CONTEXT_TYPE;
+    }));
+    const expectedBedtimeDoseDateKeys = getExpectedBedtimeDoseDateKeys(resolvedRange, options.now instanceof Date ? options.now : new Date());
     const mealValues = insulinEvents.filter((event) => event.isMealRelated).map((event) => event.actual);
     const correctionValues = insulinEvents.filter((event) => event.isCorrection).map((event) => event.actual);
     return {
+      range: resolvedRange,
       dayCount,
       entryCount: visibleRecords.length,
       calendarDateCount: uniqueRecordDateKeys(visibleRecords).length,
+      rates: {
+        entriesPerDay: calculatePerDay(visibleRecords.length, dayCount),
+        glucoseReadingsPerDay: calculatePerDay(glucoseValues.length, dayCount),
+        insulinAdministrationsPerDay: calculatePerDay(insulinEvents.length, dayCount),
+      },
       glucose: {
         ...createValueSummary(glucoseValues),
         targetRange,
@@ -2764,11 +2898,16 @@
       },
       insulin: {
         ...createValueSummary(insulinValues),
-        averagePerDay: insulinValues.length && dayCount ? sumValues(insulinValues) / dayCount : null,
+        averagePerDay: calculatePerDay(sumValues(insulinValues), dayCount),
         fastActing: createValueSummary(fastActingValues),
-        fastActingAveragePerDay: fastActingValues.length && dayCount ? sumValues(fastActingValues) / dayCount : null,
+        fastActingAveragePerDay: calculatePerDay(sumValues(fastActingValues), dayCount),
         longActing: createValueSummary(longActingValues),
-        longActingAveragePerDay: longActingValues.length && dayCount ? sumValues(longActingValues) / dayCount : null,
+        bedtimeLongActing: {
+          ...createValueSummary(bedtimeLongActingValues),
+          average: average(bedtimeLongActingValues),
+          expectedCount: expectedBedtimeDoseDateKeys.length,
+          recordedExpectedCount: bedtimeLongActingDateKeys.filter((dateKey) => expectedBedtimeDoseDateKeys.includes(dateKey)).length,
+        },
         mealRelated: createValueSummary(mealValues),
         mealRelatedAverage: average(mealValues),
         correction: createValueSummary(correctionValues),
@@ -2776,7 +2915,7 @@
       },
       carbs: {
         ...createValueSummary(carbValues),
-        averagePerDay: carbValues.length && dayCount ? sumValues(carbValues) / dayCount : null,
+        averagePerDay: calculatePerDay(sumValues(carbValues), dayCount),
         averagePerEntry: average(carbValues),
       },
     };
@@ -2960,15 +3099,18 @@
     }).format(new Date(timestamp));
   }
 
-  function formatDateRangeText(filters) {
-    const filtered = filterRecordsByDateRange(records, filters);
-    const bounds = getDateRangeBounds(filters.range, filters.startDate, filters.endDate);
-    if (!filtered.length) {
-      if (bounds.startDate && bounds.endDate) return `${formatShortDateKey(bounds.startDate)} through ${formatShortDateKey(bounds.endDate)}`;
-      return 'the selected range';
+  function formatDateRangeText(rangeOrFilters) {
+    const resolvedRange = rangeOrFilters?.resolved === true ? rangeOrFilters : resolveReportRange(rangeOrFilters);
+    if (resolvedRange.startDate && resolvedRange.endDate) {
+      return `${formatShortDateKey(resolvedRange.startDate)} through ${formatShortDateKey(resolvedRange.endDate)}`;
     }
-    const dateKeys = filtered.map(getRecordEventDateKey).sort();
-    return `${formatShortDateKey(dateKeys[0])} through ${formatShortDateKey(dateKeys[dateKeys.length - 1])}`;
+    return 'the selected range';
+  }
+
+  function formatReportRangeSummary(rangeOrFilters) {
+    const resolvedRange = rangeOrFilters?.resolved === true ? rangeOrFilters : resolveReportRange(rangeOrFilters);
+    const rangeText = formatDateRangeText(resolvedRange);
+    return [rangeText, resolvedRange.descriptor].filter(Boolean).join(' - ');
   }
 
   function formatSummaryValue(value, formatter, fallback = 'No data') {
@@ -3581,15 +3723,24 @@
     root.querySelector('[data-action="cancel-delete"]')?.focus();
   }
 
-  function getReportRecords() {
-    return filterRecordsByDateRange(activeRecords(), reportOptions);
+  function filterRecordsByResolvedReportRange(sourceRecords, resolvedRange) {
+    return sourceRecords.filter((record) => {
+      const dateKey = getRecordEventDateKey(record);
+      const afterStart = !resolvedRange.startDate || dateKey >= resolvedRange.startDate;
+      const beforeEnd = !resolvedRange.endDate || dateKey <= resolvedRange.endDate;
+      return afterStart && beforeEnd;
+    });
   }
 
-  function renderReportRangeControls() {
+  function getReportRecords(resolvedRange = resolveReportRange(reportOptions)) {
+    return filterRecordsByResolvedReportRange(activeRecords(), resolvedRange);
+  }
+
+  function renderReportRangeControls(resolvedRange = resolveReportRange(reportOptions)) {
     return `
       <section class="lee_lee_diabetes_editor lee_lee_diabetes_report_controls" aria-label="Report options">
         ${renderFilterControls(reportOptions, 'reports')}
-        <p class="lee_lee_diabetes_filter_summary" aria-live="polite">${escapeHtml(formatDateRangeText(reportOptions))}</p>
+        <p class="lee_lee_diabetes_filter_summary" aria-live="polite">${escapeHtml(formatReportRangeSummary(resolvedRange))}</p>
       </section>
     `;
   }
@@ -3647,8 +3798,22 @@
     return value == null ? 'No data' : `${Math.round(value)}%`;
   }
 
-  function renderReportsSummary(reportRecords) {
-    const summary = calculateReportSummary(reportRecords, reportOptions);
+  function formatNumberRate(value) {
+    return value == null ? 'No data' : String(Math.round(value * 10) / 10);
+  }
+
+  function formatBedtimeLongActingDetail(summary) {
+    const bedtime = summary.insulin.bedtimeLongActing;
+    const details = [];
+    if (bedtime.count) details.push(pluralize(bedtime.count, 'administration'));
+    if (bedtime.expectedCount) {
+      details.push(`${bedtime.recordedExpectedCount} of ${bedtime.expectedCount} expected bedtime doses recorded`);
+    }
+    return details.join(' · ');
+  }
+
+  function renderReportsSummary(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
+    const summary = calculateReportSummary(reportRecords, resolvedRange);
     const targetItems = summary.glucose.targetRange ? [
       { label: 'In target range', value: formatPercent(summary.glucose.inRangePercent), detail: pluralize(summary.glucose.targetCounts.inRange, 'reading') },
       { label: 'Below target', value: formatPercent(summary.glucose.belowRangePercent), detail: pluralize(summary.glucose.targetCounts.below, 'reading') },
@@ -3678,9 +3843,9 @@
           { label: 'Total insulin given', value: formatSummaryValue(summary.insulin.total, formatInsulin) },
           { label: 'Average per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
           { label: 'Fast-acting total', value: formatSummaryValue(summary.insulin.fastActing.total, formatInsulin), detail: summary.insulin.fastActing.count ? pluralize(summary.insulin.fastActing.count, 'administration') : '' },
-          { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
+          { label: 'Fast-acting avg per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
           { label: 'Long-acting total', value: formatSummaryValue(summary.insulin.longActing.total, formatInsulin), detail: summary.insulin.longActing.count ? pluralize(summary.insulin.longActing.count, 'administration') : '' },
-          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
           { label: 'Meal-related total', value: formatSummaryValue(summary.insulin.mealRelated.total, formatInsulin), detail: summary.insulin.mealRelated.count ? pluralize(summary.insulin.mealRelated.count, 'administration') : '' },
           { label: 'Meal-related average', value: formatAverageInsulin(summary.insulin.mealRelatedAverage) },
           { label: 'Correction total', value: formatSummaryValue(summary.insulin.correction.total, formatInsulin), detail: summary.insulin.correction.count ? pluralize(summary.insulin.correction.count, 'administration') : '' },
@@ -3778,8 +3943,8 @@
     `;
   }
 
-  function renderReportsAverages(reportRecords) {
-    const averages = buildAveragesReport(reportRecords, reportOptions);
+  function renderReportsAverages(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
+    const averages = buildAveragesReport(reportRecords, resolvedRange);
     const summary = averages.summary;
     return `
       <section aria-labelledby="lee-lee-reports-averages-title">
@@ -3788,13 +3953,13 @@
           { label: 'Average glucose', value: formatAverageGlucose(summary.glucose.average), detail: summary.glucose.count ? pluralize(summary.glucose.count, 'reading') : '' },
           { label: 'Insulin per administration', value: formatAverageInsulin(summary.insulin.average), detail: summary.insulin.count ? pluralize(summary.insulin.count, 'administration') : '' },
           { label: 'Insulin per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
-          { label: 'Fast-acting per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
-          { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
+          { label: 'Fast-acting avg per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
+          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
           { label: 'Carbs per entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
           { label: 'Carbs per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
-          { label: 'Entries per day', value: summary.dayCount ? String(Math.round((summary.entryCount / summary.dayCount) * 10) / 10) : 'No data' },
-          { label: 'Glucose readings per day', value: summary.dayCount ? String(Math.round((summary.glucose.count / summary.dayCount) * 10) / 10) : 'No data' },
-          { label: 'Insulin administrations per day', value: summary.dayCount ? String(Math.round((summary.insulin.count / summary.dayCount) * 10) / 10) : 'No data' },
+          { label: 'Entries per day', value: formatNumberRate(summary.rates.entriesPerDay) },
+          { label: 'Glucose readings per day', value: formatNumberRate(summary.rates.glucoseReadingsPerDay) },
+          { label: 'Insulin administrations per day', value: formatNumberRate(summary.rates.insulinAdministrationsPerDay) },
         ])}
         <h3 class="lee_lee_diabetes_section_title">Typical Day Averages</h3>
         <div class="lee_lee_diabetes_typical_day" aria-label="Typical day averages">
@@ -3804,7 +3969,7 @@
               <p>${[
                 context.glucose.count ? `${formatAverageGlucose(context.glucose.average)} avg` : '',
                 context.carbs.count ? `${formatAverageCarbs(context.carbs.average)} avg` : '',
-                context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg${context.type === BEDTIME_CONTEXT_TYPE ? ' long-acting' : ''}` : '',
+                context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg ${context.type === BEDTIME_CONTEXT_TYPE ? 'bedtime long-acting' : 'fast-acting'}` : '',
               ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
             </article>
           `).join('') : '<p class="lee_lee_diabetes_empty">No Breakfast, Lunch, Dinner, or Bedtime averages for this range.</p>'}
@@ -3834,24 +3999,26 @@
     `;
   }
 
-  function renderReportsView(reportRecords) {
+  function renderReportsView(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
     if (reportOptions.view === 'trends') return renderReportsTrends(reportRecords);
-    if (reportOptions.view === 'averages') return renderReportsAverages(reportRecords);
+    if (reportOptions.view === 'averages') return renderReportsAverages(reportRecords, resolvedRange);
     if (reportOptions.view === 'detailed-log') return renderReportsDetailedLog(reportRecords);
-    return renderReportsSummary(reportRecords);
+    return renderReportsSummary(reportRecords, resolvedRange);
   }
 
   function renderReports() {
     currentEditor = { mode: 'reports' };
     const root = getRoot();
     if (!root) return;
-    const reportRecords = getReportRecords();
-    const rangeText = formatDateRangeText(reportOptions);
+    const resolvedRange = resolveReportRange(reportOptions);
+    const reportRecords = getReportRecords(resolvedRange);
+    const rangeText = formatDateRangeText(resolvedRange);
+    const rangeSummary = formatReportRangeSummary(resolvedRange);
     root.innerHTML = `
       ${renderTrackerTop({ active: 'reports', title: 'Reports' })}
       ${renderTrackerNav('reports')}
       <div class="lee_lee_diabetes_report_control_stack">
-        ${renderReportRangeControls()}
+        ${renderReportRangeControls(resolvedRange)}
         ${renderReportViewTabs()}
       </div>
       <section class="lee_lee_diabetes_report_actions" aria-label="Report print controls">
@@ -3863,12 +4030,12 @@
         </label>
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="print-report" ${reportRecords.length ? '' : 'disabled'}>Print or Save as PDF</button>
       </section>
-      <p class="lee_lee_diabetes_help">${escapeHtml(reportRecords.length)} ${reportRecords.length === 1 ? 'record' : 'records'} from ${escapeHtml(rangeText)}.</p>
+      <p class="lee_lee_diabetes_help">${escapeHtml(reportRecords.length)} ${reportRecords.length === 1 ? 'record' : 'records'} from ${escapeHtml(rangeSummary)}.</p>
       <div class="lee_lee_diabetes_reports_body">
-        ${renderReportsView(reportRecords)}
+        ${renderReportsView(reportRecords, resolvedRange)}
       </div>
       <section class="lee_lee_diabetes_report_preview" aria-label="Printable report preview">
-        ${renderReportDocument(reportOptions.layout, reportRecords, rangeText, { includeSummary: true, filters: reportOptions })}
+        ${renderReportDocument(reportOptions.layout, reportRecords, rangeSummary, { includeSummary: true, filters: resolvedRange })}
       </section>
     `;
   }
@@ -3904,6 +4071,8 @@
             ['Insulin given', formatSummaryValue(summary.insulin.total, formatInsulin)],
             ['Fast-acting insulin', formatSummaryValue(summary.insulin.fastActing.total, formatInsulin)],
             ['Long-acting insulin', formatSummaryValue(summary.insulin.longActing.total, formatInsulin)],
+            ['Long-lasting avg per day', formatAverageInsulin(summary.insulin.bedtimeLongActing.average)],
+            ['Expected bedtime doses', summary.insulin.bedtimeLongActing.expectedCount ? `${summary.insulin.bedtimeLongActing.recordedExpectedCount} of ${summary.insulin.bedtimeLongActing.expectedCount}` : 'No data'],
             ['Total carbs', formatSummaryValue(summary.carbs.total, formatCarbs)],
           ].map(([label, value]) => `
             <div>
@@ -5417,6 +5586,9 @@
       bloodSugar: observedContext.bloodSugar,
       insulinUnits: actualAction.administeredInsulinUnits,
       administeredInsulinUnits: actualAction.administeredInsulinUnits,
+      insulinType: actualAction.administeredInsulinUnits == null || observedContext.eventType !== 'check-insulin'
+        ? ''
+        : getTreatmentInsulinTypeForContext(observedContext.type),
       mealCarbs: observedContext.mealCarbs,
       totalCarbs: observedContext.mealCarbs,
       foods: observedContext.foods,
@@ -7632,6 +7804,11 @@
     groupRecordsByLocalDate,
     filterRecordsByDateRange,
     filterRecordsByEntryType,
+    resolveReportRange,
+    filterRecordsByResolvedReportRange,
+    getReportDateKeys,
+    getInclusiveCalendarDayCount,
+    getReportDayCount,
     calculateDailySummary,
     calculateReportSummary,
     calculateContextAverages,

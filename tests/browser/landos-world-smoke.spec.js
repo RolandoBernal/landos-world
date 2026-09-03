@@ -1003,10 +1003,13 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   const reportsFilters = page.locator('[data-reports-filters]');
   await expect(reportsFilters.getByLabel('Date Range')).toHaveValue('last7');
   await expect(page.getByText('2 records from')).toBeVisible();
+  await expect(page.getByLabel('Report options').getByText('7 completed days')).toBeVisible();
   const summarySection = page.getByLabel('Summary');
   await expect(page.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
   await expect(summarySection.getByText('Total insulin given')).toBeVisible();
   await expect(summarySection.getByText('23 units')).toBeVisible();
+  await expect(summarySection.getByText('Long-lasting avg per day')).toBeVisible();
+  await expect(summarySection.getByText(/1 administration .* expected bedtime doses recorded/)).toBeVisible();
   await expect(summarySection.getByText('Total carbs')).toBeVisible();
   expect(await summarySection.getByText('42 g carbs').count()).toBeGreaterThan(0);
   await page.getByRole('tab', { name: 'Trends' }).click();
