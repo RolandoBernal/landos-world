@@ -1258,6 +1258,7 @@
       suggestedBaseUnits: normalizeNumber(record.suggestedBaseUnits),
       suggestedCarbDoseUnits: normalizeNumber(record.suggestedCarbDoseUnits ?? record.carbDoseUnits ?? record.roundedCarbDose),
       rawCarbDose: normalizeNumber(record.rawCarbDose),
+      insulinType: normalizeInsulinType(record.insulinType ?? record.insulin_type),
       insulinCarbRatioGrams: normalizeNumber(record.insulinCarbRatioGrams),
       suggestedCorrectionUnits: normalizeNumber(record.suggestedCorrectionUnits),
       suggestedTotalUnits: normalizeNumber(record.suggestedTotalUnits),
@@ -2569,9 +2570,30 @@
   }
 
   function addDays(dateKey, delta) {
-    const timestamp = createDateStartTimestamp(dateKey);
-    if (timestamp == null) return '';
-    return getLocalDateKey(new Date(timestamp + delta * 24 * 60 * 60 * 1000));
+    const day = parseDateKeyToUtcDay(dateKey);
+    if (day == null) return '';
+    return formatUtcDayAsDateKey(day + delta);
+  }
+
+  function parseDateKeyToUtcDay(dateKey) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ''));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const timestamp = Date.UTC(year, month - 1, day);
+    const date = new Date(timestamp);
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return Math.floor(timestamp / (24 * 60 * 60 * 1000));
+  }
+
+  function formatUtcDayAsDateKey(utcDay) {
+    if (!Number.isFinite(utcDay)) return '';
+    const date = new Date(utcDay * 24 * 60 * 60 * 1000);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   function getDateRangeBounds(rangeValue, startDate = '', endDate = '') {
@@ -2682,16 +2704,16 @@
     return [...new Set(sourceRecords.map(getRecordEventDateKey).filter(Boolean))].sort();
   }
 
-  function getInclusiveDayCount(startDate, endDate) {
-    const start = createDateStartTimestamp(startDate);
-    const end = createDateStartTimestamp(endDate);
+  function getInclusiveCalendarDayCount(startDate, endDate) {
+    const start = parseDateKeyToUtcDay(startDate);
+    const end = parseDateKeyToUtcDay(endDate);
     if (start == null || end == null || end < start) return null;
-    return Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+    return end - start + 1;
   }
 
   function getReportDayCount(sourceRecords, filters = {}) {
     const bounds = getDateRangeBounds(filters.range, filters.startDate, filters.endDate);
-    const boundedCount = getInclusiveDayCount(bounds.startDate, bounds.endDate);
+    const boundedCount = getInclusiveCalendarDayCount(bounds.startDate, bounds.endDate);
     if (boundedCount != null) return boundedCount;
     return uniqueRecordDateKeys(sourceRecords).length;
   }
@@ -2702,17 +2724,26 @@
     return min != null && max != null && min <= max ? { min, max } : null;
   }
 
+  function normalizeInsulinType(value) {
+    const normalized = String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    if (['long-acting', 'longacting', 'long', 'basal'].includes(normalized)) return 'long-acting';
+    if (['fast-acting', 'fastacting', 'rapid-acting', 'rapid', 'bolus', 'short-acting', 'short'].includes(normalized)) return 'fast-acting';
+    return '';
+  }
+
   function classifyActualInsulin(record) {
     const actual = getRecordActualInsulin(record);
     if (actual == null) return null;
     const type = normalizeRecordContext(record?.type, normalizeEventType(record?.eventType, record));
-    const isLongActing = type === BEDTIME_CONTEXT_TYPE;
+    const explicitInsulinType = normalizeInsulinType(record?.insulinType ?? record?.insulin_type ?? record?.insulinCategory ?? record?.insulin_category);
+    const isLongActing = explicitInsulinType ? explicitInsulinType === 'long-acting' : type === BEDTIME_CONTEXT_TYPE;
     const isMealRelated = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const isCorrection = type === 'Correction';
     return {
       actual,
       isFastActing: !isLongActing,
       isLongActing,
+      insulinType: explicitInsulinType || (isLongActing ? 'long-acting' : 'fast-acting'),
       isMealRelated,
       isCorrection,
       type,
@@ -2728,6 +2759,10 @@
       min: validValues.length ? Math.min(...validValues) : null,
       max: validValues.length ? Math.max(...validValues) : null,
     };
+  }
+
+  function calculatePerDay(value, dayCount) {
+    return value != null && dayCount ? value / dayCount : null;
   }
 
   function calculateReportSummary(sourceRecords, filters = {}, settings = trackerData.settings || {}) {
@@ -2754,6 +2789,11 @@
       dayCount,
       entryCount: visibleRecords.length,
       calendarDateCount: uniqueRecordDateKeys(visibleRecords).length,
+      rates: {
+        entriesPerDay: calculatePerDay(visibleRecords.length, dayCount),
+        glucoseReadingsPerDay: calculatePerDay(glucoseValues.length, dayCount),
+        insulinAdministrationsPerDay: calculatePerDay(insulinEvents.length, dayCount),
+      },
       glucose: {
         ...createValueSummary(glucoseValues),
         targetRange,
@@ -2764,11 +2804,11 @@
       },
       insulin: {
         ...createValueSummary(insulinValues),
-        averagePerDay: insulinValues.length && dayCount ? sumValues(insulinValues) / dayCount : null,
+        averagePerDay: calculatePerDay(sumValues(insulinValues), dayCount),
         fastActing: createValueSummary(fastActingValues),
-        fastActingAveragePerDay: fastActingValues.length && dayCount ? sumValues(fastActingValues) / dayCount : null,
+        fastActingAveragePerDay: calculatePerDay(sumValues(fastActingValues), dayCount),
         longActing: createValueSummary(longActingValues),
-        longActingAveragePerDay: longActingValues.length && dayCount ? sumValues(longActingValues) / dayCount : null,
+        longActingAveragePerDay: calculatePerDay(sumValues(longActingValues), dayCount),
         mealRelated: createValueSummary(mealValues),
         mealRelatedAverage: average(mealValues),
         correction: createValueSummary(correctionValues),
@@ -2776,7 +2816,7 @@
       },
       carbs: {
         ...createValueSummary(carbValues),
-        averagePerDay: carbValues.length && dayCount ? sumValues(carbValues) / dayCount : null,
+        averagePerDay: calculatePerDay(sumValues(carbValues), dayCount),
         averagePerEntry: average(carbValues),
       },
     };
@@ -3792,9 +3832,9 @@
           { label: 'Long-acting per day', value: formatAverageInsulin(summary.insulin.longActingAveragePerDay) },
           { label: 'Carbs per entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
           { label: 'Carbs per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
-          { label: 'Entries per day', value: summary.dayCount ? String(Math.round((summary.entryCount / summary.dayCount) * 10) / 10) : 'No data' },
-          { label: 'Glucose readings per day', value: summary.dayCount ? String(Math.round((summary.glucose.count / summary.dayCount) * 10) / 10) : 'No data' },
-          { label: 'Insulin administrations per day', value: summary.dayCount ? String(Math.round((summary.insulin.count / summary.dayCount) * 10) / 10) : 'No data' },
+          { label: 'Entries per day', value: summary.rates.entriesPerDay == null ? 'No data' : String(Math.round(summary.rates.entriesPerDay * 10) / 10) },
+          { label: 'Glucose readings per day', value: summary.rates.glucoseReadingsPerDay == null ? 'No data' : String(Math.round(summary.rates.glucoseReadingsPerDay * 10) / 10) },
+          { label: 'Insulin administrations per day', value: summary.rates.insulinAdministrationsPerDay == null ? 'No data' : String(Math.round(summary.rates.insulinAdministrationsPerDay * 10) / 10) },
         ])}
         <h3 class="lee_lee_diabetes_section_title">Typical Day Averages</h3>
         <div class="lee_lee_diabetes_typical_day" aria-label="Typical day averages">
@@ -7632,6 +7672,8 @@
     groupRecordsByLocalDate,
     filterRecordsByDateRange,
     filterRecordsByEntryType,
+    getInclusiveCalendarDayCount,
+    getReportDayCount,
     calculateDailySummary,
     calculateReportSummary,
     calculateContextAverages,

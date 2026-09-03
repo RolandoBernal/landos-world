@@ -488,6 +488,144 @@ test('reports summary uses actual recorded insulin and missing values do not bec
   assert.equal(summary.carbs.averagePerEntry, 42);
 });
 
+test('report day count uses inclusive calendar dates without elapsed-time math', () => {
+  const reports = createTrackerReports();
+
+  assert.equal(reports.getInclusiveCalendarDayCount('2026-08-28', '2026-09-02'), 6);
+  assert.equal(reports.getInclusiveCalendarDayCount('2026-09-02', '2026-09-02'), 1);
+  assert.equal(reports.getInclusiveCalendarDayCount('2026-08-27', '2026-09-02'), 7);
+  assert.equal(reports.getInclusiveCalendarDayCount('2026-09-02', '2026-08-28'), null);
+});
+
+test('reports per-day metrics use the selected inclusive report period', () => {
+  const reports = createTrackerReports();
+  const bedtimeRecords = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']
+    .map((dateKey) => record({
+      id: `bedtime-${dateKey}`,
+      type: 'Bedtime',
+      bloodSugar: null,
+      mealCarbs: null,
+      administeredInsulinUnits: 17,
+      insulinType: 'long-acting',
+      recordTimestamp: `${dateKey}T22:00:00.000Z`,
+    }));
+  const summary = reports.calculateReportSummary(bedtimeRecords, {
+    range: 'custom',
+    startDate: '2026-08-28',
+    endDate: '2026-09-02',
+  });
+
+  assert.equal(summary.dayCount, 6);
+  assert.equal(summary.entryCount, 6);
+  assert.equal(summary.rates.entriesPerDay, 1);
+  assert.equal(summary.rates.glucoseReadingsPerDay, 0);
+  assert.equal(summary.rates.insulinAdministrationsPerDay, 1);
+  assert.equal(summary.insulin.count, 6);
+  assert.equal(summary.insulin.total, 102);
+  assert.equal(summary.insulin.averagePerDay, 17);
+  assert.equal(summary.insulin.longActing.total, 102);
+  assert.equal(summary.insulin.longActingAveragePerDay, 17);
+  assert.equal(summary.insulin.fastActing.total, null);
+  assert.equal(summary.carbs.averagePerDay, null);
+  assert.equal(summary.glucose.count / summary.dayCount, 0);
+});
+
+test('single-day report per-day metrics use a one-day denominator', () => {
+  const reports = createTrackerReports();
+  const summary = reports.calculateReportSummary([
+    record({
+      id: 'single-day-bedtime',
+      type: 'Bedtime',
+      bloodSugar: null,
+      mealCarbs: null,
+      administeredInsulinUnits: 17,
+      insulinType: 'long-acting',
+      recordTimestamp: '2026-09-02T22:00:00.000Z',
+    }),
+  ], {
+    range: 'custom',
+    startDate: '2026-09-02',
+    endDate: '2026-09-02',
+  });
+
+  assert.equal(summary.dayCount, 1);
+  assert.equal(summary.insulin.longActingAveragePerDay, 17);
+  assert.equal(summary.insulin.averagePerDay, 17);
+  assert.ok(Number.isFinite(summary.insulin.longActingAveragePerDay));
+});
+
+test('missing long-acting days remain in the per-day denominator', () => {
+  const reports = createTrackerReports();
+  const longActingDays = ['2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02'];
+  const summary = reports.calculateReportSummary(longActingDays.map((dateKey) => record({
+    id: `long-acting-${dateKey}`,
+    type: 'Bedtime',
+    bloodSugar: null,
+    mealCarbs: null,
+    administeredInsulinUnits: 17,
+    insulinType: 'long-acting',
+    recordTimestamp: `${dateKey}T22:00:00.000Z`,
+  })), {
+    range: 'custom',
+    startDate: '2026-08-27',
+    endDate: '2026-09-02',
+  });
+
+  assert.equal(summary.dayCount, 7);
+  assert.equal(summary.insulin.longActing.total, 102);
+  assert.equal(summary.insulin.longActingAveragePerDay, 102 / 7);
+  assert.equal(reports.formatInsulin(Number(summary.insulin.longActingAveragePerDay.toFixed(1))), '14.6 units');
+});
+
+test('reports insulin per-day metrics filter by explicit insulin type', () => {
+  const reports = createTrackerReports();
+  const summary = reports.calculateReportSummary([
+    record({
+      id: 'lunch-long-acting',
+      type: 'Lunch',
+      bloodSugar: 120,
+      mealCarbs: 30,
+      administeredInsulinUnits: 17,
+      insulinType: 'long-acting',
+      recordTimestamp: '2026-09-01T12:00:00.000Z',
+    }),
+    record({
+      id: 'bedtime-fast-acting',
+      type: 'Bedtime',
+      bloodSugar: 180,
+      mealCarbs: null,
+      administeredInsulinUnits: 3,
+      insulinType: 'fast-acting',
+      recordTimestamp: '2026-09-01T22:00:00.000Z',
+    }),
+    record({
+      id: 'breakfast-snake-case-fast-acting',
+      type: 'Breakfast',
+      bloodSugar: 150,
+      mealCarbs: 42,
+      administeredInsulinUnits: 5,
+      insulin_type: 'rapid_acting',
+      recordTimestamp: '2026-09-02T08:00:00.000Z',
+    }),
+  ], {
+    range: 'custom',
+    startDate: '2026-09-01',
+    endDate: '2026-09-02',
+  });
+
+  assert.equal(summary.dayCount, 2);
+  assert.equal(summary.insulin.total, 25);
+  assert.equal(summary.insulin.averagePerDay, 12.5);
+  assert.equal(summary.insulin.longActing.total, 17);
+  assert.equal(summary.insulin.longActingAveragePerDay, 8.5);
+  assert.equal(summary.insulin.fastActing.total, 8);
+  assert.equal(summary.insulin.fastActingAveragePerDay, 4);
+  assert.equal(summary.carbs.averagePerDay, 36);
+  assert.equal(summary.rates.entriesPerDay, 1.5);
+  assert.equal(summary.rates.glucoseReadingsPerDay, 1.5);
+  assert.equal(summary.rates.insulinAdministrationsPerDay, 1.5);
+});
+
 test('reports target percentages require explicit min and max settings', () => {
   const reports = createTrackerReports();
   const source = [
