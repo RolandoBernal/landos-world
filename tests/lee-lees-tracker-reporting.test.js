@@ -1196,6 +1196,8 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'DM Sans'[\s\S]*font-weight: 400 700[\s\S]*url\('\.\.\/fonts\/dm-sans-latin\.woff2'\)/);
   assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/dm-sans-latin-ext\.woff2'\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
+  assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
+  assert.match(cssSource, /\.lee_lee_diabetes_shell input\[type="number"\],[\s\S]*\.lee_lee_diabetes_carb_calc_sum strong \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
   assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'DM Sans'/);
   assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
@@ -1215,8 +1217,8 @@ test('carb calculator rows use compact editable quantity without steppers or met
 });
 
 test('carb calculator compact inputs remove underlines while keeping focus visible', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) 2\.5ch auto minmax\(3\.8ch, max-content\)/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 3\.8ch[\s\S]*border: 0[\s\S]*border-bottom: 0[\s\S]*background: transparent/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) 2\.5ch auto minmax\(2\.75ch, max-content\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.75ch[\s\S]*border: 0[\s\S]*border-bottom: 0[\s\S]*background: transparent/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_cell--qty \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.5ch[\s\S]*max-width: 2\.5ch/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--app-accent-rgb, 58 160 255\) \/ 14%\)[\s\S]*outline: 2px solid/);
   assert.doesNotMatch(cssSource, /decrement-carb-row|increment-carb-row|lee_lee_diabetes_quantity_control/);

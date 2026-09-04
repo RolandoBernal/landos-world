@@ -1619,6 +1619,9 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
       carbsWeight: getComputedStyle(carbsInput).fontWeight,
       unitWeight: getComputedStyle(unitText).fontWeight,
       operatorWeight: getComputedStyle(operator).fontWeight,
+      qtyFontFamily: getComputedStyle(qtyInput).fontFamily,
+      carbsFontFamily: getComputedStyle(carbsInput).fontFamily,
+      rowTotalFontFamily: getComputedStyle(rowTotal).fontFamily,
       rowTotalWeight: getComputedStyle(rowTotal).fontWeight,
       minButtonWeight: Math.min(...buttons.map((button) => Number(getComputedStyle(button).fontWeight))),
       emojiNameCenterDelta: Math.abs(((emojiBox.top + emojiBox.bottom) / 2) - ((nameBox.top + nameBox.bottom) / 2)),
@@ -1628,7 +1631,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.calculatorOverflows).toBe(false);
   expect(compactMetrics.rowOverflows).toBe(false);
   expect(compactMetrics.qtyWidth).toBeLessThanOrEqual(36);
-  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(58);
+  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(42);
   expect(compactMetrics.qtyBorderBottomWidth).toBe('0px');
   expect(compactMetrics.carbsBorderBottomWidth).toBe('0px');
   expect(compactMetrics.qtyBorderStyle).toBe('none');
@@ -1647,6 +1650,9 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.carbsWeight).toBe('400');
   expect(compactMetrics.unitWeight).toBe('400');
   expect(compactMetrics.operatorWeight).toBe('400');
+  expect(compactMetrics.qtyFontFamily).toContain('Roboto Mono');
+  expect(compactMetrics.carbsFontFamily).toContain('Roboto Mono');
+  expect(compactMetrics.rowTotalFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.rowTotalWeight).toBe('500');
   expect(compactMetrics.minButtonWeight).toBeGreaterThanOrEqual(400);
   expect(compactMetrics.minButtonWeight).toBeLessThanOrEqual(500);
@@ -1656,10 +1662,12 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     headingWeights: Array.from(node.querySelectorAll('.lee_lee_diabetes_carb_calc_heading')).map((heading) => getComputedStyle(heading).fontWeight),
     totalLabelWeight: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calc_sum')).fontWeight,
     finalTotalWeight: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontWeight,
+    finalTotalFontFamily: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontFamily,
   }));
   expect(summaryWeightMetrics.headingWeights.every((weight) => weight === '500')).toBe(true);
   expect(summaryWeightMetrics.totalLabelWeight).toBe('600');
   expect(summaryWeightMetrics.finalTotalWeight).toBe('600');
+  expect(summaryWeightMetrics.finalTotalFontFamily).toContain('Roboto Mono');
 
   await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

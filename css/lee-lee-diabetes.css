@@ -43,6 +43,7 @@
   --lee-lee-accent: var(--app-accent, #3aa0ff);
   --lee-lee-blue: var(--app-accent, #3aa0ff);
   --lee-lee-green: #9dffcf;
+  --llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
   --llt-field-label-gap: 0.55rem;
   --llt-field-group-gap: 0.9rem;
   --llt-field-support-gap: 0.4rem;
@@ -57,6 +58,25 @@
 .lee_lee_diabetes_shell select,
 .lee_lee_diabetes_shell textarea {
   font-family: inherit;
+}
+
+.lee_lee_diabetes_shell input[type="number"],
+.lee_lee_diabetes_timeline_time,
+.lee_lee_diabetes_card_values,
+.lee_lee_diabetes_timeline_values,
+.lee_lee_diabetes_summary_grid dd,
+.lee_lee_diabetes_report_metric_grid dd,
+.lee_lee_diabetes_report_metric_grid p,
+.lee_lee_diabetes_report_summary_grid dd,
+.lee_lee_diabetes_dose_total,
+.lee_lee_diabetes_dose_breakdown,
+.lee_lee_diabetes_dose_range,
+.lee_lee_diabetes_carb_calc_operator,
+.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input,
+.lee_lee_diabetes_carb_calc_unit_input span,
+.lee_lee_diabetes_carb_calc_row_total,
+.lee_lee_diabetes_carb_calc_sum strong {
+  font-family: var(--llt-numeric-font);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_shell {
@@ -346,7 +366,6 @@
 
 .lee_lee_diabetes_timeline_time {
   color: var(--lee-lee-blue);
-  font-family: 'Roboto Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -1198,7 +1217,7 @@
 
 .lee_lee_diabetes_carb_calc_grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.5ch auto minmax(3.8ch, max-content) minmax(3.1rem, max-content) 34px;
+  grid-template-columns: minmax(0, 1fr) 2.5ch auto minmax(2.75ch, max-content) minmax(3.1rem, max-content) 34px;
   align-items: center;
   column-gap: 0.46rem;
   row-gap: 0.36rem;
@@ -1284,9 +1303,9 @@
 }
 
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
-  width: 3.8ch;
+  width: 2.75ch;
   min-width: 0;
-  max-width: 3.8ch;
+  max-width: 2.75ch;
   min-height: 34px;
   padding: 0.28rem 0.14rem;
   border: 0;
@@ -1420,7 +1439,7 @@
   }
 
   .lee_lee_diabetes_carb_calc_grid {
-    grid-template-columns: 2.5ch auto minmax(3.8ch, max-content) minmax(3.1rem, max-content) 34px;
+    grid-template-columns: 2.5ch auto minmax(2.75ch, max-content) minmax(3.1rem, max-content) 34px;
     column-gap: 0.42rem;
   }
 
