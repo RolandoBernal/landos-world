@@ -4647,7 +4647,7 @@
       <input type="hidden" name="carbCalcSourceNameSnapshot" value="${escapeHtml(item.sourceNameSnapshot)}" data-carb-row-id="${escapeHtml(item.id)}">
       <div class="lee_lee_diabetes_carb_calc_item">
         ${item.sourceType === 'food' ? `
-          <strong>${item.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span>` : ''}${escapeHtml(item.name)}</strong>
+          <strong>${item.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span>` : ''}<span class="lee_lee_diabetes_carb_calc_item_name">${escapeHtml(item.name)}</span></strong>
           <small>${escapeHtml([item.brand, item.servingLabel, formatFoodSourceLabel(item)].filter(Boolean).join(' · '))}</small>
         ` : '<span>Manual</span>'}
       </div>
