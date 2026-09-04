@@ -927,7 +927,7 @@ test('log entry configuration exposes one combined check workflow with active co
   assert.doesNotMatch(trackerSource, /label: 'Insulin'/);
 });
 
-test('carb ratio and half-unit rounding are deterministic', () => {
+test('carb ratio and configurable dose rounding are deterministic', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
 
@@ -949,26 +949,53 @@ test('carb ratio and half-unit rounding are deterministic', () => {
   ].forEach(([input, expected]) => {
     assert.equal(helper.roundToNearestHalf(input), expected);
   });
+  [
+    [1.8, 'down', 0.5, 1.5],
+    [1.6, 'down', 0.5, 1.5],
+    [1.5, 'down', 0.5, 1.5],
+    [1.4, 'down', 0.5, 1.0],
+    [2.49, 'down', 0.5, 2.0],
+    [1.8, 'nearest', 0.5, 2.0],
+    [1.75, 'nearest', 0.5, 2.0],
+    [1.74, 'nearest', 0.5, 1.5],
+    [1.8, 'up', 0.5, 2.0],
+    [2.5, 'up', 0.5, 2.5],
+    [1.24, 'nearest', 1.0, 1.0],
+    [1.5, 'nearest', 1.0, 2.0],
+    [0.26, 'nearest', 0.1, 0.3],
+    [0.26, 'down', 0.1, 0.2],
+    [0.26, 'up', 0.1, 0.3],
+    [0.275, 'nearest', 0.05, 0.3],
+  ].forEach(([raw, mode, increment, expected]) => {
+    assert.equal(helper.applyConfiguredDoseRounding(raw, mode, increment), expected);
+  });
 });
 
-test('carb calculator totals decimal quantity rows without rounding to whole grams', () => {
+test('carb calculator rows use integer quantities and derived row totals', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const rows = helper.normalizeCarbCalculatorRows([
     { qty: '1', carbs: '25' },
     { qty: '2', carbs: '15' },
     { qty: '1.5', carbs: '19' },
+    { qty: '120', carbs: '1' },
+    { qty: '0', carbs: '12' },
     { qty: '1', carbs: '46.5' },
   ]);
 
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 7);
   assert.equal(rows.at(-1).qty, '1');
   assert.equal(rows.at(-1).carbs, '');
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[0]), 25);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[1]), 30);
-  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[2]), 28.5);
+  assert.equal(rows[2].qty, '1');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[2]), 19);
+  assert.equal(rows[3].qty, '99');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[3]), 99);
+  assert.equal(rows[4].qty, '1');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[4]), 12);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows.at(-1)), null);
-  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 130);
+  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 231.5);
   assert.equal(helper.hasValidCarbCalculatorTotal(rows), true);
   assert.equal(helper.hasValidCarbCalculatorTotal(helper.normalizeCarbCalculatorRows([])), false);
 });
@@ -1009,9 +1036,12 @@ test('meal dose helper uses carb coverage plus existing correction table', () =>
   assert.equal(dinner.status, 'calculated');
   assert.equal(dinner.baseUnits, null);
   assert.equal(dinner.rawCarbDose, 7.15);
-  assert.equal(dinner.carbDoseUnits, 7);
+  assert.equal(dinner.carbDoseUnits, 7.15);
   assert.equal(dinner.correctionUnits, 2);
   assert.equal(dinner.suggestedTotalUnits, 9);
+  assert.equal(dinner.rawAggregateDose, 9.15);
+  assert.equal(dinner.doseRoundingMode, 'nearest');
+  assert.equal(dinner.doseIncrementUnits, 0.5);
   assert.equal(breakfast550.status, 'calculated');
   assert.equal(breakfast550.correctionUnits, 6);
   assert.equal(breakfast550.suggestedTotalUnits, 6);
@@ -1043,6 +1073,61 @@ test('snack boundary uses carb coverage only over 15 grams', () => {
   assert.equal(calc(20).suggestedTotalUnits, 1);
   assert.equal(calc(28).suggestedTotalUnits, 1.5);
   assert.equal(calc(28).correctionUnits, null);
+});
+
+test('meal dose rounds once after aggregating raw components', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const insulinPlan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    insulinCarbRatioGrams: 15,
+    doseRoundingMode: 'down',
+    doseIncrementUnits: 0.5,
+    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
+  };
+
+  const result = helper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Dinner',
+    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
+    insulinPlan,
+    totalCarbs: 27,
+  });
+
+  assert.equal(result.rawCarbDose, 1.8);
+  assert.equal(result.correctionUnits, 1);
+  assert.equal(result.rawAggregateDose, 2.8);
+  assert.equal(result.suggestedTotalUnits, 2.5);
+});
+
+test('below-minimum dose warning does not promote the calculated dose', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const plan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    insulinCarbRatioGrams: 20,
+    doseRoundingMode: 'nearest',
+    doseIncrementUnits: 0.1,
+    minimumAllowableDoseUnits: 0.5,
+    correctionRanges: [{ minGlucose: null, maxGlucose: 174, correctionUnits: 0 }],
+  };
+  const calc = (totalCarbs) => helper.calculateMealInsulinDose({
+    bloodSugar: 120,
+    entryType: 'Dinner',
+    recordTimestamp: Date.parse('2026-08-01T12:00:00.000Z'),
+    insulinPlan: plan,
+    totalCarbs,
+  });
+
+  assert.equal(calc(0).minimumDoseWarning, '');
+  assert.equal(calc(4).suggestedTotalUnits, 0.2);
+  assert.match(calc(4).minimumDoseWarning, /below the configured minimum/);
+  assert.equal(calc(10).suggestedTotalUnits, 0.5);
+  assert.equal(calc(10).minimumDoseWarning, '');
+  assert.equal(calc(12).suggestedTotalUnits, 0.6);
+  assert.equal(calc(12).minimumDoseWarning, '');
 });
 
 test('correction and bedtime contexts use their dedicated dosing paths', () => {
@@ -1096,6 +1181,17 @@ test('settings UI exposes bedtime long-acting dose control', () => {
   assert.match(trackerSource, /Bedtime long-acting dose must be a nonnegative number\./);
 });
 
+test('settings UI exposes configurable dose rounding controls', () => {
+  assert.match(trackerSource, /Dose Rounding/);
+  assert.match(trackerSource, /name="doseRoundingMode"/);
+  assert.match(trackerSource, /Dose Increment/);
+  assert.match(trackerSource, /name="doseIncrementUnits" type="number"/);
+  assert.match(trackerSource, /Minimum Allowable Dose/);
+  assert.match(trackerSource, /name="minimumAllowableDoseUnits" type="number"/);
+  assert.match(trackerSource, /Dose increment must be greater than zero\./);
+  assert.match(trackerSource, /Minimum allowable dose must be a nonnegative number\./);
+});
+
 test('settings plan activation closes an existing plan with the same effective date', () => {
   assert.match(trackerSource, /range\.start <= pendingStart && range\.end > pendingStart/);
 });
@@ -1134,7 +1230,10 @@ test('shared settings contract applies restored patient and dose settings to cal
       mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
       bedtimeBaseUnits: 17,
       bedtimeBaseUnitsMigratedTo17: true,
-      insulinCarbRatioGrams: 20,
+      insulinCarbRatioGrams: 15,
+      doseRoundingMode: 'down',
+      doseIncrementUnits: 0.1,
+      minimumAllowableDoseUnits: 0.5,
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -1161,7 +1260,10 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(plan.mealBaseUnitsByType.Breakfast, 5);
   assert.equal(plan.mealBaseUnitsByType.Lunch, 6);
   assert.equal(plan.mealBaseUnitsByType.Dinner, 6);
-  assert.equal(plan.insulinCarbRatioGrams, 20);
+  assert.equal(plan.insulinCarbRatioGrams, 15);
+  assert.equal(plan.doseRoundingMode, 'down');
+  assert.equal(plan.doseIncrementUnits, 0.1);
+  assert.equal(plan.minimumAllowableDoseUnits, 0.5);
   assert.equal(plan.bedtimeBaseUnits, 17);
   assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
@@ -1176,7 +1278,24 @@ test('shared settings inventory classifies every current LLT settings control', 
   const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
   const byLabel = new Map(inventory.map((item) => [item.label, item]));
 
-  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Insulin-to-Carb Ratio', 'Bedtime Base Dose', 'Correction Table'].forEach((label) => {
+  [
+    'Patient Name',
+    'Date of Birth',
+    'Clinic Name',
+    'Clinic Phone',
+    'Plan Name',
+    'Effective Date',
+    'Breakfast Base Dose',
+    'Lunch Base Dose',
+    'Dinner Base Dose',
+    'Insulin-to-Carb Ratio',
+    'Dose Rounding',
+    'Dose Increment',
+    'Minimum Allowable Dose',
+    'Bedtime Base Dose',
+    'Correction Table',
+    'Plan Notes',
+  ].forEach((label) => {
     assert.equal(byLabel.get(label)?.classification, 'SHARED');
   });
   assert.equal(byLabel.has('Saved Foods'), false);

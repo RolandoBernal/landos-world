@@ -206,6 +206,9 @@
     { label: 'Lunch Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Lunch', classification: 'SHARED' },
     { label: 'Dinner Base Dose', key: 'insulinPlans[].mealBaseUnitsByType.Dinner', classification: 'SHARED' },
     { label: 'Insulin-to-Carb Ratio', key: 'insulinPlans[].insulinCarbRatioGrams', classification: 'SHARED' },
+    { label: 'Dose Rounding', key: 'insulinPlans[].doseRoundingMode', classification: 'SHARED' },
+    { label: 'Dose Increment', key: 'insulinPlans[].doseIncrementUnits', classification: 'SHARED' },
+    { label: 'Minimum Allowable Dose', key: 'insulinPlans[].minimumAllowableDoseUnits', classification: 'SHARED' },
     { label: 'Bedtime Base Dose', key: 'insulinPlans[].bedtimeBaseUnits', classification: 'SHARED' },
     { label: 'Correction Table', key: 'insulinPlans[].correctionRanges', classification: 'SHARED' },
     { label: 'Plan Notes', key: 'insulinPlans[].notes', classification: 'SHARED' },
@@ -226,6 +229,14 @@
   const LEGACY_BEDTIME_BASE_UNITS = 15;
   const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
   const SNACK_CARB_COVERAGE_THRESHOLD_GRAMS = 15;
+  const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
+  const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
+  const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
+  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const CARB_CALCULATOR_MIN_QTY = 1;
+  const CARB_CALCULATOR_MAX_QTY = 99;
+  const CARB_SEARCH_MIN_QUERY_LENGTH = 2;
+  const CARB_SEARCH_RESULT_LIMIT = 40;
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_INSULIN_PLAN = {
     id: 'meal_plan_2026_07_31',
@@ -236,6 +247,9 @@
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
     insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+    doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
+    doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
+    minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -390,6 +404,9 @@
       bedtimeBaseUnits: getBedtimeBaseUnits(plan),
       bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true,
       insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
+      doseRoundingMode: getDoseRoundingMode(plan),
+      doseIncrementUnits: getDoseIncrementUnits(plan),
+      minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(plan),
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -421,15 +438,76 @@
     return Number.isFinite(number) && number >= 0 ? number : null;
   }
 
+  function roundToPrecision(value, decimals = 6) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    const factor = 10 ** decimals;
+    return Math.round((number + Number.EPSILON) * factor) / factor;
+  }
+
   function normalizeWholeNumber(value) {
     const number = normalizeNumber(value);
     return number == null ? null : Math.round(number);
   }
 
   function roundToNearestHalf(value) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return null;
-    return Math.floor(number * 2 + 0.5 + Number.EPSILON) / 2;
+    return applyConfiguredDoseRounding(value, DEFAULT_DOSE_ROUNDING_MODE, DEFAULT_DOSE_INCREMENT_UNITS);
+  }
+
+  function normalizeDoseRoundingMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return DOSE_ROUNDING_MODES.includes(normalized) ? normalized : DEFAULT_DOSE_ROUNDING_MODE;
+  }
+
+  function normalizeDoseIncrement(value) {
+    const number = normalizeNumber(value);
+    return number != null && number > 0 ? roundToPrecision(number) : DEFAULT_DOSE_INCREMENT_UNITS;
+  }
+
+  function normalizeMinimumAllowableDose(value) {
+    const number = normalizeNumber(value);
+    return number == null ? DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS : roundToPrecision(number);
+  }
+
+  function getDoseRoundingMode(plan = {}) {
+    return normalizeDoseRoundingMode(plan.doseRoundingMode);
+  }
+
+  function getDoseIncrementUnits(plan = {}) {
+    return normalizeDoseIncrement(plan.doseIncrementUnits);
+  }
+
+  function getMinimumAllowableDoseUnits(plan = {}) {
+    return normalizeMinimumAllowableDose(plan.minimumAllowableDoseUnits);
+  }
+
+  function applyConfiguredDoseRounding(rawDose, roundingMode = DEFAULT_DOSE_ROUNDING_MODE, doseIncrement = DEFAULT_DOSE_INCREMENT_UNITS) {
+    const raw = normalizeNumber(rawDose);
+    const increment = normalizeDoseIncrement(doseIncrement);
+    if (raw == null || !increment) return null;
+    const mode = normalizeDoseRoundingMode(roundingMode);
+    const quotient = raw / increment;
+    let roundedQuotient;
+    if (mode === 'down') roundedQuotient = Math.floor(quotient + Number.EPSILON);
+    else if (mode === 'up') roundedQuotient = Math.ceil(quotient - Number.EPSILON);
+    else roundedQuotient = Math.floor(quotient + 0.5 + Number.EPSILON);
+    return roundToPrecision(roundedQuotient * increment);
+  }
+
+  function getDoseRoundingLabel(mode) {
+    const normalized = normalizeDoseRoundingMode(mode);
+    if (normalized === 'down') return 'down';
+    if (normalized === 'up') return 'up';
+    return 'to nearest';
+  }
+
+  function getMinimumDoseWarning(suggestedDose, minimumDose) {
+    const dose = normalizeNumber(suggestedDose);
+    const minimum = normalizeMinimumAllowableDose(minimumDose);
+    if (dose != null && dose > 0 && minimum > 0 && dose < minimum) {
+      return 'Calculated dose is below the configured minimum. Confirm the dose manually.';
+    }
+    return '';
   }
 
   function sanitizeShortText(value, maxLength = 160) {
@@ -611,6 +689,17 @@
     const number = normalizeNumber(value);
     if (number == null) return fallback;
     return Math.round((number + Number.EPSILON) * 100) / 100;
+  }
+
+  function normalizeCarbCalculatorQuantity(value, fallback = CARB_CALCULATOR_MIN_QTY) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(CARB_CALCULATOR_MIN_QTY, Math.min(CARB_CALCULATOR_MAX_QTY, Math.trunc(number)));
+  }
+
+  function isIntegerQuantityValue(value) {
+    const text = String(value ?? '').trim();
+    return /^\d+$/.test(text) && Number(text) >= CARB_CALCULATOR_MIN_QTY && Number(text) <= CARB_CALCULATOR_MAX_QTY;
   }
 
   function normalizeFoodEmoji(value) {
@@ -856,7 +945,7 @@
 
   function normalizeCarbCalculatorRow(row = {}) {
     const sourceType = row.sourceType === 'food' ? 'food' : 'manual';
-    const qtyText = row.qty == null ? '' : String(row.qty);
+    const qtyText = String(normalizeCarbCalculatorQuantity(row.qty, CARB_CALCULATOR_MIN_QTY));
     const carbsText = row.carbs == null ? '' : String(row.carbs);
     return {
       id: typeof row.id === 'string' && row.id ? row.id : createId(),
@@ -882,11 +971,23 @@
   }
 
   function isCarbCalculatorRowStarted(row = {}) {
-    return String(row.carbs ?? '').trim() !== '' || !['', '1'].includes(String(row.qty ?? '').trim());
+    return String(row.carbs ?? '').trim() !== '' || !isCarbCalculatorRowPristine(row);
+  }
+
+  function isCarbCalculatorRowPristine(row = {}) {
+    return (
+      (row.sourceType || 'manual') === 'manual'
+      && String(row.carbs ?? '').trim() === ''
+      && String(row.qty ?? '1').trim() === '1'
+      && !row.foodId
+      && !row.name
+      && !row.brand
+      && !row.servingLabel
+    );
   }
 
   function calculateCarbCalculatorRowTotal(row = {}) {
-    const qty = normalizeNumber(row.qty);
+    const qty = isIntegerQuantityValue(row.qty) ? normalizeCarbCalculatorQuantity(row.qty) : null;
     const carbs = normalizeNumber(row.carbs);
     if (qty == null || carbs == null || String(row.qty ?? '').trim() === '' || String(row.carbs ?? '').trim() === '') return null;
     return Math.round((qty * carbs + Number.EPSILON) * 100) / 100;
@@ -894,31 +995,17 @@
 
   function normalizeCarbCalculatorRows(rows = []) {
     const normalized = (Array.isArray(rows) ? rows : []).map(normalizeCarbCalculatorRow);
-    const activeRows = dedupeDuplicateFoodRows(normalized.filter(isCarbCalculatorRowStarted));
+    const activeRows = normalized.filter(isCarbCalculatorRowStarted);
     return [...activeRows, createBlankCarbCalculatorRow()];
   }
 
   function normalizeCarbCalculatorRowsForEditing(rows = [], preserveRowId = '') {
     const normalized = (Array.isArray(rows) ? rows : []).map(normalizeCarbCalculatorRow);
-    const editableRows = dedupeDuplicateFoodRows(normalized.filter((row) => isCarbCalculatorRowStarted(row) || row.id === preserveRowId));
+    const editableRows = normalized.filter((row) => isCarbCalculatorRowStarted(row) || row.id === preserveRowId);
     if (!editableRows.some((row) => !isCarbCalculatorRowStarted(row))) {
       editableRows.push(createBlankCarbCalculatorRow());
     }
     return editableRows.length ? editableRows : [createBlankCarbCalculatorRow()];
-  }
-
-  function dedupeDuplicateFoodRows(rows = []) {
-    const seenFoodIds = new Set();
-    return rows.filter((row) => {
-      if (row.sourceType !== 'food' || !row.foodId) {
-        return true;
-      }
-      if (seenFoodIds.has(row.foodId)) {
-        return false;
-      }
-      seenFoodIds.add(row.foodId);
-      return true;
-    });
   }
 
   function calculateCarbCalculatorMealTotal(rows = []) {
@@ -966,7 +1053,9 @@
         ? merged.find((row) => row.sourceType === 'food' && row.foodId === incoming.foodId)
         : null;
       if (existing) {
-        existing.qty = formatCarbAmount(normalizeQuantity(existing.qty, 0) + normalizeQuantity(incoming.qty, 0));
+        existing.qty = String(Math.min(CARB_CALCULATOR_MAX_QTY, normalizeCarbCalculatorQuantity(existing.qty) + normalizeCarbCalculatorQuantity(incoming.qty)));
+      } else if (merged.length === 0 && incoming.sourceType === 'food') {
+        merged.push({ ...incoming, id: incoming.id || createId() });
       } else {
         merged.push({ ...incoming, id: incoming.id || createId() });
       }
@@ -988,8 +1077,8 @@
         brand: component.brandSnapshot || '',
         sourceTypeSnapshot: component.sourceTypeSnapshot || '',
         sourceNameSnapshot: component.sourceNameSnapshot || '',
-        qty: component.componentType === 'food' ? formatCarbAmount(component.quantity) : '1',
-        carbs: component.componentType === 'food' ? formatCarbAmount(component.carbsPerServing) : formatCarbAmount(component.carbTotal),
+        qty: component.componentType === 'food' && isIntegerQuantityValue(component.quantity) ? String(component.quantity) : '1',
+        carbs: component.componentType === 'food' && isIntegerQuantityValue(component.quantity) ? formatCarbAmount(component.carbsPerServing) : formatCarbAmount(component.carbTotal),
       }));
     return normalizeCarbCalculatorRows(rows);
   }
@@ -1044,9 +1133,11 @@
     };
   }
 
-  function calculateCarbDose(totalCarbs, ratioGrams = DEFAULT_INSULIN_CARB_RATIO_GRAMS) {
+  function calculateCarbDose(totalCarbs, ratioGrams = DEFAULT_INSULIN_CARB_RATIO_GRAMS, options = {}) {
     const carbs = normalizeNumber(totalCarbs) ?? 0;
     const ratio = normalizeNumber(ratioGrams);
+    const roundingMode = normalizeDoseRoundingMode(options.roundingMode);
+    const doseIncrementUnits = normalizeDoseIncrement(options.doseIncrementUnits);
     if (!ratio || ratio <= 0) {
       return {
         status: 'unavailable',
@@ -1054,6 +1145,8 @@
         insulinCarbRatioGrams: ratio,
         rawCarbDose: null,
         roundedCarbDose: null,
+        doseRoundingMode: roundingMode,
+        doseIncrementUnits,
         message: 'Insulin-to-carb ratio must be greater than zero.',
       };
     }
@@ -1063,13 +1156,18 @@
       totalCarbs: carbs,
       insulinCarbRatioGrams: ratio,
       rawCarbDose,
-      roundedCarbDose: roundToNearestHalf(rawCarbDose),
+      roundedCarbDose: applyConfiguredDoseRounding(rawCarbDose, roundingMode, doseIncrementUnits),
+      doseRoundingMode: roundingMode,
+      doseIncrementUnits,
       message: '',
     };
   }
 
   function calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan }) {
-    const carbDose = calculateCarbDose(totalCarbs, getInsulinCarbRatioGrams(insulinPlan));
+    const roundingMode = getDoseRoundingMode(insulinPlan);
+    const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
+    const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
+    const carbDose = calculateCarbDose(totalCarbs, getInsulinCarbRatioGrams(insulinPlan), { roundingMode, doseIncrementUnits });
     const correction = getCorrectionDose({ bloodSugar, insulinPlan });
     if (carbDose.status !== 'calculated' || correction.status !== 'calculated') {
       return {
@@ -1077,22 +1175,38 @@
         ...carbDose,
         correctionUnits: correction.correctionUnits,
         suggestedTotalUnits: null,
+        rawAggregateDose: null,
+        doseRoundingMode: roundingMode,
+        doseIncrementUnits,
+        minimumAllowableDoseUnits,
+        minimumDoseWarning: '',
         matchedRange: correction.matchedRange,
         message: correction.message || carbDose.message,
       };
     }
+    const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits;
+    const suggestedTotalUnits = applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: 'calculated',
       ...carbDose,
       correctionUnits: correction.correctionUnits,
-      suggestedTotalUnits: carbDose.roundedCarbDose + correction.correctionUnits,
+      rawAggregateDose,
+      suggestedTotalUnits,
+      doseRoundingMode: roundingMode,
+      doseIncrementUnits,
+      minimumAllowableDoseUnits,
+      minimumDoseWarning,
       matchedRange: correction.matchedRange,
-      message: 'Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.',
+      message: minimumDoseWarning || 'Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.',
     };
   }
 
   function calculateSnackSuggestedDose({ totalCarbs, insulinPlan }) {
     const carbs = normalizeNumber(totalCarbs) ?? 0;
+    const roundingMode = getDoseRoundingMode(insulinPlan);
+    const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
+    const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
     if (carbs <= SNACK_CARB_COVERAGE_THRESHOLD_GRAMS) {
       return {
         status: 'calculated',
@@ -1101,19 +1215,32 @@
         rawCarbDose: 0,
         roundedCarbDose: 0,
         correctionUnits: null,
+        rawAggregateDose: 0,
         suggestedTotalUnits: 0,
+        doseRoundingMode: roundingMode,
+        doseIncrementUnits,
+        minimumAllowableDoseUnits,
+        minimumDoseWarning: '',
         matchedRange: null,
         message: 'No fast-acting carb dose is suggested for snacks at 15 g carbs or less.',
       };
     }
-    const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan));
+    const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan), { roundingMode, doseIncrementUnits });
+    const rawAggregateDose = carbDose.rawCarbDose ?? null;
+    const suggestedTotalUnits = rawAggregateDose == null ? null : applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: carbDose.status,
       ...carbDose,
       correctionUnits: null,
-      suggestedTotalUnits: carbDose.roundedCarbDose,
+      rawAggregateDose,
+      suggestedTotalUnits,
+      doseRoundingMode: roundingMode,
+      doseIncrementUnits,
+      minimumAllowableDoseUnits,
+      minimumDoseWarning,
       matchedRange: null,
-      message: carbDose.message || 'Snack carb coverage only. Correction insulin is logged separately.',
+      message: minimumDoseWarning || carbDose.message || 'Snack carb coverage only. Correction insulin is logged separately.',
     };
   }
 
@@ -1145,6 +1272,9 @@
       bedtimeBaseUnits: getBedtimeBaseUnits(plan),
       bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true || normalizeNumber(plan.bedtimeBaseUnits) === LEGACY_BEDTIME_BASE_UNITS,
       insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
+      doseRoundingMode: getDoseRoundingMode(plan),
+      doseIncrementUnits: getDoseIncrementUnits(plan),
+      minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(plan),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(plan.notes),
@@ -1258,6 +1388,11 @@
       suggestedBaseUnits: normalizeNumber(record.suggestedBaseUnits),
       suggestedCarbDoseUnits: normalizeNumber(record.suggestedCarbDoseUnits ?? record.carbDoseUnits ?? record.roundedCarbDose),
       rawCarbDose: normalizeNumber(record.rawCarbDose),
+      rawAggregateDose: normalizeNumber(record.rawAggregateDose),
+      doseRoundingMode: record.doseRoundingMode ? normalizeDoseRoundingMode(record.doseRoundingMode) : '',
+      doseIncrementUnits: record.doseIncrementUnits == null ? null : normalizeDoseIncrement(record.doseIncrementUnits),
+      minimumAllowableDoseUnits: record.minimumAllowableDoseUnits == null ? null : normalizeMinimumAllowableDose(record.minimumAllowableDoseUnits),
+      minimumDoseWarning: sanitizeShortText(record.minimumDoseWarning, 160),
       insulinType: normalizeInsulinType(record.insulinType ?? record.insulin_type),
       insulinCarbRatioGrams: normalizeNumber(record.insulinCarbRatioGrams),
       suggestedCorrectionUnits: normalizeNumber(record.suggestedCorrectionUnits),
@@ -2384,6 +2519,13 @@
         status: 'calculated',
         baseUnits,
         correctionUnits: null,
+        carbDoseUnits: null,
+        rawCarbDose: null,
+        rawAggregateDose: baseUnits,
+        doseRoundingMode: getDoseRoundingMode(insulinPlan),
+        doseIncrementUnits: getDoseIncrementUnits(insulinPlan),
+        minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(insulinPlan),
+        minimumDoseWarning: '',
         suggestedTotalUnits: baseUnits,
         matchedRange: null,
         insulinPlanId: insulinPlan.id,
@@ -2401,7 +2543,12 @@
             insulinCarbRatioGrams: null,
             totalCarbs: normalizeNumber(totalCarbs) ?? 0,
             correctionUnits: null,
+            rawAggregateDose: null,
             suggestedTotalUnits: null,
+            doseRoundingMode: insulinPlan ? getDoseRoundingMode(insulinPlan) : DEFAULT_DOSE_ROUNDING_MODE,
+            doseIncrementUnits: insulinPlan ? getDoseIncrementUnits(insulinPlan) : DEFAULT_DOSE_INCREMENT_UNITS,
+            minimumAllowableDoseUnits: insulinPlan ? getMinimumAllowableDoseUnits(insulinPlan) : DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+            minimumDoseWarning: '',
             matchedRange: null,
             insulinPlanId: insulinPlan?.id || null,
             message: 'No insulin plan is configured for this date.',
@@ -2411,7 +2558,7 @@
         return {
           ...snack,
           baseUnits: null,
-          carbDoseUnits: snack.roundedCarbDose,
+          carbDoseUnits: snack.rawCarbDose,
           insulinPlanId: insulinPlan.id,
         };
       }
@@ -2425,7 +2572,12 @@
             insulinCarbRatioGrams: null,
             totalCarbs: null,
             correctionUnits: null,
+            rawAggregateDose: null,
             suggestedTotalUnits: null,
+            doseRoundingMode: insulinPlan ? getDoseRoundingMode(insulinPlan) : DEFAULT_DOSE_ROUNDING_MODE,
+            doseIncrementUnits: insulinPlan ? getDoseIncrementUnits(insulinPlan) : DEFAULT_DOSE_INCREMENT_UNITS,
+            minimumAllowableDoseUnits: insulinPlan ? getMinimumAllowableDoseUnits(insulinPlan) : DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+            minimumDoseWarning: '',
             matchedRange: null,
             insulinPlanId: insulinPlan?.id || null,
             message: 'No insulin plan is configured for this date.',
@@ -2441,10 +2593,15 @@
           insulinCarbRatioGrams: getInsulinCarbRatioGrams(insulinPlan),
           totalCarbs: null,
           correctionUnits: correction.correctionUnits,
+          rawAggregateDose: correction.status === 'calculated' ? correction.correctionUnits : null,
           suggestedTotalUnits: correction.status === 'calculated' ? correction.correctionUnits : null,
+          doseRoundingMode: getDoseRoundingMode(insulinPlan),
+          doseIncrementUnits: getDoseIncrementUnits(insulinPlan),
+          minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(insulinPlan),
+          minimumDoseWarning: getMinimumDoseWarning(correction.status === 'calculated' ? correction.correctionUnits : null, getMinimumAllowableDoseUnits(insulinPlan)),
           matchedRange: correction.matchedRange,
           insulinPlanId: insulinPlan.id,
-          message: correction.message || 'Based on the current correction table. Confirm the dose before giving insulin.',
+          message: getMinimumDoseWarning(correction.status === 'calculated' ? correction.correctionUnits : null, getMinimumAllowableDoseUnits(insulinPlan)) || correction.message || 'Based on the current correction table. Confirm the dose before giving insulin.',
         };
       }
       if (MEAL_TYPES.includes(entryType) && !insulinPlan) {
@@ -2452,8 +2609,14 @@
           status: 'unavailable',
           baseUnits: null,
           carbDoseUnits: null,
+          rawCarbDose: null,
+          rawAggregateDose: null,
           correctionUnits: null,
           suggestedTotalUnits: null,
+          doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
+          doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
+          minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+          minimumDoseWarning: '',
           matchedRange: null,
           insulinPlanId: null,
           message: 'No insulin plan is configured for this date.',
@@ -2463,8 +2626,14 @@
         status: 'unsupported-entry-type',
         baseUnits: null,
         carbDoseUnits: null,
+        rawCarbDose: null,
+        rawAggregateDose: null,
         correctionUnits: null,
         suggestedTotalUnits: null,
+        doseRoundingMode: insulinPlan ? getDoseRoundingMode(insulinPlan) : DEFAULT_DOSE_ROUNDING_MODE,
+        doseIncrementUnits: insulinPlan ? getDoseIncrementUnits(insulinPlan) : DEFAULT_DOSE_INCREMENT_UNITS,
+        minimumAllowableDoseUnits: insulinPlan ? getMinimumAllowableDoseUnits(insulinPlan) : DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+        minimumDoseWarning: '',
         matchedRange: null,
         insulinPlanId: insulinPlan?.id || null,
         message: 'Automatic dose guidance is available for Breakfast, Lunch, Dinner, Snacks, Correction, and Bedtime under the current plan.',
@@ -2475,8 +2644,14 @@
         status: 'unavailable',
         baseUnits: null,
         carbDoseUnits: null,
+        rawCarbDose: null,
+        rawAggregateDose: null,
         correctionUnits: null,
         suggestedTotalUnits: null,
+        doseRoundingMode: insulinPlan ? getDoseRoundingMode(insulinPlan) : DEFAULT_DOSE_ROUNDING_MODE,
+        doseIncrementUnits: insulinPlan ? getDoseIncrementUnits(insulinPlan) : DEFAULT_DOSE_INCREMENT_UNITS,
+        minimumAllowableDoseUnits: insulinPlan ? getMinimumAllowableDoseUnits(insulinPlan) : DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+        minimumDoseWarning: '',
         matchedRange: null,
         insulinPlanId: insulinPlan?.id || null,
         message: 'No insulin plan is configured for this date.',
@@ -2498,7 +2673,7 @@
     return {
       ...calculated,
       baseUnits: null,
-      carbDoseUnits: calculated.roundedCarbDose,
+      carbDoseUnits: calculated.rawCarbDose,
       insulinPlanId: insulinPlan.id,
     };
   }
@@ -2526,6 +2701,11 @@
     calculateSnackSuggestedDose,
     getCorrectionDose,
     roundToNearestHalf,
+    applyConfiguredDoseRounding,
+    normalizeDoseRoundingMode,
+    normalizeDoseIncrement,
+    normalizeMinimumAllowableDose,
+    getMinimumDoseWarning,
     calculateMealInsulinDose,
   };
 
@@ -4274,15 +4454,14 @@
             <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>
           </div>
           ${renderCarbCalculatorLibrary(activePicker, search, normalizedRows)}
-          ${renderCarbCalculatorPicker(activePicker, search, normalizedRows)}
-          ${renderSelectedCarbRows(normalizedRows)}
           <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Manual carb amounts">
+            <div class="lee_lee_diabetes_carb_calc_heading">Item</div>
             <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
             <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true"></div>
             <div class="lee_lee_diabetes_carb_calc_heading">Carbs</div>
             <div class="lee_lee_diabetes_carb_calc_heading lee_lee_diabetes_carb_calc_total_heading">Total</div>
             <div aria-hidden="true"></div>
-            ${normalizedRows.filter((row) => row.sourceType !== 'food').map((row) => renderCarbCalculatorRow(row)).join('')}
+            ${normalizedRows.map((row) => renderCarbCalculatorRow(row)).join('')}
           </div>
           <div class="lee_lee_diabetes_carb_calc_sum" aria-live="polite">
             <span>Total Carbs</span>
@@ -4297,6 +4476,7 @@
           <div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single">
             <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="use-carb-calculator-total" ${canUseTotal ? '' : 'disabled'} aria-label="Use ${escapeHtml(formatCarbAmount(mealTotal))} grams">Use ${escapeHtml(formatCarbAmount(mealTotal))} g</button>
           </div>
+          ${renderCarbCalculatorPicker(activePicker, search, normalizedRows)}
         </section>
       </div>
     `;
@@ -4308,10 +4488,10 @@
     return `
       <div class="lee_lee_diabetes_carb_library">
         <div class="lee_lee_diabetes_carb_search">
-          <div class="lee_lee_diabetes_carb_search_controls">
+          <button type="button" class="lee_lee_diabetes_carb_search_button" data-action="open-carb-calculator-search" aria-haspopup="dialog">
             <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
-            <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" aria-label="Search foods" placeholder="Search foods..." value="${escapeHtml(search)}">
-          </div>
+            <span>Search foods...</span>
+          </button>
         </div>
         <div class="lee_lee_diabetes_carb_tabs" aria-label="Carb Calculator food pickers">
           ${FOOD_LIBRARY_TABS.map(([tab, label]) => `
@@ -4332,15 +4512,21 @@
     const normalizedSearch = String(search || '').trim();
     if (!activePicker && !normalizedSearch) return '';
     const pickerKey = normalizedSearch ? 'search' : activePicker;
-    const title = normalizedSearch ? 'Search Results' : (FOOD_LIBRARY_TABS.find(([tab]) => tab === activePicker)?.[1] || 'Foods');
+    const title = pickerKey === 'search' ? 'Food Search' : (FOOD_LIBRARY_TABS.find(([tab]) => tab === activePicker)?.[1] || 'Foods');
     const hasFoodEditor = currentEditor?.carbCalculatorFoodEditorOpen === true;
     const hasMealEditor = currentEditor?.carbCalculatorMealEditorOpen === true;
     return `
-      <section class="lee_lee_diabetes_carb_picker" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" aria-labelledby="lee-lee-carb-picker-title">
+      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" role="dialog" aria-modal="${pickerKey === 'search' ? 'true' : 'false'}" aria-labelledby="lee-lee-carb-picker-title">
         <div class="lee_lee_diabetes_carb_picker_header">
           <h3 id="lee-lee-carb-picker-title">${escapeHtml(title)}</h3>
-          ${normalizedSearch ? '' : '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">Done</button>'}
+          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">${pickerKey === 'search' ? 'Cancel' : 'Done'}</button>
         </div>
+        ${pickerKey === 'search' ? `
+          <div class="lee_lee_diabetes_carb_search_controls">
+            <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
+            <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" aria-label="Search foods" placeholder="Search foods..." value="${escapeHtml(search)}">
+          </div>
+        ` : ''}
         <div class="lee_lee_diabetes_carb_library_list" data-carb-library-list>
           ${renderCarbCalculatorLibraryList(pickerKey, normalizedSearch, rows)}
         </div>
@@ -4357,8 +4543,11 @@
 
   function renderCarbCalculatorLibraryList(activePicker, search, rows = []) {
     const normalizedSearch = String(search || '').trim();
-    if (activePicker === 'search' && normalizedSearch) {
-      const foods = searchFoodItems(foodLibrary, normalizedSearch);
+    if (activePicker === 'search') {
+      if (normalizedSearch.length < CARB_SEARCH_MIN_QUERY_LENGTH) {
+        return '<p class="lee_lee_diabetes_empty">Type 2 or more characters to search.</p>';
+      }
+      const foods = searchFoodItems(foodLibrary, normalizedSearch).slice(0, CARB_SEARCH_RESULT_LIMIT);
       return foods.length ? foods.map((food) => renderCarbCalculatorFoodSearchResult(food, rows, { showFavoriteToggle: false })).join('') : `
         <div class="lee_lee_diabetes_empty lee_lee_diabetes_carb_search_empty">
           <p>No foods found for “${escapeHtml(normalizedSearch)}”</p>
@@ -4404,46 +4593,6 @@
     `;
   }
 
-  function renderSelectedCarbRows(rows) {
-    const selected = rows.filter((row) => row.sourceType === 'food' && isCarbCalculatorRowStarted(row));
-    if (!selected.length) return '';
-    return `
-      <div class="lee_lee_diabetes_carb_selected" aria-label="Selected foods">
-        <h3 class="lee_lee_diabetes_carb_subtitle">Selected Foods · ${selected.length}</h3>
-        ${selected.map((row) => {
-          const total = calculateCarbCalculatorRowTotal(row) ?? 0;
-          return `
-            <div class="lee_lee_diabetes_carb_selected_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcSourceType" value="food" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcFoodId" value="${escapeHtml(row.foodId)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcName" value="${escapeHtml(row.name)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcEmoji" value="${escapeHtml(row.emoji)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcServingLabel" value="${escapeHtml(row.servingLabel)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcBrand" value="${escapeHtml(row.brand)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcSourceTypeSnapshot" value="${escapeHtml(row.sourceTypeSnapshot)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcSourceNameSnapshot" value="${escapeHtml(row.sourceNameSnapshot)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <input type="hidden" name="carbCalcCarbs" value="${escapeHtml(row.carbs)}" data-carb-row-id="${escapeHtml(row.id)}">
-              <div>
-                <strong>${row.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(row.emoji)}</span>` : ''}${escapeHtml(row.name)}</strong>
-                <small>${escapeHtml([row.brand, row.servingLabel, `${formatCarbAmount(row.carbs)} g each`, formatFoodSourceLabel(row)].filter(Boolean).join(' · '))}</small>
-              </div>
-              <div class="lee_lee_diabetes_quantity_control">
-                <button type="button" class="lee_lee_diabetes_icon_button" data-action="decrement-carb-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Decrease ${escapeHtml(row.name)} quantity">−</button>
-                <label>
-                  <span class="lee_lee_diabetes_sr_only">Quantity for ${escapeHtml(row.name)}</span>
-                  <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcQty" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(row.qty)}" data-carb-row-id="${escapeHtml(row.id)}">
-                </label>
-                <button type="button" class="lee_lee_diabetes_icon_button" data-action="increment-carb-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Increase ${escapeHtml(row.name)} quantity">+</button>
-              </div>
-              <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="${escapeHtml(row.name)} carbs">${escapeHtml(formatCarbAmount(total))} g</output>
-              <button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(row.id)}" aria-label="Remove ${escapeHtml(row.name)}">×</button>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  }
-
   function renderFoodEditorPanel(food = {}) {
     return `
       <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-food-editor-title">
@@ -4481,19 +4630,39 @@
     const item = normalizeCarbCalculatorRow(row);
     const rowTotal = calculateCarbCalculatorRowTotal(item);
     const started = isCarbCalculatorRowStarted(item);
+    const rowName = item.sourceType === 'food' ? item.name : 'Manual amount';
+    const quantityLabel = item.sourceType === 'food' ? `Quantity for ${item.name}` : 'Quantity for manual amount';
+    const decreaseLabel = item.sourceType === 'food' ? `Decrease quantity for ${item.name}` : 'Decrease quantity for manual amount';
+    const increaseLabel = item.sourceType === 'food' ? `Increase quantity for ${item.name}` : 'Increase quantity for manual amount';
+    const removeLabel = item.sourceType === 'food' ? `Remove ${item.name}` : 'Remove row';
     return `
       <div class="lee_lee_diabetes_carb_calc_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(item.id)}">
-      <input type="hidden" name="carbCalcSourceType" value="manual" data-carb-row-id="${escapeHtml(item.id)}">
-      <div class="lee_lee_diabetes_carb_calc_cell lee_lee_diabetes_carb_calc_cell--qty">
+      <input type="hidden" name="carbCalcSourceType" value="${escapeHtml(item.sourceType)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcFoodId" value="${escapeHtml(item.foodId)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcName" value="${escapeHtml(item.name)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcEmoji" value="${escapeHtml(item.emoji)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcServingLabel" value="${escapeHtml(item.servingLabel)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcBrand" value="${escapeHtml(item.brand)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcSourceTypeSnapshot" value="${escapeHtml(item.sourceTypeSnapshot)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <input type="hidden" name="carbCalcSourceNameSnapshot" value="${escapeHtml(item.sourceNameSnapshot)}" data-carb-row-id="${escapeHtml(item.id)}">
+      <div class="lee_lee_diabetes_carb_calc_item">
+        ${item.sourceType === 'food' ? `
+          <strong>${item.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span>` : ''}<span class="lee_lee_diabetes_carb_calc_item_name">${escapeHtml(item.name)}</span></strong>
+          <small>${escapeHtml([item.brand, item.servingLabel, formatFoodSourceLabel(item)].filter(Boolean).join(' · '))}</small>
+        ` : '<span>Manual</span>'}
+      </div>
+      <div class="lee_lee_diabetes_quantity_control">
+        <button type="button" class="lee_lee_diabetes_icon_button" data-action="decrement-carb-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(decreaseLabel)}" ${Number(item.qty) <= CARB_CALCULATOR_MIN_QTY ? 'disabled' : ''}>−</button>
         <label>
-          <span class="lee_lee_diabetes_sr_only">Quantity</span>
-          <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcQty" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(item.qty)}" data-carb-row-id="${escapeHtml(item.id)}">
+          <span class="lee_lee_diabetes_sr_only">${escapeHtml(quantityLabel)}</span>
+          <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcQty" type="number" inputmode="numeric" min="${CARB_CALCULATOR_MIN_QTY}" max="${CARB_CALCULATOR_MAX_QTY}" step="1" autocomplete="off" value="${escapeHtml(item.qty)}" data-carb-row-id="${escapeHtml(item.id)}">
         </label>
+        <button type="button" class="lee_lee_diabetes_icon_button" data-action="increment-carb-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(increaseLabel)}" ${Number(item.qty) >= CARB_CALCULATOR_MAX_QTY ? 'disabled' : ''}>+</button>
       </div>
       <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×</span>
       <div class="lee_lee_diabetes_carb_calc_cell lee_lee_diabetes_carb_calc_cell--carbs">
         <label>
-          <span class="lee_lee_diabetes_sr_only">Carbohydrate grams</span>
+          <span class="lee_lee_diabetes_sr_only">${escapeHtml(rowName)} carbohydrate grams per unit</span>
           <span class="lee_lee_diabetes_carb_calc_unit_input">
             <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(item.carbs)}" data-carb-row-id="${escapeHtml(item.id)}">
             <span aria-hidden="true">g</span>
@@ -4502,7 +4671,7 @@
       </div>
       <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : `${escapeHtml(formatCarbAmount(rowTotal))} g`}</output>
       <div class="lee_lee_diabetes_carb_calc_remove_slot">
-        ${started ? `<button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="Remove row">×</button>` : ''}
+        ${started ? `<button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(removeLabel)}">×</button>` : ''}
       </div>
       </div>
     `;
@@ -4672,10 +4841,10 @@
             <input class="lee_lee_diabetes_input" name="time" type="time" required value="${escapeHtml(eventTime)}">
           </label>
           <div data-dose-helper aria-live="polite"></div>
-          ${eventConfig.fields.includes('insulinUnits') ? `
+              ${eventConfig.fields.includes('insulinUnits') ? `
             <label class="lee_lee_diabetes_field">
               <span data-insulin-label>${entryTypeUsesDoseGuidance(contextType) ? 'Insulin Actually Given' : 'Insulin'}</span>
-              <input class="lee_lee_diabetes_input" name="insulinUnits" type="number" inputmode="decimal" min="0" step="0.5" autocomplete="off" value="${escapeHtml(record.administeredInsulinUnits ?? record.insulinUnits ?? '')}">
+              <input class="lee_lee_diabetes_input" name="insulinUnits" type="number" inputmode="decimal" min="0" step="${escapeHtml(getDoseIncrementUnits(getCurrentPlan()))}" autocomplete="off" value="${escapeHtml(record.administeredInsulinUnits ?? record.insulinUnits ?? '')}">
             </label>
           ` : ''}
           ${eventConfig.fields.includes('notes') ? `
@@ -4724,7 +4893,7 @@
       focusTarget(currentEditor.carbCalculatorPickerFocus);
       currentEditor.carbCalculatorPickerFocus = '';
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker) {
-      focusTarget('[data-action="close-carb-calculator-picker"], [data-carb-picker] [data-action]');
+      focusTarget(currentEditor.carbCalculatorPicker === 'search' ? '[name="carbFoodSearch"]' : '[data-action="close-carb-calculator-picker"], [data-carb-picker] [data-action]');
     } else if (currentEditor.carbCalculatorOpen) {
       focusTarget('[data-carb-calculator-rows] [name="carbCalcCarbs"]');
     } else if (options.focusAction) {
@@ -4818,10 +4987,22 @@
     if (result.status === 'calculated') {
       const carbBreakdown = result.carbDoseUnits == null
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Carb coverage: ${escapeHtml(formatCarbs(result.totalCarbs))} ÷ ${escapeHtml(result.insulinCarbRatioGrams)} = ${escapeHtml(formatDoseNumber(result.rawCarbDose))} → ${escapeHtml(formatInsulin(result.carbDoseUnits))}</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Carb coverage: ${escapeHtml(formatCarbs(result.totalCarbs))} ÷ ${escapeHtml(result.insulinCarbRatioGrams)} = ${escapeHtml(formatDoseNumber(result.rawCarbDose))} units</div>`;
       const correctionBreakdown = result.correctionUnits == null
         ? ''
         : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${escapeHtml(formatInsulin(result.correctionUnits))}</div>`;
+      const rawDoseBreakdown = result.rawAggregateDose == null || result.rawAggregateDose === result.suggestedTotalUnits
+        ? ''
+        : `<div class="lee_lee_diabetes_dose_breakdown">Raw dose: ${escapeHtml(formatDoseNumber(result.rawAggregateDose))} units</div>`;
+      const roundingBreakdown = result.carbDoseUnits == null || result.rawAggregateDose == null
+        ? ''
+        : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${escapeHtml(formatDoseNumber(result.doseIncrementUnits))}-unit increment: ${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>`;
+      const minimumWarning = result.minimumDoseWarning
+        ? `<p class="lee_lee_diabetes_dose_warning">${escapeHtml(result.minimumDoseWarning)}</p>`
+        : '';
+      const helperMessage = result.message && result.message !== result.minimumDoseWarning
+        ? `<p>${escapeHtml(result.message)}</p>`
+        : '';
       const legacyBreakdown = result.baseUnits != null && result.correctionUnits != null
         ? `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>`
         : '';
@@ -4835,10 +5016,13 @@
             <div class="lee_lee_diabetes_dose_total">${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>
             ${carbBreakdown}
             ${correctionBreakdown}
+            ${rawDoseBreakdown}
+            ${roundingBreakdown}
             ${legacyBreakdown}
             ${range}
           </div>
-          <p>${escapeHtml(result.message)}</p>
+          ${minimumWarning}
+          ${helperMessage}
         </section>
       `;
     }
@@ -4882,6 +5066,7 @@
       );
     if (
       result.status === 'calculated'
+      && !result.minimumDoseWarning
       && canAutofillInsulin
     ) {
       insulinInput.value = String(result.suggestedTotalUnits);
@@ -4925,6 +5110,14 @@
         }
         if (!rowElement) return;
         const rowTotal = calculateCarbCalculatorRowTotal(row);
+        const qtyInput = rowElement.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(row.id)}`);
+        if (qtyInput && qtyInput.value !== row.qty) qtyInput.value = row.qty;
+        rowElement.querySelectorAll('[data-action="decrement-carb-row"]').forEach((button) => {
+          button.disabled = Number(row.qty) <= CARB_CALCULATOR_MIN_QTY;
+        });
+        rowElement.querySelectorAll('[data-action="increment-carb-row"]').forEach((button) => {
+          button.disabled = Number(row.qty) >= CARB_CALCULATOR_MAX_QTY;
+        });
         const totalElement = rowElement.querySelector('.lee_lee_diabetes_carb_calc_row_total');
         if (totalElement) totalElement.textContent = rowTotal == null ? '—' : `${formatCarbAmount(rowTotal)} g`;
         const removeSlot = rowElement.querySelector('.lee_lee_diabetes_carb_calc_remove_slot');
@@ -4940,11 +5133,6 @@
     if (emptyElement) {
       emptyElement.hidden = rows.some(isCarbCalculatorRowStarted);
     }
-    calculator.querySelectorAll('.lee_lee_diabetes_carb_selected_row').forEach((rowElement) => {
-      const row = rows.find((item) => item.id === rowElement.dataset.carbRowId);
-      const totalElement = rowElement.querySelector('.lee_lee_diabetes_carb_calc_row_total');
-      if (row && totalElement) totalElement.textContent = `${formatCarbAmount(calculateCarbCalculatorRowTotal(row) ?? 0)} g`;
-    });
     const formattedTotal = formatCarbAmount(mealTotal);
     const totalElement = calculator.querySelector('[data-carb-calculator-total]');
     if (totalElement) totalElement.textContent = `${formattedTotal} g`;
@@ -4974,7 +5162,7 @@
     const search = searchInput.value || '';
     currentEditor.carbCalculatorSearch = search;
     currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-    currentEditor.carbCalculatorPicker = String(search || '').trim() ? 'search' : '';
+    currentEditor.carbCalculatorPicker = 'search';
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
       eventType: getEditorEventType(form),
@@ -4985,7 +5173,7 @@
       carbCalculatorOpen: true,
       carbCalculatorRows: currentEditor.carbCalculatorRows,
       mealComponents: currentEditor?.mealComponents || [],
-      carbCalculatorPicker: currentEditor.carbCalculatorPicker,
+      carbCalculatorPicker: 'search',
       carbCalculatorSearch: search,
       carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
       carbCalculatorPickerFocus: '[name="carbFoodSearch"]',
@@ -5237,29 +5425,8 @@
   function setCarbRowQuantity(form, rowId, delta) {
     const input = form?.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(rowId)}`);
     if (!input) return;
-    const next = Math.max(0, normalizeQuantity(input.value, 0) + delta);
-    input.value = formatCarbAmount(next);
-    if (next === 0) {
-      form.querySelector(`[data-carb-calculator-row]${getCarbRowSelector(rowId)}`)?.remove();
-      currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-      renderEditor({
-        mode: currentEditor?.mode || 'log-entry',
-        eventType: getEditorEventType(form),
-        type: getEditorType(form),
-        record: buildDraftFromEditor(form),
-        returnTo: currentEditor?.returnTo || null,
-        returnDateKey: currentEditor?.returnDateKey || null,
-        carbCalculatorOpen: true,
-        carbCalculatorRows: currentEditor.carbCalculatorRows,
-        mealComponents: currentEditor?.mealComponents || [],
-        carbCalculatorPicker: currentEditor?.carbCalculatorPicker || '',
-        carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
-        carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-        carbCalculatorPickerFocus: '[data-carb-calculator-rows] [name="carbCalcCarbs"], [data-action="use-carb-calculator-total"]',
-        preventFocusScroll: true,
-      });
-      return;
-    }
+    const next = Math.max(CARB_CALCULATOR_MIN_QTY, Math.min(CARB_CALCULATOR_MAX_QTY, normalizeCarbCalculatorQuantity(input.value) + delta));
+    input.value = String(next);
     currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
     refreshCarbCalculator(form, rowId);
   }
@@ -5269,8 +5436,6 @@
     if (lastCarbCalculatorSelection.id === foodId && now - lastCarbCalculatorSelection.at < 350) return;
     lastCarbCalculatorSelection = { id: foodId, at: now };
     const previousPicker = currentEditor?.carbCalculatorPicker || '';
-    const previousSearch = currentEditor?.carbCalculatorSearch || '';
-    const isSearchPicker = previousPicker === 'search' || String(previousSearch || '').trim();
     const food = foodLibrary.find((item) => item.id === foodId && !isLibraryItemDeleted(item));
     const row = carbRowFromFood(food);
     if (!row) return;
@@ -5286,10 +5451,10 @@
       carbCalculatorRows: currentEditor.carbCalculatorRows,
       mealComponents: currentEditor?.mealComponents || [],
       carbCalculatorTab: currentEditor?.carbCalculatorTab || 'favorites',
-      carbCalculatorPicker: isSearchPicker ? '' : previousPicker,
-      carbCalculatorSearch: isSearchPicker ? '' : previousSearch,
+      carbCalculatorPicker: '',
+      carbCalculatorSearch: '',
       carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-      carbCalculatorPickerFocus: isSearchPicker ? '[data-action="use-carb-calculator-total"]' : '[data-carb-picker] [data-action="add-food-to-carb-calculator"]',
+      carbCalculatorPickerFocus: '[data-action="use-carb-calculator-total"]',
       preventFocusScroll: true,
     });
   }
@@ -5312,10 +5477,10 @@
       carbCalculatorRows: currentEditor.carbCalculatorRows,
       mealComponents: currentEditor?.mealComponents || [],
       carbCalculatorTab: 'meals',
-      carbCalculatorPicker: currentEditor?.carbCalculatorPicker || 'meals',
-      carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
+      carbCalculatorPicker: '',
+      carbCalculatorSearch: '',
       carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-      carbCalculatorPickerFocus: '[data-carb-picker] [data-action="add-saved-meal-to-carb-calculator"]',
+      carbCalculatorPickerFocus: '[data-action="use-carb-calculator-total"]',
       preventFocusScroll: true,
     });
   }
@@ -5601,6 +5766,11 @@
       suggestedBaseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.baseUnits : null,
       suggestedCarbDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.carbDoseUnits : null,
       rawCarbDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawCarbDose : null,
+      rawAggregateDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawAggregateDose : null,
+      doseRoundingMode: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseRoundingMode : null,
+      doseIncrementUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseIncrementUnits : null,
+      minimumAllowableDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumAllowableDoseUnits : null,
+      minimumDoseWarning: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumDoseWarning : '',
       insulinCarbRatioGrams: calculatedGuidance.status === 'calculated' ? calculatedGuidance.insulinCarbRatioGrams : null,
       suggestedCorrectionUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.correctionUnits : null,
       suggestedTotalUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.suggestedTotalUnits : null,
@@ -6024,6 +6194,20 @@
           <label class="lee_lee_diabetes_field">
             Insulin-to-Carb Ratio
             <span class="lee_lee_diabetes_inline_control">1 unit per <input class="lee_lee_diabetes_input" name="insulinCarbRatioGrams" type="number" inputmode="decimal" min="0.1" step="0.1" required value="${escapeHtml(getInsulinCarbRatioGrams(plan))}"> g carbs</span>
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Dose Rounding
+            <select class="lee_lee_diabetes_select" name="doseRoundingMode" required>
+              ${DOSE_ROUNDING_MODES.map((mode) => `<option value="${escapeHtml(mode)}" ${getDoseRoundingMode(plan) === mode ? 'selected' : ''}>${escapeHtml(mode === 'nearest' ? 'Nearest' : (mode === 'down' ? 'Down' : 'Up'))}</option>`).join('')}
+            </select>
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Dose Increment
+            <span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="doseIncrementUnits" type="number" inputmode="decimal" min="0.01" step="0.05" required value="${escapeHtml(getDoseIncrementUnits(plan))}"> units</span>
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Minimum Allowable Dose
+            <span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="minimumAllowableDoseUnits" type="number" inputmode="decimal" min="0" step="0.05" required value="${escapeHtml(getMinimumAllowableDoseUnits(plan))}"> units</span>
           </label>
           <label class="lee_lee_diabetes_field">
             Bedtime Long-Acting Dose
@@ -6548,6 +6732,18 @@
     if (bedtimeBaseUnits == null) {
       return { error: 'Bedtime long-acting dose must be a nonnegative number.' };
     }
+    const doseRoundingMode = form.elements.doseRoundingMode?.value;
+    if (!DOSE_ROUNDING_MODES.includes(doseRoundingMode)) {
+      return { error: 'Dose rounding must be Down, Nearest, or Up.' };
+    }
+    const doseIncrementUnits = normalizeNumber(form.elements.doseIncrementUnits?.value);
+    if (doseIncrementUnits == null || doseIncrementUnits <= 0) {
+      return { error: 'Dose increment must be greater than zero.' };
+    }
+    const minimumAllowableDoseUnits = normalizeNumber(form.elements.minimumAllowableDoseUnits?.value);
+    if (minimumAllowableDoseUnits == null) {
+      return { error: 'Minimum allowable dose must be a nonnegative number.' };
+    }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
     const now = new Date().toISOString();
@@ -6562,6 +6758,9 @@
         bedtimeBaseUnits,
         bedtimeBaseUnitsMigratedTo17: true,
         insulinCarbRatioGrams,
+        doseRoundingMode,
+        doseIncrementUnits: roundToPrecision(doseIncrementUnits),
+        minimumAllowableDoseUnits: roundToPrecision(minimumAllowableDoseUnits),
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -6594,6 +6793,14 @@
           <div>
             <dt>Insulin-to-carb ratio</dt>
             <dd>1 unit per ${escapeHtml(getInsulinCarbRatioGrams(plan))} g carbs</dd>
+          </div>
+          <div>
+            <dt>Dose rounding</dt>
+            <dd>${escapeHtml(getDoseRoundingMode(plan))} to ${escapeHtml(formatDoseNumber(getDoseIncrementUnits(plan)))}-unit increments</dd>
+          </div>
+          <div>
+            <dt>Minimum allowable dose</dt>
+            <dd>${escapeHtml(formatInsulin(getMinimumAllowableDoseUnits(plan)))}</dd>
           </div>
           <div>
             <dt>Bedtime long-acting dose</dt>
@@ -7142,6 +7349,27 @@
         handleUseCarbCalculatorTotal(root, target);
         return;
       }
+      if (action === 'open-carb-calculator-search') {
+        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorPicker: 'search',
+          carbCalculatorSearch: '',
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          carbCalculatorPickerFocus: '[name="carbFoodSearch"]',
+          preventFocusScroll: true,
+        });
+        return;
+      }
       if (action === 'open-carb-calculator-picker') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
         const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === target.dataset.picker) ? target.dataset.picker : 'foods';
@@ -7187,7 +7415,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[name="carbFoodSearch"]',
+          carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;
@@ -7746,7 +7974,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[name="carbFoodSearch"]',
+          carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;

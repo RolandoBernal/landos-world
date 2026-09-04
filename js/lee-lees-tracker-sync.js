@@ -24,6 +24,10 @@
   const DEFAULT_BEDTIME_BASE_UNITS = 17;
   const LEGACY_BEDTIME_BASE_UNITS = 15;
   const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
+  const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
+  const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
+  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_SHARED_INSULIN_PLAN = Object.freeze({
     id: 'meal_plan_2026_07_31',
@@ -34,6 +38,9 @@
     mealBaseUnits: DEFAULT_MEAL_BASE_UNITS_BY_TYPE.Breakfast,
     bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS,
     insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+    doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
+    doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
+    minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -180,6 +187,21 @@
     return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
   }
 
+  function normalizeSharedDoseRoundingMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return DOSE_ROUNDING_MODES.includes(normalized) ? normalized : DEFAULT_DOSE_ROUNDING_MODE;
+  }
+
+  function normalizeSharedDoseIncrement(value) {
+    const number = normalizeSharedNumber(value);
+    return number != null && number > 0 ? number : DEFAULT_DOSE_INCREMENT_UNITS;
+  }
+
+  function normalizeSharedMinimumAllowableDose(value) {
+    const number = normalizeSharedNumber(value);
+    return number == null ? DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS : number;
+  }
+
   function normalizeSharedCorrectionRange(range) {
     const source = range && typeof range === 'object' ? range : {};
     const minGlucose = source.minGlucose == null || source.minGlucose === '' ? null : Number(source.minGlucose);
@@ -248,6 +270,9 @@
         : (bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS),
       bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true || bedtimeValue === LEGACY_BEDTIME_BASE_UNITS,
       insulinCarbRatioGrams: normalizeSharedNumber(source.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+      doseRoundingMode: normalizeSharedDoseRoundingMode(source.doseRoundingMode),
+      doseIncrementUnits: normalizeSharedDoseIncrement(source.doseIncrementUnits),
+      minimumAllowableDoseUnits: normalizeSharedMinimumAllowableDose(source.minimumAllowableDoseUnits),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length
         ? normalizedCorrectionRanges
@@ -269,6 +294,9 @@
       bedtimeBaseUnits: normalized.bedtimeBaseUnits,
       bedtimeBaseUnitsMigratedTo17: normalized.bedtimeBaseUnitsMigratedTo17,
       insulinCarbRatioGrams: normalized.insulinCarbRatioGrams,
+      doseRoundingMode: normalized.doseRoundingMode,
+      doseIncrementUnits: normalized.doseIncrementUnits,
+      minimumAllowableDoseUnits: normalized.minimumAllowableDoseUnits,
       supportedMealTypes: normalized.supportedMealTypes,
       correctionRanges: normalized.correctionRanges,
       notes: normalized.notes,
@@ -291,11 +319,26 @@
     const insulinConfiguration = payload.insulinConfiguration && typeof payload.insulinConfiguration === 'object'
       ? payload.insulinConfiguration
       : {};
-    return source.insulinPlan
+    const activePlan = source.insulinPlan
       || source.activeInsulinPlan
       || insulinConfiguration.activeInsulinPlan
+      || insulinConfiguration.insulinPlan
       || payload.insulinPlan
-      || DEFAULT_SHARED_INSULIN_PLAN;
+      || payload.activeInsulinPlan;
+    if (activePlan) return activePlan;
+    const plans = [
+      source.insulinPlans,
+      payload.insulinPlans,
+      insulinConfiguration.insulinPlans,
+    ].find((items) => Array.isArray(items) && items.length);
+    if (plans) {
+      const activePlanId = source.activeInsulinPlanId
+        || payload.activeInsulinPlanId
+        || insulinConfiguration.activeInsulinPlanId
+        || '';
+      return plans.find((plan) => plan?.id === activePlanId) || plans[0];
+    }
+    return DEFAULT_SHARED_INSULIN_PLAN;
   }
 
   function normalizeSharedSettings(settings = {}) {
@@ -1279,13 +1322,14 @@
     }
 
     function saveSharedSettings(settings) {
+      const cachedVersion = getSharedSettingsCache().version || null;
       const normalized = normalizeSharedSettings({
         ...settings,
         lastEditedBy: getDeviceIdentity() || null,
         syncStatus: navigator.onLine ? 'waiting' : 'offline',
       });
-      setSharedSettingsCache(normalized);
-      const baseVersion = normalized.version || getSharedSettingsCache().version || null;
+      const baseVersion = normalized.version || cachedVersion;
+      setSharedSettingsCache({ ...normalized, version: normalized.version || cachedVersion });
       const operation = createSharedSettingsOperation(normalized, baseVersion);
       setSharedSettingsQueue([...getSharedSettingsQueue(), operation]);
       emit();

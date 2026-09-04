@@ -1151,7 +1151,7 @@ test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb da
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toHaveCount(0);
   await expect(form.getByLabel('Blood Sugar')).toBeVisible();
   await expect(form.getByText('Suggested dose')).toBeVisible();
-  await expect(form.getByText('17 units')).toBeVisible();
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('17 units');
   await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('17');
 
   const focusableCarbControls = await form.locator('[name="mealCarbs"], [name^="carbCalc"], [data-action="open-carb-calculator"]').count();
@@ -1252,10 +1252,10 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await thirdQty.click();
   await thirdQty.press('ControlOrMeta+A');
   await thirdQty.pressSequentially('1.5');
-  await expect(thirdQty).toHaveValue('1.5');
+  await expect(thirdQty).toHaveValue('1');
   await calculator.locator('[name="carbCalcCarbs"]').nth(2).click();
   await calculator.locator('[name="carbCalcCarbs"]').nth(2).pressSequentially('19');
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('91.5 g');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('82 g');
   const thirdRowId = await thirdQty.getAttribute('data-carb-row-id');
   await calculator.locator(`[data-carb-calculator-row][data-carb-row-id="${thirdRowId}"] [data-action="remove-carb-calculator-row"]`).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('63 g');
@@ -1264,11 +1264,14 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('63');
-  await expect(form.getByText('Carb coverage: 63 g carbs ÷ 20 = 3.15 → 3 units')).toBeVisible();
+  await expect(form.getByText('Carb coverage: 63 g carbs ÷ 20 = 3.15 units')).toBeVisible();
+  await expect(form.getByText('Raw dose: 5.15 units')).toBeVisible();
+  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 5 units')).toBeVisible();
   await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5');
 
   await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('70');
-  await expect(form.getByText('Carb coverage: 70 g carbs ÷ 20 = 3.5 → 3.5 units')).toBeVisible();
+  await expect(form.getByText('Carb coverage: 70 g carbs ÷ 20 = 3.5 units')).toBeVisible();
+  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 5.5 units')).toBeVisible();
   await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5.5');
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   await expect(page.locator('[data-carb-calculator]').getByLabel('Meal Total')).toHaveText('63 g');
@@ -1384,18 +1387,17 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(picker.getByRole('button', { name: /Pasta 15 g carbs/ })).toBeVisible();
   await expect(picker.getByRole('button', { name: /Mark favorite|Remove favorite/ })).toHaveCount(0);
   await picker.getByRole('button', { name: /Banana 27 g carbs/ }).click();
-  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
-  await expect(picker.getByRole('button', { name: /Selected Banana 27 g carbs/ })).toBeVisible();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('61 g');
-  await picker.getByRole('button', { name: /Pasta 15 g carbs/ }).click();
-  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
-  await expect(picker.getByRole('button', { name: /Selected Pasta 15 g carbs/ })).toBeVisible();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
-  await favoritesToggle.click();
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('61 g');
+  await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
+  await favoritesToggle.click();
+  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await picker.getByRole('button', { name: /Pasta 15 g carbs/ }).click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
   await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(calculator.getByText('Selected Foods · 2')).toBeVisible();
+  await expect(calculator.getByText('Selected Foods')).toHaveCount(0);
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Pasta' })).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Save as My Meal' })).toBeVisible();
@@ -1419,16 +1421,21 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByRole('button', { name: 'My Foods' }).click();
   await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Foods' })).toBeVisible();
   await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: '+ Add New Food' })).toBeVisible();
-  const foodSearch = calculator.getByLabel('Search foods');
-  await expect(foodSearch).toHaveAttribute('placeholder', 'Search foods...');
-  await expect(calculator.getByRole('button', { name: 'Search' })).toHaveCount(0);
+  await expect(calculator.getByRole('button', { name: 'Search', exact: true })).toHaveCount(0);
   await calculator.locator('[data-carb-picker]').getByRole('button', { name: 'Done' }).click();
 
-  await foodSearch.click();
-  await foodSearch.pressSequentially('chicken nugget');
+  await calculator.getByRole('button', { name: 'Search foods...' }).click();
+  const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
+  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Food Search' })).toBeVisible();
+  await expect(foodSearch).toBeFocused();
+  await foodSearch.pressSequentially('c');
+  await expect(foodSearch).toHaveValue('c');
+  await expect(calculator.getByText('Type 2 or more characters to search.')).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker="search"] [data-action="add-food-to-carb-calculator"]')).toHaveCount(0);
+  await foodSearch.pressSequentially('hicken nugget');
   await expect(foodSearch).toHaveValue('chicken nugget');
   await expect(foodSearch).toBeFocused();
-  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Search Results' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Food Search' })).toBeVisible();
   await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Chicken Nuggets \/ Tenders 15 g carbs/ })).toBeVisible();
   await foodSearch.press('Enter');
   await expect(calculator).toBeVisible();
@@ -1443,19 +1450,19 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByText('No foods found for “no-food-found”')).toBeVisible();
   await calculator.locator('.lee_lee_diabetes_carb_search_empty').getByRole('button', { name: '+ Add New Food' }).click();
   await expect(calculator.getByLabel('Food Name')).toBeVisible();
-  await calculator.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await calculator.getByLabel('Add Food').getByRole('button', { name: 'Cancel', exact: true }).click();
   await foodSearch.fill('');
   await foodSearch.click();
   await foodSearch.pressSequentially('ket');
   await expect(foodSearch).toHaveValue('ket');
   await expect(foodSearch).toBeFocused();
   await calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Ketchup 4 g carbs/ }).click();
-  await expect(foodSearch).toHaveValue('');
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  await expect(calculator.getByRole('button', { name: 'Search foods...' })).toBeVisible();
 
   await expect(calculator.getByLabel('Meal Total')).toHaveText('80 g');
   const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });
-  await ketchupRow.getByRole('button', { name: /Increase Ketchup quantity/ }).click();
+  await ketchupRow.getByRole('button', { name: /Increase quantity for Ketchup/ }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('84 g');
 
   await calculator.getByRole('button', { name: 'Save as My Meal' }).click();
@@ -1465,7 +1472,8 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByRole('button', { name: 'Use 84 grams' }).click();
 
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('84');
-  await expect(form.getByText('Carb coverage: 84 g carbs ÷ 20 = 4.2 → 4 units')).toBeVisible();
+  await expect(form.getByText('Carb coverage: 84 g carbs ÷ 20 = 4.2 units')).toBeVisible();
+  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 6 units')).toBeVisible();
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
 
@@ -1480,17 +1488,184 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   });
   expect(savedState.record.mealCarbs).toBe(84);
   expect(savedState.record.mealComponents.map((item) => item.nameSnapshot)).toEqual([
+    'Manual amount',
     'Banana',
     'Pasta',
     'Ketchup',
-    'Manual amount',
   ]);
   expect(savedState.savedMeals.find((meal) => meal.name === 'Starter Meal').totalCarbs).toBe(84);
   expect(savedState.foodLibrary.find((food) => food.name === 'Ketchup').lastUsedAt).toBeTruthy();
 
   await chooseLeeLeeSection(page, 'History');
   await page.getByRole('button', { name: /1 entry/ }).click();
-  await expect(page.getByText(/Banana · .*Pasta · 2× Ketchup · Manual amount/)).toBeVisible();
+  await expect(page.getByText(/Manual amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
+});
+
+test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          name: 'Chocolate Milk',
+          emoji: '🥛',
+          carbs: 26,
+          servingLabel: '1 cup (8 fl oz)',
+          sourceType: 'reference',
+          sourceName: 'USDA',
+          createdAt: '2026-09-04T12:00:00.000Z',
+          updatedAt: '2026-09-04T12:00:00.000Z',
+        },
+      ],
+    }));
+  });
+
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const manualQty = calculator.locator('[data-carb-calculator-row]').first().locator('[name="carbCalcQty"]');
+  const initialQtyWidth = await manualQty.evaluate((input) => input.getBoundingClientRect().width);
+  expect(initialQtyWidth).toBeLessThanOrEqual(36);
+  const manualWeightMetrics = await calculator.locator('[data-carb-calculator-row]').first().evaluate((row) => {
+    const manualLabel = row.querySelector('.lee_lee_diabetes_carb_calc_item > span');
+    const qtyInput = row.querySelector('[name="carbCalcQty"]');
+    const carbsInput = row.querySelector('[name="carbCalcCarbs"]');
+    const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
+    const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
+    return {
+      manualLabelWeight: getComputedStyle(manualLabel).fontWeight,
+      qtyWeight: getComputedStyle(qtyInput).fontWeight,
+      carbsWeight: getComputedStyle(carbsInput).fontWeight,
+      unitWeight: getComputedStyle(unitText).fontWeight,
+      operatorWeight: getComputedStyle(operator).fontWeight,
+    };
+  });
+  expect(manualWeightMetrics).toEqual({
+    manualLabelWeight: '400',
+    qtyWeight: '400',
+    carbsWeight: '400',
+    unitWeight: '400',
+    operatorWeight: '400',
+  });
+
+  await calculator.getByRole('button', { name: 'Search foods...' }).click();
+  const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
+  await foodSearch.fill('chocolate milk');
+  await calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Chocolate Milk 26 g carbs/ }).first().click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+
+  const chocolateMilkRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Chocolate Milk' });
+  await expect(chocolateMilkRow).toBeVisible();
+  await expect(chocolateMilkRow.getByText('1 cup (8 fl oz) · USDA')).toBeVisible();
+
+  const qty = chocolateMilkRow.getByRole('spinbutton', { name: 'Quantity for Chocolate Milk' });
+  await qty.fill('99');
+  await expect(qty).toHaveValue('99');
+  await expect(chocolateMilkRow.locator('.lee_lee_diabetes_carb_calc_row_total')).toHaveText('2574 g');
+
+  const compactMetrics = await chocolateMilkRow.evaluate((row) => {
+    const calculator = row.closest('[data-carb-calculator]');
+    const qtyInput = row.querySelector('[name="carbCalcQty"]');
+    const carbsInput = row.querySelector('[name="carbCalcCarbs"]');
+    const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
+    const unitLabel = row.querySelector('.lee_lee_diabetes_carb_calc_cell--carbs label');
+    const strong = row.querySelector('.lee_lee_diabetes_carb_calc_item strong');
+    const emoji = row.querySelector('.lee_lee_diabetes_carb_calc_item .lee_lee_diabetes_food_emoji');
+    const name = row.querySelector('.lee_lee_diabetes_carb_calc_item_name');
+    const metadata = row.querySelector('.lee_lee_diabetes_carb_calc_item small');
+    const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
+    const rowTotal = row.querySelector('.lee_lee_diabetes_carb_calc_row_total');
+    const buttons = Array.from(row.querySelectorAll('.lee_lee_diabetes_icon_button'));
+    const calcBox = calculator.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    const carbsBox = carbsInput.getBoundingClientRect();
+    const unitBox = unitText.getBoundingClientRect();
+    const emojiBox = emoji.getBoundingClientRect();
+    const nameBox = name.getBoundingClientRect();
+    const labelStyle = getComputedStyle(unitLabel);
+    return {
+      calculatorOverflows: calculator.scrollWidth > calculator.clientWidth + 1,
+      rowOverflows: rowBox.left < calcBox.left - 1 || rowBox.right > calcBox.right + 1,
+      qtyWidth: qtyInput.getBoundingClientRect().width,
+      carbsWidth: carbsBox.width,
+      minButtonSize: Math.min(...buttons.map((button) => Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
+      unitGap: unitBox.left - carbsBox.right,
+      labelMarginRight: labelStyle.marginRight,
+      labelPaddingRight: labelStyle.paddingRight,
+      foodNameDisplay: getComputedStyle(strong).display,
+      foodNameAlignItems: getComputedStyle(strong).alignItems,
+      foodNameWeight: getComputedStyle(strong).fontWeight,
+      metadataWeight: getComputedStyle(metadata).fontWeight,
+      qtyWeight: getComputedStyle(qtyInput).fontWeight,
+      carbsWeight: getComputedStyle(carbsInput).fontWeight,
+      unitWeight: getComputedStyle(unitText).fontWeight,
+      operatorWeight: getComputedStyle(operator).fontWeight,
+      rowTotalWeight: getComputedStyle(rowTotal).fontWeight,
+      minButtonWeight: Math.min(...buttons.map((button) => Number(getComputedStyle(button).fontWeight))),
+      emojiNameCenterDelta: Math.abs(((emojiBox.top + emojiBox.bottom) / 2) - ((nameBox.top + nameBox.bottom) / 2)),
+    };
+  });
+
+  expect(compactMetrics.calculatorOverflows).toBe(false);
+  expect(compactMetrics.rowOverflows).toBe(false);
+  expect(compactMetrics.qtyWidth).toBeLessThanOrEqual(36);
+  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(58);
+  expect(compactMetrics.minButtonSize).toBeGreaterThanOrEqual(34);
+  expect(compactMetrics.unitGap).toBeLessThanOrEqual(6);
+  expect(compactMetrics.labelMarginRight).toBe('0px');
+  expect(compactMetrics.labelPaddingRight).toBe('0px');
+  expect(compactMetrics.foodNameDisplay).toBe('flex');
+  expect(compactMetrics.foodNameAlignItems).toBe('center');
+  expect(compactMetrics.foodNameWeight).toBe('400');
+  expect(compactMetrics.metadataWeight).toBe('400');
+  expect(compactMetrics.qtyWeight).toBe('400');
+  expect(compactMetrics.carbsWeight).toBe('400');
+  expect(compactMetrics.unitWeight).toBe('400');
+  expect(compactMetrics.operatorWeight).toBe('400');
+  expect(compactMetrics.rowTotalWeight).toBe('500');
+  expect(compactMetrics.minButtonWeight).toBeGreaterThanOrEqual(400);
+  expect(compactMetrics.minButtonWeight).toBeLessThanOrEqual(500);
+  expect(compactMetrics.emojiNameCenterDelta).toBeLessThanOrEqual(3);
+
+  const summaryWeightMetrics = await calculator.evaluate((node) => ({
+    headingWeights: Array.from(node.querySelectorAll('.lee_lee_diabetes_carb_calc_heading')).map((heading) => getComputedStyle(heading).fontWeight),
+    totalLabelWeight: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calc_sum')).fontWeight,
+    finalTotalWeight: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontWeight,
+  }));
+  expect(summaryWeightMetrics.headingWeights.every((weight) => weight === '500')).toBe(true);
+  expect(summaryWeightMetrics.totalLabelWeight).toBe('600');
+  expect(summaryWeightMetrics.finalTotalWeight).toBe('600');
+
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(chocolateMilkRow).toBeVisible();
+  expect(await calculator.evaluate((node) => node.scrollWidth > node.clientWidth + 1)).toBe(false);
+  const lightWeightMetrics = await chocolateMilkRow.evaluate((row) => ({
+    foodNameWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item strong')).fontWeight,
+    metadataWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item small')).fontWeight,
+    qtyWeight: getComputedStyle(row.querySelector('[name="carbCalcQty"]')).fontWeight,
+    carbsWeight: getComputedStyle(row.querySelector('[name="carbCalcCarbs"]')).fontWeight,
+    unitWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]')).fontWeight,
+    operatorWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_operator')).fontWeight,
+    rowTotalWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_row_total')).fontWeight,
+  }));
+  expect(lightWeightMetrics).toEqual({
+    foodNameWeight: '400',
+    metadataWeight: '400',
+    qtyWeight: '400',
+    carbsWeight: '400',
+    unitWeight: '400',
+    operatorWeight: '400',
+    rowTotalWeight: '500',
+  });
 });
 
 test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
@@ -1818,12 +1993,12 @@ test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', a
   await qtyInputs.nth(2).click();
   await qtyInputs.nth(2).press('ControlOrMeta+A');
   await qtyInputs.nth(2).pressSequentially('1.5');
-  await expect(qtyInputs.nth(2)).toHaveValue('1.5');
+  await expect(qtyInputs.nth(2)).toHaveValue('1');
   await carbInputs.nth(2).click();
   await carbInputs.nth(2).press('ControlOrMeta+A');
   await carbInputs.nth(2).pressSequentially('19');
   await expect(carbInputs.nth(2)).toHaveValue('19');
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('81.5 g');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('72 g');
 
   expect(await calculator.locator('[tabindex]').count()).toBe(0);
 });
