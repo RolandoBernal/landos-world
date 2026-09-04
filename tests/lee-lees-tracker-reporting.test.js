@@ -1230,7 +1230,10 @@ test('shared settings contract applies restored patient and dose settings to cal
       mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
       bedtimeBaseUnits: 17,
       bedtimeBaseUnitsMigratedTo17: true,
-      insulinCarbRatioGrams: 20,
+      insulinCarbRatioGrams: 15,
+      doseRoundingMode: 'down',
+      doseIncrementUnits: 0.1,
+      minimumAllowableDoseUnits: 0.5,
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -1257,7 +1260,10 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(plan.mealBaseUnitsByType.Breakfast, 5);
   assert.equal(plan.mealBaseUnitsByType.Lunch, 6);
   assert.equal(plan.mealBaseUnitsByType.Dinner, 6);
-  assert.equal(plan.insulinCarbRatioGrams, 20);
+  assert.equal(plan.insulinCarbRatioGrams, 15);
+  assert.equal(plan.doseRoundingMode, 'down');
+  assert.equal(plan.doseIncrementUnits, 0.1);
+  assert.equal(plan.minimumAllowableDoseUnits, 0.5);
   assert.equal(plan.bedtimeBaseUnits, 17);
   assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
@@ -1272,7 +1278,24 @@ test('shared settings inventory classifies every current LLT settings control', 
   const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
   const byLabel = new Map(inventory.map((item) => [item.label, item]));
 
-  ['Patient Name', 'Date of Birth', 'Clinic Name', 'Clinic Phone', 'Insulin-to-Carb Ratio', 'Bedtime Base Dose', 'Correction Table'].forEach((label) => {
+  [
+    'Patient Name',
+    'Date of Birth',
+    'Clinic Name',
+    'Clinic Phone',
+    'Plan Name',
+    'Effective Date',
+    'Breakfast Base Dose',
+    'Lunch Base Dose',
+    'Dinner Base Dose',
+    'Insulin-to-Carb Ratio',
+    'Dose Rounding',
+    'Dose Increment',
+    'Minimum Allowable Dose',
+    'Bedtime Base Dose',
+    'Correction Table',
+    'Plan Notes',
+  ].forEach((label) => {
     assert.equal(byLabel.get(label)?.classification, 'SHARED');
   });
   assert.equal(byLabel.has('Saved Foods'), false);

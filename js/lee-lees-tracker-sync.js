@@ -319,11 +319,26 @@
     const insulinConfiguration = payload.insulinConfiguration && typeof payload.insulinConfiguration === 'object'
       ? payload.insulinConfiguration
       : {};
-    return source.insulinPlan
+    const activePlan = source.insulinPlan
       || source.activeInsulinPlan
       || insulinConfiguration.activeInsulinPlan
+      || insulinConfiguration.insulinPlan
       || payload.insulinPlan
-      || DEFAULT_SHARED_INSULIN_PLAN;
+      || payload.activeInsulinPlan;
+    if (activePlan) return activePlan;
+    const plans = [
+      source.insulinPlans,
+      payload.insulinPlans,
+      insulinConfiguration.insulinPlans,
+    ].find((items) => Array.isArray(items) && items.length);
+    if (plans) {
+      const activePlanId = source.activeInsulinPlanId
+        || payload.activeInsulinPlanId
+        || insulinConfiguration.activeInsulinPlanId
+        || '';
+      return plans.find((plan) => plan?.id === activePlanId) || plans[0];
+    }
+    return DEFAULT_SHARED_INSULIN_PLAN;
   }
 
   function normalizeSharedSettings(settings = {}) {
@@ -1307,13 +1322,14 @@
     }
 
     function saveSharedSettings(settings) {
+      const cachedVersion = getSharedSettingsCache().version || null;
       const normalized = normalizeSharedSettings({
         ...settings,
         lastEditedBy: getDeviceIdentity() || null,
         syncStatus: navigator.onLine ? 'waiting' : 'offline',
       });
-      setSharedSettingsCache(normalized);
-      const baseVersion = normalized.version || getSharedSettingsCache().version || null;
+      const baseVersion = normalized.version || cachedVersion;
+      setSharedSettingsCache({ ...normalized, version: normalized.version || cachedVersion });
       const operation = createSharedSettingsOperation(normalized, baseVersion);
       setSharedSettingsQueue([...getSharedSettingsQueue(), operation]);
       emit();

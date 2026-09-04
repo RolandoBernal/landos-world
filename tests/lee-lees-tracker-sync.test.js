@@ -287,6 +287,10 @@ function sharedInsulinPlan(overrides = {}) {
     mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
     mealBaseUnits: 5,
     bedtimeBaseUnits: 15,
+    insulinCarbRatioGrams: 20,
+    doseRoundingMode: 'nearest',
+    doseIncrementUnits: 0.5,
+    minimumAllowableDoseUnits: 0,
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -744,6 +748,7 @@ test('shared settings write payload includes dose settings and excludes local-on
   assert.equal(row.last_edited_by, 'Levi');
   assert.equal(row.payload.patientClinic.patientName, 'Lee Bernal');
   assert.deepEqual(row.payload.insulinConfiguration.activeInsulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.insulinCarbRatioGrams, 20);
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.doseRoundingMode, 'nearest');
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.doseIncrementUnits, 0.5);
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.minimumAllowableDoseUnits, 0);
@@ -770,6 +775,7 @@ test('shared settings read restores patient clinic and dose configuration from r
   assert.equal(restored.patientName, 'Lee Bernal');
   assert.equal(restored.clinicName, 'Vanderbilt Children');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 20);
   assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
   assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
   assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
@@ -794,12 +800,46 @@ test('legacy shared settings payloads are upgraded with the current dose default
 
   assert.equal(restored.patientName, 'Legacy Lee');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 20);
   assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
   assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
   assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+});
+
+test('legacy shared settings payloads restore active insulin plans from plan collections', () => {
+  const context = createSyncContext();
+  const restored = context.LeeLeeTrackerSync.sharedSettingsFromRemote({
+    user_id: 'user-1',
+    patient_name: 'Legacy Lee',
+    patient_date_of_birth: '2014-06-13',
+    clinic_name: 'Legacy Clinic',
+    clinic_phone: '555-0100',
+    version: 2,
+    last_edited_by: 'Emily',
+    payload: {
+      activeInsulinPlanId: 'plan-15',
+      insulinPlans: [
+        sharedInsulinPlan({ id: 'plan-20', insulinCarbRatioGrams: 20 }),
+        sharedInsulinPlan({
+          id: 'plan-15',
+          insulinCarbRatioGrams: 15,
+          doseRoundingMode: 'down',
+          doseIncrementUnits: 0.1,
+          minimumAllowableDoseUnits: 0.5,
+        }),
+      ],
+    },
+    app_schema_version: 1,
+  });
+
+  assert.equal(restored.insulinPlan.id, 'plan-15');
+  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(restored.insulinPlan.doseRoundingMode, 'down');
+  assert.equal(restored.insulinPlan.doseIncrementUnits, 0.1);
+  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0.5);
 });
 
 test('startup pulls established remote shared settings without pushing local defaults', async () => {
@@ -842,6 +882,7 @@ test('cross-device shared settings sync carries patient and dose updates', async
     patientName: 'Updated Lee',
     insulinPlan: sharedInsulinPlan({
       mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+      insulinCarbRatioGrams: 15,
       doseRoundingMode: 'down',
       doseIncrementUnits: 0.1,
       minimumAllowableDoseUnits: 0.5,
@@ -861,10 +902,34 @@ test('cross-device shared settings sync carries patient and dose updates', async
 
   assert.equal(second.getSharedSettings().patientName, 'Updated Lee');
   assert.equal(second.getSharedSettings().insulinPlan.mealBaseUnitsByType.Lunch, 6);
+  assert.equal(second.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
   assert.equal(second.getSharedSettings().insulinPlan.doseRoundingMode, 'down');
   assert.equal(second.getSharedSettings().insulinPlan.doseIncrementUnits, 0.1);
   assert.equal(second.getSharedSettings().insulinPlan.minimumAllowableDoseUnits, 0.5);
   assert.equal(second.getSharedSettings().insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
+});
+
+test('shared settings saves use the cached remote version instead of inserting duplicates', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow({ version: 7 })],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+  repository.saveSharedSettings({
+    patientName: 'Lee Bernal',
+    insulinPlan: sharedInsulinPlan({ insulinCarbRatioGrams: 15 }),
+  });
+  await repository.processSharedSettingsQueue();
+
+  assert.equal(supabase.client.sharedSettingsRows.length, 1);
+  assert.equal(supabase.client.rpcCalls.at(-1).name, 'update_lee_lee_shared_settings_with_version');
+  assert.equal(supabase.client.rpcCalls.at(-1).args.p_expected_version, 7);
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
 });
 
 test('shared settings stale version creates a conflict and preserves local version', async () => {
