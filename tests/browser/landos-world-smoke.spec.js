@@ -1250,8 +1250,7 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
 
   const thirdQty = calculator.locator('[name="carbCalcQty"]').nth(2);
   await thirdQty.click();
-  await thirdQty.press('ControlOrMeta+A');
-  await thirdQty.pressSequentially('1.5');
+  await thirdQty.fill('1.5');
   await expect(thirdQty).toHaveValue('1');
   await calculator.locator('[name="carbCalcCarbs"]').nth(2).click();
   await calculator.locator('[name="carbCalcCarbs"]').nth(2).pressSequentially('19');
@@ -1462,7 +1461,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
 
   await expect(calculator.getByLabel('Meal Total')).toHaveText('80 g');
   const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });
-  await ketchupRow.getByRole('button', { name: /Increase quantity for Ketchup/ }).click();
+  await ketchupRow.getByRole('spinbutton', { name: /Quantity for Ketchup/ }).fill('2');
   await expect(calculator.getByLabel('Meal Total')).toHaveText('84 g');
 
   await calculator.getByRole('button', { name: 'Save as My Meal' }).click();
@@ -1541,7 +1540,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
     const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
     return {
-      manualLabelWeight: getComputedStyle(manualLabel).fontWeight,
+      manualLabelHidden: manualLabel == null,
       qtyWeight: getComputedStyle(qtyInput).fontWeight,
       carbsWeight: getComputedStyle(carbsInput).fontWeight,
       unitWeight: getComputedStyle(unitText).fontWeight,
@@ -1549,7 +1548,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     };
   });
   expect(manualWeightMetrics).toEqual({
-    manualLabelWeight: '400',
+    manualLabelHidden: true,
     qtyWeight: '400',
     carbsWeight: '400',
     unitWeight: '400',
@@ -1564,9 +1563,14 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
 
   const chocolateMilkRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Chocolate Milk' });
   await expect(chocolateMilkRow).toBeVisible();
-  await expect(chocolateMilkRow.getByText('1 cup (8 fl oz) · USDA')).toBeVisible();
+  await expect(chocolateMilkRow.getByText('1 cup (8 fl oz) · USDA')).toHaveCount(0);
+  await expect(chocolateMilkRow.locator('[name="carbCalcServingLabel"]')).toHaveValue('1 cup (8 fl oz)');
+  await expect(chocolateMilkRow.locator('[name="carbCalcSourceNameSnapshot"]')).toHaveValue('USDA');
+  await expect(chocolateMilkRow.getByRole('button', { name: /Increase quantity for Chocolate Milk/ })).toHaveCount(0);
+  await expect(chocolateMilkRow.getByRole('button', { name: /Decrease quantity for Chocolate Milk/ })).toHaveCount(0);
 
   const qty = chocolateMilkRow.getByRole('spinbutton', { name: 'Quantity for Chocolate Milk' });
+  await qty.click();
   await qty.fill('99');
   await expect(qty).toHaveValue('99');
   await expect(chocolateMilkRow.locator('.lee_lee_diabetes_carb_calc_row_total')).toHaveText('2574 g');
@@ -1580,7 +1584,6 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     const strong = row.querySelector('.lee_lee_diabetes_carb_calc_item strong');
     const emoji = row.querySelector('.lee_lee_diabetes_carb_calc_item .lee_lee_diabetes_food_emoji');
     const name = row.querySelector('.lee_lee_diabetes_carb_calc_item_name');
-    const metadata = row.querySelector('.lee_lee_diabetes_carb_calc_item small');
     const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
     const rowTotal = row.querySelector('.lee_lee_diabetes_carb_calc_row_total');
     const buttons = Array.from(row.querySelectorAll('.lee_lee_diabetes_icon_button'));
@@ -1590,12 +1593,20 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     const unitBox = unitText.getBoundingClientRect();
     const emojiBox = emoji.getBoundingClientRect();
     const nameBox = name.getBoundingClientRect();
+    const qtyStyle = getComputedStyle(qtyInput);
+    const carbsStyle = getComputedStyle(carbsInput);
     const labelStyle = getComputedStyle(unitLabel);
     return {
       calculatorOverflows: calculator.scrollWidth > calculator.clientWidth + 1,
       rowOverflows: rowBox.left < calcBox.left - 1 || rowBox.right > calcBox.right + 1,
       qtyWidth: qtyInput.getBoundingClientRect().width,
       carbsWidth: carbsBox.width,
+      qtyBorderBottomWidth: qtyStyle.borderBottomWidth,
+      carbsBorderBottomWidth: carbsStyle.borderBottomWidth,
+      qtyBorderStyle: qtyStyle.borderStyle,
+      carbsBorderStyle: carbsStyle.borderStyle,
+      focusedQtyBackground: qtyStyle.backgroundColor,
+      focusedQtyOutlineWidth: qtyStyle.outlineWidth,
       minButtonSize: Math.min(...buttons.map((button) => Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
       unitGap: unitBox.left - carbsBox.right,
       labelMarginRight: labelStyle.marginRight,
@@ -1603,11 +1614,14 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
       foodNameDisplay: getComputedStyle(strong).display,
       foodNameAlignItems: getComputedStyle(strong).alignItems,
       foodNameWeight: getComputedStyle(strong).fontWeight,
-      metadataWeight: getComputedStyle(metadata).fontWeight,
+      metadataHidden: row.querySelector('.lee_lee_diabetes_carb_calc_item small') == null,
       qtyWeight: getComputedStyle(qtyInput).fontWeight,
       carbsWeight: getComputedStyle(carbsInput).fontWeight,
       unitWeight: getComputedStyle(unitText).fontWeight,
       operatorWeight: getComputedStyle(operator).fontWeight,
+      qtyFontFamily: getComputedStyle(qtyInput).fontFamily,
+      carbsFontFamily: getComputedStyle(carbsInput).fontFamily,
+      rowTotalFontFamily: getComputedStyle(rowTotal).fontFamily,
       rowTotalWeight: getComputedStyle(rowTotal).fontWeight,
       minButtonWeight: Math.min(...buttons.map((button) => Number(getComputedStyle(button).fontWeight))),
       emojiNameCenterDelta: Math.abs(((emojiBox.top + emojiBox.bottom) / 2) - ((nameBox.top + nameBox.bottom) / 2)),
@@ -1617,7 +1631,13 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.calculatorOverflows).toBe(false);
   expect(compactMetrics.rowOverflows).toBe(false);
   expect(compactMetrics.qtyWidth).toBeLessThanOrEqual(36);
-  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(58);
+  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(42);
+  expect(compactMetrics.qtyBorderBottomWidth).toBe('0px');
+  expect(compactMetrics.carbsBorderBottomWidth).toBe('0px');
+  expect(compactMetrics.qtyBorderStyle).toBe('none');
+  expect(compactMetrics.carbsBorderStyle).toBe('none');
+  expect(compactMetrics.focusedQtyBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(compactMetrics.focusedQtyOutlineWidth).toBe('2px');
   expect(compactMetrics.minButtonSize).toBeGreaterThanOrEqual(34);
   expect(compactMetrics.unitGap).toBeLessThanOrEqual(6);
   expect(compactMetrics.labelMarginRight).toBe('0px');
@@ -1625,11 +1645,14 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.foodNameDisplay).toBe('flex');
   expect(compactMetrics.foodNameAlignItems).toBe('center');
   expect(compactMetrics.foodNameWeight).toBe('400');
-  expect(compactMetrics.metadataWeight).toBe('400');
+  expect(compactMetrics.metadataHidden).toBe(true);
   expect(compactMetrics.qtyWeight).toBe('400');
   expect(compactMetrics.carbsWeight).toBe('400');
   expect(compactMetrics.unitWeight).toBe('400');
   expect(compactMetrics.operatorWeight).toBe('400');
+  expect(compactMetrics.qtyFontFamily).toContain('Roboto Mono');
+  expect(compactMetrics.carbsFontFamily).toContain('Roboto Mono');
+  expect(compactMetrics.rowTotalFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.rowTotalWeight).toBe('500');
   expect(compactMetrics.minButtonWeight).toBeGreaterThanOrEqual(400);
   expect(compactMetrics.minButtonWeight).toBeLessThanOrEqual(500);
@@ -1639,10 +1662,12 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     headingWeights: Array.from(node.querySelectorAll('.lee_lee_diabetes_carb_calc_heading')).map((heading) => getComputedStyle(heading).fontWeight),
     totalLabelWeight: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calc_sum')).fontWeight,
     finalTotalWeight: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontWeight,
+    finalTotalFontFamily: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontFamily,
   }));
   expect(summaryWeightMetrics.headingWeights.every((weight) => weight === '500')).toBe(true);
   expect(summaryWeightMetrics.totalLabelWeight).toBe('600');
   expect(summaryWeightMetrics.finalTotalWeight).toBe('600');
+  expect(summaryWeightMetrics.finalTotalFontFamily).toContain('Roboto Mono');
 
   await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -1650,7 +1675,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(await calculator.evaluate((node) => node.scrollWidth > node.clientWidth + 1)).toBe(false);
   const lightWeightMetrics = await chocolateMilkRow.evaluate((row) => ({
     foodNameWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item strong')).fontWeight,
-    metadataWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item small')).fontWeight,
+    metadataHidden: row.querySelector('.lee_lee_diabetes_carb_calc_item small') == null,
     qtyWeight: getComputedStyle(row.querySelector('[name="carbCalcQty"]')).fontWeight,
     carbsWeight: getComputedStyle(row.querySelector('[name="carbCalcCarbs"]')).fontWeight,
     unitWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]')).fontWeight,
@@ -1659,7 +1684,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   }));
   expect(lightWeightMetrics).toEqual({
     foodNameWeight: '400',
-    metadataWeight: '400',
+    metadataHidden: true,
     qtyWeight: '400',
     carbsWeight: '400',
     unitWeight: '400',
@@ -1753,7 +1778,7 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
     });
   });
 
-  await carbInputs.first().pressSequentially('20');
+  await carbInputs.first().fill('20');
   await expect(calculator).toBeVisible();
   await expect(carbInputs.first()).toHaveValue('20');
   await expect(carbInputs).toHaveCount(2);
@@ -1762,20 +1787,20 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   await carbInputs.nth(1).click();
   await expect(calculator).toBeVisible();
   await expect.poll(focusedCarbInputIndex).toBe(1);
-  await carbInputs.nth(1).pressSequentially('15');
+  await carbInputs.nth(1).fill('15');
   await expect(carbInputs).toHaveCount(3);
 
   await qtyInputs.nth(1).click();
   await expect(calculator).toBeVisible();
   await expect.poll(focusedQtyInputIndex).toBe(1);
-  await qtyInputs.nth(1).press('ControlOrMeta+A');
-  await qtyInputs.nth(1).pressSequentially('2');
+  await qtyInputs.nth(1).fill('2');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(3);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('50 g');
 
   await carbInputs.nth(2).click();
   await expect(calculator).toBeVisible();
   await expect.poll(focusedCarbInputIndex).toBe(2);
-  await carbInputs.nth(2).pressSequentially('10');
+  await carbInputs.nth(2).fill('10');
   await expect(calculator.getByLabel('Meal Total')).toHaveText('60 g');
   expect(await page.evaluate(() => window.__leeLeeEditorSubmitCount)).toBe(0);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
@@ -1988,12 +2013,13 @@ test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', a
   await qtyInputs.nth(1).press('ControlOrMeta+A');
   await qtyInputs.nth(1).pressSequentially('2');
   await expect(qtyInputs.nth(1)).toHaveValue('2');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(4);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('100 g');
 
   await qtyInputs.nth(2).click();
-  await qtyInputs.nth(2).press('ControlOrMeta+A');
-  await qtyInputs.nth(2).pressSequentially('1.5');
+  await qtyInputs.nth(2).fill('1.5');
   await expect(qtyInputs.nth(2)).toHaveValue('1');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(4);
   await carbInputs.nth(2).click();
   await carbInputs.nth(2).press('ControlOrMeta+A');
   await carbInputs.nth(2).pressSequentially('19');

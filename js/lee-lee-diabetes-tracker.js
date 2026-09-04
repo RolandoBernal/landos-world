@@ -4632,8 +4632,6 @@
     const started = isCarbCalculatorRowStarted(item);
     const rowName = item.sourceType === 'food' ? item.name : 'Manual amount';
     const quantityLabel = item.sourceType === 'food' ? `Quantity for ${item.name}` : 'Quantity for manual amount';
-    const decreaseLabel = item.sourceType === 'food' ? `Decrease quantity for ${item.name}` : 'Decrease quantity for manual amount';
-    const increaseLabel = item.sourceType === 'food' ? `Increase quantity for ${item.name}` : 'Increase quantity for manual amount';
     const removeLabel = item.sourceType === 'food' ? `Remove ${item.name}` : 'Remove row';
     return `
       <div class="lee_lee_diabetes_carb_calc_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(item.id)}">
@@ -4648,16 +4646,13 @@
       <div class="lee_lee_diabetes_carb_calc_item">
         ${item.sourceType === 'food' ? `
           <strong>${item.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span>` : ''}<span class="lee_lee_diabetes_carb_calc_item_name">${escapeHtml(item.name)}</span></strong>
-          <small>${escapeHtml([item.brand, item.servingLabel, formatFoodSourceLabel(item)].filter(Boolean).join(' · '))}</small>
-        ` : '<span>Manual</span>'}
+        ` : (started ? '<span>Manual</span>' : '')}
       </div>
-      <div class="lee_lee_diabetes_quantity_control">
-        <button type="button" class="lee_lee_diabetes_icon_button" data-action="decrement-carb-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(decreaseLabel)}" ${Number(item.qty) <= CARB_CALCULATOR_MIN_QTY ? 'disabled' : ''}>−</button>
+      <div class="lee_lee_diabetes_carb_calc_cell lee_lee_diabetes_carb_calc_cell--qty">
         <label>
           <span class="lee_lee_diabetes_sr_only">${escapeHtml(quantityLabel)}</span>
           <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbCalcQty" type="number" inputmode="numeric" min="${CARB_CALCULATOR_MIN_QTY}" max="${CARB_CALCULATOR_MAX_QTY}" step="1" autocomplete="off" value="${escapeHtml(item.qty)}" data-carb-row-id="${escapeHtml(item.id)}">
         </label>
-        <button type="button" class="lee_lee_diabetes_icon_button" data-action="increment-carb-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(increaseLabel)}" ${Number(item.qty) >= CARB_CALCULATOR_MAX_QTY ? 'disabled' : ''}>+</button>
       </div>
       <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×</span>
       <div class="lee_lee_diabetes_carb_calc_cell lee_lee_diabetes_carb_calc_cell--carbs">
@@ -5112,12 +5107,6 @@
         const rowTotal = calculateCarbCalculatorRowTotal(row);
         const qtyInput = rowElement.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(row.id)}`);
         if (qtyInput && qtyInput.value !== row.qty) qtyInput.value = row.qty;
-        rowElement.querySelectorAll('[data-action="decrement-carb-row"]').forEach((button) => {
-          button.disabled = Number(row.qty) <= CARB_CALCULATOR_MIN_QTY;
-        });
-        rowElement.querySelectorAll('[data-action="increment-carb-row"]').forEach((button) => {
-          button.disabled = Number(row.qty) >= CARB_CALCULATOR_MAX_QTY;
-        });
         const totalElement = rowElement.querySelector('.lee_lee_diabetes_carb_calc_row_total');
         if (totalElement) totalElement.textContent = rowTotal == null ? '—' : `${formatCarbAmount(rowTotal)} g`;
         const removeSlot = rowElement.querySelector('.lee_lee_diabetes_carb_calc_remove_slot');
@@ -5374,8 +5363,10 @@
     const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
     const input = eventTarget?.closest?.('[data-carb-calculator] input, [data-carb-calculator] select, [data-carb-calculator] textarea');
     if (!input || document.activeElement === input) return;
+    const shouldSelectValue = ['carbCalcQty', 'carbCalcCarbs'].includes(input.name || '');
     const focusInput = () => {
       input.focus({ preventScroll: true });
+      if (shouldSelectValue && document.activeElement === input && typeof input.select === 'function') input.select();
       if (document.activeElement === input) {
         pendingCarbCalculatorFocusRowId = '';
         pendingCarbCalculatorFocusFieldName = '';
@@ -5420,15 +5411,6 @@
 
   function handleUseCarbCalculatorTotal(root, target) {
     return closeCarbCalculator(root, target, { applyTotal: true });
-  }
-
-  function setCarbRowQuantity(form, rowId, delta) {
-    const input = form?.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(rowId)}`);
-    if (!input) return;
-    const next = Math.max(CARB_CALCULATOR_MIN_QTY, Math.min(CARB_CALCULATOR_MAX_QTY, normalizeCarbCalculatorQuantity(input.value) + delta));
-    input.value = String(next);
-    currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-    refreshCarbCalculator(form, rowId);
   }
 
   function addFoodToCarbCalculator(form, foodId) {
@@ -7426,11 +7408,6 @@
       }
       if (action === 'add-saved-meal-to-carb-calculator') {
         addSavedMealToCarbCalculator(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'), target.dataset.id);
-        return;
-      }
-      if (action === 'increment-carb-row' || action === 'decrement-carb-row') {
-        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
-        setCarbRowQuantity(form, target.dataset.carbRowId || '', action === 'increment-carb-row' ? 1 : -1);
         return;
       }
       if (action === 'open-carb-food-editor' || action === 'cancel-carb-food-editor') {
