@@ -454,7 +454,7 @@ test('saved meal totals and entry components are derived from snapshots', () => 
   const helpers = storage.helpers;
   const rows = [
     { id: 'food-1-row', sourceType: 'food', foodId: 'food-1', name: 'Footlong hot dog', servingLabel: 'one', qty: '1', carbs: '24' },
-    { id: 'food-2-row', sourceType: 'food', foodId: 'food-2', name: 'Ketchup', qty: '1.5', carbs: '4' },
+    { id: 'food-2-row', sourceType: 'food', foodId: 'food-2', name: 'Ketchup', qty: '2', carbs: '4' },
     { id: 'manual-row', sourceType: 'manual', qty: '1', carbs: '3' },
   ];
   const components = helpers.buildMealComponentsFromCarbCalculatorRows(rows);
@@ -463,7 +463,7 @@ test('saved meal totals and entry components are derived from snapshots', () => 
   assert.equal(components.length, 3);
   assert.equal(components.find((item) => item.foodId === 'food-1').nameSnapshot, 'Footlong hot dog');
   assert.equal(components.find((item) => item.componentType === 'manual').carbTotal, 3);
-  assert.equal(meal.totalCarbs, 33);
+  assert.equal(meal.totalCarbs, 35);
 });
 
 test('tracker document preserves food library, saved meals, and historical meal components', () => {

@@ -816,6 +816,16 @@
   font-weight: 800;
 }
 
+.lee_lee_diabetes_dose_warning {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgb(255 202 87 / 52%);
+  border-radius: 8px;
+  background: rgb(255 202 87 / 12%);
+  color: #ffe08a;
+  font-weight: 900;
+}
+
 .lee_lee_diabetes_carb_entry {
   display: grid;
   gap: 0.75rem;
@@ -915,10 +925,25 @@
   padding-bottom: 0.3rem;
 }
 
+.lee_lee_diabetes_carb_search_button,
 .lee_lee_diabetes_carb_search_controls {
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
+}
+
+.lee_lee_diabetes_carb_search_button {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--lee-lee-muted);
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
 }
 
 .lee_lee_diabetes_carb_search_controls .lee_lee_diabetes_input {
@@ -1006,6 +1031,18 @@
   background: rgb(0 0 0 / 16%);
 }
 
+.lee_lee_diabetes_carb_picker--search {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  align-content: start;
+  padding: 1rem;
+  border: 0;
+  border-radius: 18px;
+  background: #06142b;
+  overflow: hidden;
+}
+
 .lee_lee_diabetes_carb_picker_header {
   display: flex;
   align-items: center;
@@ -1028,6 +1065,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+.lee_lee_diabetes_carb_picker--search .lee_lee_diabetes_carb_library_list {
+  max-height: min(22rem, calc(100dvh - 12rem));
 }
 
 .lee_lee_diabetes_carb_food_row,
@@ -1115,9 +1156,15 @@
 
 .lee_lee_diabetes_quantity_control {
   display: grid;
-  grid-template-columns: 30px minmax(3.5rem, auto) 30px;
+  grid-template-columns: 34px 4.2ch 34px;
   align-items: center;
   gap: 0.28rem;
+}
+
+.lee_lee_diabetes_quantity_control .lee_lee_diabetes_icon_button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
 }
 
 .lee_lee_diabetes_carb_editor_panel {
@@ -1138,7 +1185,7 @@
 
 .lee_lee_diabetes_carb_calc_grid {
   display: grid;
-  grid-template-columns: minmax(2.8rem, 3.6rem) auto minmax(4.4rem, 1fr) minmax(4.4rem, auto) 2rem;
+  grid-template-columns: minmax(0, 1.25fr) auto auto minmax(4.4rem, 0.8fr) minmax(4.4rem, auto) 2rem;
   align-items: center;
   column-gap: 0.45rem;
   row-gap: 0.36rem;
@@ -1158,7 +1205,32 @@
 }
 
 .lee_lee_diabetes_carb_calc_row {
-  display: contents;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.lee_lee_diabetes_carb_calc_item {
+  min-width: 0;
+}
+
+.lee_lee_diabetes_carb_calc_item strong,
+.lee_lee_diabetes_carb_calc_item span {
+  display: block;
+  overflow-wrap: anywhere;
+  font-weight: 900;
+}
+
+.lee_lee_diabetes_carb_calc_item small {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--lee-lee-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .lee_lee_diabetes_carb_calc_cell label {
@@ -1205,7 +1277,7 @@
 }
 
 .lee_lee_diabetes_carb_calc_cell--qty .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
-  width: 4ch;
+  width: 4.2ch;
   text-align: center;
 }
 
@@ -1303,6 +1375,15 @@
 
   .lee_lee_diabetes_quantity_control {
     justify-content: start;
+  }
+
+  .lee_lee_diabetes_carb_calc_grid {
+    grid-template-columns: minmax(0, 1fr) auto minmax(4.5rem, auto) minmax(4.4rem, auto) 2rem;
+  }
+
+  .lee_lee_diabetes_carb_calc_grid > .lee_lee_diabetes_carb_calc_heading:first-child,
+  .lee_lee_diabetes_carb_calc_item {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1570,6 +1651,23 @@
   border-color: var(--lee-lee-border-strong);
   color: var(--lee-lee-text);
   box-shadow: 0 -18px 50px rgb(15 63 110 / 22%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_carb_picker--search {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 98%), rgb(232 243 255 / 98%));
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_carb_search_button {
+  background: rgb(247 251 255 / 88%);
+  border-color: rgb(15 63 110 / 24%);
+  color: var(--lee-lee-muted);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_dose_warning {
+  border-color: rgb(178 116 0 / 32%);
+  background: rgb(255 202 87 / 24%);
+  color: #6d4a00;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card_title,

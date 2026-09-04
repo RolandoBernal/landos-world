@@ -744,6 +744,9 @@ test('shared settings write payload includes dose settings and excludes local-on
   assert.equal(row.last_edited_by, 'Levi');
   assert.equal(row.payload.patientClinic.patientName, 'Lee Bernal');
   assert.deepEqual(row.payload.insulinConfiguration.activeInsulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.doseRoundingMode, 'nearest');
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.doseIncrementUnits, 0.5);
+  assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.minimumAllowableDoseUnits, 0);
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(row.payload.insulinConfiguration.activeInsulinPlan.correctionRanges.at(-1).correctionUnits, 6);
@@ -767,6 +770,9 @@ test('shared settings read restores patient clinic and dose configuration from r
   assert.equal(restored.patientName, 'Lee Bernal');
   assert.equal(restored.clinicName, 'Vanderbilt Children');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
+  assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
+  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
@@ -788,6 +794,9 @@ test('legacy shared settings payloads are upgraded with the current dose default
 
   assert.equal(restored.patientName, 'Legacy Lee');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
+  assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
+  assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
+  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
@@ -833,6 +842,9 @@ test('cross-device shared settings sync carries patient and dose updates', async
     patientName: 'Updated Lee',
     insulinPlan: sharedInsulinPlan({
       mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6 },
+      doseRoundingMode: 'down',
+      doseIncrementUnits: 0.1,
+      minimumAllowableDoseUnits: 0.5,
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
         { minGlucose: 175, maxGlucose: 249, correctionUnits: 1 },
@@ -849,6 +861,9 @@ test('cross-device shared settings sync carries patient and dose updates', async
 
   assert.equal(second.getSharedSettings().patientName, 'Updated Lee');
   assert.equal(second.getSharedSettings().insulinPlan.mealBaseUnitsByType.Lunch, 6);
+  assert.equal(second.getSharedSettings().insulinPlan.doseRoundingMode, 'down');
+  assert.equal(second.getSharedSettings().insulinPlan.doseIncrementUnits, 0.1);
+  assert.equal(second.getSharedSettings().insulinPlan.minimumAllowableDoseUnits, 0.5);
   assert.equal(second.getSharedSettings().insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
 });
 
