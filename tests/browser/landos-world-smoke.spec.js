@@ -1534,6 +1534,27 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   const manualQty = calculator.locator('[data-carb-calculator-row]').first().locator('[name="carbCalcQty"]');
   const initialQtyWidth = await manualQty.evaluate((input) => input.getBoundingClientRect().width);
   expect(initialQtyWidth).toBeLessThanOrEqual(36);
+  const manualWeightMetrics = await calculator.locator('[data-carb-calculator-row]').first().evaluate((row) => {
+    const manualLabel = row.querySelector('.lee_lee_diabetes_carb_calc_item > span');
+    const qtyInput = row.querySelector('[name="carbCalcQty"]');
+    const carbsInput = row.querySelector('[name="carbCalcCarbs"]');
+    const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
+    const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
+    return {
+      manualLabelWeight: getComputedStyle(manualLabel).fontWeight,
+      qtyWeight: getComputedStyle(qtyInput).fontWeight,
+      carbsWeight: getComputedStyle(carbsInput).fontWeight,
+      unitWeight: getComputedStyle(unitText).fontWeight,
+      operatorWeight: getComputedStyle(operator).fontWeight,
+    };
+  });
+  expect(manualWeightMetrics).toEqual({
+    manualLabelWeight: '400',
+    qtyWeight: '400',
+    carbsWeight: '400',
+    unitWeight: '400',
+    operatorWeight: '400',
+  });
 
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
@@ -1559,6 +1580,9 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     const strong = row.querySelector('.lee_lee_diabetes_carb_calc_item strong');
     const emoji = row.querySelector('.lee_lee_diabetes_carb_calc_item .lee_lee_diabetes_food_emoji');
     const name = row.querySelector('.lee_lee_diabetes_carb_calc_item_name');
+    const metadata = row.querySelector('.lee_lee_diabetes_carb_calc_item small');
+    const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
+    const rowTotal = row.querySelector('.lee_lee_diabetes_carb_calc_row_total');
     const buttons = Array.from(row.querySelectorAll('.lee_lee_diabetes_icon_button'));
     const calcBox = calculator.getBoundingClientRect();
     const rowBox = row.getBoundingClientRect();
@@ -1578,6 +1602,14 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
       labelPaddingRight: labelStyle.paddingRight,
       foodNameDisplay: getComputedStyle(strong).display,
       foodNameAlignItems: getComputedStyle(strong).alignItems,
+      foodNameWeight: getComputedStyle(strong).fontWeight,
+      metadataWeight: getComputedStyle(metadata).fontWeight,
+      qtyWeight: getComputedStyle(qtyInput).fontWeight,
+      carbsWeight: getComputedStyle(carbsInput).fontWeight,
+      unitWeight: getComputedStyle(unitText).fontWeight,
+      operatorWeight: getComputedStyle(operator).fontWeight,
+      rowTotalWeight: getComputedStyle(rowTotal).fontWeight,
+      minButtonWeight: Math.min(...buttons.map((button) => Number(getComputedStyle(button).fontWeight))),
       emojiNameCenterDelta: Math.abs(((emojiBox.top + emojiBox.bottom) / 2) - ((nameBox.top + nameBox.bottom) / 2)),
     };
   });
@@ -1592,12 +1624,48 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.labelPaddingRight).toBe('0px');
   expect(compactMetrics.foodNameDisplay).toBe('flex');
   expect(compactMetrics.foodNameAlignItems).toBe('center');
+  expect(compactMetrics.foodNameWeight).toBe('400');
+  expect(compactMetrics.metadataWeight).toBe('400');
+  expect(compactMetrics.qtyWeight).toBe('400');
+  expect(compactMetrics.carbsWeight).toBe('400');
+  expect(compactMetrics.unitWeight).toBe('400');
+  expect(compactMetrics.operatorWeight).toBe('400');
+  expect(compactMetrics.rowTotalWeight).toBe('500');
+  expect(compactMetrics.minButtonWeight).toBeGreaterThanOrEqual(400);
+  expect(compactMetrics.minButtonWeight).toBeLessThanOrEqual(500);
   expect(compactMetrics.emojiNameCenterDelta).toBeLessThanOrEqual(3);
+
+  const summaryWeightMetrics = await calculator.evaluate((node) => ({
+    headingWeights: Array.from(node.querySelectorAll('.lee_lee_diabetes_carb_calc_heading')).map((heading) => getComputedStyle(heading).fontWeight),
+    totalLabelWeight: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calc_sum')).fontWeight,
+    finalTotalWeight: getComputedStyle(node.querySelector('[data-carb-calculator-total]')).fontWeight,
+  }));
+  expect(summaryWeightMetrics.headingWeights.every((weight) => weight === '500')).toBe(true);
+  expect(summaryWeightMetrics.totalLabelWeight).toBe('600');
+  expect(summaryWeightMetrics.finalTotalWeight).toBe('600');
 
   await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(chocolateMilkRow).toBeVisible();
   expect(await calculator.evaluate((node) => node.scrollWidth > node.clientWidth + 1)).toBe(false);
+  const lightWeightMetrics = await chocolateMilkRow.evaluate((row) => ({
+    foodNameWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item strong')).fontWeight,
+    metadataWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item small')).fontWeight,
+    qtyWeight: getComputedStyle(row.querySelector('[name="carbCalcQty"]')).fontWeight,
+    carbsWeight: getComputedStyle(row.querySelector('[name="carbCalcCarbs"]')).fontWeight,
+    unitWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]')).fontWeight,
+    operatorWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_operator')).fontWeight,
+    rowTotalWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_row_total')).fontWeight,
+  }));
+  expect(lightWeightMetrics).toEqual({
+    foodNameWeight: '400',
+    metadataWeight: '400',
+    qtyWeight: '400',
+    carbsWeight: '400',
+    unitWeight: '400',
+    operatorWeight: '400',
+    rowTotalWeight: '500',
+  });
 });
 
 test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
