@@ -69,6 +69,7 @@
 }
 
 .lee_lee_diabetes_numeric,
+.lee_lee_diabetes_shell input[type="date"],
 .lee_lee_diabetes_shell input[type="time"],
 .lee_lee_diabetes_shell input[type="number"],
 .lee_lee_diabetes_shell input[inputmode="numeric"],

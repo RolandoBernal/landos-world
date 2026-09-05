@@ -1903,7 +1903,9 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
   await insulin.pressSequentially('1.5');
   await expect(insulin).toHaveValue('1.5');
   await expect(insulin).toBeFocused();
+  const dateFontFamily = await form.locator('input[name="date"]').evaluate((input) => getComputedStyle(input).fontFamily);
   const timeFontFamily = await form.locator('input[name="time"]').evaluate((input) => getComputedStyle(input).fontFamily);
+  expect(dateFontFamily).toContain('Roboto Mono');
   expect(timeFontFamily).toContain('Roboto Mono');
 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
