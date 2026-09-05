@@ -1543,8 +1543,9 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   await chocolateMilkRow.getByRole('button', { name: 'Edit Chocolate Milk' }).click();
   const itemQty = calculator.locator('[name="carbItemQty"]');
   await expect(itemQty).toBeFocused();
-  expect(await itemQty.evaluate((input) => input.getBoundingClientRect().width)).toBeLessThanOrEqual(46);
+  expect(await itemQty.evaluate((input) => input.getBoundingClientRect().width)).toBeLessThanOrEqual(62);
   await itemQty.fill('99');
+  expect(await itemQty.evaluate((input) => input.scrollWidth <= input.clientWidth)).toBe(true);
   await calculator.getByRole('button', { name: 'Save Item' }).click();
   await expect(chocolateMilkRow.locator('.lee_lee_diabetes_carb_calc_row_total')).toHaveText('2574 g');
 
@@ -1653,6 +1654,36 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
 
   const calculator = page.locator('[data-carb-calculator]');
   await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  const editorMetrics = await calculator.locator('[data-carb-item-editor]').evaluate((node) => {
+    const qtyInput = node.querySelector('[name="carbItemQty"]');
+    const labelInput = node.querySelector('[name="carbItemLabel"]');
+    const carbsInput = node.querySelector('[name="carbItemCarbs"]');
+    const carbsUnit = carbsInput?.nextElementSibling;
+    const qtyBox = qtyInput.getBoundingClientRect();
+    const labelBox = labelInput.getBoundingClientRect();
+    const carbsBox = carbsInput.getBoundingClientRect();
+    const unitBox = carbsUnit.getBoundingClientRect();
+    const qtyStyle = getComputedStyle(qtyInput);
+    const labelStyle = getComputedStyle(labelInput);
+    const carbsStyle = getComputedStyle(carbsInput);
+    return {
+      qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
+      labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
+      carbsHasVisibleBox: carbsStyle.borderTopWidth !== '0px' && carbsStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
+      carbsWidth: carbsBox.width,
+      carbsUnitGap: unitBox.left - carbsBox.right,
+      labelGap: qtyBox.top - node.querySelector('label').getBoundingClientRect().top,
+      inputGap: labelBox.top - qtyBox.bottom,
+    };
+  });
+  expect(editorMetrics.qtyHasVisibleBox).toBe(true);
+  expect(editorMetrics.labelHasVisibleBox).toBe(true);
+  expect(editorMetrics.carbsHasVisibleBox).toBe(true);
+  expect(editorMetrics.carbsWidth).toBeLessThanOrEqual(82);
+  expect(editorMetrics.carbsUnitGap).toBeGreaterThanOrEqual(4);
+  expect(editorMetrics.carbsUnitGap).toBeLessThanOrEqual(12);
+  expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(24);
+  expect(editorMetrics.inputGap).toBeGreaterThanOrEqual(8);
   const carbsInput = calculator.locator('[name="carbItemCarbs"]');
   await carbsInput.click();
 
@@ -1872,6 +1903,8 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
   await insulin.pressSequentially('1.5');
   await expect(insulin).toHaveValue('1.5');
   await expect(insulin).toBeFocused();
+  const timeFontFamily = await form.locator('input[name="time"]').evaluate((input) => getComputedStyle(input).fontFamily);
+  expect(timeFontFamily).toContain('Roboto Mono');
 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   const calculator = page.locator('[data-carb-calculator]');

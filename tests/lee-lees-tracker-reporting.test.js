@@ -1250,7 +1250,7 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Roboto Mono'[\s\S]*url\('\.\.\/fonts\/roboto-mono-regular\.ttf'\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
   assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
-  assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[type="time"\],[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_timeline_values,[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_dose_breakdown,[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
