@@ -4007,17 +4007,21 @@
     const sourceLabel = formatFoodSourceLabel(food);
     const metadata = [food.brand ? escapeHtml(food.brand) : '', food.servingLabel ? escapeHtml(food.servingLabel) : '', renderCarbs(food.carbs), sourceLabel ? escapeHtml(sourceLabel) : ''].filter(Boolean).join(' · ');
     return `
-      <article class="lee_lee_diabetes_food_item">
-        <div>
+      <article class="lee_lee_diabetes_food_item lee_lee_diabetes_food_item--library">
+        <div class="lee_lee_diabetes_food_item_content">
           <strong>${food.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(food.emoji)}</span>` : ''}${escapeHtml(food.name)}</strong>
           <p>${metadata}</p>
           ${food.verificationNote ? `<p class="lee_lee_diabetes_food_note">${escapeHtml(food.verificationNote)}</p>` : ''}
         </div>
-        <div class="lee_lee_diabetes_record_actions">
-          <button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-food-favorite" data-id="${escapeHtml(food.id)}" aria-label="${food.favorite ? 'Remove favorite' : 'Mark favorite'}">${food.favorite ? '★' : '☆'}</button>
-          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-food-library-item" data-id="${escapeHtml(food.id)}">Edit</button>
-          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-food-library-item" data-id="${escapeHtml(food.id)}">Delete</button>
-        </div>
+        <footer class="lee_lee_diabetes_food_item_footer">
+          <div class="lee_lee_diabetes_food_item_actions">
+            <button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-food-favorite" data-id="${escapeHtml(food.id)}" aria-label="${food.favorite ? 'Remove favorite' : 'Mark favorite'}">${food.favorite ? '★' : '☆'}</button>
+            <span class="lee_lee_diabetes_food_item_actions_right">
+              <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-food-library-item" data-id="${escapeHtml(food.id)}">Edit</button>
+              <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-food-library-item" data-id="${escapeHtml(food.id)}">Delete</button>
+            </span>
+          </div>
+        </footer>
       </article>
     `;
   }
