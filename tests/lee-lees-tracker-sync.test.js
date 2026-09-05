@@ -990,6 +990,43 @@ test('offline shared settings queue survives reload and syncs exactly once', asy
   assert.equal(second.getSharedSettingsStatus().pendingCount, 0);
 });
 
+test('offline shared settings saves coalesce to one canonical pending operation', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow({ version: 7 })],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  context.navigator.onLine = false;
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+  repository.saveSharedSettings({ patientName: 'Lee', insulinPlan: sharedInsulinPlan({ doseIncrementUnits: 0.5 }) });
+  repository.saveSharedSettings({ patientName: 'Lee', clinicName: 'Monroe Carell Jr.', insulinPlan: sharedInsulinPlan({ doseIncrementUnits: 0.1 }) });
+  repository.saveSharedSettings({ patientName: 'Levi R. Bernal', clinicName: 'Monroe Carell Jr.', insulinPlan: sharedInsulinPlan({ doseIncrementUnits: 0.05 }) });
+
+  let diagnostics = repository.getSyncDiagnostics();
+  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 1);
+  assert.equal(diagnostics.sharedSettingsQueue.length, 1);
+  assert.equal(diagnostics.sharedSettingsQueue[0].operationType, 'update-shared-settings');
+  assert.equal(diagnostics.sharedSettingsQueue[0].baseVersion, 7);
+  assert.equal(diagnostics.summary.byEntityType['shared-settings'], 1);
+  assert.equal(diagnostics.summary.duplicateTargets.length, 0);
+
+  context.navigator.onLine = true;
+  await repository.processSharedSettingsQueue();
+  diagnostics = repository.getSyncDiagnostics();
+
+  assert.equal(supabase.client.rpcCalls.length, 1);
+  assert.equal(supabase.client.rpcCalls[0].name, 'update_lee_lee_shared_settings_with_version');
+  assert.equal(supabase.client.rpcCalls[0].args.p_expected_version, 7);
+  assert.equal(supabase.client.rpcCalls[0].args.p_payload.insulinConfiguration.activeInsulinPlan.doseIncrementUnits, 0.05);
+  assert.equal(repository.getSharedSettings().patientName, 'Levi R. Bernal');
+  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 0);
+  assert.equal(diagnostics.sharedSettingsQueue.length, 0);
+});
+
 test('shared settings migration metadata is separate from medical-record migration metadata', () => {
   const context = createSyncContext();
   const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());

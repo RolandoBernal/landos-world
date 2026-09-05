@@ -233,6 +233,7 @@
   const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
   const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const DOSE_PRECISION_STEP_UNITS = 0.05;
   const CARB_CALCULATOR_MIN_QTY = 1;
   const CARB_CALCULATOR_MAX_QTY = 99;
   const CARB_SEARCH_MIN_QUERY_LENGTH = 2;
@@ -443,6 +444,13 @@
     if (!Number.isFinite(number)) return null;
     const factor = 10 ** decimals;
     return Math.round((number + Number.EPSILON) * factor) / factor;
+  }
+
+  function alignsWithDosePrecision(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return false;
+    const quotient = number / DOSE_PRECISION_STEP_UNITS;
+    return Math.abs(quotient - Math.round(quotient)) < 0.000001;
   }
 
   function normalizeWholeNumber(value) {
@@ -2085,9 +2093,9 @@
     if (!status.configured) return { state: 'config-needed', message: 'Supabase setup needed' };
     if (!status.signedIn) return { state: 'signed-out', message: 'Sign in to sync' };
     if (status.conflictCount) return { state: 'conflict', message: 'Conflict needs review' };
-    if (status.state === 'syncing') return { state: 'syncing', message: 'Syncing...' };
-    if (status.state === 'offline') return { state: 'offline', message: 'Offline / Waiting to reconnect' };
-    if (status.pendingCount) return { state: 'waiting', message: `${status.pendingCount} waiting to sync` };
+    if (status.state === 'syncing') return { state: 'syncing', message: status.message || 'Syncing...' };
+    if (status.state === 'offline') return { state: 'offline', message: status.message || 'Offline / Waiting to reconnect' };
+    if (status.pendingCount) return { state: 'waiting', message: status.message || `${status.pendingCount} waiting to sync` };
     if (status.realtimeStatus && !['idle', 'connected'].includes(status.realtimeStatus)) {
       return { state: 'waiting', message: 'Realtime disconnected / Using periodic sync' };
     }
@@ -3311,7 +3319,8 @@
 
   function formatInsulin(value) {
     if (value == null) return '';
-    return `${value} ${value === 1 ? 'unit' : 'units'}`;
+    const formattedValue = formatDoseNumber(value);
+    return formattedValue ? `${formattedValue} ${Number(formattedValue) === 1 ? 'unit' : 'units'}` : '';
   }
 
   function formatDoseNumber(value) {
@@ -6097,7 +6106,7 @@
     const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
     const sharedSettingsStatus = getSharedSettingsStatus();
     root.innerHTML = `
-      <form class="lee_lee_diabetes_editor" data-plan-editor>
+      <form class="lee_lee_diabetes_editor" data-plan-editor novalidate>
         ${renderTrackerTop({ active: 'settings', kicker: 'Lee-Lee’s Tracker', title: 'Settings' })}
         ${renderTrackerNav('settings')}
         <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-patient-title">
@@ -6147,7 +6156,10 @@
           </label>
           <div class="lee_lee_diabetes_plan_meta">
             <span>Status: ${escapeHtml(friendlySyncStatus.message)}</span>
-            <span>Pending: ${escapeHtml(syncStatus.pendingCount)}</span>
+            <span>Pending total: ${escapeHtml(syncStatus.pendingCount)}</span>
+            <span>Records pending: ${escapeHtml(syncStatus.recordPendingCount || 0)}</span>
+            <span>Settings pending: ${escapeHtml(syncStatus.sharedSettingsPendingCount || 0)}</span>
+            <span>Foods pending: ${escapeHtml(syncStatus.foodLibraryPendingCount || 0)}</span>
             <span>Conflicts: ${escapeHtml(syncStatus.conflictCount)}</span>
             <span>Realtime: ${escapeHtml(syncStatus.realtimeStatus)}</span>
             <span>Last successful sync: ${escapeHtml(formatRelativeSyncTime(syncStatus.lastSuccessfulSyncAt))}</span>
@@ -6185,7 +6197,7 @@
           </label>
           <label class="lee_lee_diabetes_field">
             Dose Increment
-            <span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="doseIncrementUnits" type="number" inputmode="decimal" min="0.01" step="0.05" required value="${escapeHtml(getDoseIncrementUnits(plan))}"> units</span>
+            <span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="doseIncrementUnits" type="number" inputmode="decimal" min="0.05" step="0.05" required value="${escapeHtml(getDoseIncrementUnits(plan))}"> units</span>
           </label>
           <label class="lee_lee_diabetes_field">
             Minimum Allowable Dose
@@ -6722,9 +6734,15 @@
     if (doseIncrementUnits == null || doseIncrementUnits <= 0) {
       return { error: 'Dose increment must be greater than zero.' };
     }
+    if (!alignsWithDosePrecision(doseIncrementUnits)) {
+      return { error: 'Dose increment must use 0.05-unit precision.' };
+    }
     const minimumAllowableDoseUnits = normalizeNumber(form.elements.minimumAllowableDoseUnits?.value);
     if (minimumAllowableDoseUnits == null) {
       return { error: 'Minimum allowable dose must be a nonnegative number.' };
+    }
+    if (!alignsWithDosePrecision(minimumAllowableDoseUnits)) {
+      return { error: 'Minimum allowable dose must use 0.05-unit precision.' };
     }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
@@ -7999,6 +8017,15 @@
     }),
     applySharedSettingsToDocument,
     createSharedInsulinPlanSnapshot,
+  };
+
+  window.LeeLeeTrackerDebug = {
+    getSyncDiagnostics() {
+      return syncRepository?.getSyncDiagnostics?.() || null;
+    },
+    getSyncStatus() {
+      return syncRepository?.getSyncStatus?.() || syncStatus;
+    },
   };
 
   window.LeeLeeTrackerReports = {
