@@ -1215,49 +1215,35 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator).toHaveAttribute('aria-modal', 'true');
   await expect(form.locator('[data-editor-main]')).toHaveAttribute('inert', '');
   await expect(form.locator('[data-editor-main]')).toHaveAttribute('aria-hidden', 'true');
-  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toBeFocused();
-  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('×');
-  await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);
-  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveClass(/lee_lee_diabetes_carb_calc_input/);
-  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveCSS('text-align', 'left');
-  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveCSS('appearance', 'textfield');
-  await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveCSS('appearance', 'textfield');
-  expect(await calculator.locator('[name="carbCalcCarbs"]').first().evaluate((input) => input.getBoundingClientRect().width)).toBeLessThan(90);
-  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(1);
-  await expect(calculator.locator('[name="carbCalcQty"]').first()).toHaveValue('1');
-  await expect(calculator.locator('[name="carbCalcCarbs"]').first()).toHaveValue('');
+  await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
+  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
+  await expect(calculator.getByText('No items added yet.')).toBeVisible();
   await expect(calculator.getByText('Total Carbs')).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Use 0 grams' })).toBeDisabled();
 
-  const firstCarbs = calculator.locator('[name="carbCalcCarbs"]').first();
-  await firstCarbs.click();
-  await firstCarbs.pressSequentially('25');
-  await expect(firstCarbs).toHaveValue('25');
-  await expect(firstCarbs).toBeFocused();
-  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(2);
-  const secondQty = calculator.locator('[name="carbCalcQty"]').nth(1);
-  await secondQty.click();
-  await secondQty.press('ControlOrMeta+A');
-  await secondQty.pressSequentially('2');
-  await expect(secondQty).toHaveValue('2');
-  const secondCarbs = calculator.locator('[name="carbCalcCarbs"]').nth(1);
-  await secondCarbs.click();
-  await secondCarbs.pressSequentially('19');
-  await expect(secondCarbs).toHaveValue('19');
-  await expect(secondCarbs).toBeFocused();
-  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(3);
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Add Food Item' })).toBeVisible();
+  await expect(calculator.locator('[name="carbItemQty"]')).toBeFocused();
+  await calculator.getByLabel('Quantity').fill('2');
+  await calculator.getByLabel('Label').fill('Orange');
+  await calculator.getByLabel('Carbs per serving').fill('15');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Carb Calculator' })).toBeVisible();
+  await expect(calculator.getByText('No items added yet.')).toHaveCount(0);
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('@');
+  await expect(calculator.getByText('Orange')).toBeVisible();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('30 g');
+
+  await calculator.getByRole('button', { name: 'Edit Orange' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Edit Food Item' })).toBeVisible();
+  await calculator.getByLabel('Quantity').fill('3');
+  await calculator.getByLabel('Carbs per serving').fill('21');
+  await calculator.getByRole('button', { name: 'Save Item' }).click();
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('63 g');
 
-  const thirdQty = calculator.locator('[name="carbCalcQty"]').nth(2);
-  await thirdQty.click();
-  await thirdQty.fill('1.5');
-  await expect(thirdQty).toHaveValue('1');
-  await calculator.locator('[name="carbCalcCarbs"]').nth(2).click();
-  await calculator.locator('[name="carbCalcCarbs"]').nth(2).pressSequentially('19');
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('82 g');
-  const thirdRowId = await thirdQty.getAttribute('data-carb-row-id');
-  await calculator.locator(`[data-carb-calculator-row][data-carb-row-id="${thirdRowId}"] [data-action="remove-carb-calculator-row"]`).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('63 g');
   await calculator.getByRole('button', { name: 'Use 63 grams' }).click();
 
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
@@ -1370,12 +1356,13 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByRole('button', { name: 'Add New Food' })).toHaveCount(0);
   await expect(calculator.getByRole('button', { name: 'Save as Meal' })).toHaveCount(0);
 
-  const manualQty = calculator.locator('[data-carb-calculator-rows] [name="carbCalcQty"]').first();
-  const manualCarbs = calculator.locator('[data-carb-calculator-rows] [name="carbCalcCarbs"]').first();
-  await manualQty.fill('2');
-  await manualCarbs.fill('17');
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByLabel('Quantity').fill('2');
+  await calculator.getByLabel('Carbs per serving').fill('17');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('34 g');
-  await expect(calculator.getByText('No foods added yet.')).toBeHidden();
+  await expect(calculator.getByText('Manual Amount')).toBeVisible();
+  await expect(calculator.getByText('No foods added yet.')).toHaveCount(0);
 
   await favoritesToggle.click();
   const picker = calculator.locator('[data-carb-picker]');
@@ -1425,6 +1412,13 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
 
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
+  const setFoodSearchQuery = async (query) => {
+    await foodSearch.evaluate((input, nextQuery) => {
+      input.value = nextQuery;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, query);
+    await expect(foodSearch).toHaveValue(query);
+  };
   await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Food Search' })).toBeVisible();
   await expect(foodSearch).toBeFocused();
   await foodSearch.pressSequentially('c');
@@ -1439,20 +1433,18 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await foodSearch.press('Enter');
   await expect(calculator).toBeVisible();
   await expect(foodSearch).toBeFocused();
-  await foodSearch.fill('bagel');
+  await setFoodSearchQuery('bagel');
   await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Bagel 15 g carbs/ })).toBeVisible();
-  await foodSearch.fill('PB&J');
+  await setFoodSearchQuery('PB&J');
   await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /PB&J Sandwich 45 g carbs/ })).toBeVisible();
-  await foodSearch.fill('nature');
+  await setFoodSearchQuery('nature');
   await expect(calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Nature's Bakery Fig Bar 38 g carbs/ })).toBeVisible();
-  await foodSearch.fill(' no-food-found ');
+  await setFoodSearchQuery(' no-food-found ');
   await expect(calculator.getByText('No foods found for “no-food-found”')).toBeVisible();
   await calculator.locator('.lee_lee_diabetes_carb_search_empty').getByRole('button', { name: '+ Add New Food' }).click();
   await expect(calculator.getByLabel('Food Name')).toBeVisible();
   await calculator.getByLabel('Add Food').getByRole('button', { name: 'Cancel', exact: true }).click();
-  await foodSearch.fill('');
-  await foodSearch.click();
-  await foodSearch.pressSequentially('ket');
+  await setFoodSearchQuery('ket');
   await expect(foodSearch).toHaveValue('ket');
   await expect(foodSearch).toBeFocused();
   await calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Ketchup 4 g carbs/ }).click();
@@ -1461,7 +1453,9 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
 
   await expect(calculator.getByLabel('Meal Total')).toHaveText('80 g');
   const ketchupRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Ketchup' });
-  await ketchupRow.getByRole('spinbutton', { name: /Quantity for Ketchup/ }).fill('2');
+  await ketchupRow.getByRole('button', { name: 'Edit Ketchup' }).click();
+  await calculator.getByLabel('Quantity').fill('2');
+  await calculator.getByRole('button', { name: 'Save Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('84 g');
 
   await calculator.getByRole('button', { name: 'Save as My Meal' }).click();
@@ -1487,7 +1481,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   });
   expect(savedState.record.mealCarbs).toBe(84);
   expect(savedState.record.mealComponents.map((item) => item.nameSnapshot)).toEqual([
-    'Manual amount',
+    'Manual Amount',
     'Banana',
     'Pasta',
     'Ketchup',
@@ -1497,7 +1491,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
 
   await chooseLeeLeeSection(page, 'History');
   await page.getByRole('button', { name: /1 entry/ }).click();
-  await expect(page.getByText(/Manual amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
+  await expect(page.getByText(/Manual Amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
 });
 
 test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async ({ page }) => {
@@ -1530,30 +1524,9 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  const manualQty = calculator.locator('[data-carb-calculator-row]').first().locator('[name="carbCalcQty"]');
-  const initialQtyWidth = await manualQty.evaluate((input) => input.getBoundingClientRect().width);
-  expect(initialQtyWidth).toBeLessThanOrEqual(36);
-  const manualWeightMetrics = await calculator.locator('[data-carb-calculator-row]').first().evaluate((row) => {
-    const manualLabel = row.querySelector('.lee_lee_diabetes_carb_calc_item > span');
-    const qtyInput = row.querySelector('[name="carbCalcQty"]');
-    const carbsInput = row.querySelector('[name="carbCalcCarbs"]');
-    const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
-    const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
-    return {
-      manualLabelHidden: manualLabel == null,
-      qtyWeight: getComputedStyle(qtyInput).fontWeight,
-      carbsWeight: getComputedStyle(carbsInput).fontWeight,
-      unitWeight: getComputedStyle(unitText).fontWeight,
-      operatorWeight: getComputedStyle(operator).fontWeight,
-    };
-  });
-  expect(manualWeightMetrics).toEqual({
-    manualLabelHidden: true,
-    qtyWeight: '400',
-    carbsWeight: '400',
-    unitWeight: '400',
-    operatorWeight: '400',
-  });
+  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeVisible();
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
+  await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
 
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
@@ -1563,25 +1536,24 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
 
   const chocolateMilkRow = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Chocolate Milk' });
   await expect(chocolateMilkRow).toBeVisible();
-  await expect(chocolateMilkRow.getByText('1 cup (8 fl oz) · USDA')).toHaveCount(0);
-  await expect(chocolateMilkRow.locator('[name="carbCalcServingLabel"]')).toHaveValue('1 cup (8 fl oz)');
-  await expect(chocolateMilkRow.locator('[name="carbCalcSourceNameSnapshot"]')).toHaveValue('USDA');
+  await expect(chocolateMilkRow.getByText('1 cup (8 fl oz) · USDA')).toBeVisible();
   await expect(chocolateMilkRow.getByRole('button', { name: /Increase quantity for Chocolate Milk/ })).toHaveCount(0);
   await expect(chocolateMilkRow.getByRole('button', { name: /Decrease quantity for Chocolate Milk/ })).toHaveCount(0);
 
-  const qty = chocolateMilkRow.getByRole('spinbutton', { name: 'Quantity for Chocolate Milk' });
-  await qty.click();
-  await qty.fill('99');
-  await expect(qty).toHaveValue('99');
+  await chocolateMilkRow.getByRole('button', { name: 'Edit Chocolate Milk' }).click();
+  const itemQty = calculator.locator('[name="carbItemQty"]');
+  await expect(itemQty).toBeFocused();
+  expect(await itemQty.evaluate((input) => input.getBoundingClientRect().width)).toBeLessThanOrEqual(46);
+  await itemQty.fill('99');
+  await calculator.getByRole('button', { name: 'Save Item' }).click();
   await expect(chocolateMilkRow.locator('.lee_lee_diabetes_carb_calc_row_total')).toHaveText('2574 g');
 
   const compactMetrics = await chocolateMilkRow.evaluate((row) => {
     const calculator = row.closest('[data-carb-calculator]');
-    const qtyInput = row.querySelector('[name="carbCalcQty"]');
-    const carbsInput = row.querySelector('[name="carbCalcCarbs"]');
-    const unitText = row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]');
-    const unitLabel = row.querySelector('.lee_lee_diabetes_carb_calc_cell--carbs label');
-    const strong = row.querySelector('.lee_lee_diabetes_carb_calc_item strong');
+    const qty = row.querySelector('.lee_lee_diabetes_carb_calc_qty');
+    const carbs = row.querySelector('.lee_lee_diabetes_carb_calc_carbs');
+    const metadata = row.querySelector('.lee_lee_diabetes_carb_calc_item small');
+    const itemLine = row.querySelector('.lee_lee_diabetes_carb_calc_item_line');
     const emoji = row.querySelector('.lee_lee_diabetes_carb_calc_item .lee_lee_diabetes_food_emoji');
     const name = row.querySelector('.lee_lee_diabetes_carb_calc_item_name');
     const operator = row.querySelector('.lee_lee_diabetes_carb_calc_operator');
@@ -1590,38 +1562,23 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     const buttons = Array.from(row.querySelectorAll('.lee_lee_diabetes_icon_button'));
     const calcBox = calculator.getBoundingClientRect();
     const rowBox = row.getBoundingClientRect();
-    const carbsBox = carbsInput.getBoundingClientRect();
-    const unitBox = unitText.getBoundingClientRect();
     const emojiBox = emoji.getBoundingClientRect();
     const nameBox = name.getBoundingClientRect();
-    const qtyStyle = getComputedStyle(qtyInput);
-    const carbsStyle = getComputedStyle(carbsInput);
-    const labelStyle = getComputedStyle(unitLabel);
     return {
       calculatorOverflows: calculator.scrollWidth > calculator.clientWidth + 1,
       rowOverflows: rowBox.left < calcBox.left - 1 || rowBox.right > calcBox.right + 1,
-      qtyWidth: qtyInput.getBoundingClientRect().width,
-      carbsWidth: carbsBox.width,
-      qtyBorderBottomWidth: qtyStyle.borderBottomWidth,
-      carbsBorderBottomWidth: carbsStyle.borderBottomWidth,
-      qtyBorderStyle: qtyStyle.borderStyle,
-      carbsBorderStyle: carbsStyle.borderStyle,
-      focusedQtyBackground: qtyStyle.backgroundColor,
-      focusedQtyOutlineWidth: qtyStyle.outlineWidth,
       minButtonSize: Math.min(...buttons.map((button) => Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
-      unitGap: unitBox.left - carbsBox.right,
-      labelMarginRight: labelStyle.marginRight,
-      labelPaddingRight: labelStyle.paddingRight,
-      foodNameDisplay: getComputedStyle(strong).display,
-      foodNameAlignItems: getComputedStyle(strong).alignItems,
-      foodNameWeight: getComputedStyle(strong).fontWeight,
-      metadataHidden: row.querySelector('.lee_lee_diabetes_carb_calc_item small') == null,
-      qtyWeight: getComputedStyle(qtyInput).fontWeight,
-      carbsWeight: getComputedStyle(carbsInput).fontWeight,
-      unitWeight: getComputedStyle(unitText).fontWeight,
+      itemLineDisplay: getComputedStyle(itemLine).display,
+      itemLineAlignItems: getComputedStyle(itemLine).alignItems,
+      metadataText: metadata?.textContent || '',
+      metadataWhiteSpace: getComputedStyle(metadata).whiteSpace,
+      foodNameWeight: getComputedStyle(itemLine).fontWeight,
+      qtyWeight: getComputedStyle(qty).fontWeight,
+      carbsWeight: getComputedStyle(carbs).fontWeight,
       operatorWeight: getComputedStyle(operator).fontWeight,
-      qtyFontFamily: getComputedStyle(qtyInput).fontFamily,
-      carbsFontFamily: getComputedStyle(carbsInput).fontFamily,
+      operatorText: operator.textContent.trim(),
+      qtyFontFamily: getComputedStyle(qty).fontFamily,
+      carbsFontFamily: getComputedStyle(carbs.querySelector('.lee_lee_diabetes_numeric')).fontFamily,
       rowTotalFontFamily: getComputedStyle(rowTotal).fontFamily,
       rowTotalNumberFontFamily: getComputedStyle(rowTotalNumber).fontFamily,
       rowTotalWeight: getComputedStyle(rowTotal).fontWeight,
@@ -1632,26 +1589,16 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
 
   expect(compactMetrics.calculatorOverflows).toBe(false);
   expect(compactMetrics.rowOverflows).toBe(false);
-  expect(compactMetrics.qtyWidth).toBeLessThanOrEqual(36);
-  expect(compactMetrics.carbsWidth).toBeLessThanOrEqual(42);
-  expect(compactMetrics.qtyBorderBottomWidth).toBe('0px');
-  expect(compactMetrics.carbsBorderBottomWidth).toBe('0px');
-  expect(compactMetrics.qtyBorderStyle).toBe('none');
-  expect(compactMetrics.carbsBorderStyle).toBe('none');
-  expect(compactMetrics.focusedQtyBackground).not.toBe('rgba(0, 0, 0, 0)');
-  expect(compactMetrics.focusedQtyOutlineWidth).toBe('2px');
-  expect(compactMetrics.minButtonSize).toBeGreaterThanOrEqual(34);
-  expect(compactMetrics.unitGap).toBeLessThanOrEqual(6);
-  expect(compactMetrics.labelMarginRight).toBe('0px');
-  expect(compactMetrics.labelPaddingRight).toBe('0px');
-  expect(compactMetrics.foodNameDisplay).toBe('flex');
-  expect(compactMetrics.foodNameAlignItems).toBe('center');
+  expect(compactMetrics.minButtonSize).toBeGreaterThanOrEqual(30);
+  expect(compactMetrics.itemLineDisplay).toBe('flex');
+  expect(compactMetrics.itemLineAlignItems).toBe('center');
+  expect(compactMetrics.metadataText).toBe('1 cup (8 fl oz) · USDA');
+  expect(compactMetrics.metadataWhiteSpace).toBe('nowrap');
   expect(compactMetrics.foodNameWeight).toBe('400');
-  expect(compactMetrics.metadataHidden).toBe(true);
   expect(compactMetrics.qtyWeight).toBe('400');
   expect(compactMetrics.carbsWeight).toBe('400');
-  expect(compactMetrics.unitWeight).toBe('400');
   expect(compactMetrics.operatorWeight).toBe('400');
+  expect(compactMetrics.operatorText).toBe('@');
   expect(compactMetrics.qtyFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.carbsFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.rowTotalFontFamily).toContain('DM Sans');
@@ -1679,26 +1626,24 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   await expect(chocolateMilkRow).toBeVisible();
   expect(await calculator.evaluate((node) => node.scrollWidth > node.clientWidth + 1)).toBe(false);
   const lightWeightMetrics = await chocolateMilkRow.evaluate((row) => ({
-    foodNameWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item strong')).fontWeight,
-    metadataHidden: row.querySelector('.lee_lee_diabetes_carb_calc_item small') == null,
-    qtyWeight: getComputedStyle(row.querySelector('[name="carbCalcQty"]')).fontWeight,
-    carbsWeight: getComputedStyle(row.querySelector('[name="carbCalcCarbs"]')).fontWeight,
-    unitWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_unit_input span[aria-hidden="true"]')).fontWeight,
+    foodNameWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_item_line')).fontWeight,
+    metadataVisible: row.querySelector('.lee_lee_diabetes_carb_calc_item small') != null,
+    qtyWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_qty')).fontWeight,
+    carbsWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_carbs')).fontWeight,
     operatorWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_operator')).fontWeight,
     rowTotalWeight: getComputedStyle(row.querySelector('.lee_lee_diabetes_carb_calc_row_total')).fontWeight,
   }));
   expect(lightWeightMetrics).toEqual({
     foodNameWeight: '400',
-    metadataHidden: true,
+    metadataVisible: true,
     qtyWeight: '400',
     carbsWeight: '400',
-    unitWeight: '400',
     operatorWeight: '400',
     rowTotalWeight: '500',
   });
 });
 
-test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first pointer action', async ({ page }) => {
+test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on first pointer action', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: '+ Log Entry' }).click();
 
@@ -1707,38 +1652,28 @@ test('Lee-Lee Carb Calc preserves focused inputs and uses the total on first poi
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
-  await expect(carbInputs.first()).toBeFocused();
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  const carbsInput = calculator.locator('[name="carbItemCarbs"]');
+  await carbsInput.click();
 
-  const firstNodeStableAfterInput = await carbInputs.first().evaluate((input) => {
-    window.__leeLeeFirstCarbInput = input;
-    input.value = '20';
+  const firstNodeStableAfterInput = await carbsInput.evaluate((input) => {
+    window.__leeLeeCarbItemInput = input;
+    input.value = '35';
     input.dispatchEvent(new InputEvent('input', {
       bubbles: true,
-      data: '20',
+      data: '35',
       inputType: 'insertText',
     }));
-    return window.__leeLeeFirstCarbInput === input && input.isConnected;
+    return window.__leeLeeCarbItemInput === input && input.isConnected;
   });
   expect(firstNodeStableAfterInput).toBe(true);
-  await expect(carbInputs.first()).toHaveValue('20');
-  await expect(carbInputs).toHaveCount(2);
-
-  const secondCarbs = carbInputs.nth(1);
-  await carbInputs.first().focus();
-  await secondCarbs.click();
-  await expect(secondCarbs).toBeFocused();
-  await secondCarbs.pressSequentially('15');
-  await expect(secondCarbs).toHaveValue('15');
+  await expect(carbsInput).toHaveValue('35');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('35 g');
+  await expect(calculator.getByRole('button', { name: 'Edit Manual Amount' })).toBeFocused();
 
-  const nodesStableAfterSwitching = await carbInputs.first().evaluate((input) => (
-    window.__leeLeeFirstCarbInput === input && input.isConnected
-  ));
-  expect(nodesStableAfterSwitching).toBe(true);
-
-  await secondCarbs.focus();
-  await calculator.getByRole('button', { name: 'Use 35 grams' }).click();
+  await calculator.getByRole('button', { name: 'Use 35 grams' }).dispatchEvent('pointerdown');
+  await calculator.getByRole('button', { name: 'Use 35 grams' }).dispatchEvent('pointerup');
 
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
@@ -1763,16 +1698,8 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
-  const qtyInputs = calculator.locator('[name="carbCalcQty"]');
-  const focusedCarbInputIndex = () => page.evaluate(() => (
-    Array.from(document.querySelectorAll('[data-carb-calculator] [name="carbCalcCarbs"]')).indexOf(document.activeElement)
-  ));
-  const focusedQtyInputIndex = () => page.evaluate(() => (
-    Array.from(document.querySelectorAll('[data-carb-calculator] [name="carbCalcQty"]')).indexOf(document.activeElement)
-  ));
   await expect(calculator).toBeVisible();
-  await expect(carbInputs.first()).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
   await expect.poll(() => calculator.evaluate((node) => getComputedStyle(node).maxHeight)).toBe('100%');
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
@@ -1783,30 +1710,20 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
     });
   });
 
-  await carbInputs.first().fill('20');
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await expect(calculator.locator('[name="carbItemQty"]')).toBeFocused();
+  await calculator.locator('[name="carbItemCarbs"]').fill('20');
   await expect(calculator).toBeVisible();
-  await expect(carbInputs.first()).toHaveValue('20');
-  await expect(carbInputs).toHaveCount(2);
+  await expect(calculator.locator('[name="carbItemCarbs"]')).toHaveValue('20');
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
-  await carbInputs.nth(1).click();
+  await calculator.locator('[name="carbItemQty"]').click();
   await expect(calculator).toBeVisible();
-  await expect.poll(focusedCarbInputIndex).toBe(1);
-  await carbInputs.nth(1).fill('15');
-  await expect(carbInputs).toHaveCount(3);
-
-  await qtyInputs.nth(1).click();
-  await expect(calculator).toBeVisible();
-  await expect.poll(focusedQtyInputIndex).toBe(1);
-  await qtyInputs.nth(1).fill('2');
-  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(3);
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('50 g');
-
-  await carbInputs.nth(2).click();
-  await expect(calculator).toBeVisible();
-  await expect.poll(focusedCarbInputIndex).toBe(2);
-  await carbInputs.nth(2).fill('10');
+  await expect(calculator.locator('[name="carbItemQty"]')).toBeFocused();
+  await calculator.locator('[name="carbItemQty"]').fill('3');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('60 g');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
   expect(await page.evaluate(() => window.__leeLeeEditorSubmitCount)).toBe(0);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
@@ -1871,9 +1788,8 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
 
   const calculator = page.locator('[data-carb-calculator]');
   const layer = page.locator('[data-carb-calculator-layer]');
-  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
   await expect(calculator).toBeVisible();
-  await expect(carbInputs.first()).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
   expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
@@ -1906,7 +1822,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   })).toBe(108);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
   await expect(calculator).toBeVisible();
-  await expect(carbInputs.first()).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
     node.scrollTop = node.scrollHeight;
@@ -1959,25 +1875,26 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   const calculator = page.locator('[data-carb-calculator]');
-  const blankRowId = await calculator.locator('[name="carbCalcCarbs"]').first().getAttribute('data-carb-row-id');
-  const blankCarbs = calculator.locator(`[name="carbCalcCarbs"][data-carb-row-id="${blankRowId}"]`);
-  await blankCarbs.click();
-  await blankCarbs.pressSequentially('47');
-  await expect(blankCarbs).toHaveValue('47');
-  await expect(blankCarbs).toBeFocused();
-  await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(2);
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  const itemCarbs = calculator.locator('[name="carbItemCarbs"]');
+  await itemCarbs.click();
+  await itemCarbs.pressSequentially('47');
+  await expect(itemCarbs).toHaveValue('47');
+  await expect(itemCarbs).toBeFocused();
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('47 g');
   await calculator.getByRole('button', { name: 'Use 47 grams' }).click();
   await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('1.5');
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
-  await blankCarbs.press('ControlOrMeta+A');
-  await blankCarbs.pressSequentially('19');
-  await expect(blankCarbs).toHaveValue('19');
-  await expect(blankCarbs).toBeFocused();
+  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).click();
+  await itemCarbs.press('ControlOrMeta+A');
+  await itemCarbs.pressSequentially('19');
+  await expect(itemCarbs).toHaveValue('19');
+  await expect(itemCarbs).toBeFocused();
 });
 
-test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', async ({ page }) => {
+test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display-only', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: '+ Log Entry' }).click();
 
@@ -1986,49 +1903,29 @@ test('Lee-Lee Carb Calc tabs down the carb column while keeping qty editable', a
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  const carbInputs = calculator.locator('[name="carbCalcCarbs"]');
-  const qtyInputs = calculator.locator('[name="carbCalcQty"]');
+  await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
+  await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
 
-  await carbInputs.first().click();
-  await carbInputs.first().pressSequentially('23');
-  await expect(carbInputs.first()).toHaveValue('23');
-  await expect(carbInputs.first()).toBeFocused();
-  await expect(carbInputs).toHaveCount(2);
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByLabel('Carbs per serving').fill('23');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByLabel('Quantity').fill('2');
+  await calculator.getByLabel('Label').fill('Snack');
+  await calculator.getByLabel('Carbs per serving').fill('15');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByLabel('Carbs per serving').fill('47');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
 
-  await carbInputs.first().focus();
-  await page.keyboard.press('Tab');
-  await expect(carbInputs.nth(1)).toBeFocused();
-  await carbInputs.nth(1).fill('15');
-  await expect(carbInputs.nth(1)).toHaveValue('15');
-  await expect(carbInputs).toHaveCount(3);
-
-  await page.keyboard.press('Tab');
-  await expect(carbInputs.nth(2)).toBeFocused();
-  await carbInputs.nth(2).fill('47');
-  await expect(carbInputs.nth(2)).toHaveValue('47');
-  await expect(carbInputs).toHaveCount(4);
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('85 g');
-
-  await page.keyboard.press('Shift+Tab');
-  await expect(carbInputs.nth(1)).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(carbInputs.first()).toBeFocused();
-
-  await qtyInputs.nth(1).click();
-  await qtyInputs.nth(1).press('ControlOrMeta+A');
-  await qtyInputs.nth(1).pressSequentially('2');
-  await expect(qtyInputs.nth(1)).toHaveValue('2');
-  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(4);
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(3);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('100 g');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator')).toHaveText(['@', '@', '@']);
 
-  await qtyInputs.nth(2).click();
-  await qtyInputs.nth(2).fill('1.5');
-  await expect(qtyInputs.nth(2)).toHaveValue('1');
-  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(4);
-  await carbInputs.nth(2).click();
-  await carbInputs.nth(2).press('ControlOrMeta+A');
-  await carbInputs.nth(2).pressSequentially('19');
-  await expect(carbInputs.nth(2)).toHaveValue('19');
+  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).nth(1).click();
+  await calculator.getByLabel('Quantity').fill('1.5');
+  await calculator.getByLabel('Carbs per serving').fill('19');
+  await calculator.getByRole('button', { name: 'Save Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('72 g');
 
   expect(await calculator.locator('[tabindex]').count()).toBe(0);

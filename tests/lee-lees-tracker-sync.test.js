@@ -1405,21 +1405,19 @@ test('food library queue syncs offline-created foods and saved meals without rec
   assert.equal(repo.getRecordQueueSnapshot().length, 0);
 });
 
-test('starter food sync upserts by stable id so two devices do not create duplicates', async () => {
+test('starter food defaults are excluded from food sync queue while user foods still sync', async () => {
   const supabase = createMockSupabase([], { userId: 'user-1' });
-  const createRepo = () => {
-    const store = createDocumentStore({ records: [], foodLibrary: [], savedMeals: [] });
-    const context = createSyncContext({
-      supabase,
-      config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
-    });
-    return context.LeeLeeTrackerSync.createRepository({
-      ...store,
-      normalizeRecord: (item) => ({ ...item }),
-      normalizeFood: (item) => item && item.name ? { ...item } : null,
-      normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
-    });
-  };
+  const store = createDocumentStore({ records: [], foodLibrary: [], savedMeals: [] });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+  });
+  const repo = context.LeeLeeTrackerSync.createRepository({
+    ...store,
+    normalizeRecord: (item) => ({ ...item }),
+    normalizeFood: (item) => item && item.name ? { ...item } : null,
+    normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+  });
   const starterFood = {
     id: '0e95de71-a68c-5b46-8e7f-779d641794be',
     name: 'Banana',
@@ -1433,17 +1431,79 @@ test('starter food sync upserts by stable id so two devices do not create duplic
     updatedAt: '2026-08-31T00:00:00.000Z',
     version: 1,
   };
-  const firstRepo = createRepo();
-  const secondRepo = createRepo();
+  const userFood = {
+    id: 'food-user-1',
+    name: 'House Waffle',
+    carbs: 31,
+    sourceType: 'user',
+    createdAt: '2026-09-05T12:00:00.000Z',
+    updatedAt: '2026-09-05T12:00:00.000Z',
+    version: 1,
+  };
 
-  await firstRepo.initialize();
-  await secondRepo.initialize();
-  firstRepo.queueFoodUpsert(starterFood);
-  secondRepo.queueFoodUpsert(starterFood);
-  await firstRepo.processFoodLibraryQueue();
-  await secondRepo.processFoodLibraryQueue();
+  await repo.initialize();
+  assert.equal(repo.queueFoodUpsert(starterFood), null);
+  repo.queueFoodUpsert(userFood);
+  await repo.processFoodLibraryQueue();
 
-  assert.equal(supabase.client.foodRows.filter((row) => row.payload.seedKey === 'starter-banana-medium').length, 1);
-  assert.equal(supabase.client.foodRows[0].payload.sourceType, 'reference');
-  assert.equal(supabase.client.foodRows[0].payload.emoji, '🍌');
+  assert.equal(repo.getSyncStatus().foodLibraryPendingCount, 0);
+  assert.equal(supabase.client.foodRows.some((row) => row.payload.seedKey === 'starter-banana-medium'), false);
+  assert.equal(supabase.client.foodRows[0].name, 'House Waffle');
+  assert.equal(supabase.client.foodRows[0].payload.sourceType, 'user');
+});
+
+test('stale starter food queue entries are pruned during sync initialization', async () => {
+  const queueKey = 'lando-world:lee-lees-tracker:food-library-queue:v1';
+  const staleStarterOperation = {
+    id: 'operation-seed',
+    recordId: 'starter-banana',
+    entityType: 'food',
+    type: 'upsert-library-item',
+    state: 'pending',
+    payload: {
+      id: 'starter-banana',
+      name: 'Banana',
+      carbs: 27,
+      sourceType: 'reference',
+      seedKey: 'starter-banana-medium',
+      starterFoodVersion: 3,
+    },
+  };
+  const pendingUserOperation = {
+    id: 'operation-user-food',
+    recordId: 'food-user-1',
+    entityType: 'food',
+    type: 'upsert-library-item',
+    state: 'pending',
+    payload: {
+      id: 'food-user-1',
+      name: 'House Waffle',
+      carbs: 31,
+      sourceType: 'user',
+    },
+  };
+  const localStorage = createLocalStorage({
+    [queueKey]: JSON.stringify([staleStarterOperation, pendingUserOperation]),
+  });
+  const supabase = createMockSupabase([], { userId: 'user-1' });
+  const store = createDocumentStore({ records: [], foodLibrary: [], savedMeals: [] });
+  const context = createSyncContext({
+    localStorage,
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+  });
+  context.navigator.onLine = false;
+  const repo = context.LeeLeeTrackerSync.createRepository({
+    ...store,
+    normalizeRecord: (item) => ({ ...item }),
+    normalizeFood: (item) => item && item.name ? { ...item } : null,
+    normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+  });
+
+  await repo.initialize();
+
+  const queue = JSON.parse(localStorage.dump()[queueKey]);
+  assert.equal(queue.some((operation) => operation.recordId === 'starter-banana'), false);
+  assert.equal(queue.some((operation) => operation.recordId === 'food-user-1'), true);
+  assert.equal(repo.getSyncStatus().foodLibraryPendingCount, 1);
 });

@@ -165,6 +165,17 @@
     writeJson(FOOD_LIBRARY_QUEUE_KEY, queue);
   }
 
+  function isDefaultSeedFoodPayload(payload = {}) {
+    const sourceType = String(payload.sourceType || payload.source_type || '').trim();
+    return Boolean(payload.seedKey || payload.seed_key || payload.starterFoodVersion || payload.starter_food_version)
+      && ['reference', 'verified-label'].includes(sourceType);
+  }
+
+  function isDefaultSeedFoodOperation(operation = {}) {
+    if (operation.entityType !== 'food') return false;
+    return isDefaultSeedFoodPayload(operation.payload || {});
+  }
+
   function getSharedSettingsMigration() {
     return {
       prompted: false,
@@ -1018,6 +1029,7 @@
     async function initialize() {
       if (initialized) return getSyncStatus();
       initialized = true;
+      pruneDefaultSeedFoodQueue();
       try {
         const client = await ensureClient();
         if (client) {
@@ -1568,9 +1580,23 @@
       };
     }
 
+    function pruneDefaultSeedFoodQueue() {
+      const queue = getFoodLibraryQueue();
+      const filteredQueue = queue.filter((operation) => !isDefaultSeedFoodOperation(operation));
+      if (filteredQueue.length !== queue.length) {
+        setFoodLibraryQueue(filteredQueue);
+      }
+      return filteredQueue;
+    }
+
     function queueLibraryUpsert(entityType, item, existingItem = null) {
       const operation = createLibraryOperation(entityType, item, existingItem?.version || null);
-      setFoodLibraryQueue([...getFoodLibraryQueue().filter((queued) => queued.recordId !== operation.recordId || queued.entityType !== entityType), operation]);
+      if (isDefaultSeedFoodOperation(operation)) {
+        pruneDefaultSeedFoodQueue();
+        emit();
+        return null;
+      }
+      setFoodLibraryQueue([...pruneDefaultSeedFoodQueue().filter((queued) => queued.recordId !== operation.recordId || queued.entityType !== entityType), operation]);
       emit();
       processFoodLibraryQueue().catch(() => {});
       return operation;
@@ -1611,7 +1637,7 @@
       processingFoodLibrary = true;
       emit();
       const remaining = [];
-      for (const operation of getFoodLibraryQueue()) {
+      for (const operation of pruneDefaultSeedFoodQueue()) {
         const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
           const normalized = normalizeLibraryItem(attemptedOperation.entityType, attemptedOperation.payload);
