@@ -1494,6 +1494,127 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(page.getByText(/Manual Amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
 });
 
+test('Lee-Lee My Foods cards keep footer actions on one row', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          name: 'Banana',
+          emoji: '🍌',
+          carbs: 27,
+          servingLabel: '1 small banana with a deliberately long serving reference that wraps on phones',
+          brand: 'Kitchen note with enough detail to wrap naturally before the footer starts',
+          verificationNote: 'A longer note verifies the action footer is independent from wrapped food content.',
+          favorite: true,
+          createdAt: '2026-09-05T12:00:00.000Z',
+          updatedAt: '2026-09-05T12:00:00.000Z',
+        },
+        {
+          id: '66666666-6666-4666-8666-666666666666',
+          name: 'Milk',
+          emoji: '🥛',
+          carbs: 12,
+          servingLabel: '1 cup',
+          favorite: false,
+          createdAt: '2026-09-05T12:00:00.000Z',
+          updatedAt: '2026-09-05T12:00:00.000Z',
+        },
+      ],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  await expect(page.getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  const allFoodCards = page.locator('.lee_lee_diabetes_food_item--library');
+  const seededFoodCardSelector = [
+    'article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])',
+    'article.lee_lee_diabetes_food_item--library:has([data-id="66666666-6666-4666-8666-666666666666"])',
+  ].join(', ');
+  await expect(page.locator(seededFoodCardSelector)).toHaveCount(2);
+  await expect(page.locator('.lee_lee_diabetes_food_item_footer')).toHaveCount(await allFoodCards.count());
+
+  const assertFooterLayout = async (width) => {
+    await page.setViewportSize({ width, height: 844 });
+    const metrics = await page.locator(seededFoodCardSelector).evaluateAll((cards) => cards.map((card) => {
+      const content = card.querySelector('.lee_lee_diabetes_food_item_content');
+      const footer = card.querySelector('.lee_lee_diabetes_food_item_footer');
+      const actions = card.querySelector('.lee_lee_diabetes_food_item_actions');
+      const rightActions = card.querySelector('.lee_lee_diabetes_food_item_actions_right');
+      const favorite = actions?.querySelector('[data-action="toggle-food-favorite"]');
+      const edit = actions?.querySelector('[data-action="edit-food-library-item"]');
+      const deleteButton = actions?.querySelector('[data-action="delete-food-library-item"]');
+      const contentRect = content.getBoundingClientRect();
+      const footerRect = footer.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const favoriteRect = favorite.getBoundingClientRect();
+      const editRect = edit.getBoundingClientRect();
+      const deleteRect = deleteButton.getBoundingClientRect();
+      const actionStyle = getComputedStyle(actions);
+      const rightStyle = getComputedStyle(rightActions);
+      const footerStyle = getComputedStyle(footer);
+      return {
+        actionDisplay: actionStyle.display,
+        actionFlexWrap: actionStyle.flexWrap,
+        rightDisplay: rightStyle.display,
+        rightFlexWrap: rightStyle.flexWrap,
+        footerBorderTopWidth: Number.parseFloat(footerStyle.borderTopWidth),
+        footerTop: footerRect.top,
+        contentBottom: contentRect.bottom,
+        actionsLeft: actionsRect.left,
+        actionsRight: actionsRect.right,
+        favoriteLeft: favoriteRect.left,
+        favoriteCenterY: favoriteRect.top + favoriteRect.height / 2,
+        editCenterY: editRect.top + editRect.height / 2,
+        deleteCenterY: deleteRect.top + deleteRect.height / 2,
+        editRight: editRect.right,
+        deleteLeft: deleteRect.left,
+        deleteRight: deleteRect.right,
+      };
+    }));
+
+    expect(metrics).toHaveLength(2);
+    for (const metric of metrics) {
+      expect(metric.actionDisplay).toBe('flex');
+      expect(metric.actionFlexWrap).toBe('nowrap');
+      expect(metric.rightDisplay).toBe('flex');
+      expect(metric.rightFlexWrap).toBe('nowrap');
+      expect(metric.footerBorderTopWidth).toBeGreaterThanOrEqual(1);
+      expect(metric.footerTop).toBeGreaterThanOrEqual(metric.contentBottom - 1);
+      expect(metric.favoriteLeft).toBeGreaterThanOrEqual(metric.actionsLeft - 1);
+      expect(metric.deleteRight).toBeLessThanOrEqual(metric.actionsRight + 1);
+      expect(metric.deleteLeft).toBeGreaterThanOrEqual(metric.editRight - 1);
+      expect(Math.abs(metric.favoriteCenterY - metric.editCenterY)).toBeLessThanOrEqual(4);
+      expect(Math.abs(metric.editCenterY - metric.deleteCenterY)).toBeLessThanOrEqual(2);
+    }
+  };
+
+  await assertFooterLayout(320);
+  await assertFooterLayout(390);
+  await assertFooterLayout(768);
+  await assertFooterLayout(1024);
+
+  const bananaCard = page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])');
+  await bananaCard.getByRole('button', { name: 'Remove favorite' }).click();
+  await expect(page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])').getByRole('button', { name: 'Mark favorite' })).toBeVisible();
+  await page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])').getByRole('button', { name: 'Edit' }).click();
+  await expect(page.locator('[data-food-library-editor]').getByLabel('Food Name')).toHaveValue('Banana');
+
+  await page.evaluate(() => {
+    window.__leeLeeConfirmMessages = [];
+    window.confirm = (message) => {
+      window.__leeLeeConfirmMessages.push(message);
+      return false;
+    };
+  });
+  await page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])').getByRole('button', { name: 'Delete' }).click();
+  await expect.poll(() => page.evaluate(() => window.__leeLeeConfirmMessages)).toEqual([
+    'Delete Banana? History entries will keep their saved food snapshot.',
+  ]);
+});
+
 test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProtectedLeeLeeTracker(page);
