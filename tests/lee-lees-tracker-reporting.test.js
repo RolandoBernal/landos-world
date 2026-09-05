@@ -1035,9 +1035,7 @@ test('carb calculator rows use integer quantities and derived row totals', () =>
     { qty: '1', carbs: '46.5' },
   ]);
 
-  assert.equal(rows.length, 7);
-  assert.equal(rows.at(-1).qty, '1');
-  assert.equal(rows.at(-1).carbs, '');
+  assert.equal(rows.length, 6);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[0]), 25);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[1]), 30);
   assert.equal(rows[2].qty, '1');
@@ -1046,7 +1044,6 @@ test('carb calculator rows use integer quantities and derived row totals', () =>
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[3]), 99);
   assert.equal(rows[4].qty, '1');
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[4]), 12);
-  assert.equal(helper.calculateCarbCalculatorRowTotal(rows.at(-1)), null);
   assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 231.5);
   assert.equal(helper.hasValidCarbCalculatorTotal(rows), true);
   assert.equal(helper.hasValidCarbCalculatorTotal(helper.normalizeCarbCalculatorRows([])), false);
@@ -1253,7 +1250,7 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Roboto Mono'[\s\S]*url\('\.\.\/fonts\/roboto-mono-regular\.ttf'\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
   assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
-  assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[type="date"\],[\s\S]*\.lee_lee_diabetes_shell input\[type="time"\],[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_timeline_values,[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_dose_breakdown,[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
@@ -1261,21 +1258,28 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
 });
 
-test('carb calculator rows use compact editable quantity without steppers or metadata display', () => {
-  assert.match(trackerSource, /name="carbCalcQty" type="number" inputmode="numeric" min="\$\{CARB_CALCULATOR_MIN_QTY\}" max="\$\{CARB_CALCULATOR_MAX_QTY\}" step="1"/);
-  assert.match(trackerSource, /started \? '<span>Manual<\/span>' : ''/);
-  assert.match(trackerSource, /name="carbCalcServingLabel"/);
-  assert.match(trackerSource, /name="carbCalcSourceNameSnapshot"/);
+test('carb calculator uses display rows with a focused item editor', () => {
+  assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
+  assert.match(trackerSource, /name="carbItemQty" type="number" inputmode="numeric" min="\$\{CARB_CALCULATOR_MIN_QTY\}" max="\$\{CARB_CALCULATOR_MAX_QTY\}" step="1"/);
+  assert.match(trackerSource, /name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e\.g\. Orange"/);
+  assert.match(trackerSource, /name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0\.1"/);
+  assert.match(trackerSource, /data-action="edit-carb-calculator-row"/);
+  assert.match(trackerSource, /data-action="remove-carb-calculator-row"/);
+  assert.match(trackerSource, /aria-label="\$\{escapeHtml\(editLabel\)\}"/);
+  assert.match(trackerSource, /aria-label="\$\{escapeHtml\(removeLabel\)\}"/);
+  assert.match(trackerSource, /if \(!form\?\.querySelector\('\[name="carbCalcQty"\]'\)\) \{/);
   assert.doesNotMatch(trackerSource, /data-action="increment-carb-row"/);
   assert.doesNotMatch(trackerSource, /data-action="decrement-carb-row"/);
   assert.doesNotMatch(trackerSource, /setCarbRowQuantity/);
-  assert.doesNotMatch(trackerSource, /formatFoodSourceLabel\(item\)\]\.filter\(Boolean\)\.join\(' · '\)/);
-  assert.match(trackerSource, /shouldSelectValue = \['carbCalcQty', 'carbCalcCarbs'\]\.includes/);
+  assert.match(trackerSource, /shouldSelectValue = \['carbCalcQty', 'carbCalcCarbs', 'carbItemQty', 'carbItemCarbs'\]\.includes/);
   assert.match(trackerSource, /input\.select\(\)/);
 });
 
-test('carb calculator compact inputs remove underlines while keeping focus visible', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) 2\.5ch auto minmax\(2\.75ch, max-content\)/);
+test('carb calculator compact rows keep narrow item controls and icon actions', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_grid \{[\s\S]*grid-template-columns: minmax\(2\.5ch, max-content\) minmax\(0, 1fr\) auto minmax\(3\.5ch, max-content\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_item_name \{[\s\S]*text-overflow: ellipsis[\s\S]*white-space: nowrap/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_actions \{[\s\S]*display: flex/);
+  assert.match(cssSource, /\.lee_lee_diabetes_icon_button svg \{[\s\S]*stroke: currentColor/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.75ch[\s\S]*border: 0[\s\S]*border-bottom: 0[\s\S]*background: transparent/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_cell--qty \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.5ch[\s\S]*max-width: 2\.5ch/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--app-accent-rgb, 58 160 255\) \/ 14%\)[\s\S]*outline: 2px solid/);
@@ -1427,7 +1431,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /Open Carb Calc/);
   assert.match(trackerSource, /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
-  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×/);
+  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
   assert.match(trackerSource, /enableCarbCalculatorModalViewport/);
   assert.match(trackerSource, /lockCarbCalculatorDocumentScroll/);
