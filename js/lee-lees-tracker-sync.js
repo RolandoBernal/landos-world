@@ -528,6 +528,7 @@
     return {
       id: operation?.id || '',
       recordId: operation?.recordId || payload.id || '',
+      entityType: operation?.entityType || 'record',
       recordType: payload.type || 'Other',
       eventType: payload.eventType || '',
       operationType: operation?.type || '',
@@ -547,6 +548,7 @@
       lastErrorCategory: operation?.lastErrorCategory || '',
       lastErrorCode: operation?.lastErrorCode || '',
       lastErrorMessage: operation?.lastErrorMessage || '',
+      lastAttemptAt: operation?.lastAttemptAt || '',
     };
   }
 
@@ -845,10 +847,24 @@
         message = 'Conflict needs review';
       } else if (totalPendingCount && !navigator.onLine) {
         state = 'offline';
-        message = `Offline — ${totalPendingCount} waiting to sync`;
+        message = formatPendingSyncMessage({
+          recordPendingCount: pendingCount,
+          sharedSettingsPendingCount: sharedPendingCount,
+          foodLibraryPendingCount,
+        }, 'Offline — ');
       } else if (totalPendingCount) {
         state = processing || processingSharedSettings || processingFoodLibrary ? 'syncing' : 'waiting';
-        message = processing || processingSharedSettings || processingFoodLibrary ? 'Syncing…' : `${totalPendingCount} waiting to sync`;
+        message = processing || processingSharedSettings || processingFoodLibrary
+          ? `Syncing ${getPendingSyncParts({
+            recordPendingCount: pendingCount,
+            sharedSettingsPendingCount: sharedPendingCount,
+            foodLibraryPendingCount,
+          }).join(', ')}…`
+          : formatPendingSyncMessage({
+            recordPendingCount: pendingCount,
+            sharedSettingsPendingCount: sharedPendingCount,
+            foodLibraryPendingCount,
+          });
       } else if (metadata.lastSuccessfulSyncAt) {
         state = 'synced';
         message = 'Synced';
@@ -876,21 +892,86 @@
       return getQueue().map(sanitizeOperationMetadata);
     }
 
+    function formatCountLabel(count, singular, plural = `${singular}s`) {
+      return `${count} ${count === 1 ? singular : plural}`;
+    }
+
+    function getPendingSyncParts({ recordPendingCount = 0, sharedSettingsPendingCount = 0, foodLibraryPendingCount = 0 } = {}) {
+      return [
+        recordPendingCount ? formatCountLabel(recordPendingCount, 'record') : '',
+        sharedSettingsPendingCount ? formatCountLabel(sharedSettingsPendingCount, 'setting') : '',
+        foodLibraryPendingCount ? formatCountLabel(foodLibraryPendingCount, 'food item') : '',
+      ].filter(Boolean);
+    }
+
+    function formatPendingSyncMessage(statusCounts, prefix = '') {
+      const parts = getPendingSyncParts(statusCounts);
+      if (!parts.length) return prefix ? `${prefix}No pending sync items` : 'No pending sync items';
+      const joined = parts.join(', ');
+      return `${prefix}${joined} waiting to sync`;
+    }
+
+    function summarizeSanitizedOperations(operations) {
+      const byEntityType = {};
+      const byOperationType = {};
+      const byState = {};
+      const duplicateTargets = new Map();
+      let retryingCount = 0;
+      let oldestCreatedAt = '';
+      let newestCreatedAt = '';
+      operations.forEach((operation) => {
+        const entityType = operation.entityType || operation.recordType || 'record';
+        const operationType = operation.operationType || 'unknown';
+        const state = operation.state || operation.syncState || 'pending';
+        byEntityType[entityType] = Number(byEntityType[entityType] || 0) + 1;
+        byOperationType[operationType] = Number(byOperationType[operationType] || 0) + 1;
+        byState[state] = Number(byState[state] || 0) + 1;
+        if (operation.retryCount) retryingCount += 1;
+        const createdAt = operation.operationCreatedAt || operation.createdAt || '';
+        if (createdAt && (!oldestCreatedAt || createdAt < oldestCreatedAt)) oldestCreatedAt = createdAt;
+        if (createdAt && (!newestCreatedAt || createdAt > newestCreatedAt)) newestCreatedAt = createdAt;
+        const targetKey = `${entityType}:${operation.operationType || ''}:${operation.recordId || operation.remoteId || ''}`;
+        duplicateTargets.set(targetKey, Number(duplicateTargets.get(targetKey) || 0) + 1);
+      });
+      return {
+        total: operations.length,
+        byEntityType,
+        byOperationType,
+        byState,
+        retryingCount,
+        duplicateTargets: Array.from(duplicateTargets.entries())
+          .filter(([, count]) => count > 1)
+          .map(([target, count]) => ({ target, count })),
+        oldestCreatedAt,
+        newestCreatedAt,
+      };
+    }
+
     function getSyncDiagnostics() {
       const metadata = getMetadata();
+      const recordQueue = getRecordQueueSnapshot();
+      const sharedSettingsQueue = getSharedSettingsQueue().map(sanitizeOperationMetadata);
+      const foodLibraryQueue = getFoodLibraryQueue().map((operation) => ({
+        id: operation.id,
+        recordId: operation.recordId,
+        entityType: operation.entityType,
+        operationType: operation.type,
+        state: operation.state || 'pending',
+        retryCount: Number(operation.retryCount || 0),
+        createdAt: operation.createdAt || '',
+        updatedAt: operation.payload?.updatedAt || '',
+        deleted: Boolean(operation.payload?.deletedAt),
+        lastAttemptAt: operation.lastAttemptAt || '',
+        lastErrorCategory: operation.lastErrorCategory || '',
+        lastErrorCode: operation.lastErrorCode || '',
+        lastErrorMessage: operation.lastErrorMessage || '',
+      }));
+      const allOperations = [...recordQueue, ...sharedSettingsQueue, ...foodLibraryQueue];
       return {
-        queue: getRecordQueueSnapshot(),
-        sharedSettingsQueue: getSharedSettingsQueue().map(sanitizeOperationMetadata),
-        foodLibraryQueue: getFoodLibraryQueue().map((operation) => ({
-          id: operation.id,
-          recordId: operation.recordId,
-          entityType: operation.entityType,
-          operationType: operation.type,
-          state: operation.state || 'pending',
-          retryCount: Number(operation.retryCount || 0),
-          updatedAt: operation.payload?.updatedAt || '',
-          deleted: Boolean(operation.payload?.deletedAt),
-        })),
+        summary: summarizeSanitizedOperations(allOperations),
+        queue: recordQueue,
+        sharedSettingsQueue,
+        foodLibraryQueue,
         conflicts: getConflicts().map((conflict) => ({
           id: conflict.id,
           recordId: conflict.recordId,
@@ -1109,6 +1190,7 @@
             lastErrorCategory: 'authentication',
             lastErrorCode: details.code,
             lastErrorMessage: details.message,
+            lastAttemptAt: nowIso(),
             state: 'needs-attention',
           })),
         ]);
@@ -1131,9 +1213,10 @@
       emit();
       const remaining = [];
       for (const operation of currentQueue) {
+        const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
-          const remoteRecord = sanitizeRecordForRemote(operation.payload, session.user.id);
-          if (operation.type === 'insert') {
+          const remoteRecord = sanitizeRecordForRemote(attemptedOperation.payload, session.user.id);
+          if (attemptedOperation.type === 'insert') {
             const { data, error } = await client
               .from(REMOTE_RECORDS_TABLE)
               .insert(remoteRecord)
@@ -1141,40 +1224,40 @@
               .single();
             if (error) {
               if (isDuplicateKeyError(error)) {
-                const existing = await fetchRemoteRecord(operation.recordId);
-                if (existing && recordsHaveSameContent(existing, operation.payload)) {
+                const existing = await fetchRemoteRecord(attemptedOperation.recordId);
+                if (existing && recordsHaveSameContent(existing, attemptedOperation.payload)) {
                   mergeRemoteRecords([existing]);
-                  recordAttemptItem(attempt, operation, 'succeeded', { reconciledDuplicate: true });
+                  recordAttemptItem(attempt, attemptedOperation, 'succeeded', { reconciledDuplicate: true });
                   continue;
                 }
-                await registerConflict(operation, existing);
-                recordAttemptItem(attempt, operation, 'succeeded', { conflictCreated: true, category: 'conflict' });
+                await registerConflict(attemptedOperation, existing);
+                recordAttemptItem(attempt, attemptedOperation, 'succeeded', { conflictCreated: true, category: 'conflict' });
                 continue;
               }
               throw error;
             }
             mergeRemoteRecords([recordFromRemote(data)]);
-            recordAttemptItem(attempt, operation, 'succeeded');
+            recordAttemptItem(attempt, attemptedOperation, 'succeeded');
             continue;
           }
-          const expectedVersion = Number(operation.baseVersion || operation.payload.version || 1);
+          const expectedVersion = Number(attemptedOperation.baseVersion || attemptedOperation.payload.version || 1);
           const { data, error } = await client
             .rpc('update_lee_lee_record_with_version', createVersionedMutationArgs(remoteRecord, expectedVersion));
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
           if (!updatedRow) {
-            await registerConflict(operation);
-            recordAttemptItem(attempt, operation, 'succeeded', { conflictCreated: true, category: 'conflict' });
+            await registerConflict(attemptedOperation);
+            recordAttemptItem(attempt, attemptedOperation, 'succeeded', { conflictCreated: true, category: 'conflict' });
             continue;
           }
           mergeRemoteRecords([recordFromRemote(updatedRow)]);
-          recordAttemptItem(attempt, operation, 'succeeded');
+          recordAttemptItem(attempt, attemptedOperation, 'succeeded');
         } catch (error) {
           const category = categorizeError(error);
           const details = sanitizeSupabaseError(error);
           const failed = {
-            ...operation,
-            retryCount: Number(operation.retryCount || 0) + 1,
+            ...attemptedOperation,
+            retryCount: Number(attemptedOperation.retryCount || 0) + 1,
             lastErrorCategory: category,
             lastErrorCode: details.code,
             lastErrorMessage: details.message,
@@ -1321,20 +1404,36 @@
       };
     }
 
+    function coalesceSharedSettingsOperation(operation) {
+      const existingQueue = getSharedSettingsQueue();
+      const baseVersion = existingQueue.find((item) => item.baseVersion != null)?.baseVersion ?? operation.baseVersion;
+      const retryCount = existingQueue.reduce((max, item) => Math.max(max, Number(item.retryCount || 0)), 0);
+      const coalescedCount = existingQueue.reduce((total, item) => total + Number(item.coalescedCount || 1), 1);
+      return {
+        ...operation,
+        baseVersion,
+        type: baseVersion ? 'update-shared-settings' : 'insert-shared-settings',
+        retryCount,
+        coalescedCount,
+      };
+    }
+
     function saveSharedSettings(settings) {
       const cachedVersion = getSharedSettingsCache().version || null;
+      const pendingBaseVersion = getSharedSettingsQueue().find((operation) => operation.baseVersion != null)?.baseVersion ?? null;
       const normalized = normalizeSharedSettings({
         ...settings,
         lastEditedBy: getDeviceIdentity() || null,
         syncStatus: navigator.onLine ? 'waiting' : 'offline',
       });
-      const baseVersion = normalized.version || cachedVersion;
+      const baseVersion = pendingBaseVersion || normalized.version || cachedVersion;
       setSharedSettingsCache({ ...normalized, version: normalized.version || cachedVersion });
       const operation = createSharedSettingsOperation(normalized, baseVersion);
-      setSharedSettingsQueue([...getSharedSettingsQueue(), operation]);
+      const queuedOperation = coalesceSharedSettingsOperation(operation);
+      setSharedSettingsQueue([queuedOperation]);
       emit();
       processSharedSettingsQueue().catch(() => {});
-      return operation;
+      return queuedOperation;
     }
 
     async function registerSharedSettingsConflict(operation, knownSharedSettings = null) {
@@ -1367,9 +1466,10 @@
       emit();
       const remaining = [];
       for (const operation of getSharedSettingsQueue()) {
+        const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
-          const remotePayload = sharedSettingsToRemote(operation.payload, session.user.id);
-          if (!operation.baseVersion) {
+          const remotePayload = sharedSettingsToRemote(attemptedOperation.payload, session.user.id);
+          if (!attemptedOperation.baseVersion) {
             const { data, error } = await client
               .from(REMOTE_SHARED_SETTINGS_TABLE)
               .insert(remotePayload)
@@ -1377,7 +1477,7 @@
               .single();
             if (error) {
               if (isDuplicateKeyError(error)) {
-                await registerSharedSettingsConflict(operation);
+                await registerSharedSettingsConflict(attemptedOperation);
                 continue;
               }
               throw error;
@@ -1387,7 +1487,7 @@
           }
           const { data, error } = await client
             .rpc('update_lee_lee_shared_settings_with_version', {
-              p_expected_version: Number(operation.baseVersion),
+              p_expected_version: Number(attemptedOperation.baseVersion),
               p_patient_name: remotePayload.patient_name,
               p_patient_date_of_birth: remotePayload.patient_date_of_birth,
               p_clinic_name: remotePayload.clinic_name,
@@ -1399,18 +1499,21 @@
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
           if (!updatedRow) {
-            await registerSharedSettingsConflict(operation);
+            await registerSharedSettingsConflict(attemptedOperation);
             continue;
           }
           mergeSharedSettings(sharedSettingsFromRemote(updatedRow));
         } catch (error) {
+          const sanitizedError = sanitizeSupabaseError(error);
           remaining.push({
-            ...operation,
-            retryCount: Number(operation.retryCount || 0) + 1,
+            ...attemptedOperation,
+            retryCount: Number(attemptedOperation.retryCount || 0) + 1,
             lastErrorCategory: categorizeError(error),
+            lastErrorCode: sanitizedError.code,
+            lastErrorMessage: sanitizedError.message,
             state: 'pending',
           });
-          setSharedSettingsCache({ ...operation.payload, syncStatus: navigator.onLine ? 'waiting' : 'offline', syncError: 'Patient and clinic information will retry syncing.' });
+          setSharedSettingsCache({ ...attemptedOperation.payload, syncStatus: navigator.onLine ? 'waiting' : 'offline', syncError: 'Patient and clinic information will retry syncing.' });
         }
       }
       setSharedSettingsQueue(remaining);
@@ -1509,22 +1612,26 @@
       emit();
       const remaining = [];
       for (const operation of getFoodLibraryQueue()) {
+        const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
-          const normalized = normalizeLibraryItem(operation.entityType, operation.payload);
-          const remote = sanitizeLibraryItemForRemote(normalized, session.user.id, operation.entityType);
+          const normalized = normalizeLibraryItem(attemptedOperation.entityType, attemptedOperation.payload);
+          const remote = sanitizeLibraryItemForRemote(normalized, session.user.id, attemptedOperation.entityType);
           const { data, error } = await client
-            .from(tableForLibraryEntity(operation.entityType))
+            .from(tableForLibraryEntity(attemptedOperation.entityType))
             .upsert(remote, { onConflict: 'id' })
             .select()
             .single();
           if (error) throw error;
-          const mergedItem = normalizeLibraryItem(operation.entityType, libraryItemFromRemote(data, operation.entityType));
-          if (mergedItem) mergeRemoteLibraryItems(operation.entityType, [mergedItem]);
+          const mergedItem = normalizeLibraryItem(attemptedOperation.entityType, libraryItemFromRemote(data, attemptedOperation.entityType));
+          if (mergedItem) mergeRemoteLibraryItems(attemptedOperation.entityType, [mergedItem]);
         } catch (error) {
+          const sanitizedError = sanitizeSupabaseError(error);
           remaining.push({
-            ...operation,
-            retryCount: Number(operation.retryCount || 0) + 1,
+            ...attemptedOperation,
+            retryCount: Number(attemptedOperation.retryCount || 0) + 1,
             lastErrorCategory: categorizeError(error),
+            lastErrorCode: sanitizedError.code,
+            lastErrorMessage: sanitizedError.message,
             state: 'pending',
           });
           setMetadata({ lastError: 'Food Library sync will retry when the connection is available.' });

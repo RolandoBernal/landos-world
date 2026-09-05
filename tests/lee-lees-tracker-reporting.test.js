@@ -81,6 +81,10 @@ function compactHtml(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function stripHtml(text) {
+  return compactHtml(text.replace(/<[^>]*>/g, ''));
+}
+
 test('starter food seed data is valid and matches runtime seed normalization', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
@@ -767,7 +771,23 @@ test('older bedtime records without insulin type metadata report as bedtime long
   assert.equal(summary.insulin.fastActing.total, 3);
 });
 
-test('reports insulin per-day metrics follow treatment insulin type rules by context', () => {
+test('daily summary exposes fast and long acting insulin total cards from actual given doses', () => {
+  const reports = createTrackerReports();
+  const summary = reports.calculateDailySummary([
+    record({ id: 'breakfast-fast', type: 'Breakfast', administeredInsulinUnits: 4.5, suggestedTotalUnits: 5 }),
+    record({ id: 'bedtime-long', type: 'Bedtime', administeredInsulinUnits: 17, suggestedTotalUnits: 18 }),
+    record({ id: 'correction-fast', type: 'Correction', administeredInsulinUnits: 1.5, suggestedTotalUnits: 2 }),
+  ]);
+
+  assert.equal(summary.totalInsulin, 23);
+  assert.equal(summary.fastActingInsulin, 6);
+  assert.equal(summary.longActingInsulin, 17);
+  assert.match(trackerSource, /\['Fast-acting', hasInsulin \? formatInsulin\(summary\.fastActingInsulin \|\| 0\) : 'No data'\]/);
+  assert.match(trackerSource, /\['Long-acting', hasInsulin \? formatInsulin\(summary\.longActingInsulin \|\| 0\) : 'No data'\]/);
+  assert.match(trackerSource, /\['Total insulin', formatSummaryValue\(summary\.totalInsulin, formatInsulin\)\]/);
+});
+
+test('reports insulin per-day metrics prefer explicit insulin type before legacy context fallback', () => {
   const reports = createTrackerReports();
   const summary = reports.calculateReportSummary([
     record({
@@ -806,14 +826,44 @@ test('reports insulin per-day metrics follow treatment insulin type rules by con
   assert.equal(summary.dayCount, 2);
   assert.equal(summary.insulin.total, 25);
   assert.equal(summary.insulin.averagePerDay, 12.5);
-  assert.equal(summary.insulin.longActing.total, 3);
-  assert.equal(summary.insulin.bedtimeLongActing.average, 3);
-  assert.equal(summary.insulin.fastActing.total, 22);
-  assert.equal(summary.insulin.fastActingAveragePerDay, 11);
+  assert.equal(summary.insulin.longActing.total, 17);
+  assert.equal(summary.insulin.bedtimeLongActing.average, null);
+  assert.equal(summary.insulin.fastActing.total, 8);
+  assert.equal(summary.insulin.fastActingAveragePerDay, 4);
   assert.equal(summary.carbs.averagePerDay, 36);
   assert.equal(summary.rates.entriesPerDay, 1.5);
   assert.equal(summary.rates.glucoseReadingsPerDay, 1.5);
   assert.equal(summary.rates.insulinAdministrationsPerDay, 1.5);
+});
+
+test('LLT entry cards semantically separate numeric values from labels and units', () => {
+  const reports = createTrackerReports();
+  const html = compactHtml(reports.renderTimelineItem(record({
+    type: 'Dinner',
+    eventType: 'check-insulin',
+    bloodSugar: 108,
+    mealCarbs: 70,
+    administeredInsulinUnits: 4.5,
+    suggestedTotalUnits: 4.5,
+    suggestedCarbDoseUnits: 4.666666666666667,
+    suggestedCorrectionUnits: 0,
+    doseCalculationStatus: 'calculated',
+    mealComponents: [{
+      componentType: 'food',
+      quantity: 2,
+      nameSnapshot: 'Thin-Crust Pizza',
+      emojiSnapshot: '🍕',
+      carbs: 35,
+    }],
+    recordTimestamp: '2026-09-02T18:34:00.000Z',
+  })));
+
+  assert.match(html, /<span class="lee_lee_diabetes_numeric">108<\/span> mg\/dL/);
+  assert.match(html, /<span class="lee_lee_diabetes_numeric">70<\/span> g carbs/);
+  assert.match(html, /Given: <span class="lee_lee_diabetes_numeric">4\.5<\/span> units/);
+  assert.match(html, /<span class="lee_lee_diabetes_numeric">4\.67<\/span> units carbs \+ <span class="lee_lee_diabetes_numeric">0<\/span> units correction/);
+  assert.match(html, /<span class="lee_lee_diabetes_numeric">2<\/span>× 🍕 Thin-Crust Pizza/);
+  assert.match(html, /<time[^>]*><span class="lee_lee_diabetes_numeric">/);
 });
 
 test('reports target percentages require explicit min and max settings', () => {
@@ -882,8 +932,10 @@ test('reports navigation and print summary are wired into the app', () => {
   assert.match(trackerSource, /renderReports\(\)/);
   assert.doesNotMatch(trackerSource, /function renderExport\(\)/);
   assert.match(compactHtml(html), /<h3>Summary<\/h3>/);
-  assert.match(compactHtml(html), /<dt>Insulin given<\/dt> <dd>6 units<\/dd>/);
-  assert.doesNotMatch(compactHtml(html), /<dt>Insulin given<\/dt> <dd>5 units<\/dd>/);
+  assert.match(stripHtml(html), /Insulin given 6 units/);
+  assert.match(compactHtml(html), /<dt>Fast-acting insulin<\/dt> <dd><span class="lee_lee_diabetes_numeric">6<\/span> units<\/dd>/);
+  assert.match(compactHtml(html), /<dt>Long-acting insulin<\/dt> <dd>No data<\/dd>/);
+  assert.doesNotMatch(stripHtml(html), /Insulin given 5 units/);
 });
 
 test('entry type configuration exposes active carb-counting contexts while preserving legacy labels', () => {
@@ -1182,22 +1234,28 @@ test('settings UI exposes bedtime long-acting dose control', () => {
 });
 
 test('settings UI exposes configurable dose rounding controls', () => {
+  assert.match(trackerSource, /<form class="lee_lee_diabetes_editor" data-plan-editor novalidate>/);
   assert.match(trackerSource, /Dose Rounding/);
   assert.match(trackerSource, /name="doseRoundingMode"/);
   assert.match(trackerSource, /Dose Increment/);
-  assert.match(trackerSource, /name="doseIncrementUnits" type="number"/);
+  assert.match(trackerSource, /name="doseIncrementUnits" type="number" inputmode="decimal" min="0\.05" step="0\.05"/);
   assert.match(trackerSource, /Minimum Allowable Dose/);
-  assert.match(trackerSource, /name="minimumAllowableDoseUnits" type="number"/);
+  assert.match(trackerSource, /name="minimumAllowableDoseUnits" type="number" inputmode="decimal" min="0" step="0\.05"/);
   assert.match(trackerSource, /Dose increment must be greater than zero\./);
+  assert.match(trackerSource, /Dose increment must use 0\.05-unit precision\./);
   assert.match(trackerSource, /Minimum allowable dose must be a nonnegative number\./);
+  assert.match(trackerSource, /Minimum allowable dose must use 0\.05-unit precision\./);
 });
 
 test('LLT typography uses bundled DM Sans without affecting sibling apps', () => {
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'DM Sans'[\s\S]*font-weight: 400 700[\s\S]*url\('\.\.\/fonts\/dm-sans-latin\.woff2'\)/);
   assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/dm-sans-latin-ext\.woff2'\)/);
+  assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Roboto Mono'[\s\S]*url\('\.\.\/fonts\/roboto-mono-regular\.ttf'\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
   assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
-  assert.match(cssSource, /\.lee_lee_diabetes_shell input\[type="number"\],[\s\S]*\.lee_lee_diabetes_carb_calc_sum strong \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_timeline_values,[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_dose_breakdown,[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
   assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'DM Sans'/);
   assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
@@ -1426,12 +1484,36 @@ test('canonical entry cards render check insulin dinner once in today and histor
   assert.ok(historyHtml.includes(canonicalHtml));
 
   for (const html of [todayHtml, historyHtml]) {
-    assert.equal(countOccurrences(html, '269 mg/dL'), 1);
+    assert.equal(countOccurrences(stripHtml(html), '269 mg/dL'), 1);
     assert.equal(countOccurrences(html, 'Dinner'), 1);
-    assert.equal(countOccurrences(html, '<div class="lee_lee_diabetes_timeline_notes">8 units</div>'), 1);
-    assert.equal(countOccurrences(html, 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
+    assert.match(html, /<div class="lee_lee_diabetes_timeline_notes"><span class="lee_lee_diabetes_numeric">8<\/span> units<\/div>/);
+    assert.equal(countOccurrences(stripHtml(html), 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
   }
+});
+
+test('entry card dose breakdowns trim repeating decimal noise', () => {
+  const reports = createTrackerReports();
+  const dinner = record({
+    eventType: 'check-insulin',
+    type: 'Dinner',
+    bloodSugar: 108,
+    mealCarbs: 70,
+    administeredInsulinUnits: 4.5,
+    insulinUnits: 4.5,
+    suggestedTotalUnits: 4.5,
+    suggestedCarbDoseUnits: 4.666666666666667,
+    suggestedCorrectionUnits: 0,
+    doseCalculationStatus: 'calculated',
+    recordTimestamp: '2026-09-04T23:34:00.000Z',
+  });
+
+  const content = reports.getEntryCardContent(dinner);
+  assert.deepEqual(Array.from(content.secondary), [
+    '70 g carbs',
+    '4.5 units',
+    'Given: 4.5 units · Suggested: 4.5 units · 4.67 units carbs + 0 units correction',
+  ]);
 });
 
 test('canonical entry cards show bedtime manual override against suggested dose', () => {
@@ -1459,10 +1541,10 @@ test('canonical entry cards show bedtime manual override against suggested dose'
   assert.equal(content.timestamp, Date.parse('2026-08-08T21:36:00.000Z'));
 
   const historyHtml = reports.renderHistoryRecord(bedtime);
-  assert.equal(countOccurrences(historyHtml, '439 mg/dL'), 1);
+  assert.equal(countOccurrences(stripHtml(historyHtml), '439 mg/dL'), 1);
   assert.match(historyHtml, /Bedtime/);
-  assert.match(historyHtml, /14 units/);
-  assert.match(historyHtml, /Given: 14 units · Suggested: 15 units/);
+  assert.match(stripHtml(historyHtml), /14 units/);
+  assert.match(stripHtml(historyHtml), /Given: 14 units · Suggested: 15 units/);
   assert.doesNotMatch(historyHtml, /base|correction/);
 });
 
@@ -1488,7 +1570,7 @@ test('canonical entry cards keep other check insulin records free of dose guidan
 
   const historyHtml = reports.renderHistoryRecord(overnight);
   assert.match(historyHtml, /2 AM/);
-  assert.match(historyHtml, /0 units/);
+  assert.match(stripHtml(historyHtml), /0 units/);
   assert.doesNotMatch(historyHtml, /base|correction|Suggested/);
 });
 
@@ -1634,10 +1716,14 @@ test('shared sync status copy explains healthy, syncing, and offline states', ()
     configured: true,
     signedIn: true,
     pendingCount: 1,
+    recordPendingCount: 1,
+    sharedSettingsPendingCount: 0,
+    foodLibraryPendingCount: 0,
     conflictCount: 0,
     realtimeStatus: 'connected',
     state: 'offline',
-  }, now).message, 'Offline / Waiting to reconnect');
+    message: 'Offline — 1 record waiting to sync',
+  }, now).message, 'Offline — 1 record waiting to sync');
 });
 
 test('migration UX stores explicit shared sync metadata outside tracker records', () => {
@@ -1655,6 +1741,13 @@ test('migration UX stores explicit shared sync metadata outside tracker records'
   assert.match(trackerSource, /lastErrorCategory/);
   assert.match(trackerSource, /Migration Diagnostics/);
   assert.match(trackerSource, /scheduleMigrationContinuation/);
+});
+
+test('LLT exposes sanitized live sync diagnostics for device queue inspection', () => {
+  assert.match(trackerSource, /window\.LeeLeeTrackerDebug = \{/);
+  assert.match(trackerSource, /getSyncDiagnostics\(\) \{/);
+  assert.match(trackerSource, /syncRepository\?\.getSyncDiagnostics\?\.\(\) \|\| null/);
+  assert.match(trackerSource, /getSyncStatus\(\) \{/);
 });
 
 test('migration session summary preserves original total and counts conflicts as processed', () => {
