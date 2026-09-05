@@ -2267,7 +2267,7 @@
             <input type="checkbox" data-conflict-select="${escapeHtml(conflict.recordId)}" aria-label="Select ${escapeHtml(title)} conflict" ${isSelected ? 'checked' : ''}>
           </label>
           <div class="lee_lee_diabetes_record_details">
-            ${conflict.entityType === 'shared-settings' ? '' : `<p>${escapeHtml(formatRecordDateTime(local.recordTimestamp || shared.recordTimestamp))}</p>`}
+            ${conflict.entityType === 'shared-settings' ? '' : `<p>${renderRecordDateTime(local.recordTimestamp || shared.recordTimestamp)}</p>`}
             <p><strong>Shared:</strong> edited by ${escapeHtml(shared.lastEditedBy || shared.enteredBy || 'Unknown')}</p>
             <p><strong>This device:</strong> edited by ${escapeHtml(local.lastEditedBy || local.enteredBy || 'Unknown')}</p>
             <dl class="lee_lee_diabetes_conflict_grid">
@@ -2847,6 +2847,7 @@
         record.eventType ?? '',
         record.bloodSugar ?? '',
         getRecordActualInsulin(record) ?? '',
+        record.insulinType ?? record.insulin_type ?? record.insulinCategory ?? record.insulin_category ?? '',
         record.mealCarbs ?? '',
         record.activityDurationMinutes ?? '',
         record.updatedAt ?? '',
@@ -2860,17 +2861,28 @@
     const glucoseValues = sourceRecords
       .map((record) => normalizeBloodSugar(record.bloodSugar))
       .filter((value) => value != null);
-    const insulinValues = sourceRecords
-      .map(getRecordActualInsulin)
+    const insulinClassifications = sourceRecords
+      .map(classifyActualInsulin)
       .filter((value) => value != null);
+    const insulinValues = insulinClassifications.map((classification) => classification.actual);
+    const fastActingInsulinValues = insulinClassifications
+      .filter((classification) => classification.isFastActing)
+      .map((classification) => classification.actual);
+    const longActingInsulinValues = insulinClassifications
+      .filter((classification) => classification.isLongActing)
+      .map((classification) => classification.actual);
     const totalGlucose = glucoseValues.reduce((sum, value) => sum + value, 0);
     const totalInsulin = insulinValues.reduce((sum, value) => sum + value, 0);
+    const fastActingInsulin = fastActingInsulinValues.reduce((sum, value) => sum + value, 0);
+    const longActingInsulin = longActingInsulinValues.reduce((sum, value) => sum + value, 0);
     const summary = {
       entryCount: sourceRecords.length,
       averageBloodSugar: glucoseValues.length ? Math.round(totalGlucose / glucoseValues.length) : null,
       highestBloodSugar: glucoseValues.length ? Math.max(...glucoseValues) : null,
       lowestBloodSugar: glucoseValues.length ? Math.min(...glucoseValues) : null,
       totalInsulin: insulinValues.length ? totalInsulin : null,
+      fastActingInsulin: insulinValues.length ? fastActingInsulin : null,
+      longActingInsulin: insulinValues.length ? longActingInsulin : null,
     };
     dailySummaryCache.set(cacheKey, summary);
     return summary;
@@ -2979,15 +2991,15 @@
     if (actual == null) return null;
     const type = normalizeRecordContext(record?.type, normalizeEventType(record?.eventType, record));
     const explicitInsulinType = normalizeInsulinType(record?.insulinType ?? record?.insulin_type ?? record?.insulinCategory ?? record?.insulin_category);
-    const treatmentInsulinType = getTreatmentInsulinTypeForContext(type);
-    const isLongActing = treatmentInsulinType === 'long-acting';
+    const insulinType = explicitInsulinType || getTreatmentInsulinTypeForContext(type);
+    const isLongActing = insulinType === 'long-acting';
     const isMealRelated = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const isCorrection = type === 'Correction';
     return {
       actual,
       isFastActing: !isLongActing,
       isLongActing,
-      insulinType: treatmentInsulinType,
+      insulinType,
       recordedInsulinType: explicitInsulinType,
       isMealRelated,
       isCorrection,
@@ -3333,6 +3345,63 @@
     return value == null ? '' : `${value} g carbs`;
   }
 
+  function renderNumeric(value) {
+    return `<span class="lee_lee_diabetes_numeric">${escapeHtml(value)}</span>`;
+  }
+
+  function renderBloodSugar(value) {
+    return value == null ? '' : `${renderNumeric(value)} mg/dL`;
+  }
+
+  function renderInsulin(value) {
+    if (value == null) return '';
+    const formattedValue = formatDoseNumber(value);
+    return formattedValue ? `${renderNumeric(formattedValue)} ${Number(formattedValue) === 1 ? 'unit' : 'units'}` : '';
+  }
+
+  function renderCarbs(value) {
+    return value == null ? '' : `${renderNumeric(value)} g carbs`;
+  }
+
+  function renderCarbGrams(value) {
+    return value == null ? '' : `${renderNumeric(value)} g`;
+  }
+
+  function renderDoseNumber(value) {
+    const formattedValue = formatDoseNumber(value);
+    return formattedValue ? renderNumeric(formattedValue) : '';
+  }
+
+  function renderSummaryValue(value, formatter, fallback = 'No data') {
+    return value == null ? escapeHtml(fallback) : formatter(value);
+  }
+
+  function renderFormattedValue(value) {
+    const text = String(value ?? '');
+    if (!text) return '';
+    const escaped = escapeHtml(text);
+    const leadingMeasurementMatch = text.match(/^(-?\d+(?:\.\d+)?)(\+?)(?:\s+)(mg\/dL|g carbs?|units?|entries?|entry|records?|readings?|administrations?|days?)(.*)$/);
+    if (leadingMeasurementMatch) {
+      return `${renderNumeric(`${leadingMeasurementMatch[1]}${leadingMeasurementMatch[2]}`)} ${escapeHtml(leadingMeasurementMatch[3])}${escapeHtml(leadingMeasurementMatch[4])}`;
+    }
+    const measurementMatch = text.match(/^(-?\d+(?:\.\d+)?)(\+?)(?:\s+)(mg\/dL|g carbs?|units?|entries?|entry|records?|readings?|administrations?|days?)$/);
+    if (measurementMatch) {
+      return `${renderNumeric(`${measurementMatch[1]}${measurementMatch[2]}`)} ${escapeHtml(measurementMatch[3])}`;
+    }
+    const percentMatch = text.match(/^(-?\d+(?:\.\d+)?)%$/);
+    if (percentMatch) return `${renderNumeric(percentMatch[1])}%`;
+    const countRatioMatch = text.match(/^(\d+) of (\d+)$/);
+    if (countRatioMatch) return `${renderNumeric(countRatioMatch[1])} of ${renderNumeric(countRatioMatch[2])}`;
+    if (/^-?\d+(?:\.\d+)?$/.test(text)) return renderNumeric(text);
+    if (/^\d{1,2}:\d{2}(?:\s?[AP]M)?$/i.test(text)) return renderNumeric(text);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return renderNumeric(text);
+    return escaped;
+  }
+
+  function renderCount(count, singular, plural = `${singular}s`) {
+    return `${renderNumeric(count)} ${count === 1 ? escapeHtml(singular) : escapeHtml(plural)}`;
+  }
+
   function formatMealComponentLabel(component) {
     const item = normalizeMealComponent(component);
     if (!item) return '';
@@ -3340,6 +3409,15 @@
     return item.quantity && item.quantity !== 1 && item.componentType !== 'manual'
       ? `${formatCarbAmount(item.quantity)}× ${name}`
       : name;
+  }
+
+  function renderMealComponentLabel(component) {
+    const item = normalizeMealComponent(component);
+    if (!item) return '';
+    const name = [item.emojiSnapshot, item.nameSnapshot || 'Manual amount'].filter(Boolean).join(' ');
+    return item.quantity && item.quantity !== 1 && item.componentType !== 'manual'
+      ? `${renderNumeric(formatCarbAmount(item.quantity))}× ${escapeHtml(name)}`
+      : escapeHtml(name);
   }
 
   function getMealComponentSummary(record) {
@@ -3356,6 +3434,10 @@
     return value == null ? '' : `${value} min`;
   }
 
+  function renderActivityDuration(value) {
+    return value == null ? '' : `${renderNumeric(value)} min`;
+  }
+
   function formatRange(range) {
     if (!range) return '';
     if (range.minGlucose == null) return `Below ${Number(range.maxGlucose) + 1} mg/dL`;
@@ -3363,9 +3445,21 @@
     return `${range.minGlucose}-${range.maxGlucose} mg/dL`;
   }
 
+  function renderRange(range) {
+    if (!range) return '';
+    if (range.minGlucose == null) return `Below ${renderBloodSugar(Number(range.maxGlucose) + 1)}`;
+    if (range.maxGlucose == null) return `${renderNumeric(`${range.minGlucose}+`)} mg/dL`;
+    return `${renderNumeric(`${range.minGlucose}-${range.maxGlucose}`)} mg/dL`;
+  }
+
   function formatRecordDateTime(timestamp) {
     const date = new Date(timestamp);
     return `${formatDate(date)} at ${formatTime(timestamp)}`;
+  }
+
+  function renderRecordDateTime(timestamp) {
+    const date = new Date(timestamp);
+    return `${renderNumeric(formatDate(date))} at ${renderNumeric(formatTime(timestamp))}`;
   }
 
   function getMealDoseSummary(record) {
@@ -3385,6 +3479,78 @@
     const breakdown = `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`;
     return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
   }
+
+  function renderMealDoseSummary(record) {
+    if (!record || record.doseCalculationStatus !== 'calculated' || record.suggestedTotalUnits == null) return '';
+    const given = renderInsulin(record.administeredInsulinUnits ?? record.insulinUnits) || 'No insulin';
+    const suggested = renderInsulin(record.suggestedTotalUnits);
+    if (record.type === BEDTIME_CONTEXT_TYPE) {
+      return `Given: ${given} · Suggested: ${suggested}`;
+    }
+    if (record.suggestedCarbDoseUnits != null || record.rawCarbDose != null) {
+      const parts = [];
+      if (record.suggestedCarbDoseUnits != null) parts.push(`${renderInsulin(record.suggestedCarbDoseUnits)} carbs`);
+      if (record.suggestedCorrectionUnits != null) parts.push(`${renderInsulin(record.suggestedCorrectionUnits)} correction`);
+      const breakdown = parts.length ? parts.join(' + ') : 'Carb coverage';
+      return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
+    }
+    const breakdown = `${renderInsulin(record.suggestedBaseUnits)} base + ${renderInsulin(record.suggestedCorrectionUnits)} correction`;
+    return `Given: ${given} · Suggested: ${suggested} · ${breakdown}`;
+  }
+
+  function getRenderedRecordPrimaryValue(record) {
+    if (!record) return '';
+    if (record.eventType === 'meal') return renderCarbs(record.mealCarbs);
+    if (record.eventType === 'activity') return escapeHtml(record.activityDescription || 'Activity');
+    if (record.eventType === 'check-insulin' && ['Snacks', 'Snack'].includes(record.type)) {
+      return renderCarbs(record.mealCarbs) || renderBloodSugar(record.bloodSugar) || renderInsulin(getRecordActualInsulin(record));
+    }
+    if (record.eventType === 'check-insulin') {
+      return renderBloodSugar(record.bloodSugar) || renderCarbs(record.mealCarbs) || renderInsulin(getRecordActualInsulin(record));
+    }
+    if (record.eventType === 'note') return record.notes ? 'Note' : '';
+    return renderBloodSugar(record.bloodSugar);
+  }
+
+  function getRenderedRecordSecondaryLines(record) {
+    if (!record) return [];
+    if (record.eventType === 'meal') {
+      return [
+        escapeHtml(record.type),
+        escapeHtml(record.mealDescription || ''),
+        escapeHtml(record.notes || ''),
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'activity') {
+      return [
+        [renderActivityDuration(record.activityDurationMinutes), escapeHtml(record.activityIntensity || '')].filter(Boolean).join(' · '),
+        escapeHtml(record.notes || ''),
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'check-insulin') {
+      const primary = getRecordPrimaryValue(record);
+      const actualInsulin = formatInsulin(getRecordActualInsulin(record));
+      const carbs = formatCarbs(record.mealCarbs);
+      const foodSummary = Array.isArray(record?.mealComponents)
+        ? record.mealComponents.map(renderMealComponentLabel).filter(Boolean).join(' · ')
+        : '';
+      return [
+        carbs && carbs !== primary ? renderCarbs(record.mealCarbs) : '',
+        actualInsulin && actualInsulin !== primary ? renderInsulin(getRecordActualInsulin(record)) : '',
+        foodSummary,
+        renderMealDoseSummary(record),
+        escapeHtml(record.notes || ''),
+      ].filter(Boolean);
+    }
+    if (record.eventType === 'note') {
+      return [escapeHtml(record.notes || 'No note text')].filter(Boolean);
+    }
+    return [
+      escapeHtml(record.type),
+      escapeHtml(record.notes || ''),
+    ].filter(Boolean);
+  }
+
 
   function getEventTypeLabel(eventType) {
     return getEventTypeConfig(eventType).label;
@@ -3449,11 +3615,11 @@
   function renderValuePills(record) {
     if (!record) return '';
     const values = [
-      formatBloodSugar(record.bloodSugar),
-      formatInsulin(getRecordActualInsulin(record)),
+      renderBloodSugar(record.bloodSugar),
+      renderInsulin(getRecordActualInsulin(record)),
     ].filter(Boolean);
     return values.length
-      ? `<div class="lee_lee_diabetes_card_values">${values.map((value) => `<span class="lee_lee_diabetes_pill">${escapeHtml(value)}</span>`).join('')}</div>`
+      ? `<div class="lee_lee_diabetes_card_values">${values.map((value) => `<span class="lee_lee_diabetes_pill">${value}</span>`).join('')}</div>`
       : '';
   }
 
@@ -3468,11 +3634,13 @@
 
   function renderEntryCardContent(record) {
     const content = getEntryCardContent(record);
+    const primary = getRenderedRecordPrimaryValue(record);
+    const secondary = getRenderedRecordSecondaryLines(record);
     return `
       <div>
         <div class="lee_lee_diabetes_timeline_type">${escapeHtml(content.title)}</div>
-        ${content.primary ? `<div class="lee_lee_diabetes_timeline_values">${escapeHtml(content.primary)}</div>` : ''}
-        ${content.secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${escapeHtml(line)}</div>`).join('')}
+        ${content.primary ? `<div class="lee_lee_diabetes_timeline_values">${primary}</div>` : ''}
+        ${secondary.map((line) => `<div class="lee_lee_diabetes_timeline_notes">${line}</div>`).join('')}
       </div>
     `;
   }
@@ -3483,7 +3651,7 @@
       <article class="lee_lee_diabetes_timeline_item${variant ? ` lee_lee_diabetes_timeline_item--${escapeHtml(variant)}` : ''}">
         ${renderEntryCardContent(record)}
         <div class="lee_lee_diabetes_timeline_footer">
-          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(timestamp).toISOString())}">${escapeHtml(formatTime(timestamp))}</time>
+          <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(timestamp).toISOString())}">${renderNumeric(formatTime(timestamp))}</time>
           ${actions}
         </div>
       </article>
@@ -3696,11 +3864,14 @@
   }
 
   function renderSummaryGrid(summary) {
+    const hasInsulin = summary.totalInsulin != null;
     const items = [
       ['Entries', summary.entryCount],
       ['Average', formatSummaryValue(summary.averageBloodSugar, formatBloodSugar)],
       ['High', formatSummaryValue(summary.highestBloodSugar, formatBloodSugar)],
       ['Low', formatSummaryValue(summary.lowestBloodSugar, formatBloodSugar)],
+      ['Fast-acting', hasInsulin ? formatInsulin(summary.fastActingInsulin || 0) : 'No data'],
+      ['Long-acting', hasInsulin ? formatInsulin(summary.longActingInsulin || 0) : 'No data'],
       ['Total insulin', formatSummaryValue(summary.totalInsulin, formatInsulin)],
     ];
     return `
@@ -3708,7 +3879,7 @@
         ${items.map(([label, value]) => `
           <div>
             <dt>${escapeHtml(label)}</dt>
-            <dd>${escapeHtml(value)}</dd>
+            <dd>${renderFormattedValue(value)}</dd>
           </div>
         `).join('')}
       </dl>
@@ -3754,9 +3925,9 @@
     const types = [...new Set(group.records.map((record) => record.type))].join(' · ');
     return `
       <button type="button" class="lee_lee_diabetes_history_date" data-action="history-date" data-date="${escapeHtml(group.dateKey)}">
-        <span>
-          <span class="lee_lee_diabetes_card_title">${escapeHtml(formatDateKey(group.dateKey))}</span>
-          <span class="lee_lee_diabetes_timeline_values">${escapeHtml(summary.entryCount)} ${summary.entryCount === 1 ? 'entry' : 'entries'} · Average: ${escapeHtml(formatSummaryValue(summary.averageBloodSugar, formatBloodSugar))} · Total insulin: ${escapeHtml(formatSummaryValue(summary.totalInsulin, formatInsulin))}</span>
+          <span>
+            <span class="lee_lee_diabetes_card_title">${escapeHtml(formatDateKey(group.dateKey))}</span>
+          <span class="lee_lee_diabetes_timeline_values">${renderCount(summary.entryCount, 'entry', 'entries')} · Average: ${renderSummaryValue(summary.averageBloodSugar, renderBloodSugar)} · Total insulin: ${renderSummaryValue(summary.totalInsulin, renderInsulin)}</span>
           <span class="lee_lee_diabetes_timeline_notes">${escapeHtml(types)}</span>
         </span>
         <span class="lee_lee_diabetes_card_icon" aria-hidden="true">›</span>
@@ -3841,12 +4012,12 @@
 
   function renderFoodLibraryRow(food) {
     const sourceLabel = formatFoodSourceLabel(food);
-    const metadata = [food.brand, food.servingLabel, formatCarbs(food.carbs), sourceLabel].filter(Boolean).join(' · ');
+    const metadata = [food.brand ? escapeHtml(food.brand) : '', food.servingLabel ? escapeHtml(food.servingLabel) : '', renderCarbs(food.carbs), sourceLabel ? escapeHtml(sourceLabel) : ''].filter(Boolean).join(' · ');
     return `
       <article class="lee_lee_diabetes_food_item">
         <div>
           <strong>${food.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(food.emoji)}</span>` : ''}${escapeHtml(food.name)}</strong>
-          <p>${escapeHtml(metadata)}</p>
+          <p>${metadata}</p>
           ${food.verificationNote ? `<p class="lee_lee_diabetes_food_note">${escapeHtml(food.verificationNote)}</p>` : ''}
         </div>
         <div class="lee_lee_diabetes_record_actions">
@@ -3863,8 +4034,8 @@
       <article class="lee_lee_diabetes_food_item">
         <div>
           <strong>${escapeHtml(meal.name)}</strong>
-          <p>${escapeHtml(formatCarbs(meal.totalCarbs))}</p>
-          <p>${escapeHtml(meal.components.map(formatMealComponentLabel).join(' · '))}</p>
+          <p>${renderCarbs(meal.totalCarbs)}</p>
+          <p>${meal.components.map(renderMealComponentLabel).join(' · ')}</p>
         </div>
         <div class="lee_lee_diabetes_record_actions">
           <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-saved-meal" data-id="${escapeHtml(meal.id)}">Delete</button>
@@ -3896,11 +4067,11 @@
           </div>
           <div>
             <dt>Date and time</dt>
-            <dd>${escapeHtml(formatRecordDateTime(record.recordTimestamp))}</dd>
+            <dd>${renderRecordDateTime(record.recordTimestamp)}</dd>
           </div>
           <div>
             <dt>Value</dt>
-            <dd>${escapeHtml(getRecordPrimaryValue(record) || 'No value')}</dd>
+            <dd>${getRenderedRecordPrimaryValue(record) || 'No value'}</dd>
           </div>
         </dl>
         <div class="lee_lee_diabetes_actions">
@@ -3956,11 +4127,11 @@
     if (!visibleItems.length) return '<p class="lee_lee_diabetes_empty" role="status">No data for this section.</p>';
     return `
       <dl class="lee_lee_diabetes_summary_grid lee_lee_diabetes_report_metric_grid">
-        ${visibleItems.map(({ label, value, detail = '' }) => `
+        ${visibleItems.map(({ label, value, detail = '', detailHtml = '' }) => `
           <div>
             <dt>${escapeHtml(label)}</dt>
-            <dd>${escapeHtml(value)}</dd>
-            ${detail ? `<p>${escapeHtml(detail)}</p>` : ''}
+            <dd>${renderFormattedValue(value)}</dd>
+            ${detailHtml || detail ? `<p>${detailHtml || renderFormattedValue(detail)}</p>` : ''}
           </div>
         `).join('')}
       </dl>
@@ -4001,6 +4172,16 @@
     return details.join(' · ');
   }
 
+  function renderBedtimeLongActingDetail(summary) {
+    const bedtime = summary.insulin.bedtimeLongActing;
+    const details = [];
+    if (bedtime.count) details.push(renderCount(bedtime.count, 'administration'));
+    if (bedtime.expectedCount) {
+      details.push(`${renderNumeric(bedtime.recordedExpectedCount)} of ${renderNumeric(bedtime.expectedCount)} expected bedtime doses recorded`);
+    }
+    return details.join(' · ');
+  }
+
   function renderReportsSummary(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
     const summary = calculateReportSummary(reportRecords, resolvedRange);
     const targetItems = summary.glucose.targetRange ? [
@@ -4034,7 +4215,7 @@
           { label: 'Fast-acting total', value: formatSummaryValue(summary.insulin.fastActing.total, formatInsulin), detail: summary.insulin.fastActing.count ? pluralize(summary.insulin.fastActing.count, 'administration') : '' },
           { label: 'Fast-acting avg per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
           { label: 'Long-acting total', value: formatSummaryValue(summary.insulin.longActing.total, formatInsulin), detail: summary.insulin.longActing.count ? pluralize(summary.insulin.longActing.count, 'administration') : '' },
-          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
+          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detailHtml: renderBedtimeLongActingDetail(summary) },
           { label: 'Meal-related total', value: formatSummaryValue(summary.insulin.mealRelated.total, formatInsulin), detail: summary.insulin.mealRelated.count ? pluralize(summary.insulin.mealRelated.count, 'administration') : '' },
           { label: 'Meal-related average', value: formatAverageInsulin(summary.insulin.mealRelatedAverage) },
           { label: 'Correction total', value: formatSummaryValue(summary.insulin.correction.total, formatInsulin), detail: summary.insulin.correction.count ? pluralize(summary.insulin.correction.count, 'administration') : '' },
@@ -4095,7 +4276,7 @@
         <table class="lee_lee_diabetes_chart_table">
           <thead><tr><th scope="col">Time</th><th scope="col">Context</th><th scope="col">Value</th></tr></thead>
           <tbody>
-            ${series.map((point) => `<tr><td>${escapeHtml(formatShortDateKey(getRecordEventDateKey(point.record)))} ${escapeHtml(formatTime(point.timestamp))}</td><td>${escapeHtml(point.record.type)}</td><td>${escapeHtml(formatter(point.value))}</td></tr>`).join('')}
+            ${series.map((point) => `<tr><td>${renderNumeric(formatShortDateKey(getRecordEventDateKey(point.record)))} ${renderNumeric(formatTime(point.timestamp))}</td><td>${escapeHtml(point.record.type)}</td><td>${renderFormattedValue(formatter(point.value))}</td></tr>`).join('')}
           </tbody>
         </table>
       </figure>
@@ -4143,7 +4324,7 @@
           { label: 'Insulin per administration', value: formatAverageInsulin(summary.insulin.average), detail: summary.insulin.count ? pluralize(summary.insulin.count, 'administration') : '' },
           { label: 'Insulin per day', value: formatAverageInsulin(summary.insulin.averagePerDay) },
           { label: 'Fast-acting avg per day', value: formatAverageInsulin(summary.insulin.fastActingAveragePerDay) },
-          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detail: formatBedtimeLongActingDetail(summary) },
+          { label: 'Long-lasting avg per day', value: formatAverageInsulin(summary.insulin.bedtimeLongActing.average), detailHtml: renderBedtimeLongActingDetail(summary) },
           { label: 'Carbs per entry', value: formatAverageCarbs(summary.carbs.averagePerEntry), detail: summary.carbs.count ? pluralize(summary.carbs.count, 'entry', 'entries') : '' },
           { label: 'Carbs per day', value: formatAverageCarbs(summary.carbs.averagePerDay) },
           { label: 'Entries per day', value: formatNumberRate(summary.rates.entriesPerDay) },
@@ -4159,7 +4340,7 @@
                 context.glucose.count ? `${formatAverageGlucose(context.glucose.average)} avg` : '',
                 context.carbs.count ? `${formatAverageCarbs(context.carbs.average)} avg` : '',
                 context.insulin.count ? `${formatAverageInsulin(context.insulin.average)} avg ${context.type === BEDTIME_CONTEXT_TYPE ? 'bedtime long-acting' : 'fast-acting'}` : '',
-              ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+              ].filter(Boolean).map(renderFormattedValue).join(' · ')}</p>
             </article>
           `).join('') : '<p class="lee_lee_diabetes_empty">No Breakfast, Lunch, Dinner, or Bedtime averages for this range.</p>'}
         </div>
@@ -4219,7 +4400,7 @@
         </label>
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="print-report" ${reportRecords.length ? '' : 'disabled'}>Print or Save as PDF</button>
       </section>
-      <p class="lee_lee_diabetes_help">${escapeHtml(reportRecords.length)} ${reportRecords.length === 1 ? 'record' : 'records'} from ${escapeHtml(rangeSummary)}.</p>
+      <p class="lee_lee_diabetes_help">${renderCount(reportRecords.length, 'record')} from ${escapeHtml(rangeSummary)}.</p>
       <div class="lee_lee_diabetes_reports_body">
         ${renderReportsView(reportRecords, resolvedRange)}
       </div>
@@ -4266,7 +4447,7 @@
           ].map(([label, value]) => `
             <div>
               <dt>${escapeHtml(label)}</dt>
-              <dd>${escapeHtml(value)}</dd>
+              <dd>${renderFormattedValue(value)}</dd>
             </div>
           `).join('')}
         </dl>
@@ -4296,7 +4477,7 @@
           ${details.map(([label, value]) => `
             <div>
               <dt>${escapeHtml(label)}</dt>
-              <dd>${escapeHtml(value)}</dd>
+              <dd>${label === 'Patient' || label === 'Clinic' ? escapeHtml(value) : renderFormattedValue(value)}</dd>
             </div>
           `).join('')}
         </dl>
@@ -4398,31 +4579,31 @@
 
   function renderDetailedReportRow(record) {
     const suggestedParts = [
-      record.suggestedTotalUnits == null ? '' : formatInsulin(record.suggestedTotalUnits),
+      record.suggestedTotalUnits == null ? '' : renderInsulin(record.suggestedTotalUnits),
       record.suggestedCarbDoseUnits == null
         ? ''
-        : `${formatInsulin(record.suggestedCarbDoseUnits)} carb coverage`,
+        : `${renderInsulin(record.suggestedCarbDoseUnits)} carb coverage`,
       record.suggestedBaseUnits == null && record.suggestedCorrectionUnits == null
         ? ''
         : (record.suggestedBaseUnits == null
-          ? `${formatInsulin(record.suggestedCorrectionUnits)} correction`
-          : `${formatInsulin(record.suggestedBaseUnits)} base + ${formatInsulin(record.suggestedCorrectionUnits)} correction`),
+          ? `${renderInsulin(record.suggestedCorrectionUnits)} correction`
+          : `${renderInsulin(record.suggestedBaseUnits)} base + ${renderInsulin(record.suggestedCorrectionUnits)} correction`),
       record.doseCalculationStatus && record.doseCalculationStatus !== 'calculated' && record.doseCalculationStatus !== 'manual'
-        ? record.doseCalculationStatus
+        ? escapeHtml(record.doseCalculationStatus)
         : '',
     ].filter(Boolean).join(' · ');
     const planName = record.insulinPlanSnapshot?.name || record.insulinPlanId || '';
     return `
       <tr>
-        <td>${escapeHtml(formatTime(getRecordTimestamp(record)))}</td>
+        <td>${renderNumeric(formatTime(getRecordTimestamp(record)))}</td>
         <td>${escapeHtml(getEventTypeLabel(record.eventType))}</td>
         <td>${escapeHtml(record.type)}</td>
-        <td>${escapeHtml(formatCarbs(record.mealCarbs) || '—')}</td>
+        <td>${record.mealCarbs == null ? '—' : renderCarbs(record.mealCarbs)}</td>
         <td>${escapeHtml(record.mealDescription || '—')}</td>
-        <td>${escapeHtml([record.activityDescription, formatActivityDuration(record.activityDurationMinutes), record.activityIntensity].filter(Boolean).join(' · ') || '—')}</td>
-        <td>${escapeHtml(formatBloodSugar(record.bloodSugar) || '—')}</td>
-        <td>${escapeHtml(formatInsulin(getRecordActualInsulin(record)) || '—')}</td>
-        <td>${escapeHtml(suggestedParts || '—')}</td>
+        <td>${[escapeHtml(record.activityDescription || ''), renderActivityDuration(record.activityDurationMinutes), escapeHtml(record.activityIntensity || '')].filter(Boolean).join(' · ') || '—'}</td>
+        <td>${record.bloodSugar == null ? '—' : renderBloodSugar(record.bloodSugar)}</td>
+        <td>${getRecordActualInsulin(record) == null ? '—' : renderInsulin(getRecordActualInsulin(record))}</td>
+        <td>${suggestedParts || '—'}</td>
         <td>${escapeHtml(planName || '—')}</td>
         <td>${escapeHtml(record.notes || '—')}</td>
       </tr>
@@ -4474,7 +4655,7 @@
           </div>
           <div class="lee_lee_diabetes_carb_calc_sum" aria-live="polite">
             <span>Total Carbs</span>
-            <strong data-carb-calculator-total aria-label="Meal Total">${escapeHtml(formatCarbAmount(mealTotal))} g</strong>
+            <strong data-carb-calculator-total aria-label="Meal Total">${renderCarbGrams(formatCarbAmount(mealTotal))}</strong>
           </div>
           ${hasReusableFoodSelection(normalizedRows) ? `
             <div class="lee_lee_diabetes_carb_secondary_action">
@@ -4569,7 +4750,7 @@
         .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
       return meals.length ? meals.map((meal) => `
         <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}">
-          <span><strong>${escapeHtml(meal.name)}</strong><small>${escapeHtml(formatCarbs(meal.totalCarbs))}</small></span>
+            <span><strong>${escapeHtml(meal.name)}</strong><small>${renderCarbs(meal.totalCarbs)}</small></span>
           <span aria-hidden="true">+</span>
         </button>
       `).join('') : '<p class="lee_lee_diabetes_empty">No My Meals yet.</p>';
@@ -4594,7 +4775,7 @@
     return `
       <div class="lee_lee_diabetes_carb_food_row${options.showFavoriteToggle === false ? ' lee_lee_diabetes_carb_food_row--picker' : ''}">
         <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-food-to-carb-calculator" data-id="${escapeHtml(food.id)}" aria-label="${escapeHtml(`${actionLabel} ${food.name} ${formatCarbs(food.carbs)}`)}">
-          <span><strong>${food.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(food.emoji)}</span>` : ''}${escapeHtml(food.name)}</strong><small>${escapeHtml([food.brand, food.servingLabel, formatCarbs(food.carbs)].filter(Boolean).join(' · '))}</small></span>
+          <span><strong>${food.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(food.emoji)}</span>` : ''}${escapeHtml(food.name)}</strong><small>${[food.brand ? escapeHtml(food.brand) : '', food.servingLabel ? escapeHtml(food.servingLabel) : '', renderCarbs(food.carbs)].filter(Boolean).join(' · ')}</small></span>
           <span class="lee_lee_diabetes_carb_pick_state" aria-hidden="true">${selected ? '✓' : '+'}</span>
         </button>
         ${options.showFavoriteToggle === false ? '' : `<button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-food-favorite" data-id="${escapeHtml(food.id)}" aria-label="${food.favorite ? 'Remove favorite' : 'Mark favorite'}">${food.favorite ? '★' : '☆'}</button>`}
@@ -4626,7 +4807,7 @@
       <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-meal-editor-title">
         <h3 id="lee-lee-carb-meal-editor-title">Save as My Meal</h3>
         <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" maxlength="80" autocomplete="off" required></label>
-        <p class="lee_lee_diabetes_help">${escapeHtml(formatCarbs(total))}</p>
+        <p class="lee_lee_diabetes_help">${renderCarbs(total)}</p>
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-meal-editor">Cancel</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save My Meal</button>
@@ -4673,7 +4854,7 @@
           </span>
         </label>
       </div>
-      <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : `${escapeHtml(formatCarbAmount(rowTotal))} g`}</output>
+      <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : renderCarbGrams(formatCarbAmount(rowTotal))}</output>
       <div class="lee_lee_diabetes_carb_calc_remove_slot">
         ${started ? `<button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(removeLabel)}">×</button>` : ''}
       </div>
@@ -4991,16 +5172,16 @@
     if (result.status === 'calculated') {
       const carbBreakdown = result.carbDoseUnits == null
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Carb coverage: ${escapeHtml(formatCarbs(result.totalCarbs))} ÷ ${escapeHtml(result.insulinCarbRatioGrams)} = ${escapeHtml(formatDoseNumber(result.rawCarbDose))} units</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Carb coverage: ${renderCarbs(result.totalCarbs)} ÷ ${renderNumeric(result.insulinCarbRatioGrams)} = ${renderDoseNumber(result.rawCarbDose)} units</div>`;
       const correctionBreakdown = result.correctionUnits == null
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${escapeHtml(formatInsulin(result.correctionUnits))}</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${renderInsulin(result.correctionUnits)}</div>`;
       const rawDoseBreakdown = result.rawAggregateDose == null || result.rawAggregateDose === result.suggestedTotalUnits
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Raw dose: ${escapeHtml(formatDoseNumber(result.rawAggregateDose))} units</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Raw dose: ${renderDoseNumber(result.rawAggregateDose)} units</div>`;
       const roundingBreakdown = result.carbDoseUnits == null || result.rawAggregateDose == null
         ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${escapeHtml(formatDoseNumber(result.doseIncrementUnits))}-unit increment: ${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>`;
+        : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${renderDoseNumber(result.doseIncrementUnits)}-unit increment: ${renderInsulin(result.suggestedTotalUnits)}</div>`;
       const minimumWarning = result.minimumDoseWarning
         ? `<p class="lee_lee_diabetes_dose_warning">${escapeHtml(result.minimumDoseWarning)}</p>`
         : '';
@@ -5008,16 +5189,16 @@
         ? `<p>${escapeHtml(result.message)}</p>`
         : '';
       const legacyBreakdown = result.baseUnits != null && result.correctionUnits != null
-        ? `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(formatInsulin(result.baseUnits))} base + ${escapeHtml(formatInsulin(result.correctionUnits))} correction</div>`
+        ? `<div class="lee_lee_diabetes_dose_breakdown">${renderInsulin(result.baseUnits)} base + ${renderInsulin(result.correctionUnits)} correction</div>`
         : '';
       const range = result.matchedRange
-        ? `<div class="lee_lee_diabetes_dose_range">${escapeHtml(formatRange(result.matchedRange))}</div>`
+        ? `<div class="lee_lee_diabetes_dose_range">${renderRange(result.matchedRange)}</div>`
         : '';
       return `
         <section class="lee_lee_diabetes_dose_card" aria-label="Suggested insulin">
           <div>
             <div class="lee_lee_diabetes_dose_label">Suggested dose</div>
-            <div class="lee_lee_diabetes_dose_total">${escapeHtml(formatInsulin(result.suggestedTotalUnits))}</div>
+            <div class="lee_lee_diabetes_dose_total">${renderInsulin(result.suggestedTotalUnits)}</div>
             ${carbBreakdown}
             ${correctionBreakdown}
             ${rawDoseBreakdown}
@@ -5117,7 +5298,7 @@
         const qtyInput = rowElement.querySelector(`[name="carbCalcQty"]${getCarbRowSelector(row.id)}`);
         if (qtyInput && qtyInput.value !== row.qty) qtyInput.value = row.qty;
         const totalElement = rowElement.querySelector('.lee_lee_diabetes_carb_calc_row_total');
-        if (totalElement) totalElement.textContent = rowTotal == null ? '—' : `${formatCarbAmount(rowTotal)} g`;
+        if (totalElement) totalElement.innerHTML = rowTotal == null ? '—' : renderCarbGrams(formatCarbAmount(rowTotal));
         const removeSlot = rowElement.querySelector('.lee_lee_diabetes_carb_calc_remove_slot');
         if (removeSlot) {
           removeSlot.innerHTML = isCarbCalculatorRowStarted(row)
@@ -5133,7 +5314,7 @@
     }
     const formattedTotal = formatCarbAmount(mealTotal);
     const totalElement = calculator.querySelector('[data-carb-calculator-total]');
-    if (totalElement) totalElement.textContent = `${formattedTotal} g`;
+    if (totalElement) totalElement.innerHTML = renderCarbGrams(formattedTotal);
     const useButton = calculator.querySelector('[data-action="use-carb-calculator-total"]');
     if (useButton) {
       useButton.textContent = `Use ${formattedTotal} g`;
@@ -5846,19 +6027,19 @@
         <dl class="lee_lee_diabetes_confirm_list">
           <div>
             <dt>Blood sugar</dt>
-            <dd>${escapeHtml(formatBloodSugar(record.bloodSugar) || 'No blood sugar')}</dd>
+            <dd>${renderBloodSugar(record.bloodSugar) || 'No blood sugar'}</dd>
           </div>
           <div>
             <dt>Suggested dose</dt>
-            <dd>${escapeHtml(suggested)}</dd>
+            <dd>${record.suggestedTotalUnits == null ? escapeHtml(suggested) : renderInsulin(record.suggestedTotalUnits)}</dd>
           </div>
           <div>
             <dt>${differs ? 'Recorded as given' : 'Insulin entered as given'}</dt>
-            <dd>${escapeHtml(given)}</dd>
+            <dd>${record.administeredInsulinUnits == null ? escapeHtml(given) : renderInsulin(record.administeredInsulinUnits)}</dd>
           </div>
           <div>
             <dt>Record time</dt>
-            <dd>${escapeHtml(formatRecordDateTime(record.recordTimestamp))}</dd>
+            <dd>${renderRecordDateTime(record.recordTimestamp)}</dd>
           </div>
         </dl>
         <p class="lee_lee_diabetes_help">Based on the current clinician-provided insulin plan. Confirm the dose before giving insulin.</p>
@@ -6187,7 +6368,7 @@
           <p class="lee_lee_diabetes_help">Meals use carb counting plus the correction table. Legacy fixed meal base doses are preserved for older records but no longer used for new meal calculations.</p>
           <label class="lee_lee_diabetes_field">
             Insulin-to-Carb Ratio
-            <span class="lee_lee_diabetes_inline_control">1 unit per <input class="lee_lee_diabetes_input" name="insulinCarbRatioGrams" type="number" inputmode="decimal" min="0.1" step="0.1" required value="${escapeHtml(getInsulinCarbRatioGrams(plan))}"> g carbs</span>
+            <span class="lee_lee_diabetes_inline_control">${renderNumeric(1)} unit per <input class="lee_lee_diabetes_input" name="insulinCarbRatioGrams" type="number" inputmode="decimal" min="0.1" step="0.1" required value="${escapeHtml(getInsulinCarbRatioGrams(plan))}"> g carbs</span>
           </label>
           <label class="lee_lee_diabetes_field">
             Dose Rounding
@@ -6250,8 +6431,8 @@
               <div>
                 <div class="lee_lee_diabetes_timeline_type">${escapeHtml(record.type)}</div>
                 <div class="lee_lee_diabetes_record_details">
-                  <p>${escapeHtml(formatRecordDateTime(record.recordTimestamp))}</p>
-                  <p>${escapeHtml(getRecordDisplayTitle(record))} · ${escapeHtml(getRecordPrimaryValue(record) || record.type)}</p>
+                  <p>${renderRecordDateTime(record.recordTimestamp)}</p>
+                  <p>${escapeHtml(getRecordDisplayTitle(record))} · ${getRenderedRecordPrimaryValue(record) || escapeHtml(record.type)}</p>
                   <p>Deleted by ${escapeHtml(record.deletedBy || 'Unknown')}</p>
                 </div>
               </div>
@@ -6788,23 +6969,23 @@
           </div>
           <div>
             <dt>Effective date</dt>
-            <dd>${escapeHtml(plan.effectiveFrom)}</dd>
+            <dd>${renderNumeric(plan.effectiveFrom)}</dd>
           </div>
           <div>
             <dt>Insulin-to-carb ratio</dt>
-            <dd>1 unit per ${escapeHtml(getInsulinCarbRatioGrams(plan))} g carbs</dd>
+            <dd>${renderNumeric(1)} unit per ${renderNumeric(getInsulinCarbRatioGrams(plan))} g carbs</dd>
           </div>
           <div>
             <dt>Dose rounding</dt>
-            <dd>${escapeHtml(getDoseRoundingMode(plan))} to ${escapeHtml(formatDoseNumber(getDoseIncrementUnits(plan)))}-unit increments</dd>
+            <dd>${escapeHtml(getDoseRoundingMode(plan))} to ${renderDoseNumber(getDoseIncrementUnits(plan))}-unit increments</dd>
           </div>
           <div>
             <dt>Minimum allowable dose</dt>
-            <dd>${escapeHtml(formatInsulin(getMinimumAllowableDoseUnits(plan)))}</dd>
+            <dd>${renderInsulin(getMinimumAllowableDoseUnits(plan))}</dd>
           </div>
           <div>
             <dt>Bedtime long-acting dose</dt>
-            <dd>${escapeHtml(formatInsulin(getBedtimeBaseUnits(plan)))}</dd>
+            <dd>${renderInsulin(getBedtimeBaseUnits(plan))}</dd>
           </div>
         </dl>
         <label class="lee_lee_diabetes_checkline">

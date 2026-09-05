@@ -149,6 +149,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './fonts/digital-7.ttf',
     './fonts/dm-sans-latin.woff2',
     './fonts/dm-sans-latin-ext.woff2',
+    './fonts/roboto-mono-regular.ttf',
     './icons/landos-world.svg',
     './icons/weather.png',
     './icons/digital-clock.png',
@@ -182,7 +183,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-05-1'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-05-2'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -196,9 +197,9 @@ test('service worker uses separate versioned caches and strategy-specific runtim
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260825-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260905-1/],
-    [html, /js\/lee-lees-tracker-sync\.js\?v=20260905-1/],
-    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260905-1/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260905-2/],
+    [html, /js\/lee-lees-tracker-sync\.js\?v=20260905-2/],
+    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260905-2/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [dailyChiefBriefingCss, /\.daily_briefing_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
     [leeLeeDiabetesCss, /\.lee_lee_diabetes_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],

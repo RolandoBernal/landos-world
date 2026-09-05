@@ -16,6 +16,14 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/roboto-mono-regular.ttf') format('truetype');
+}
+
 .clock_utility_card--lee-lee-diabetes {
   box-shadow: 0 10px 16px 0 rgb(255 255 255 / 10%),
     0 6px 20px 0 rgb(255 255 255 / 10%),
@@ -60,22 +68,11 @@
   font-family: inherit;
 }
 
+.lee_lee_diabetes_numeric,
 .lee_lee_diabetes_shell input[type="number"],
-.lee_lee_diabetes_timeline_time,
-.lee_lee_diabetes_card_values,
-.lee_lee_diabetes_timeline_values,
-.lee_lee_diabetes_summary_grid dd,
-.lee_lee_diabetes_report_metric_grid dd,
-.lee_lee_diabetes_report_metric_grid p,
-.lee_lee_diabetes_report_summary_grid dd,
-.lee_lee_diabetes_dose_total,
-.lee_lee_diabetes_dose_breakdown,
-.lee_lee_diabetes_dose_range,
-.lee_lee_diabetes_carb_calc_operator,
-.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input,
-.lee_lee_diabetes_carb_calc_unit_input span,
-.lee_lee_diabetes_carb_calc_row_total,
-.lee_lee_diabetes_carb_calc_sum strong {
+.lee_lee_diabetes_shell input[inputmode="numeric"],
+.lee_lee_diabetes_shell input[inputmode="decimal"],
+.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
   font-family: var(--llt-numeric-font);
 }
 
