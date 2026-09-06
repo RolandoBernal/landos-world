@@ -954,6 +954,11 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await page.evaluate(({ recentDateKey: recentKey, olderDateKey: olderKey }) => {
     window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
       ...current,
+      settings: {
+        ...current.settings,
+        glucoseTargetMin: 70,
+        glucoseTargetMax: 180,
+      },
       records: [
         {
           id: 'reports-breakfast',
@@ -1016,6 +1021,30 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await expect(page.getByRole('img', { name: /Glucose Trend chart/ })).toBeVisible();
   await expect(page.getByText('Carbohydrate Trend')).toBeVisible();
   await expect(page.locator('.lee_lee_diabetes_chart_point')).toHaveCount(5);
+  await expect(page.locator('.lee_lee_diabetes_chart_target')).toHaveCount(1);
+  await expect(page.locator('.lee_lee_diabetes_chart_grid')).not.toHaveCount(0);
+  await expect(page.locator('.lee_lee_diabetes_chart_tick--number').first()).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_chart_tick--date').first()).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_chart_unit').filter({ hasText: 'mg/dL' })).toBeVisible();
+  await page.locator('.lee_lee_diabetes_chart_point_group').first().click();
+  await expect(page.locator('.lee_lee_diabetes_chart_tooltip')).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_chart_tooltip')).toContainText('mg/dL');
+  const chartMetrics = await page.locator('.lee_lee_diabetes_chart').first().evaluate((chart) => {
+    const chartBox = chart.getBoundingClientRect();
+    const tooltip = chart.querySelector('.lee_lee_diabetes_chart_tooltip');
+    const tooltipBox = tooltip.getBoundingClientRect();
+    const numberTick = chart.querySelector('.lee_lee_diabetes_chart_tick--number');
+    return {
+      tooltipInside:
+        tooltipBox.left >= chartBox.left - 1
+        && tooltipBox.right <= chartBox.right + 1
+        && tooltipBox.top >= chartBox.top - 1
+        && tooltipBox.bottom <= chartBox.bottom + 1,
+      tickFontFamily: getComputedStyle(numberTick).fontFamily,
+    };
+  });
+  expect(chartMetrics.tooltipInside).toBe(true);
+  expect(chartMetrics.tickFontFamily).toContain('Roboto Mono');
   expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).display)).toBe('grid');
   expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).rowGap)).toBe(
     await page.locator('.lee_lee_diabetes_report_tabs').evaluate((node) => getComputedStyle(node).rowGap),
@@ -1601,6 +1630,9 @@ test('Lee-Lee My Foods cards keep footer actions on one row', async ({ page }) =
   await expect(page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])').getByRole('button', { name: 'Mark favorite' })).toBeVisible();
   await page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])').getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('[data-food-library-editor]').getByLabel('Food Name')).toHaveValue('Banana');
+  await expect(page.locator('[data-food-library-editor-layer]').getByRole('heading', { name: 'Edit Food' })).toBeVisible();
+  await page.locator('[data-food-library-editor-layer]').getByRole('button', { name: 'Cancel' }).first().click();
+  await expect(page.locator('[data-food-library-editor-layer]')).toHaveCount(0);
 
   await page.evaluate(() => {
     window.__leeLeeConfirmMessages = [];
@@ -1613,6 +1645,63 @@ test('Lee-Lee My Foods cards keep footer actions on one row', async ({ page }) =
   await expect.poll(() => page.evaluate(() => window.__leeLeeConfirmMessages)).toEqual([
     'Delete Banana? History entries will keep their saved food snapshot.',
   ]);
+});
+
+test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
+  await chooseLeeLeeSection(page, 'Foods');
+
+  await expect(page.getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  await expect(page.locator('[data-food-library-editor]')).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Add New Food' }).click();
+
+  const editorLayer = page.locator('[data-food-library-editor-layer]');
+  await expect(editorLayer.getByRole('heading', { name: 'Add New Food' })).toBeVisible();
+  await expect(editorLayer.locator('[name="foodName"]')).toBeFocused();
+  const dialogMetrics = await editorLayer.locator('.lee_lee_diabetes_food_editor_dialog').evaluate((dialog) => ({
+    top: dialog.getBoundingClientRect().top,
+    bottom: dialog.getBoundingClientRect().bottom,
+    viewportHeight: window.innerHeight,
+    overflowY: getComputedStyle(dialog).overflowY,
+  }));
+  expect(dialogMetrics.top).toBeGreaterThanOrEqual(0);
+  expect(dialogMetrics.bottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight);
+  expect(dialogMetrics.overflowY).toBe('auto');
+
+  await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');
+  await editorLayer.getByLabel('Emoji').fill('🐉');
+  await editorLayer.getByLabel('Carbs').fill('18');
+  await editorLayer.getByLabel('Serving Label').fill('1 bowl');
+  await editorLayer.getByLabel('Brand / Notes').fill('Kitchen');
+  await editorLayer.getByLabel('Favorite').check();
+  await editorLayer.getByRole('button', { name: 'Save Food' }).click();
+
+  await expect(page.locator('[data-food-library-editor-layer]')).toHaveCount(0);
+  await expect(page.locator('.lee_lee_diabetes_food_item--library').filter({ hasText: 'Dragonfruit Test' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (
+    window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.filter((food) => !food.deletedAt && food.name === 'Dragonfruit Test').length
+  ))).toBe(1);
+
+  const dragonfruitCard = page.locator('.lee_lee_diabetes_food_item--library').filter({ hasText: 'Dragonfruit Test' });
+  await dragonfruitCard.getByRole('button', { name: 'Edit' }).click();
+  await expect(editorLayer.getByRole('heading', { name: 'Edit Food' })).toBeVisible();
+  await editorLayer.getByLabel('Serving Label').fill('1 snack bowl');
+  await editorLayer.getByRole('button', { name: 'Save Food' }).click();
+
+  await expect.poll(() => page.evaluate(() => (
+    window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary
+      .filter((food) => !food.deletedAt && food.name === 'Dragonfruit Test')
+      .map((food) => food.servingLabel)
+  ))).toEqual(['1 snack bowl']);
+
+  await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: '+ Add New Food' }).click();
+  await expect(editorLayer.getByRole('heading', { name: 'Add New Food' })).toBeVisible();
+  await editorLayer.getByRole('button', { name: 'Cancel' }).first().click();
+  await expect(page.locator('[data-food-library-editor-layer]')).toHaveCount(0);
 });
 
 test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async ({ page }) => {
@@ -1720,7 +1809,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.qtyWeight).toBe('400');
   expect(compactMetrics.carbsWeight).toBe('400');
   expect(compactMetrics.operatorWeight).toBe('400');
-  expect(compactMetrics.operatorText).toBe('@');
+  expect(compactMetrics.operatorText).toBe('×');
   expect(compactMetrics.qtyFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.carbsFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.rowTotalFontFamily).toContain('DM Sans');
