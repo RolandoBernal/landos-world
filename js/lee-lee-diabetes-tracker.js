@@ -3985,7 +3985,7 @@
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-list-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-list-title">My Foods</h2>
         <div class="lee_lee_diabetes_food_library_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="open-food-library-editor">+ Add New Food</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-food-library-editor">+ Add New Food</button>
         </div>
         <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
         <div class="lee_lee_diabetes_food_list">
@@ -4011,7 +4011,7 @@
       <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_food_editor_layer" data-food-library-editor-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-food-library-editor"></div>
         <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
-          <div class="lee_lee_diabetes_carb_calc_header">
+          <div class="lee_lee_diabetes_carb_calculator_header">
             <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-library-editor-title">${escapeHtml(title)}</h2>
             <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-food-library-editor">Cancel</button>
           </div>
