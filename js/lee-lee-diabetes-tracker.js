@@ -4011,7 +4011,7 @@
       <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_food_editor_layer" data-food-library-editor-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-food-library-editor"></div>
         <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
-          <div class="lee_lee_diabetes_carb_calc_header">
+          <div class="lee_lee_diabetes_carb_calculator_header">
             <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-library-editor-title">${escapeHtml(title)}</h2>
             <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-food-library-editor">Cancel</button>
           </div>

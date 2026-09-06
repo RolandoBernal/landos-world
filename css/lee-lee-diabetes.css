@@ -1050,6 +1050,15 @@
   gap: 0.65rem;
 }
 
+.lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus,
+.lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus-visible {
+  border-color: var(--lee-lee-soft);
+  outline: 0;
+  box-shadow:
+    inset 0 0 0 1px var(--lee-lee-soft),
+    0 0 0 3px rgb(var(--app-accent-rgb, 58 160 255) / 22%);
+}
+
 .lee_lee_diabetes_carb_search {
   padding-bottom: 0.3rem;
 }
@@ -1643,6 +1652,15 @@
       max(1rem, env(safe-area-inset-right))
       max(1rem, env(safe-area-inset-bottom))
       max(1rem, env(safe-area-inset-left));
+  }
+
+  .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_carb_calculator_header {
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_timeline_edit {
+    margin-left: auto;
   }
 
   .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_food_form {

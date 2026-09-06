@@ -1665,16 +1665,36 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
     bottom: dialog.getBoundingClientRect().bottom,
     height: dialog.getBoundingClientRect().height,
     viewportHeight: window.innerHeight,
+    headerDisplay: getComputedStyle(dialog.querySelector('.lee_lee_diabetes_carb_calculator_header')).display,
+    headerAlignItems: getComputedStyle(dialog.querySelector('.lee_lee_diabetes_carb_calculator_header')).alignItems,
+    titleCenterY: (() => {
+      const rect = dialog.querySelector('#lee-lee-food-library-editor-title')?.getBoundingClientRect();
+      return rect ? rect.top + rect.height / 2 : 0;
+    })(),
+    cancelCenterY: (() => {
+      const rect = dialog.querySelector('.lee_lee_diabetes_carb_calculator_header [data-action="cancel-food-library-editor"]')?.getBoundingClientRect();
+      return rect ? rect.top + rect.height / 2 : 0;
+    })(),
+    cancelRight: dialog.querySelector('.lee_lee_diabetes_carb_calculator_header [data-action="cancel-food-library-editor"]')?.getBoundingClientRect().right || 0,
+    dialogRight: dialog.getBoundingClientRect().right,
     borderTopLeftRadius: getComputedStyle(dialog).borderTopLeftRadius,
     overflowY: getComputedStyle(dialog).overflowY,
     actionBottom: dialog.querySelector('.lee_lee_diabetes_food_editor_actions')?.getBoundingClientRect().bottom || 0,
+    focusedInputOutlineWidth: getComputedStyle(dialog.querySelector('[name="foodName"]')).outlineWidth,
+    focusedInputBoxShadow: getComputedStyle(dialog.querySelector('[name="foodName"]')).boxShadow,
   }));
   expect(dialogMetrics.top).toBe(0);
   expect(Math.abs(dialogMetrics.height - dialogMetrics.viewportHeight)).toBeLessThanOrEqual(1);
   expect(dialogMetrics.bottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
   expect(dialogMetrics.actionBottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
+  expect(dialogMetrics.headerDisplay).toBe('flex');
+  expect(dialogMetrics.headerAlignItems).toBe('center');
+  expect(Math.abs(dialogMetrics.titleCenterY - dialogMetrics.cancelCenterY)).toBeLessThanOrEqual(2);
+  expect(dialogMetrics.cancelRight).toBeLessThanOrEqual(dialogMetrics.dialogRight - 12);
   expect(dialogMetrics.borderTopLeftRadius).toBe('0px');
   expect(dialogMetrics.overflowY).toBe('auto');
+  expect(dialogMetrics.focusedInputOutlineWidth).toBe('0px');
+  expect(dialogMetrics.focusedInputBoxShadow).not.toBe('none');
 
   await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');
   await editorLayer.getByLabel('Emoji').fill('🐉');
