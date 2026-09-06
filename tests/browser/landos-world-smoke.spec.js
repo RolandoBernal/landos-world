@@ -1663,11 +1663,17 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
   const dialogMetrics = await editorLayer.locator('.lee_lee_diabetes_food_editor_dialog').evaluate((dialog) => ({
     top: dialog.getBoundingClientRect().top,
     bottom: dialog.getBoundingClientRect().bottom,
+    height: dialog.getBoundingClientRect().height,
     viewportHeight: window.innerHeight,
+    borderTopLeftRadius: getComputedStyle(dialog).borderTopLeftRadius,
     overflowY: getComputedStyle(dialog).overflowY,
+    actionBottom: dialog.querySelector('.lee_lee_diabetes_food_editor_actions')?.getBoundingClientRect().bottom || 0,
   }));
-  expect(dialogMetrics.top).toBeGreaterThanOrEqual(0);
-  expect(dialogMetrics.bottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight);
+  expect(dialogMetrics.top).toBe(0);
+  expect(Math.abs(dialogMetrics.height - dialogMetrics.viewportHeight)).toBeLessThanOrEqual(1);
+  expect(dialogMetrics.bottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
+  expect(dialogMetrics.actionBottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
+  expect(dialogMetrics.borderTopLeftRadius).toBe('0px');
   expect(dialogMetrics.overflowY).toBe('auto');
 
   await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');

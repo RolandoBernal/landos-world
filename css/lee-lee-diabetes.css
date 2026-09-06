@@ -1039,6 +1039,7 @@
 .lee_lee_diabetes_food_editor_dialog {
   width: min(100%, 30rem);
   max-height: min(36rem, calc(100dvh - 1.5rem));
+  grid-template-rows: auto minmax(0, 1fr);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1623,6 +1624,41 @@
     block-size: 30px;
     min-height: 30px;
   }
+
+  .lee_lee_diabetes_food_editor_layer {
+    align-items: stretch;
+    justify-items: stretch;
+    padding: 0;
+  }
+
+  .lee_lee_diabetes_food_editor_dialog {
+    width: 100%;
+    block-size: 100%;
+    max-height: none;
+    min-height: 100%;
+    border-radius: 0;
+    border-inline: 0;
+    padding:
+      max(1rem, env(safe-area-inset-top))
+      max(1rem, env(safe-area-inset-right))
+      max(1rem, env(safe-area-inset-bottom))
+      max(1rem, env(safe-area-inset-left));
+  }
+
+  .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_food_form {
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 0.15rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lee_lee_diabetes_food_editor_actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-top: 0.3rem;
+    background: #06142b;
+  }
 }
 
 .lee_lee_diabetes_confirm_list {
@@ -1894,6 +1930,12 @@
 :root[data-theme="light"] .lee_lee_diabetes_chart_tooltip {
   background: #ffffff;
   box-shadow: 0 12px 28px rgb(15 63 110 / 18%);
+}
+
+@media (max-width: 420px) {
+  :root[data-theme="light"] .lee_lee_diabetes_food_editor_actions {
+    background: #e8f3ff;
+  }
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_picker--search {
