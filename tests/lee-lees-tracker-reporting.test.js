@@ -7,6 +7,16 @@ const trackerSource = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', 
 const cssSource = readFileSync(new URL('../css/lee-lee-diabetes.css', import.meta.url), 'utf8');
 const starterFoods = JSON.parse(readFileSync(new URL('../data/llt-starter-foods.json', import.meta.url), 'utf8'));
 
+function getCssRuleBody(selectorText) {
+  const selectorIndex = cssSource.indexOf(selectorText);
+  assert.notEqual(selectorIndex, -1, `Missing CSS rule: ${selectorText}`);
+  const openBraceIndex = cssSource.indexOf('{', selectorIndex);
+  const closeBraceIndex = cssSource.indexOf('}', openBraceIndex);
+  assert.notEqual(openBraceIndex, -1, `Missing CSS rule body: ${selectorText}`);
+  assert.notEqual(closeBraceIndex, -1, `Missing CSS rule close: ${selectorText}`);
+  return cssSource.slice(openBraceIndex + 1, closeBraceIndex);
+}
+
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
   return {
@@ -1251,8 +1261,9 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
   assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
   assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[type="date"\],[\s\S]*\.lee_lee_diabetes_shell input\[type="time"\],[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_timeline_values,[\s\S]*font-family: var\(--llt-numeric-font\)/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_dose_breakdown,[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_chart_tick,[\s\S]*\.lee_lee_diabetes_chart_unit \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
+  assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_timeline_values,\n.lee_lee_diabetes_timeline_notes'), /font-family: var\(--llt-numeric-font\)/);
+  assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_dose_breakdown'), /font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
   assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'DM Sans'/);
   assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
@@ -1431,7 +1442,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /Open Carb Calc/);
   assert.match(trackerSource, /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
-  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
+  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
   assert.match(trackerSource, /enableCarbCalculatorModalViewport/);
   assert.match(trackerSource, /lockCarbCalculatorDocumentScroll/);

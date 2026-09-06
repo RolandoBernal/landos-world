@@ -294,6 +294,7 @@
     startDate: '',
     endDate: '',
   };
+  let selectedTrendPointId = '';
   let foodLibrarySearch = '';
   let savedMealsSearch = '';
   let foodLibraryMessage = '';
@@ -3960,34 +3961,32 @@
     });
   }
 
-  function renderFoodLibrary() {
+  function renderFoodLibrary(options = {}) {
     const root = getRoot();
     if (!root) return;
-    currentEditor = { mode: 'foods' };
+    currentEditor = {
+      mode: 'foods',
+      foodLibraryEditorOpen: options.foodLibraryEditorOpen === true,
+      foodLibraryEditorId: options.foodLibraryEditorId || '',
+    };
     const foods = searchFoodItems(foodLibrary, foodLibrarySearch);
     const meals = activeSavedMeals(savedMeals)
       .filter((meal) => searchTextMatches(meal.name, savedMealsSearch))
       .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+    const editorFood = currentEditor.foodLibraryEditorId
+      ? foodLibrary.find((food) => food.id === currentEditor.foodLibraryEditorId && !isLibraryItemDeleted(food))
+      : null;
+    const editorTitle = editorFood ? 'Edit Food' : 'Add New Food';
     root.innerHTML = `
       ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
       ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved">${escapeHtml(foodLibraryMessage)}</p>` : ''}
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-add-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-add-title">Add Food</h2>
-        <div class="lee_lee_diabetes_food_form" data-food-library-editor>
-          <input type="hidden" name="foodId" value="">
-          <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" required></label>
-          <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="foodEmoji" type="text" maxlength="16" autocomplete="off"></label>
-          <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required></label>
-          <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off"></label>
-          <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off"></label>
-          <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite"> Favorite</label>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
-        </div>
-      </section>
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-list-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-list-title">My Foods</h2>
+        <div class="lee_lee_diabetes_food_library_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="open-food-library-editor">+ Add New Food</button>
+        </div>
         <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
         <div class="lee_lee_diabetes_food_list">
           ${foods.length ? foods.map(renderFoodLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No foods yet.</p>'}
@@ -4000,6 +3999,37 @@
           ${meals.length ? meals.map(renderSavedMealLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No My Meals yet.</p>'}
         </div>
       </section>
+      ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
+    `;
+    if (currentEditor.foodLibraryEditorOpen) {
+      requestAnimationFrame(() => root.querySelector('[data-food-library-editor] [name="foodName"]')?.focus({ preventScroll: true }));
+    }
+  }
+
+  function renderFoodLibraryEditor(food = null, title = 'Add New Food') {
+    return `
+      <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_food_editor_layer" data-food-library-editor-layer>
+        <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-food-library-editor"></div>
+        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
+          <div class="lee_lee_diabetes_carb_calc_header">
+            <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-library-editor-title">${escapeHtml(title)}</h2>
+            <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-food-library-editor">Cancel</button>
+          </div>
+          <div class="lee_lee_diabetes_food_form" data-food-library-editor>
+            <input type="hidden" name="foodId" value="${escapeHtml(food?.id || '')}">
+            <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food?.name || '')}" required></label>
+            <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="foodEmoji" type="text" maxlength="16" autocomplete="off" value="${escapeHtml(food?.emoji || '')}"></label>
+            <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(food ? formatCarbAmount(food.carbs) : '')}" required></label>
+            <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food?.servingLabel || '')}"></label>
+            <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food?.brand || '')}"></label>
+            <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food?.favorite ? 'checked' : ''}> Favorite</label>
+            <div class="lee_lee_diabetes_food_editor_actions">
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
+            </div>
+          </div>
+        </section>
+      </div>
     `;
   }
 
@@ -4229,47 +4259,150 @@
     `;
   }
 
-  function getChartBounds(series) {
-    const timestamps = series.map((point) => point.timestamp);
-    const values = series.map((point) => point.value);
-    const minX = Math.min(...timestamps);
-    const maxX = Math.max(...timestamps);
-    const minY = Math.min(0, ...values);
-    const maxY = Math.max(...values);
+  function getNiceChartStep(range, preferredTickCount = 4) {
+    const rawStep = Math.max(Number(range) || 1, 1) / Math.max(preferredTickCount, 1);
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+    const normalized = rawStep / magnitude;
+    const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+    return multiplier * magnitude;
+  }
+
+  function getChartYAxis(series, { includeZero = true, targetRange = null } = {}) {
+    const values = series.map((point) => point.value).filter((value) => Number.isFinite(value));
+    if (targetRange && Number.isFinite(targetRange.min) && Number.isFinite(targetRange.max)) {
+      values.push(targetRange.min, targetRange.max);
+    }
+    let minValue = values.length ? Math.min(...values) : 0;
+    let maxValue = values.length ? Math.max(...values) : 1;
+    if (includeZero) minValue = Math.min(0, minValue);
+    if (maxValue === minValue) {
+      maxValue += maxValue === 0 ? 1 : Math.abs(maxValue * 0.1);
+      minValue = includeZero ? 0 : minValue - Math.abs(minValue * 0.1 || 1);
+    }
+    const step = getNiceChartStep(maxValue - minValue, 4);
+    const minY = includeZero ? 0 : Math.floor(minValue / step) * step;
+    const maxY = Math.ceil(maxValue / step) * step;
+    const ticks = [];
+    for (let tick = minY; tick <= maxY + step / 2; tick += step) {
+      ticks.push(Number(tick.toFixed(8)));
+      if (ticks.length > 8) break;
+    }
     return {
-      minX,
-      maxX: maxX === minX ? minX + 1 : maxX,
       minY,
-      maxY: maxY === minY ? minY + 1 : maxY,
+      maxY: maxY === minY ? minY + step : maxY,
+      ticks,
     };
   }
 
-  function renderTrendChart(title, series, formatter, { targetRange = null } = {}) {
+  function getChartXBounds(series, resolvedRange) {
+    const timestamps = series.map((point) => point.timestamp).filter((timestamp) => Number.isFinite(timestamp));
+    const rangeStart = resolvedRange?.startDate ? createDateStartTimestamp(resolvedRange.startDate) : null;
+    const nextEndDate = resolvedRange?.endDate ? addDays(resolvedRange.endDate, 1) : '';
+    const rangeEnd = nextEndDate ? createDateStartTimestamp(nextEndDate) - 1 : null;
+    const minX = Number.isFinite(rangeStart) ? rangeStart : Math.min(...timestamps);
+    const maxX = Number.isFinite(rangeEnd) ? rangeEnd : Math.max(...timestamps);
+    return {
+      minX,
+      maxX: maxX === minX ? minX + 1 : maxX,
+    };
+  }
+
+  function buildChartDateTicks(resolvedRange, xBounds) {
+    const dateKeys = Array.isArray(resolvedRange?.dateKeys) ? resolvedRange.dateKeys : [];
+    if (!dateKeys.length) {
+      const dateKey = getLocalDateKey(new Date(xBounds.minX));
+      return [{ dateKey, timestamp: xBounds.minX }];
+    }
+    const preferredCount = dateKeys.length <= 1 ? 1 : Math.min(5, Math.max(2, Math.ceil(dateKeys.length / 2)));
+    const indexes = new Set();
+    for (let index = 0; index < preferredCount; index += 1) {
+      indexes.add(Math.round((index * (dateKeys.length - 1)) / Math.max(preferredCount - 1, 1)));
+    }
+    return [...indexes].sort((a, b) => a - b).map((index) => ({
+      dateKey: dateKeys[index],
+      timestamp: createDateStartTimestamp(dateKeys[index]) ?? xBounds.minX,
+    }));
+  }
+
+  function formatChartTick(value) {
+    if (!Number.isFinite(value)) return '';
+    return Math.abs(value % 1) < 0.01 ? String(Math.round(value)) : formatDoseNumber(value);
+  }
+
+  function getTrendChartMetric(title) {
+    if (/glucose/i.test(title)) return { key: 'glucose', unit: 'mg/dL', includeZero: false };
+    if (/insulin/i.test(title)) return { key: 'insulin', unit: 'units', includeZero: true };
+    return { key: 'carbs', unit: 'g', includeZero: true };
+  }
+
+  function getTrendPointId(metricKey, point, index) {
+    return `${metricKey}-${point.record?.id || 'point'}-${index}`;
+  }
+
+  function renderTrendChart(title, series, formatter, { targetRange = null, resolvedRange = null } = {}) {
     if (!series.length) return `<p class="lee_lee_diabetes_empty" role="status">No ${escapeHtml(title.toLowerCase())} data for this range.</p>`;
     const width = 640;
-    const height = 220;
-    const pad = 32;
-    const bounds = getChartBounds(series);
-    const xFor = (timestamp) => pad + ((timestamp - bounds.minX) / (bounds.maxX - bounds.minX)) * (width - pad * 2);
-    const yFor = (value) => height - pad - ((value - bounds.minY) / (bounds.maxY - bounds.minY)) * (height - pad * 2);
+    const height = 260;
+    const pad = { top: 30, right: 24, bottom: 46, left: 58 };
+    const metric = getTrendChartMetric(title);
+    const yAxis = getChartYAxis(series, { includeZero: metric.includeZero, targetRange });
+    const xBounds = getChartXBounds(series, resolvedRange);
+    const xTicks = buildChartDateTicks(resolvedRange, xBounds);
+    const plotWidth = width - pad.left - pad.right;
+    const plotHeight = height - pad.top - pad.bottom;
+    const xFor = (timestamp) => pad.left + ((timestamp - xBounds.minX) / (xBounds.maxX - xBounds.minX)) * plotWidth;
+    const yFor = (value) => pad.top + (1 - ((value - yAxis.minY) / (yAxis.maxY - yAxis.minY))) * plotHeight;
     const line = series.map((point) => `${xFor(point.timestamp).toFixed(1)},${yFor(point.value).toFixed(1)}`).join(' ');
-    const targetBand = targetRange
-      ? `<rect class="lee_lee_diabetes_chart_target" x="${pad}" y="${Math.min(yFor(targetRange.min), yFor(targetRange.max)).toFixed(1)}" width="${width - pad * 2}" height="${Math.abs(yFor(targetRange.min) - yFor(targetRange.max)).toFixed(1)}"></rect>`
+    const selectedPoint = series
+      .map((point, index) => ({ ...point, chartId: getTrendPointId(metric.key, point, index), index }))
+      .find((point) => point.chartId === selectedTrendPointId);
+    const targetBand = targetRange && Number.isFinite(targetRange.min) && Number.isFinite(targetRange.max)
+      ? `<rect class="lee_lee_diabetes_chart_target" x="${pad.left}" y="${Math.min(yFor(targetRange.min), yFor(targetRange.max)).toFixed(1)}" width="${plotWidth}" height="${Math.abs(yFor(targetRange.min) - yFor(targetRange.max)).toFixed(1)}"></rect>`
       : '';
+    const tooltip = selectedPoint ? (() => {
+      const leftPercent = Math.min(82, Math.max(18, (xFor(selectedPoint.timestamp) / width) * 100));
+      const topPercent = Math.min(78, Math.max(18, (yFor(selectedPoint.value) / height) * 100));
+      return `
+        <div class="lee_lee_diabetes_chart_tooltip" style="left:${leftPercent.toFixed(1)}%; top:${topPercent.toFixed(1)}%;" role="status">
+          <strong>${renderFormattedValue(formatter(selectedPoint.value))}</strong>
+          <span>${renderNumeric(formatShortDateKey(getRecordEventDateKey(selectedPoint.record)))} ${renderNumeric(formatTime(selectedPoint.timestamp))}</span>
+          <span>${escapeHtml(selectedPoint.record.type)}${selectedPoint.category ? ` · ${escapeHtml(selectedPoint.category)}` : ''}</span>
+        </div>
+      `;
+    })() : '';
     return `
       <figure class="lee_lee_diabetes_chart">
         <figcaption>${escapeHtml(title)}</figcaption>
-        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)} chart with ${escapeHtml(series.length)} recorded values" preserveAspectRatio="none">
-          ${targetBand}
-          <line class="lee_lee_diabetes_chart_axis" x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}"></line>
-          <line class="lee_lee_diabetes_chart_axis" x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}"></line>
-          ${series.length > 1 ? `<polyline class="lee_lee_diabetes_chart_line" points="${line}"></polyline>` : ''}
-          ${series.map((point) => `
-            <circle class="lee_lee_diabetes_chart_point ${point.category === 'Long-acting' ? 'is-long-acting' : ''}" cx="${xFor(point.timestamp).toFixed(1)}" cy="${yFor(point.value).toFixed(1)}" r="5">
-              <title>${escapeHtml(formatDateKey(getRecordEventDateKey(point.record)))} ${escapeHtml(formatTime(point.timestamp))} - ${escapeHtml(point.record.type)} - ${escapeHtml(formatter(point.value))}</title>
-            </circle>
-          `).join('')}
-        </svg>
+        <div class="lee_lee_diabetes_chart_plot">
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)} chart with ${escapeHtml(series.length)} recorded values">
+            ${targetBand}
+            ${yAxis.ticks.map((tick) => `
+              <line class="lee_lee_diabetes_chart_grid" x1="${pad.left}" y1="${yFor(tick).toFixed(1)}" x2="${width - pad.right}" y2="${yFor(tick).toFixed(1)}"></line>
+              <text class="lee_lee_diabetes_chart_tick lee_lee_diabetes_chart_tick--number" x="${pad.left - 10}" y="${(yFor(tick) + 4).toFixed(1)}" text-anchor="end">${escapeHtml(formatChartTick(tick))}</text>
+            `).join('')}
+            ${xTicks.map((tick) => `
+              <line class="lee_lee_diabetes_chart_grid lee_lee_diabetes_chart_grid--vertical" x1="${xFor(tick.timestamp).toFixed(1)}" y1="${pad.top}" x2="${xFor(tick.timestamp).toFixed(1)}" y2="${height - pad.bottom}"></line>
+              <text class="lee_lee_diabetes_chart_tick lee_lee_diabetes_chart_tick--date" x="${xFor(tick.timestamp).toFixed(1)}" y="${height - 18}" text-anchor="middle">${escapeHtml(formatShortDateKey(tick.dateKey).replace(/,?\s+\d{4}$/, ''))}</text>
+            `).join('')}
+            <text class="lee_lee_diabetes_chart_unit" x="${pad.left}" y="18">${escapeHtml(metric.unit)}</text>
+            <line class="lee_lee_diabetes_chart_axis" x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}"></line>
+            <line class="lee_lee_diabetes_chart_axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}"></line>
+            ${series.length > 1 ? `<polyline class="lee_lee_diabetes_chart_line" points="${line}"></polyline>` : ''}
+            ${series.map((point, index) => {
+              const pointId = getTrendPointId(metric.key, point, index);
+              const selectedClass = pointId === selectedTrendPointId ? ' is-selected' : '';
+              const longActingClass = point.category === 'Long-acting' ? ' is-long-acting' : '';
+              const label = `${formatDateKey(getRecordEventDateKey(point.record))} ${formatTime(point.timestamp)} ${point.record.type} ${formatter(point.value)}`;
+              return `
+                <g class="lee_lee_diabetes_chart_point_group${selectedClass}" data-action="select-report-chart-point" data-chart-point-id="${escapeHtml(pointId)}" role="button" tabindex="0" aria-label="${escapeHtml(label)}">
+                  <circle class="lee_lee_diabetes_chart_hit" cx="${xFor(point.timestamp).toFixed(1)}" cy="${yFor(point.value).toFixed(1)}" r="14"></circle>
+                  <circle class="lee_lee_diabetes_chart_point${longActingClass}" cx="${xFor(point.timestamp).toFixed(1)}" cy="${yFor(point.value).toFixed(1)}" r="5"></circle>
+                </g>
+              `;
+            }).join('')}
+          </svg>
+          ${tooltip}
+        </div>
         <table class="lee_lee_diabetes_chart_table">
           <thead><tr><th scope="col">Time</th><th scope="col">Context</th><th scope="col">Value</th></tr></thead>
           <tbody>
@@ -4280,15 +4413,15 @@
     `;
   }
 
-  function renderReportsTrends(reportRecords) {
+  function renderReportsTrends(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
     const series = buildTrendSeries(reportRecords);
     const targetRange = getGlucoseTargetRange();
     return `
       <section aria-labelledby="lee-lee-reports-trends-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-reports-trends-title">Trends</h2>
-        ${renderTrendChart('Glucose Trend', series.glucose, formatBloodSugar, { targetRange })}
-        ${renderTrendChart('Insulin Trend', series.insulin, formatInsulin)}
-        ${renderTrendChart('Carbohydrate Trend', series.carbs, formatCarbs)}
+        ${renderTrendChart('Glucose Trend', series.glucose, formatBloodSugar, { targetRange, resolvedRange })}
+        ${renderTrendChart('Insulin Trend', series.insulin, formatInsulin, { resolvedRange })}
+        ${renderTrendChart('Carbohydrate Trend', series.carbs, formatCarbs, { resolvedRange })}
       </section>
     `;
   }
@@ -4367,7 +4500,7 @@
   }
 
   function renderReportsView(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
-    if (reportOptions.view === 'trends') return renderReportsTrends(reportRecords);
+    if (reportOptions.view === 'trends') return renderReportsTrends(reportRecords, resolvedRange);
     if (reportOptions.view === 'averages') return renderReportsAverages(reportRecords, resolvedRange);
     if (reportOptions.view === 'detailed-log') return renderReportsDetailedLog(reportRecords);
     return renderReportsSummary(reportRecords, resolvedRange);
@@ -4646,7 +4779,7 @@
             <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
               <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Item</div>
-              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">@</div>
+              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">×</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Carbs</div>
               <div class="lee_lee_diabetes_carb_calc_heading lee_lee_diabetes_carb_calc_total_heading">Total</div>
               <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true"></div>
@@ -4836,7 +4969,7 @@
           </span>
           ${sourceParts.length ? `<small>${sourceParts.map(escapeHtml).join(' · ')}</small>` : ''}
         </div>
-        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@</span>
+        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×</span>
         <span class="lee_lee_diabetes_carb_calc_carbs">${renderCarbGrams(formatCarbAmount(item.carbs || 0))}</span>
         <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : renderCarbGrams(formatCarbAmount(rowTotal))}</output>
         <div class="lee_lee_diabetes_carb_calc_actions">
@@ -7573,9 +7706,21 @@
     }, true);
     document.addEventListener('keydown', (event) => {
       handleCarbCalculatorCarbsTab(event);
+      if ((event.key === 'Enter' || event.key === ' ') && document.activeElement?.matches?.('[data-action="select-report-chart-point"]')) {
+        event.preventDefault();
+        document.activeElement.click();
+      }
     }, true);
     root.addEventListener('click', (event) => {
       const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const isChartPointTap = Boolean(eventTarget?.closest?.('[data-action="select-report-chart-point"], .lee_lee_diabetes_chart_tooltip'));
+      if (currentEditor?.mode === 'reports' && selectedTrendPointId && !isChartPointTap) {
+        selectedTrendPointId = '';
+        if (!eventTarget?.closest?.('[data-action]')) {
+          renderReports();
+          return;
+        }
+      }
       const target = eventTarget?.closest?.('[data-action]');
       if (!target) return;
       const action = target.dataset.action;
@@ -7809,6 +7954,7 @@
         renderReports();
       }
       if (action === 'report-view') {
+        selectedTrendPointId = '';
         reportOptions = {
           ...reportOptions,
           view: REPORT_VIEW_ITEMS.some(([view]) => view === target.dataset.view) ? target.dataset.view : 'summary',
@@ -7924,23 +8070,28 @@
         });
         foodLibraryError = result.error || '';
         foodLibraryMessage = result.food ? 'Food saved.' : '';
+        renderFoodLibrary(result.error ? { foodLibraryEditorOpen: true, foodLibraryEditorId: id } : {});
+      }
+      if (action === 'open-food-library-editor') {
+        foodLibraryError = '';
+        foodLibraryMessage = '';
+        renderFoodLibrary({ foodLibraryEditorOpen: true });
+      }
+      if (action === 'cancel-food-library-editor') {
+        foodLibraryError = '';
         renderFoodLibrary();
       }
       if (action === 'edit-food-library-item') {
         const food = foodLibrary.find((item) => item.id === target.dataset.id);
         if (food) {
-          const panel = root.querySelector('[data-food-library-editor]');
-          if (panel) {
-            panel.querySelector('[name="foodId"]').value = food.id;
-            panel.querySelector('[name="foodName"]').value = food.name;
-            panel.querySelector('[name="foodEmoji"]').value = food.emoji || '';
-            panel.querySelector('[name="foodCarbs"]').value = formatCarbAmount(food.carbs);
-            panel.querySelector('[name="foodServingLabel"]').value = food.servingLabel || '';
-            panel.querySelector('[name="foodBrand"]').value = food.brand || '';
-            panel.querySelector('[name="foodFavorite"]').checked = food.favorite === true;
-            panel.querySelector('[name="foodName"]')?.focus();
-          }
+          foodLibraryError = '';
+          foodLibraryMessage = '';
+          renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorId: food.id });
         }
+      }
+      if (action === 'select-report-chart-point') {
+        selectedTrendPointId = target.dataset.chartPointId || '';
+        renderReports();
       }
       if (action === 'toggle-food-favorite') {
         const food = foodLibrary.find((item) => item.id === target.dataset.id);

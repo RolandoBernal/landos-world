@@ -630,7 +630,33 @@
 .lee_lee_diabetes_chart svg {
   display: block;
   width: 100%;
-  height: 220px;
+  height: 260px;
+}
+
+.lee_lee_diabetes_chart_plot {
+  position: relative;
+}
+
+.lee_lee_diabetes_chart_grid {
+  stroke: var(--lee-lee-border);
+  stroke-width: 1;
+  opacity: 0.72;
+}
+
+.lee_lee_diabetes_chart_grid--vertical {
+  opacity: 0.34;
+}
+
+.lee_lee_diabetes_chart_tick,
+.lee_lee_diabetes_chart_unit {
+  fill: var(--lee-lee-muted);
+  font-family: var(--llt-numeric-font);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.lee_lee_diabetes_chart_unit {
+  fill: var(--lee-lee-soft);
 }
 
 .lee_lee_diabetes_chart_axis {
@@ -656,8 +682,44 @@
   fill: var(--lee-lee-green);
 }
 
+.lee_lee_diabetes_chart_point_group {
+  cursor: pointer;
+}
+
+.lee_lee_diabetes_chart_point_group:focus-visible .lee_lee_diabetes_chart_point,
+.lee_lee_diabetes_chart_point_group.is-selected .lee_lee_diabetes_chart_point {
+  stroke: var(--lee-lee-soft);
+  stroke-width: 3;
+}
+
+.lee_lee_diabetes_chart_hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
 .lee_lee_diabetes_chart_target {
   fill: rgb(var(--app-accent-rgb, 58 160 255) / 12%);
+}
+
+.lee_lee_diabetes_chart_tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 0.16rem;
+  max-width: min(13rem, 70%);
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--lee-lee-border-strong);
+  border-radius: 8px;
+  background: #050b16;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 30%);
+  color: var(--lee-lee-muted);
+  font-size: 0.74rem;
+  transform: translate(-50%, -50%);
+}
+
+.lee_lee_diabetes_chart_tooltip strong {
+  color: var(--lee-lee-text);
+  font-weight: 500;
 }
 
 .lee_lee_diabetes_chart_table {
@@ -962,6 +1024,28 @@
 .lee_lee_diabetes_food_form,
 .lee_lee_diabetes_food_list {
   display: grid;
+  gap: 0.65rem;
+}
+
+.lee_lee_diabetes_food_library_actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.lee_lee_diabetes_food_editor_layer {
+  touch-action: auto;
+}
+
+.lee_lee_diabetes_food_editor_dialog {
+  width: min(100%, 30rem);
+  max-height: min(36rem, calc(100dvh - 1.5rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.lee_lee_diabetes_food_editor_actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
@@ -1805,6 +1889,11 @@
   border-color: var(--lee-lee-border-strong);
   color: var(--lee-lee-text);
   box-shadow: 0 -18px 50px rgb(15 63 110 / 22%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_chart_tooltip {
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgb(15 63 110 / 18%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_picker--search {
