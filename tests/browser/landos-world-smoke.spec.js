@@ -1655,7 +1655,21 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
 
   await expect(page.getByRole('heading', { name: 'My Foods' })).toBeVisible();
   await expect(page.locator('[data-food-library-editor]')).toHaveCount(0);
-  await page.getByRole('button', { name: '+ Add New Food' }).click();
+  const addFoodButton = page.locator('.lee_lee_diabetes_food_library_actions [data-action="open-food-library-editor"]');
+  const addFoodButtonMetrics = await addFoodButton.evaluate((button) => {
+    const buttonRect = button.getBoundingClientRect();
+    const containerRect = button.closest('.lee_lee_diabetes_food_library_actions')?.getBoundingClientRect();
+    const computed = getComputedStyle(button);
+    return {
+      widthDelta: containerRect ? Math.abs(buttonRect.width - containerRect.width) : 999,
+      height: buttonRect.height,
+      fontSize: computed.fontSize,
+    };
+  });
+  expect(addFoodButtonMetrics.widthDelta).toBeLessThanOrEqual(1);
+  expect(addFoodButtonMetrics.height).toBeGreaterThanOrEqual(54);
+  expect(addFoodButtonMetrics.fontSize).toBe('16px');
+  await addFoodButton.click();
 
   const editorLayer = page.locator('[data-food-library-editor-layer]');
   await expect(editorLayer.getByRole('heading', { name: 'Add New Food' })).toBeVisible();

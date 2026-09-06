@@ -1028,8 +1028,7 @@
 }
 
 .lee_lee_diabetes_food_library_actions {
-  display: flex;
-  justify-content: flex-start;
+  display: block;
 }
 
 .lee_lee_diabetes_food_editor_layer {
@@ -1872,6 +1871,11 @@
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.lee_lee_diabetes_button.lee_lee_diabetes_log_entry_button {
+  min-height: 54px;
+  font-size: 1rem;
 }
 
 .lee_lee_diabetes_button[disabled] {

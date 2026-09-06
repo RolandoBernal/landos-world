@@ -3985,7 +3985,7 @@
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-list-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-list-title">My Foods</h2>
         <div class="lee_lee_diabetes_food_library_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="open-food-library-editor">+ Add New Food</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-food-library-editor">+ Add New Food</button>
         </div>
         <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
         <div class="lee_lee_diabetes_food_list">
