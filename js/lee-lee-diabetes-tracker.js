@@ -6526,17 +6526,133 @@
     focusPrimaryAction();
   }
 
+  function formatSyncStatusText(status = syncStatus) {
+    if (!status.configured) return 'Sync error';
+    if (!status.signedIn) return 'Sync error';
+    if (status.conflictCount) return 'Conflict needs review';
+    if (status.state === 'offline') return (status.pendingCount || 0) ? 'Offline with pending changes' : 'Offline';
+    if (status.pendingCount) return status.state === 'syncing' ? 'Syncing' : 'Items waiting to sync';
+    if (status.state === 'syncing') return 'Syncing';
+    if (status.lastError) return 'Sync error';
+    return 'All synced';
+  }
+
+  function formatRealtimeStatus(value) {
+    if (value === 'connected') return 'Connected';
+    if (value === 'idle') return 'Idle';
+    if (value === 'connecting') return 'Connecting';
+    return value ? String(value) : 'Disconnected';
+  }
+
+  function formatOnlineStatus() {
+    return navigator.onLine ? 'Online' : 'Offline';
+  }
+
+  function formatDiagnosticTimestamp(timestamp) {
+    return timestamp ? formatRelativeSyncTime(timestamp) : 'Not yet';
+  }
+
+  function renderStatusGrid(items) {
+    return `
+      <dl class="lee_lee_diabetes_status_grid">
+        ${items.map(([label, value]) => `
+          <div>
+            <dt>${escapeHtml(label)}</dt>
+            <dd>${escapeHtml(value)}</dd>
+          </div>
+        `).join('')}
+      </dl>
+    `;
+  }
+
+  function getCloudRecordCount() {
+    const metadata = getSharedSyncMigrationMetadata();
+    if (!metadata.migrationCompleted) return null;
+    return Math.max(Number(metadata.recordsMigrated || 0), activeRecords().length);
+  }
+
+  function renderSyncDiagnostics(diagnostics) {
+    const summary = diagnostics?.summary || {};
+    const states = summary.byState || {};
+    const lastAttempt = diagnostics?.lastSyncAttempt || null;
+    const conflict = diagnostics?.conflicts?.[0] || null;
+    const failedItems = Number(states['needs-attention'] || 0) + Number(states.failed || 0);
+    const queueBlocked = syncStatus.signedIn && syncStatus.configured
+      ? (failedItems || syncStatus.conflictCount ? 'Needs review' : 'No')
+      : 'Authentication/setup needed';
+    const rows = [
+      ['Local records', String(activeRecords().length)],
+      ['Cloud records', getCloudRecordCount() == null ? 'Not available' : String(getCloudRecordCount())],
+      ['Queued items', String(summary.total || 0)],
+      ['Oldest queued item', formatDiagnosticTimestamp(summary.oldestCreatedAt)],
+      ['Retrying items', String(summary.retryingCount || 0)],
+      ['Failed / needs review', String(failedItems)],
+      ['Queue blocked', queueBlocked],
+      ['Sync in progress', syncStatus.state === 'syncing' ? 'Yes' : 'No'],
+      ['Last attempt', lastAttempt ? formatDiagnosticTimestamp(lastAttempt.finishedAt || lastAttempt.startedAt) : 'Not yet'],
+      ['Last attempt result', lastAttempt ? `${Number(lastAttempt.succeeded || 0)} succeeded / ${Number(lastAttempt.failed || 0)} failed` : 'Not yet'],
+      ['Last error', syncStatus.lastError || diagnostics?.lastError || 'None'],
+      ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
+    ];
+    return `
+      <details class="lee_lee_diabetes_details">
+        <summary>Sync Diagnostics</summary>
+        ${renderStatusGrid(rows)}
+      </details>
+    `;
+  }
+
+  function renderSyncStatusSection() {
+    const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
+    const diagnostics = syncRepository?.getSyncDiagnostics?.() || null;
+    const rows = [
+      ['Overall status', formatSyncStatusText(syncStatus)],
+      ['Pending total', String(syncStatus.pendingCount || 0)],
+      ['Records pending', String(syncStatus.recordPendingCount || 0)],
+      ['Settings pending', String(syncStatus.sharedSettingsPendingCount || 0)],
+      ['Foods pending', String(syncStatus.foodLibraryPendingCount || 0)],
+      ['Conflicts', String(syncStatus.conflictCount || 0)],
+      ['Realtime', formatRealtimeStatus(syncStatus.realtimeStatus)],
+      ['Last successful sync', formatRelativeSyncTime(syncStatus.lastSuccessfulSyncAt)],
+      ['Device', syncStatus.deviceIdentity || 'Unknown'],
+      ['Connection', formatOnlineStatus()],
+      ['Records in cloud', getCloudRecordCount() == null ? 'Not available' : String(getCloudRecordCount())],
+    ];
+    return `
+      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-sync-title">
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-sync-title">Sync Status</h2>
+        <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(friendlySyncStatus.state)}" aria-live="polite">
+          ${escapeHtml(friendlySyncStatus.message)}
+        </p>
+        ${renderStatusGrid(rows)}
+        <label class="lee_lee_diabetes_field">
+          This device is used by
+          <select class="lee_lee_diabetes_select" name="deviceIdentity" data-current-device-identity="${escapeHtml(syncStatus.deviceIdentity || '')}">
+            ${renderDeviceIdentityOptions(syncStatus.deviceIdentity)}
+          </select>
+        </label>
+        <div class="lee_lee_diabetes_backup_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-device-identity" hidden>Save Device</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="sync-now">Sync Now</button>
+          ${syncStatus.conflictCount ? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts</button>' : ''}
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sign-out">Sign Out This Device</button>
+        </div>
+        ${renderSyncDiagnostics(diagnostics)}
+      </section>
+    `;
+  }
+
   function renderSettings(errorMessage = '') {
     const root = getRoot();
     if (!root) return;
     currentEditor = { mode: 'settings' };
     const plan = getCurrentPlan() || clonePlanSnapshot(DEFAULT_INSULIN_PLAN);
-    const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
     const sharedSettingsStatus = getSharedSettingsStatus();
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-plan-editor novalidate>
         ${renderTrackerTop({ active: 'settings', kicker: 'Lee-Lee’s Tracker', title: 'Settings' })}
         ${renderTrackerNav('settings')}
+        ${renderSyncStatusSection()}
         <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-patient-title">
           <h2 class="lee_lee_diabetes_section_title" id="lee-lee-patient-title">Patient & Clinic</h2>
           <p class="lee_lee_diabetes_help">Patient and clinic information syncs across signed-in devices.</p>
@@ -6573,31 +6689,6 @@
             </select>
           </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-history-preference">Save History Preference</button>
-        </section>
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-sync-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-sync-title">Shared Sync</h2>
-          <label class="lee_lee_diabetes_field">
-            This device is used by
-            <select class="lee_lee_diabetes_select" name="deviceIdentity">
-              ${renderDeviceIdentityOptions(syncStatus.deviceIdentity)}
-            </select>
-          </label>
-          <div class="lee_lee_diabetes_plan_meta">
-            <span>Status: ${escapeHtml(friendlySyncStatus.message)}</span>
-            <span>Pending total: ${escapeHtml(syncStatus.pendingCount)}</span>
-            <span>Records pending: ${escapeHtml(syncStatus.recordPendingCount || 0)}</span>
-            <span>Settings pending: ${escapeHtml(syncStatus.sharedSettingsPendingCount || 0)}</span>
-            <span>Foods pending: ${escapeHtml(syncStatus.foodLibraryPendingCount || 0)}</span>
-            <span>Conflicts: ${escapeHtml(syncStatus.conflictCount)}</span>
-            <span>Realtime: ${escapeHtml(syncStatus.realtimeStatus)}</span>
-            <span>Last successful sync: ${escapeHtml(formatRelativeSyncTime(syncStatus.lastSuccessfulSyncAt))}</span>
-          </div>
-          <div class="lee_lee_diabetes_backup_actions">
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-device-identity">Save Device</button>
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sync-now">Sync Now</button>
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts" ${syncStatus.conflictCount ? '' : 'disabled'}>Review Conflicts</button>
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sign-out">Sign Out This Device</button>
-          </div>
         </section>
         ${renderMigrationSettings()}
         ${renderMigrationDiagnostics()}
@@ -6703,7 +6794,8 @@
       : (session.status || 'idle');
     return `
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-migration-diagnostics-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-migration-diagnostics-title">Migration Diagnostics</h2>
+        <details class="lee_lee_diabetes_details">
+          <summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics</summary>
         <dl class="lee_lee_diabetes_status_grid">
           <div>
             <dt>Status</dt>
@@ -6759,6 +6851,7 @@
           </div>
         </dl>
         ${session.lastErrorMessage ? `<p class="lee_lee_diabetes_help">${escapeHtml(session.lastErrorMessage)}</p>` : ''}
+        </details>
       </section>
     `;
   }
@@ -6768,37 +6861,7 @@
     const backupAvailable = storageAvailability.available;
     const metadata = getSharedSyncMigrationMetadata();
     const localOnlyCount = getLocalOnlyRecordCount();
-    if (metadata.migrationCompleted && localOnlyCount === 0) {
-      const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
-      const cloudCount = Math.max(metadata.recordsMigrated, activeCount);
-      return `
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-cloud-status-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-cloud-status-title">Cloud Status</h2>
-          <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(friendlySyncStatus.state)}">${escapeHtml(friendlySyncStatus.message)}</p>
-          <dl class="lee_lee_diabetes_status_grid">
-            <div>
-              <dt>Records in cloud</dt>
-              <dd>${escapeHtml(cloudCount)}</dd>
-            </div>
-            <div>
-              <dt>Realtime</dt>
-              <dd>${escapeHtml(syncStatus.realtimeStatus === 'connected' ? 'Connected' : syncStatus.realtimeStatus)}</dd>
-            </div>
-            <div>
-              <dt>Last successful sync</dt>
-              <dd>${escapeHtml(formatRelativeSyncTime(syncStatus.lastSuccessfulSyncAt))}</dd>
-            </div>
-            <div>
-              <dt>Device</dt>
-              <dd>${escapeHtml(syncStatus.deviceIdentity || 'Unknown')}</dd>
-            </div>
-          </dl>
-          <div class="lee_lee_diabetes_backup_actions">
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sync-now">Sync Now</button>
-          </div>
-        </section>
-      `;
-    }
+    if (metadata.migrationCompleted && localOnlyCount === 0) return '';
     return `
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-migration-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-migration-title">Existing Records</h2>
@@ -7663,6 +7726,38 @@
     if (currentEditor.mode === 'foods') renderFoodLibrary();
   }
 
+  function logSyncDiagnosticSnapshot(label, status = syncStatus) {
+    const diagnostics = syncRepository?.getSyncDiagnostics?.() || {};
+    const summary = diagnostics.summary || {};
+    console.info(label, {
+      pendingTotal: status.pendingCount || 0,
+      pendingRecords: status.recordPendingCount || 0,
+      pendingSettings: status.sharedSettingsPendingCount || 0,
+      pendingFoods: status.foodLibraryPendingCount || 0,
+      conflicts: status.conflictCount || 0,
+      realtime: status.realtimeStatus || 'idle',
+      online: navigator.onLine,
+      queuedItems: summary.total || 0,
+      retryingItems: summary.retryingCount || 0,
+    });
+  }
+
+  function runManualSyncNow() {
+    if (!syncRepository?.syncNow) return;
+    logSyncDiagnosticSnapshot('[Sync] Starting full sync');
+    syncRepository.syncNow({ includeNeedsAttention: true }).then((nextStatus) => {
+      syncStatus = nextStatus || syncRepository.getSyncStatus?.() || syncStatus;
+      logSyncDiagnosticSnapshot('[Sync] Completed', syncStatus);
+      refreshCurrentViewForSync();
+    }).catch((error) => {
+      console.info('[Sync] Failed', {
+        message: error?.message || 'Sync failed.',
+      });
+      syncStatus = syncRepository.getSyncStatus?.() || syncStatus;
+      refreshCurrentViewForSync();
+    });
+  }
+
   async function init() {
     const root = getRoot();
     if (!root) return;
@@ -8141,7 +8236,7 @@
         renderSettings();
       }
       if (action === 'sync-now') {
-        syncRepository?.syncNow?.({ includeNeedsAttention: true });
+        runManualSyncNow();
       }
       if (action === 'begin-local-migration') {
         beginLocalMigration(target.dataset.startedFrom || currentEditor?.mode || 'settings');
@@ -8381,6 +8476,11 @@
       if (event.target.matches('[data-backup-import]')) {
         handleBackupImport(event.target.files?.[0]);
         event.target.value = '';
+      }
+      if (event.target.matches('[name="deviceIdentity"][data-current-device-identity]')) {
+        const saveButton = root.querySelector('[data-action="save-device-identity"]');
+        if (saveButton) saveButton.hidden = event.target.value === event.target.dataset.currentDeviceIdentity;
+        return;
       }
       const conflictCheckbox = event.target.closest('[data-conflict-select]');
       if (conflictCheckbox) {
