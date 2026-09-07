@@ -317,6 +317,8 @@
     state: 'saved',
     message: 'Saved on this device',
   };
+  let manualSyncState = { state: 'idle', message: '' };
+  let manualSyncPromise = null;
   let authMessage = '';
   let authError = '';
   let patientSettingsMessage = '';
@@ -2099,9 +2101,16 @@
     return { state: 'synced', message: '✓ Shared Sync Active' };
   }
 
-  function renderPersistenceStatus() {
+  function getTopSyncStatusForSurface(status, surface) {
+    const friendlyStatus = getFriendlySyncStatus(status);
+    if (surface === 'today' && ['offline', 'synced', 'syncing', 'waiting'].includes(friendlyStatus.state)) return null;
+    return friendlyStatus;
+  }
+
+  function renderPersistenceStatus({ surface = '' } = {}) {
     const isSyncEnabled = syncRepository && syncStatus.configured && syncStatus.signedIn;
-    const friendlyStatus = getFriendlySyncStatus(syncStatus);
+    const friendlyStatus = getTopSyncStatusForSurface(syncStatus, surface);
+    if (isSyncEnabled && !friendlyStatus) return '';
     const statusClass = isSyncEnabled ? friendlyStatus.state : persistenceStatus;
     const statusMessage = isSyncEnabled ? friendlyStatus.message : persistenceMessage;
     const retry = persistenceStatus === 'failed' || syncStatus.state === 'waiting' || syncStatus.state === 'offline'
@@ -3708,7 +3717,7 @@
           <div class="lee_lee_diabetes_top_title_group">
             <p class="lee_lee_diabetes_date">${escapeHtml(kicker)}</p>
             <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">${escapeHtml(title)}</h1>
-            ${renderPersistenceStatus()}
+            ${renderPersistenceStatus({ surface: active })}
           </div>
           <button
             type="button"
@@ -6537,6 +6546,31 @@
     return 'All synced';
   }
 
+  function summarizeSyncResult(status = syncStatus, error = null) {
+    if (error) {
+      const reason = status.lastError || error?.message || 'Check Sync Diagnostics.';
+      return { state: 'failed', message: `Sync failed. ${reason}` };
+    }
+    if (!status.configured || !status.signedIn) return { state: 'failed', message: 'Sync failed. Sign in or check sync setup.' };
+    if (status.state === 'offline' || navigator.onLine === false) return { state: 'offline', message: 'Cannot sync while offline.' };
+    if (status.conflictCount) {
+      return {
+        state: 'conflict',
+        message: `Sync complete — ${status.conflictCount} ${status.conflictCount === 1 ? 'conflict needs' : 'conflicts need'} review.`,
+      };
+    }
+    if (status.pendingCount) {
+      const parts = [
+        status.recordPendingCount ? `${status.recordPendingCount} ${status.recordPendingCount === 1 ? 'record' : 'records'}` : '',
+        status.sharedSettingsPendingCount ? `${status.sharedSettingsPendingCount} ${status.sharedSettingsPendingCount === 1 ? 'setting' : 'settings'}` : '',
+        status.foodLibraryPendingCount ? `${status.foodLibraryPendingCount} ${status.foodLibraryPendingCount === 1 ? 'food item' : 'food items'}` : '',
+      ].filter(Boolean).join(', ');
+      return { state: 'waiting', message: `Sync completed with ${parts || `${status.pendingCount} items`} still pending. See Sync Diagnostics for details.` };
+    }
+    if (status.lastError) return { state: 'failed', message: `Sync failed. ${status.lastError}` };
+    return { state: 'synced', message: 'Sync complete. All data is up to date.' };
+  }
+
   function formatRealtimeStatus(value) {
     if (value === 'connected') return 'Connected';
     if (value === 'idle') return 'Idle';
@@ -6605,6 +6639,8 @@
   function renderSyncStatusSection() {
     const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
     const diagnostics = syncRepository?.getSyncDiagnostics?.() || null;
+    const syncIsRunning = manualSyncState.state === 'syncing' || syncStatus.state === 'syncing';
+    const syncButtonLabel = syncIsRunning ? 'Syncing...' : 'Sync Now';
     const rows = [
       ['Overall status', formatSyncStatusText(syncStatus)],
       ['Pending total', String(syncStatus.pendingCount || 0)],
@@ -6631,9 +6667,13 @@
             ${renderDeviceIdentityOptions(syncStatus.deviceIdentity)}
           </select>
         </label>
+        ${manualSyncState.message ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(manualSyncState.state)}" aria-live="polite">${escapeHtml(manualSyncState.message)}</p>` : ''}
         <div class="lee_lee_diabetes_backup_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-device-identity" hidden>Save Device</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="sync-now">Sync Now</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_sync_button ${syncIsRunning ? 'is-syncing' : ''}" data-action="sync-now" ${syncIsRunning ? 'disabled aria-busy="true"' : ''}>
+            <span class="lee_lee_diabetes_sync_spinner" aria-hidden="true"></span>
+            <span>${escapeHtml(syncButtonLabel)}</span>
+          </button>
           ${syncStatus.conflictCount ? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts</button>' : ''}
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sign-out">Sign Out This Device</button>
         </div>
@@ -7743,19 +7783,40 @@
   }
 
   function runManualSyncNow() {
-    if (!syncRepository?.syncNow) return;
+    if (manualSyncPromise) return manualSyncPromise;
+    if (!syncRepository?.syncNow) {
+      manualSyncState = { state: 'failed', message: 'Sync failed. Sync is not available.' };
+      refreshCurrentViewForSync();
+      return Promise.resolve(syncStatus);
+    }
+    if (!navigator.onLine) {
+      syncStatus = syncRepository.getSyncStatus?.() || syncStatus;
+      manualSyncState = summarizeSyncResult({ ...syncStatus, state: 'offline' });
+      refreshCurrentViewForSync();
+      return Promise.resolve(syncStatus);
+    }
+    manualSyncState = { state: 'syncing', message: 'Syncing...' };
+    syncStatus = { ...(syncRepository.getSyncStatus?.() || syncStatus), state: 'syncing', message: 'Syncing...' };
+    refreshCurrentViewForSync();
     logSyncDiagnosticSnapshot('[Sync] Starting full sync');
-    syncRepository.syncNow({ includeNeedsAttention: true }).then((nextStatus) => {
+    manualSyncPromise = syncRepository.syncNow({ includeNeedsAttention: true }).then((nextStatus) => {
       syncStatus = nextStatus || syncRepository.getSyncStatus?.() || syncStatus;
+      manualSyncState = summarizeSyncResult(syncStatus);
       logSyncDiagnosticSnapshot('[Sync] Completed', syncStatus);
       refreshCurrentViewForSync();
+      return syncStatus;
     }).catch((error) => {
       console.info('[Sync] Failed', {
         message: error?.message || 'Sync failed.',
       });
       syncStatus = syncRepository.getSyncStatus?.() || syncStatus;
+      manualSyncState = summarizeSyncResult(syncStatus, error);
       refreshCurrentViewForSync();
+      return syncStatus;
+    }).finally(() => {
+      manualSyncPromise = null;
     });
+    return manualSyncPromise;
   }
 
   async function init() {
@@ -8635,6 +8696,8 @@
     renderReportDocument,
     formatRelativeSyncTime,
     getFriendlySyncStatus,
+    getTopSyncStatusForSurface,
+    summarizeSyncResult,
     getMigrationSessionSummary,
     reportRegistry: REPORT_REGISTRY.map(({ id, title, description, printLayout }) => ({ id, title, description, printLayout })),
   };

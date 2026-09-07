@@ -39,6 +39,16 @@ function createLocalStorage(seed = {}) {
   };
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 function createSyncContext({ localStorage = createLocalStorage(), supabase = null, config = null } = {}) {
   const context = {
     Date,
@@ -116,6 +126,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
   const foodRows = [...(options.foodRows || [])];
   const savedMealRows = [...(options.savedMealRows || [])];
   const rpcCalls = [];
+  const orderCalls = [];
   const userId = options.userId || 'user-1';
   const client = {
     auth: {
@@ -202,6 +213,13 @@ function createMockSupabase(remoteRows = [], options = {}) {
           return builder;
         },
         order() {
+          orderCalls.push({ tableName });
+          if ((tableName === 'lee_lee_foods' || tableName === 'lee_lee_saved_meals') && options.foodLibrarySelectError) {
+            return Promise.resolve({ data: null, error: options.foodLibrarySelectError });
+          }
+          if (options.orderWait) {
+            return options.orderWait.then(() => ({ data: tableRows, error: null }));
+          }
           return Promise.resolve({ data: tableRows, error: null });
         },
       };
@@ -279,6 +297,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
     foodRows,
     savedMealRows,
     rpcCalls,
+    orderCalls,
   };
   return { createClient: () => client, client };
 }
@@ -450,6 +469,38 @@ test('new record queues locally and uploads through Supabase once initialized', 
 
   assert.equal(supabase.client.rows.some((row) => row.id === 'local-first'), true);
   assert.equal(repository.getSyncStatus().pendingCount, 0);
+});
+
+test('manual full sync is serialized while a sync is already in progress', async () => {
+  const gate = createDeferred();
+  const mockOptions = {};
+  const supabase = createMockSupabase([], mockOptions);
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const store = createDocumentStore({ records: [] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  const recordOrderCallsBefore = supabase.client.orderCalls.filter((call) => call.tableName === 'lee_lee_records').length;
+  mockOptions.orderWait = gate.promise;
+  const first = repository.syncNow({ includeNeedsAttention: true });
+  const second = repository.syncNow({ includeNeedsAttention: true });
+
+  assert.equal(first, second);
+  assert.equal(repository.getSyncStatus().state, 'syncing');
+  await Promise.resolve();
+  assert.equal(
+    supabase.client.orderCalls.filter((call) => call.tableName === 'lee_lee_records').length,
+    recordOrderCallsBefore + 1,
+  );
+
+  gate.resolve();
+  const status = await first;
+
+  assert.equal(status.pendingCount, 0);
+  assert.equal(repository.getSyncStatus().state, 'synced');
 });
 
 test('record insert check constraint failures keep entries preserved with safe diagnostics', async () => {
@@ -1465,6 +1516,60 @@ test('failed food library sync remains pending and surfaces diagnostics', async 
   assert.equal(diagnostics.foodLibraryQueue[0].retryCount, 1);
   assert.equal(diagnostics.foodLibraryQueue[0].lastErrorCode, '42501');
   assert.equal(supabase.client.foodRows.length, 0);
+});
+
+test('food library refresh failure still attempts pending local food upserts', async () => {
+  const store = createDocumentStore({
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+  });
+  let document = {
+    schemaVersion: 1,
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+    settings: {},
+    insulinPlans: [],
+    metadata: {},
+  };
+  store.getDocument = () => document;
+  store.saveDocument = (nextDocument) => {
+    document = nextDocument;
+    return { ok: true, data: document };
+  };
+  store.mergeDocuments = (base, incoming) => ({
+    ...base,
+    records: [...new Map([...(base.records || []), ...(incoming.records || [])].map((item) => [item.id, item])).values()],
+    foodLibrary: [...new Map([...(base.foodLibrary || []), ...(incoming.foodLibrary || [])].map((item) => [item.id, item])).values()],
+    savedMeals: [...new Map([...(base.savedMeals || []), ...(incoming.savedMeals || [])].map((item) => [item.id, item])).values()],
+  });
+  const supabase = createMockSupabase([], {
+    foodLibrarySelectError: { code: '57014', message: 'canceling statement due to timeout' },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+  });
+  const repo = context.LeeLeeTrackerSync.createRepository({
+    ...store,
+    normalizeRecord: (item) => ({ ...item }),
+    normalizeFood: (item) => item && item.name ? { ...item } : null,
+    normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+  });
+
+  await repo.initialize();
+  context.navigator.onLine = false;
+  repo.queueFoodUpsert({ id: 'food-1', name: 'Mustard', carbs: 0, createdAt: '2026-08-31T12:00:00.000Z', updatedAt: '2026-08-31T12:00:00.000Z', version: 1 });
+  context.navigator.onLine = true;
+
+  await repo.syncFoodLibrary();
+
+  const status = repo.getSyncStatus();
+  assert.equal(status.foodLibraryPendingCount, 0);
+  assert.equal(status.pendingCount, 0);
+  assert.equal(status.lastError, 'Food Library could not be refreshed.');
+  assert.equal(supabase.client.foodRows[0].name, 'Mustard');
 });
 
 test('starter food defaults are excluded from food sync queue while user foods still sync', async () => {

@@ -1899,6 +1899,39 @@
   cursor: not-allowed;
 }
 
+.lee_lee_diabetes_sync_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.lee_lee_diabetes_sync_spinner {
+  display: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+}
+
+.lee_lee_diabetes_sync_button.is-syncing .lee_lee_diabetes_sync_spinner {
+  display: inline-block;
+  animation: lee-lee-sync-spin 0.75s linear infinite;
+}
+
+@keyframes lee-lee-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lee_lee_diabetes_sync_button.is-syncing .lee_lee_diabetes_sync_spinner {
+    animation: none;
+  }
+}
+
 .lee_lee_diabetes_button--primary {
   background: linear-gradient(135deg, var(--app-accent, #3aa0ff), var(--app-accent-deep, #0b49b5));
   border-color: rgb(var(--app-accent-rgb, 58 160 255) / 62%);
