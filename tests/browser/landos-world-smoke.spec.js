@@ -1541,6 +1541,116 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(page.getByText(/Manual Amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
 });
 
+test('Lee-Lee Food Library search keeps focus while filtering', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Chicken Noodle Soup',
+          emoji: '🍲',
+          carbs: 18,
+          servingLabel: '1 cup',
+          favorite: false,
+          createdAt: '2026-09-07T12:00:00.000Z',
+          updatedAt: '2026-09-07T12:00:00.000Z',
+        },
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          name: 'Chocolate Milk',
+          emoji: '🥛',
+          carbs: 26,
+          servingLabel: '1 cup',
+          favorite: false,
+          createdAt: '2026-09-07T12:00:00.000Z',
+          updatedAt: '2026-09-07T12:00:00.000Z',
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          name: 'Banana',
+          emoji: '🍌',
+          carbs: 27,
+          servingLabel: '1 medium',
+          favorite: false,
+          createdAt: '2026-09-07T12:00:00.000Z',
+          updatedAt: '2026-09-07T12:00:00.000Z',
+        },
+      ],
+      savedMeals: [{
+        id: '44444444-4444-4444-8444-444444444444',
+        name: 'Chicken Lunch',
+        components: [{
+          componentType: 'food',
+          foodId: '11111111-1111-4111-8111-111111111111',
+          nameSnapshot: 'Chicken Noodle Soup',
+          quantity: 1,
+          carbsPerServing: 18,
+          carbTotal: 18,
+        }],
+        totalCarbs: 18,
+        createdAt: '2026-09-07T12:00:00.000Z',
+        updatedAt: '2026-09-07T12:00:00.000Z',
+      }],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+
+  const searchInput = page.getByLabel('Search Foods');
+  await searchInput.focus();
+  const searchHandle = await searchInput.elementHandle();
+  expect(searchHandle).not.toBeNull();
+
+  const expectSearchStillFocused = async (value) => {
+    const state = await page.evaluate((input) => ({
+      isConnected: input.isConnected,
+      isActive: document.activeElement === input,
+      value: input.value,
+    }), searchHandle);
+    expect(state).toEqual({ isConnected: true, isActive: true, value });
+  };
+
+  let typed = '';
+  for (const char of 'Chicken') {
+    typed += char;
+    await page.keyboard.type(char);
+    await expectSearchStillFocused(typed);
+  }
+
+  await expect(searchInput).toHaveValue('Chicken');
+  await expect(page.locator('[data-food-library-list]').getByText('Chicken Noodle Soup')).toBeVisible();
+  await expect(page.locator('[data-food-library-list]').getByText('Banana')).toHaveCount(0);
+
+  for (const value of ['Chicke', 'Chick', 'Chic']) {
+    await page.keyboard.press('Backspace');
+    await expectSearchStillFocused(value);
+  }
+
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('Backspace');
+  await expectSearchStillFocused('');
+  await expect(page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="33333333-3333-4333-8333-333333333333"])')).toBeVisible();
+
+  const chickenCard = page.locator('article.lee_lee_diabetes_food_item--library:has([data-id="11111111-1111-4111-8111-111111111111"])');
+  await chickenCard.getByRole('button', { name: 'Mark favorite' }).click();
+  await expect(chickenCard.getByRole('button', { name: 'Remove favorite' })).toBeVisible();
+
+  const mealSearchInput = page.getByLabel('Search My Meals');
+  await mealSearchInput.focus();
+  const mealSearchHandle = await mealSearchInput.elementHandle();
+  expect(mealSearchHandle).not.toBeNull();
+  await page.keyboard.type('Chicken');
+  const mealSearchState = await page.evaluate((input) => ({
+    isConnected: input.isConnected,
+    isActive: document.activeElement === input,
+    value: input.value,
+  }), mealSearchHandle);
+  expect(mealSearchState).toEqual({ isConnected: true, isActive: true, value: 'Chicken' });
+  await expect(page.locator('[data-saved-meals-list]').getByText('Chicken Lunch')).toBeVisible();
+});
+
 test('Lee-Lee My Foods cards keep footer actions on one row', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProtectedLeeLeeTracker(page);

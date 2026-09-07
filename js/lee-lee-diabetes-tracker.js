@@ -3979,9 +3979,7 @@
       foodLibraryEditorId: options.foodLibraryEditorId || '',
     };
     const foods = searchFoodItems(foodLibrary, foodLibrarySearch);
-    const meals = activeSavedMeals(savedMeals)
-      .filter((meal) => searchTextMatches(meal.name, savedMealsSearch))
-      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+    const meals = searchSavedMealItems(savedMeals, savedMealsSearch);
     const editorFood = currentEditor.foodLibraryEditorId
       ? foodLibrary.find((food) => food.id === currentEditor.foodLibraryEditorId && !isLibraryItemDeleted(food))
       : null;
@@ -3997,15 +3995,15 @@
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-food-library-editor">+ Add New Food</button>
         </div>
         <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
-        <div class="lee_lee_diabetes_food_list">
-          ${foods.length ? foods.map(renderFoodLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No foods yet.</p>'}
+        <div class="lee_lee_diabetes_food_list" data-food-library-list>
+          ${renderFoodLibraryResults(foods)}
         </div>
       </section>
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-meals-list-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meals-list-title">My Meals</h2>
         <label class="lee_lee_diabetes_field">Search My Meals<input class="lee_lee_diabetes_input" name="savedMealsSearch" type="search" value="${escapeHtml(savedMealsSearch)}" autocomplete="off"></label>
-        <div class="lee_lee_diabetes_food_list">
-          ${meals.length ? meals.map(renderSavedMealLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No My Meals yet.</p>'}
+        <div class="lee_lee_diabetes_food_list" data-saved-meals-list>
+          ${renderSavedMealResults(meals)}
         </div>
       </section>
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
@@ -4013,6 +4011,32 @@
     if (currentEditor.foodLibraryEditorOpen) {
       requestAnimationFrame(() => root.querySelector('[data-food-library-editor] [name="foodName"]')?.focus({ preventScroll: true }));
     }
+  }
+
+  function searchSavedMealItems(meals = [], query = '') {
+    return activeSavedMeals(meals)
+      .filter((meal) => searchTextMatches(meal.name, query))
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
+  }
+
+  function renderFoodLibraryResults(foods = searchFoodItems(foodLibrary, foodLibrarySearch)) {
+    return foods.length ? foods.map(renderFoodLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No foods yet.</p>';
+  }
+
+  function renderSavedMealResults(meals = searchSavedMealItems(savedMeals, savedMealsSearch)) {
+    return meals.length ? meals.map(renderSavedMealLibraryRow).join('') : '<p class="lee_lee_diabetes_empty">No My Meals yet.</p>';
+  }
+
+  function refreshFoodLibrarySearchResults() {
+    const root = getRoot();
+    const list = root?.querySelector('[data-food-library-list]');
+    if (list) list.innerHTML = renderFoodLibraryResults();
+  }
+
+  function refreshSavedMealSearchResults() {
+    const root = getRoot();
+    const list = root?.querySelector('[data-saved-meals-list]');
+    if (list) list.innerHTML = renderSavedMealResults();
   }
 
   function renderFoodLibraryEditor(food = null, title = 'Add New Food') {
@@ -8460,12 +8484,12 @@
     root.addEventListener('input', (event) => {
       if (event.target.name === 'foodLibrarySearch') {
         foodLibrarySearch = event.target.value;
-        renderFoodLibrary();
+        refreshFoodLibrarySearchResults();
         return;
       }
       if (event.target.name === 'savedMealsSearch') {
         savedMealsSearch = event.target.value;
-        renderFoodLibrary();
+        refreshSavedMealSearchResults();
         return;
       }
       const form = event.target.closest('[data-lee-lee-editor]');
