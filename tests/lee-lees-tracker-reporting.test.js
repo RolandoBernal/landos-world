@@ -1741,6 +1741,32 @@ test('shared sync status copy explains healthy, syncing, and offline states', ()
   }, now).message, 'Offline — 1 record waiting to sync');
 });
 
+test('settings sync status is consolidated into one global sync action', () => {
+  const syncButtonMatches = trackerSource.match(/data-action="sync-now"/g) || [];
+  assert.equal(syncButtonMatches.length, 1);
+  assert.match(trackerSource, /id="lee-lee-sync-title">Sync Status/);
+  assert.match(trackerSource, /Overall status/);
+  assert.match(trackerSource, /Records pending/);
+  assert.match(trackerSource, /Settings pending/);
+  assert.match(trackerSource, /Foods pending/);
+  assert.match(trackerSource, /Records in cloud/);
+  assert.match(trackerSource, /renderSyncDiagnostics\(diagnostics\)/);
+  assert.match(trackerSource, /syncRepository\.syncNow\(\{ includeNeedsAttention: true \}\)/);
+  assert.doesNotMatch(trackerSource, /id="lee-lee-cloud-status-title">Cloud Status/);
+});
+
+test('settings review and migration diagnostics are shown only when useful', () => {
+  assert.match(trackerSource, /\$\{syncStatus\.conflictCount \? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts<\/button>' : ''\}/);
+  assert.match(trackerSource, /<details class="lee_lee_diabetes_details">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics<\/summary>/);
+  assert.match(trackerSource, /data-action="save-device-identity" hidden/);
+  assert.match(trackerSource, /event\.target\.matches\('\[name="deviceIdentity"\]\[data-current-device-identity\]'\)/);
+});
+
+test('today screen keeps routine sync queue counts out of primary activity', () => {
+  assert.match(trackerSource, /function renderPersistenceStatus\(\)[\s\S]*data-action="retry-save"/);
+  assert.doesNotMatch(trackerSource, /renderHome\(\)[\s\S]{0,1400}food item[^`]*waiting to sync/);
+});
+
 test('migration UX stores explicit shared sync metadata outside tracker records', () => {
   assert.match(trackerSource, /shared-sync-migration:v1/);
   assert.match(trackerSource, /migrationCompleted/);

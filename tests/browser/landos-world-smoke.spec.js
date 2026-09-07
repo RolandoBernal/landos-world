@@ -854,6 +854,24 @@ test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
   await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('Lee-Lee Settings shows one global sync status action', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  const app = page.locator('#lee-lees-tracker-view');
+  await app.getByRole('button', { name: 'Settings' }).click();
+
+  await expect(app.getByRole('heading', { name: 'Sync Status' })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Sync Now' })).toHaveCount(1);
+  await expect(app.getByRole('heading', { name: 'Cloud Status' })).toHaveCount(0);
+  await expect(app.getByText('Pending total')).toBeVisible();
+  await expect(app.getByText('Records pending')).toBeVisible();
+  await expect(app.getByText('Settings pending')).toBeVisible();
+  await expect(app.getByText('Foods pending')).toBeVisible();
+  const migrationDetails = app.locator('details').filter({ hasText: 'Migration Diagnostics' });
+  if (await migrationDetails.count()) {
+    await expect(migrationDetails.first()).not.toHaveAttribute('open', '');
+  }
+});
+
 test('Lee-Lee light mobile navigation menu uses readable light surfaces', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProtectedLeeLeeTracker(page);

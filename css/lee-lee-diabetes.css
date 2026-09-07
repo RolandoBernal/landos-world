@@ -1802,6 +1802,22 @@
   font-weight: 600;
 }
 
+.lee_lee_diabetes_details {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lee_lee_diabetes_details summary {
+  min-height: 44px;
+  color: var(--lee-lee-soft);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lee_lee_diabetes_details[open] summary {
+  margin-bottom: 0.65rem;
+}
+
 .lee_lee_diabetes_progress {
   position: relative;
   overflow: hidden;

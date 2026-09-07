@@ -156,6 +156,11 @@ function createMockSupabase(remoteRows = [], options = {}) {
           return builder;
         },
         upsert(payload) {
+          if ((tableName === 'lee_lee_foods' || tableName === 'lee_lee_saved_meals') && options.foodLibraryUpsertError) {
+            builder.error = options.foodLibraryUpsertError;
+            builder.current = null;
+            return builder;
+          }
           const index = tableRows.findIndex((row) => row.id === payload.id && row.user_id === payload.user_id);
           if (index >= 0) {
             tableRows[index] = {
@@ -1403,6 +1408,63 @@ test('food library queue syncs offline-created foods and saved meals without rec
   assert.equal(supabase.client.foodRows[0].carb_grams, 0);
   assert.equal(supabase.client.savedMealRows[0].name, 'Hot Dog Meal');
   assert.equal(repo.getRecordQueueSnapshot().length, 0);
+});
+
+test('failed food library sync remains pending and surfaces diagnostics', async () => {
+  const store = createDocumentStore({
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+  });
+  let document = {
+    schemaVersion: 1,
+    records: [],
+    foodLibrary: [],
+    savedMeals: [],
+    settings: {},
+    insulinPlans: [],
+    metadata: {},
+  };
+  store.getDocument = () => document;
+  store.saveDocument = (nextDocument) => {
+    document = nextDocument;
+    return { ok: true, data: document };
+  };
+  store.mergeDocuments = (base, incoming) => ({
+    ...base,
+    records: [...new Map([...(base.records || []), ...(incoming.records || [])].map((item) => [item.id, item])).values()],
+    foodLibrary: [...new Map([...(base.foodLibrary || []), ...(incoming.foodLibrary || [])].map((item) => [item.id, item])).values()],
+    savedMeals: [...new Map([...(base.savedMeals || []), ...(incoming.savedMeals || [])].map((item) => [item.id, item])).values()],
+  });
+  const supabase = createMockSupabase([], {
+    userId: 'user-1',
+    foodLibraryUpsertError: { code: '42501', message: 'permission denied for table lee_lee_foods' },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'a'.repeat(32) },
+  });
+  const repo = context.LeeLeeTrackerSync.createRepository({
+    ...store,
+    normalizeRecord: (item) => ({ ...item }),
+    normalizeFood: (item) => item && item.name ? { ...item } : null,
+    normalizeSavedMeal: (item) => item && item.name ? { ...item } : null,
+  });
+
+  await repo.initialize();
+  repo.queueFoodUpsert({ id: 'food-1', name: 'Mustard', carbs: 0, createdAt: '2026-08-31T12:00:00.000Z', updatedAt: '2026-08-31T12:00:00.000Z', version: 1 });
+  await repo.processFoodLibraryQueue();
+
+  const status = repo.getSyncStatus();
+  const diagnostics = repo.getSyncDiagnostics();
+  assert.equal(status.foodLibraryPendingCount, 1);
+  assert.equal(status.pendingCount, 1);
+  assert.equal(status.lastError, 'Food Library sync will retry when the connection is available.');
+  assert.equal(diagnostics.foodLibraryQueue.length, 1);
+  assert.equal(diagnostics.foodLibraryQueue[0].recordId, 'food-1');
+  assert.equal(diagnostics.foodLibraryQueue[0].retryCount, 1);
+  assert.equal(diagnostics.foodLibraryQueue[0].lastErrorCode, '42501');
+  assert.equal(supabase.client.foodRows.length, 0);
 });
 
 test('starter food defaults are excluded from food sync queue while user foods still sync', async () => {
