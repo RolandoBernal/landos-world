@@ -783,6 +783,7 @@ async function openProtectedLeeLeeTracker(page) {
           order: async () => { await window.__lltSyncReadGate; return { data: [], error: null }; },
           maybeSingle: async () => ({ data: null, error: null }),
           insert() { return { select: () => ({ single: async () => ({ data: null, error: { message: 'offline test client' } }) }) }; },
+          upsert() { return { select: () => ({ single: async () => ({ data: null, error: { code: '42501', message: 'permission denied for table lee_lee_foods' } }) }) }; },
         }),
         rpc: async () => ({ data: null, error: { message: 'offline test client' } }),
       }),
@@ -2415,4 +2416,27 @@ test('Lee-Lee global sync reports its result and preserves Settings input', asyn
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.locator('[name="patientName"]')).toHaveValue('Unsaved draft');
   await expect(page.getByText('Sync complete. All data is up to date.', { exact: true })).toBeVisible();
+});
+
+
+test('Lee-Lee food upload failures appear beside Sync Now and in food attempt diagnostics', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.evaluate(() => {
+    localStorage.setItem('lando-world:lee-lees-tracker:food-library-queue:v1', JSON.stringify(
+      Array.from({ length: 4 }, (_, i) => ({ id: `op-${i}`, recordId: `food-${i}`, entityType: 'food',
+        type: 'upsert-library-item', state: 'pending', createdAt: new Date().toISOString(),
+        payload: { id: `food-${i}`, name: `Food ${i}`, carbs: 10, version: 1 } }))
+    ));
+  });
+  await page.getByRole('button', { name: 'Sync Now', exact: true }).click();
+  await expect(page.getByText(/Sync completed with 4 food items still pending.*42501/)).toBeVisible();
+  await page.getByText('Sync Diagnostics', { exact: true }).click();
+  const row = label => page.locator('dl > div').filter({ has: page.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }) }).locator('dd');
+  await expect(row('Failed / needs review')).toHaveText('4');
+  await expect(row('Last food attempt result')).toHaveText('0 succeeded / 4 failed');
+  await expect(row('Last food attempt')).not.toHaveText('No food uploads attempted');
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sync Now', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:food-library-queue:v1')).length)).toBe(4);
 });

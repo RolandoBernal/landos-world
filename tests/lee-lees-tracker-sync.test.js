@@ -1515,7 +1515,7 @@ test('failed food library sync remains pending and surfaces diagnostics', async 
   const diagnostics = repo.getSyncDiagnostics();
   assert.equal(status.foodLibraryPendingCount, 1);
   assert.equal(status.pendingCount, 1);
-  assert.equal(status.lastError, 'Food Library sync will retry when the connection is available.');
+  assert.equal(status.lastError, 'Food upload failed (42501): permission denied for table lee_lee_foods');
   assert.equal(diagnostics.foodLibraryQueue.length, 1);
   assert.equal(diagnostics.foodLibraryQueue[0].recordId, 'food-1');
   assert.equal(diagnostics.foodLibraryQueue[0].retryCount, 1);
@@ -1746,12 +1746,21 @@ test('four failed food operations retain exact diagnostics and retry successfull
   await repository.syncNow();
   const diagnostics = repository.getSyncDiagnostics().foodLibraryQueue;
   assert.equal(diagnostics.length, 4);
+  const failure = repository.getSyncDiagnostics();
+  assert.equal(failure.summary.byState.failed, 4);
+  assert.equal(failure.lastFoodSyncAttempt.attempted, 4);
+  assert.equal(failure.lastFoodSyncAttempt.failed, 4);
+  assert.equal(failure.lastFoodSyncAttempt.succeeded, 0);
+  assert.ok(failure.lastFoodSyncAttempt.finishedAt);
+  assert.match(failure.lastError, /PGRST204.*Column does not exist/);
   assert.equal(new Set(diagnostics.map(item => item.recordId)).size, 4);
   assert.ok(diagnostics.every(item => item.targetTable === 'lee_lee_foods' && item.lastErrorCode === 'PGRST204' && item.lastAttemptAt));
   options.foodLibraryUpsertError = null;
   const result = await repository.syncNow();
   assert.equal(result.pendingCount, 0);
   assert.equal(supabase.client.foodRows.length, 4);
+  assert.equal(repository.getSyncDiagnostics().lastFoodSyncAttempt.succeeded, 4);
+  assert.equal(repository.getSyncDiagnostics().lastFoodSyncAttempt.failed, 0);
   assert.ok(result.lastSuccessfulSyncAt);
 });
 

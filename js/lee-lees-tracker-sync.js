@@ -885,6 +885,7 @@
         realtimeStatus: metadata.realtimeStatus || 'idle',
         lastError: metadata.lastError || '',
         lastSyncAttempt: metadata.lastSyncAttempt || null,
+        lastFoodSyncAttempt: metadata.lastFoodSyncAttempt || null,
         state,
         message,
       };
@@ -985,6 +986,7 @@
           sharedVersion: conflict.sharedRecord?.version ?? null,
         })),
         lastSyncAttempt: metadata.lastSyncAttempt || null,
+        lastFoodSyncAttempt: metadata.lastFoodSyncAttempt || null,
         lastError: metadata.lastError || '',
       };
     }
@@ -1690,6 +1692,7 @@
       emit();
       const remaining = [];
       const snapshot = pruneDefaultSeedFoodQueue();
+      const attempt = { startedAt: nowIso(), attempted: snapshot.length, succeeded: 0, failed: 0 };
       for (const operation of snapshot) {
         const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
@@ -1702,23 +1705,26 @@
             .single();
           if (error) throw error;
           if (!data?.id) throw new Error('Food upload returned no acknowledgement.');
+          attempt.succeeded += 1;
           setFoodLibraryQueue(getFoodLibraryQueue().filter((item) => item.id !== operation.id));
           const mergedItem = normalizeLibraryItem(attemptedOperation.entityType, libraryItemFromRemote(data, attemptedOperation.entityType));
           if (mergedItem) mergeRemoteLibraryItems(attemptedOperation.entityType, [mergedItem]);
         } catch (error) {
           const sanitizedError = sanitizeSupabaseError(error);
+          attempt.failed += 1;
           remaining.push({
             ...attemptedOperation,
             retryCount: Number(attemptedOperation.retryCount || 0) + 1,
             lastErrorCategory: categorizeError(error),
             lastErrorCode: sanitizedError.code,
             lastErrorMessage: sanitizedError.message,
-            state: 'pending',
+            state: 'failed',
           });
-          setMetadata({ lastError: 'Food Library sync will retry when the connection is available.' });
+          setMetadata({ lastError: `Food upload failed${sanitizedError.code ? ` (${sanitizedError.code})` : ''}: ${sanitizedError.message || 'No error details returned.'}` });
         }
       }
       setFoodLibraryQueue([...getFoodLibraryQueue().filter((item) => !snapshot.some((old) => old.id === item.id)), ...remaining.filter((item) => getFoodLibraryQueue().some((current) => current.id === item.id))]);
+      if (snapshot.length) setMetadata({ lastFoodSyncAttempt: { ...attempt, finishedAt: nowIso() } });
       processingFoodLibrary = false;
       emit();
       return getSyncStatus();
