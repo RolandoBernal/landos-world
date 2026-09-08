@@ -1865,6 +1865,12 @@
   accent-color: var(--lee-lee-accent);
 }
 
+.lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_checkline,
+.lee_lee_diabetes_carb_editor_panel .lee_lee_diabetes_checkline {
+  justify-content: flex-start;
+  gap: 0.65rem;
+}
+
 .lee_lee_diabetes_actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
