@@ -167,6 +167,11 @@ function createMockSupabase(remoteRows = [], options = {}) {
           return builder;
         },
         upsert(payload) {
+          if ((tableName === 'lee_lee_foods' && 'total_carbs' in payload)
+            || (tableName === 'lee_lee_saved_meals' && 'carb_grams' in payload)) {
+            builder.error = { code: 'PGRST204', message: 'Column does not exist in schema cache' };
+            return builder;
+          }
           if ((tableName === 'lee_lee_foods' || tableName === 'lee_lee_saved_meals') && options.foodLibraryUpsertError) {
             builder.error = options.foodLibraryUpsertError;
             builder.current = null;
@@ -1673,4 +1678,109 @@ test('stale starter food queue entries are pruned during sync initialization', a
   assert.equal(queue.some((operation) => operation.recordId === 'starter-banana'), false);
   assert.equal(queue.some((operation) => operation.recordId === 'food-user-1'), true);
   assert.equal(repo.getSyncStatus().foodLibraryPendingCount, 1);
+});
+
+
+test('settings edited during an upload survive acknowledgement and sync at the new version', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow()] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const applied = [];
+  const repository = context.LeeLeeTrackerSync.createRepository({ ...createDocumentStore(), onSharedSettingsChange: value => applied.push(value) });
+  await repository.initialize();
+  const realRpc = supabase.client.rpc;
+  const gate = createDeferred();
+  const started = createDeferred();
+  supabase.client.rpc = async (...args) => { started.resolve(); await gate.promise; return realRpc(...args); };
+  const base = repository.getSharedSettings();
+  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 20 } });
+  const running = repository.processSharedSettingsQueue();
+  await started.promise;
+  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 15 } });
+  gate.resolve();
+  await running;
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 1);
+  await repository.processSharedSettingsQueue();
+  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 0);
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(applied.at(-1).insulinPlan.insulinCarbRatioGrams, 15);
+});
+
+test('unresolved settings conflict remains local across repeated pulls', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ version: 4 })] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository({ ...createDocumentStore() });
+  await repository.initialize();
+  const base = repository.getSharedSettings();
+  supabase.client.sharedSettingsRows[0].version = 5;
+  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 15 } });
+  await repository.processSharedSettingsQueue();
+  assert.equal(repository.getConflicts().length, 1);
+  await repository.syncSharedSettings();
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(repository.getConflicts().length, 1);
+});
+
+test('failed food pull never advances full sync success time even with an empty queue', async () => {
+  const supabase = createMockSupabase([], { foodLibrarySelectError: { code: '42P01', message: 'missing table' } });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository({ ...createDocumentStore() });
+  await repository.initialize();
+  const before = repository.getSyncStatus().lastSuccessfulSyncAt;
+  const result = await repository.syncNow();
+  assert.ok(result.lastError);
+  assert.equal(result.lastSuccessfulSyncAt, before);
+  assert.notEqual(result.state, 'syncing');
+});
+
+
+test('four failed food operations retain exact diagnostics and retry successfully against table schema', async () => {
+  const options = { foodLibraryUpsertError: { code: 'PGRST204', message: 'Column does not exist in schema cache' } };
+  const supabase = createMockSupabase([], options);
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository({ ...createDocumentStore(), normalizeFood: item => item });
+  await repository.initialize();
+  context.navigator.onLine = false;
+  for (let i = 0; i < 4; i++) repository.queueFoodUpsert({ id: `food-${i}`, name: `Food ${i}`, carbs: i, version: 1 });
+  context.navigator.onLine = true;
+  await repository.syncNow();
+  const diagnostics = repository.getSyncDiagnostics().foodLibraryQueue;
+  assert.equal(diagnostics.length, 4);
+  assert.equal(new Set(diagnostics.map(item => item.recordId)).size, 4);
+  assert.ok(diagnostics.every(item => item.targetTable === 'lee_lee_foods' && item.lastErrorCode === 'PGRST204' && item.lastAttemptAt));
+  options.foodLibraryUpsertError = null;
+  const result = await repository.syncNow();
+  assert.equal(result.pendingCount, 0);
+  assert.equal(supabase.client.foodRows.length, 4);
+  assert.ok(result.lastSuccessfulSyncAt);
+});
+
+test('deleting a not-yet-uploaded record keeps its tombstone and uses the insert acknowledgement version', async () => {
+  const supabase = createMockSupabase();
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const store = createDocumentStore({ records: [record({ deletedAt: '2026-09-07T12:00:00Z' })] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+  await repository.initialize();
+  context.navigator.onLine = false;
+  repository.queueUpsert(record());
+  repository.queueSoftDelete(record());
+  context.navigator.onLine = true;
+  await repository.processQueue();
+  assert.equal(repository.getSyncStatus().recordPendingCount, 0);
+  assert.ok(supabase.client.rows[0].deleted_at);
+  assert.ok(store.getDocument().records[0].deletedAt);
+  assert.equal(store.getDocument().records[0].version, 2);
+});
+
+test('legacy remote settings cannot replace a locally configured ratio with defaults', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ settings: { insulinPlan: sharedInsulinPlan({ insulinCarbRatioGrams: 15 }) } })] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await repository.initialize();
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  supabase.client.sharedSettingsRows[0].payload = {};
+  supabase.client.sharedSettingsRows[0].version++;
+  await repository.syncSharedSettings();
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(repository.getConflicts().length, 1);
 });

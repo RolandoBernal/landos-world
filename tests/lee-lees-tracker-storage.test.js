@@ -107,8 +107,8 @@ test('migrates legacy record and plan keys into the stable tracker document with
   assert.equal(stored.records[0].unknownFutureField, 'preserve me');
   assert.equal(stored.insulinPlans.some((plan) => plan.id === 'plan-1'), true);
   const migratedPlan = stored.insulinPlans.find((plan) => plan.id === 'plan-1');
-  assert.deepEqual(migratedPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
-  assert.equal(migratedPlan.mealBaseUnits, 5);
+  assert.deepEqual(migratedPlan.mealBaseUnitsByType, { Breakfast: 4, Lunch: 4, Dinner: 4 });
+  assert.equal(migratedPlan.mealBaseUnits, 4);
   assert.equal(migratedPlan.bedtimeBaseUnits, 17);
   assert.equal(migratedPlan.insulinCarbRatioGrams, 20);
   assert.equal(Object.hasOwn(migratedPlan, 'savedFoods'), false);
@@ -116,7 +116,7 @@ test('migrates legacy record and plan keys into the stable tracker document with
   assert.ok(localStorage.getItem(legacyPlansKey));
 });
 
-test('legacy shared meal base dose is replaced by current prescribed per-meal and bedtime defaults', () => {
+test('legacy explicit meal base dose is preserved during normalization', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({
       schemaVersion: 1,
@@ -143,8 +143,8 @@ test('legacy shared meal base dose is replaced by current prescribed per-meal an
 
   const stored = JSON.parse(localStorage.getItem(storageKey));
   const plan = stored.insulinPlans[0];
-  assert.deepEqual(plan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
-  assert.equal(plan.mealBaseUnits, 5);
+  assert.deepEqual(plan.mealBaseUnitsByType, { Breakfast: 4, Lunch: 4, Dinner: 4 });
+  assert.equal(plan.mealBaseUnits, 4);
   assert.equal(plan.bedtimeBaseUnits, 17);
   assert.equal(plan.insulinCarbRatioGrams, 20);
   assert.equal(plan.notes, 'keep this');
@@ -193,7 +193,7 @@ test('bedtime base dose migration preserves unrelated settings and custom values
   assert.equal(stored.records[0].suggestedTotalUnits, 15);
 });
 
-test('stored current correction table is extended with the open-ended 550 plus range', () => {
+test('stored correction table remains unchanged during normalization', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({
       schemaVersion: 1,
@@ -225,8 +225,8 @@ test('stored current correction table is extended with the open-ended 550 plus r
 
   const stored = JSON.parse(localStorage.getItem(storageKey));
   const plan = stored.insulinPlans[0];
-  assert.deepEqual(plan.correctionRanges.at(-2), { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 });
-  assert.deepEqual(plan.correctionRanges.at(-1), { minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
+  assert.equal(plan.correctionRanges.length, 6);
+  assert.deepEqual(plan.correctionRanges.at(-1), { minGlucose: 475, maxGlucose: 549, correctionUnits: 5 });
 });
 
 test('separate glucose and insulin event records normalize into the combined check workflow', () => {
@@ -492,4 +492,38 @@ test('tracker document preserves food library, saved meals, and historical meal 
   assert.equal(stored.savedMeals[0].totalCarbs, 30);
   assert.equal(stored.records[0].mealComponents[0].nameSnapshot, 'Original Name');
   assert.equal(stored.records[0].mealCarbs, 28);
+});
+
+
+test('canonical settings and tombstones survive reload with stale legacy data', () => {
+  const original = createTracker().storage.loadTrackerData();
+  const plan = { ...original.insulinPlans[0], insulinCarbRatioGrams: 15 };
+  const deleted = sampleRecord({ deletedAt: '2026-09-07T12:00:00Z', updatedAt: '2026-09-07T12:00:00Z' });
+  const localStorage = createLocalStorage({
+    [storageKey]: JSON.stringify({ ...original, insulinPlans: [plan], activeInsulinPlanId: plan.id, records: [deleted] }),
+    [legacyPlansKey]: JSON.stringify([{ ...plan, insulinCarbRatioGrams: 20 }]),
+    [legacyRecordsKey]: JSON.stringify([{ ...deleted, deletedAt: null }]),
+  });
+  const data = createTracker({ localStorage }).storage.loadTrackerData();
+  assert.equal(data.insulinPlans.find(item => item.id === plan.id).insulinCarbRatioGrams, 15);
+  assert.ok(data.records[0].deletedAt);
+});
+
+test('record merge orders by edit revision and keeps a tombstone on equal revision', () => {
+  const { storage } = createTracker();
+  const deleted = sampleRecord({ deletedAt: '2026-09-07T12:00:00Z', updatedAt: '2026-09-07T12:00:00Z' });
+  for (const updatedAt of ['2026-09-07T11:00:00Z', deleted.updatedAt]) {
+    const merged = storage.mergeTrackerDocuments({ records: [deleted] }, { records: [{ ...deleted, deletedAt: null, updatedAt }] });
+    assert.ok(merged.records[0].deletedAt);
+  }
+});
+
+
+test('an explicitly saved bedtime value of 15 is never automatically rewritten', () => {
+  const original = createTracker().storage.loadTrackerData();
+  const plan = { ...original.insulinPlans[0], bedtimeBaseUnits: 15, bedtimeBaseUnitsMigratedTo17: false, insulinCarbRatioGrams: 15 };
+  const localStorage = createLocalStorage({ [storageKey]: JSON.stringify({ ...original, insulinPlans: [plan], activeInsulinPlanId: plan.id }) });
+  const loaded = createTracker({ localStorage }).storage.loadTrackerData();
+  assert.equal(loaded.insulinPlans[0].bedtimeBaseUnits, 15);
+  assert.equal(loaded.insulinPlans[0].insulinCarbRatioGrams, 15);
 });

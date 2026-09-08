@@ -22,7 +22,6 @@
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
   const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({ Breakfast: 5, Lunch: 6, Dinner: 6 });
   const DEFAULT_BEDTIME_BASE_UNITS = 17;
-  const LEGACY_BEDTIME_BASE_UNITS = 15;
   const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
   const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
@@ -168,7 +167,9 @@
   function isDefaultSeedFoodPayload(payload = {}) {
     const sourceType = String(payload.sourceType || payload.source_type || '').trim();
     return Boolean(payload.seedKey || payload.seed_key || payload.starterFoodVersion || payload.starter_food_version)
-      && ['reference', 'verified-label'].includes(sourceType);
+      && ['reference', 'verified-label'].includes(sourceType)
+      && !payload.favorite && !payload.deletedAt && !payload.lastUsedAt && !payload.lastEditedBy
+      && (!payload.updatedAt || payload.updatedAt === payload.createdAt);
   }
 
   function isDefaultSeedFoodOperation(operation = {}) {
@@ -228,19 +229,6 @@
     return { minGlucose, maxGlucose, correctionUnits };
   }
 
-  function ensureSharedHighGlucoseCorrectionRange(correctionRanges) {
-    const ranges = Array.isArray(correctionRanges) ? correctionRanges : [];
-    const hasHighGlucoseRange = ranges.some((range) => (
-      (range.minGlucose == null || HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose >= range.minGlucose)
-      && range.maxGlucose == null
-    ));
-    if (hasHighGlucoseRange) return ranges;
-    const finalRange = ranges[ranges.length - 1];
-    if (finalRange?.maxGlucose === HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose - 1) {
-      return [...ranges, { ...HIGH_GLUCOSE_CORRECTION_RANGE }];
-    }
-    return ranges;
-  }
 
   function normalizeSharedMealBaseUnitsByType(plan = {}) {
     const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
@@ -248,7 +236,7 @@
       : {};
     return Object.fromEntries(MEAL_TYPES.map((type) => [
       type,
-      normalizeSharedNumber(source[type]) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
+      normalizeSharedNumber(source[type]) ?? normalizeSharedNumber(plan.mealBaseUnits) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
     ]));
   }
 
@@ -263,7 +251,7 @@
     const correctionRanges = Array.isArray(source.correctionRanges)
       ? source.correctionRanges.map(normalizeSharedCorrectionRange).filter(Boolean)
       : [];
-    const normalizedCorrectionRanges = ensureSharedHighGlucoseCorrectionRange(correctionRanges);
+    const normalizedCorrectionRanges = correctionRanges;
     const supportedMealTypes = Array.isArray(source.supportedMealTypes)
       ? source.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
@@ -276,10 +264,8 @@
       effectiveTo,
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
-      bedtimeBaseUnits: bedtimeValue === LEGACY_BEDTIME_BASE_UNITS && source.bedtimeBaseUnitsMigratedTo17 !== true
-        ? DEFAULT_BEDTIME_BASE_UNITS
-        : (bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS),
-      bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true || bedtimeValue === LEGACY_BEDTIME_BASE_UNITS,
+      bedtimeBaseUnits: bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS,
+      bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true,
       insulinCarbRatioGrams: normalizeSharedNumber(source.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
       doseRoundingMode: normalizeSharedDoseRoundingMode(source.doseRoundingMode),
       doseIncrementUnits: normalizeSharedDoseIncrement(source.doseIncrementUnits),
@@ -357,6 +343,7 @@
     const patientClinic = getSharedPatientClinicSource(source);
     return {
       schemaVersion: SHARED_SETTINGS_SCHEMA_VERSION,
+      hasExplicitInsulinPlan: source.hasExplicitInsulinPlan !== false,
       patientName: String(patientClinic.patientName || patientClinic.patient_name || source.patient_name || '').trim().slice(0, 80),
       patientBirthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(patientClinic.patientBirthDate || patientClinic.patient_date_of_birth || source.patient_date_of_birth || ''))
         ? String(patientClinic.patientBirthDate || patientClinic.patient_date_of_birth || source.patient_date_of_birth)
@@ -406,6 +393,7 @@
       clinicName: row.clinic_name,
       clinicPhone: row.clinic_phone,
       payload: row.payload,
+      hasExplicitInsulinPlan: getSharedInsulinPlanSource(row) !== DEFAULT_SHARED_INSULIN_PLAN,
       version: row.version,
       lastEditedBy: row.last_edited_by,
       updatedAt: row.updated_at,
@@ -471,8 +459,7 @@
       last_edited_by: item.lastEditedBy || null,
       version: Number(item.version || 1),
       payload: publicLibraryItem(item),
-      total_carbs: entityType === 'saved-meal' ? item.totalCarbs : null,
-      carb_grams: entityType === 'food' ? item.carbs : null,
+      ...(entityType === 'saved-meal' ? { total_carbs: item.totalCarbs } : { carb_grams: item.carbs }),
     };
   }
 
@@ -970,6 +957,7 @@
         id: operation.id,
         recordId: operation.recordId,
         entityType: operation.entityType,
+        targetTable: tableForLibraryEntity(operation.entityType),
         operationType: operation.type,
         state: operation.state || 'pending',
         retryCount: Number(operation.retryCount || 0),
@@ -1113,6 +1101,18 @@
       saveDocument({ ...current, records: nextRecords }, { keepStatus: true });
     }
 
+    function acknowledgeRecord(operation, remote) {
+      if (!remote?.id) throw new Error('Record upload returned no acknowledgement.');
+      setQueue(getQueue().filter((item) => item.id !== operation.id).map((item) => item.recordId === remote.id && item.type === 'soft-delete'
+        ? { ...item, baseVersion: remote.version } : item));
+      if (getQueue().some((item) => item.recordId === remote.id)) {
+        const current = getDocument();
+        saveDocument({ ...current, records: current.records.map((item) => item.id === remote.id ? { ...item, version: remote.version } : item) }, { keepStatus: true });
+      } else {
+        mergeRemoteRecords([remote]);
+      }
+    }
+
     function queueOperation(type, record, baseVersion = null) {
       const operation = createOperation(type, record, baseVersion);
       setQueue([...getQueue(), operation]);
@@ -1164,7 +1164,14 @@
       return queueOperation('restore', nextRecord, record.version || null);
     }
 
-    async function processQueue(options = {}) {
+    let processQueuePromise = null;
+    function processQueue(...args) {
+      if (processQueuePromise) return processQueuePromise;
+      processQueuePromise = Promise.resolve().then(() => processQueueInternal(...args)).finally(() => { processQueuePromise = null; processing = false; });
+      return processQueuePromise;
+    }
+
+    async function processQueueInternal(options = {}) {
       if (processing || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client) return getSyncStatus();
@@ -1229,7 +1236,7 @@
       emit();
       const remaining = [];
       for (const operation of currentQueue) {
-        const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
+        const attemptedOperation = { ...(getQueue().find((item) => item.id === operation.id) || operation), lastAttemptAt: nowIso() };
         try {
           const remoteRecord = sanitizeRecordForRemote(attemptedOperation.payload, session.user.id);
           if (attemptedOperation.type === 'insert') {
@@ -1242,7 +1249,7 @@
               if (isDuplicateKeyError(error)) {
                 const existing = await fetchRemoteRecord(attemptedOperation.recordId);
                 if (existing && recordsHaveSameContent(existing, attemptedOperation.payload)) {
-                  mergeRemoteRecords([existing]);
+                  acknowledgeRecord(attemptedOperation, existing);
                   recordAttemptItem(attempt, attemptedOperation, 'succeeded', { reconciledDuplicate: true });
                   continue;
                 }
@@ -1252,7 +1259,7 @@
               }
               throw error;
             }
-            mergeRemoteRecords([recordFromRemote(data)]);
+            acknowledgeRecord(attemptedOperation, recordFromRemote(data));
             recordAttemptItem(attempt, attemptedOperation, 'succeeded');
             continue;
           }
@@ -1266,7 +1273,7 @@
             recordAttemptItem(attempt, attemptedOperation, 'succeeded', { conflictCreated: true, category: 'conflict' });
             continue;
           }
-          mergeRemoteRecords([recordFromRemote(updatedRow)]);
+          acknowledgeRecord(attemptedOperation, recordFromRemote(updatedRow));
           recordAttemptItem(attempt, attemptedOperation, 'succeeded');
         } catch (error) {
           const category = categorizeError(error);
@@ -1293,9 +1300,9 @@
           }
         }
       }
-      setQueue([...skipped, ...remaining]);
+      setQueue([...getQueue().filter((item) => !currentQueue.some((attempted) => attempted.id === item.id)), ...remaining]);
       processing = false;
-      if (!remaining.length) setMetadata({ lastSuccessfulSyncAt: nowIso(), lastError: '' });
+      // Full-sync success is recorded only after every domain has completed.
       logSyncAttempt(attempt);
       emit();
       return getSyncStatus();
@@ -1350,7 +1357,6 @@
       }
       mergeRemoteRecords((data || []).map(recordFromRemote));
       await processQueue(options);
-      setMetadata({ lastSuccessfulSyncAt: nowIso(), lastError: '' });
       emit();
       return getSyncStatus();
     }
@@ -1367,10 +1373,25 @@
       return data ? sharedSettingsFromRemote(data) : null;
     }
 
-    function mergeSharedSettings(settings) {
+    function mergeSharedSettings(settings, { force = false } = {}) {
       if (!settings) return;
+      const cached = getSharedSettingsCache();
+      if (!force) {
+        if (Number(settings.version || 0) < Number(cached.version || 0)) return;
+        const local = normalizeSharedSettings(getLocalSharedSettings?.() || cached);
+        if (getLocalSharedSettings && sharedSettingsHaveValues(local) && !sharedSettingsAreSame(local, cached) && !sharedSettingsAreSame(local, settings) && !getSharedSettingsQueue().length) {
+          registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
+          return;
+        }
+        if (settings.hasExplicitInsulinPlan === false && !sharedSettingsAreSame({ ...settings, insulinPlan: local.insulinPlan }, settings)) {
+          registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
+          return;
+        }
+        if (getConflicts().some((item) => item.recordId === 'shared-settings')) return;
+        if (getSharedSettingsQueue().some((item) => !sharedSettingsAreSame(item.payload, settings))) return;
+      }
       const normalized = setSharedSettingsCache({ ...settings, syncStatus: 'synced', syncError: '' });
-      onSharedSettingsChange?.(normalized);
+      if (!getLocalSharedSettings || !sharedSettingsAreSame(getLocalSharedSettings(), normalized)) onSharedSettingsChange?.(normalized);
     }
 
     async function reconcileSharedSettings() {
@@ -1382,7 +1403,7 @@
           const pendingSettings = getSharedSettingsQueue()[0]?.payload;
           const migration = getSharedSettingsMigration();
           const localSettings = normalizeSharedSettings(getLocalSharedSettings?.() || null);
-          if (!migration.completed && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame(localSettings, remoteSettings)) {
+          if (!pendingSettings && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame(localSettings, remoteSettings) && (!migration.completed || !sharedSettingsAreSame(localSettings, getSharedSettingsCache()))) {
             await registerSharedSettingsConflict(createSharedSettingsOperation({
               ...localSettings,
               version: remoteSettings.version,
@@ -1452,6 +1473,16 @@
       return queuedOperation;
     }
 
+    function acknowledgeSharedSettings(operation, remote) {
+      const queue = getSharedSettingsQueue().filter((item) => item.id !== operation.id);
+      setSharedSettingsQueue(queue.map((item) => ({ ...item, baseVersion: remote.version, type: 'update-shared-settings' })));
+      if (queue.length) {
+        setSharedSettingsCache({ ...queue[queue.length - 1].payload, version: remote.version });
+      } else {
+        mergeSharedSettings(remote);
+      }
+    }
+
     async function registerSharedSettingsConflict(operation, knownSharedSettings = null) {
       const sharedSettings = knownSharedSettings || await fetchSharedSettings();
       if (sharedSettings && sharedSettingsAreSame(sharedSettings, operation.payload)) {
@@ -1471,17 +1502,26 @@
           createdAt: nowIso(),
         },
       ]);
-      setSharedSettingsCache({ ...operation.payload, syncStatus: 'conflict', syncError: 'Patient and clinic information changed on another device.' });
+      const latest = getSharedSettingsQueue().at(-1)?.payload || operation.payload;
+      setSharedSettingsCache({ ...latest, syncStatus: 'conflict', syncError: 'Shared care settings changed on another device. Review before replacing local settings.' });
     }
 
-    async function processSharedSettingsQueue() {
+    let processSharedSettingsQueuePromise = null;
+    function processSharedSettingsQueue(...args) {
+      if (processSharedSettingsQueuePromise) return processSharedSettingsQueuePromise;
+      processSharedSettingsQueuePromise = Promise.resolve().then(() => processSharedSettingsQueueInternal(...args)).finally(() => { processSharedSettingsQueuePromise = null; processingSharedSettings = false; });
+      return processSharedSettingsQueuePromise;
+    }
+
+    async function processSharedSettingsQueueInternal() {
       if (processingSharedSettings || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       processingSharedSettings = true;
       emit();
       const remaining = [];
-      for (const operation of getSharedSettingsQueue()) {
+      const snapshot = getSharedSettingsQueue();
+      for (const operation of snapshot) {
         const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
           const remotePayload = sharedSettingsToRemote(attemptedOperation.payload, session.user.id);
@@ -1498,7 +1538,7 @@
               }
               throw error;
             }
-            mergeSharedSettings(sharedSettingsFromRemote(data));
+            acknowledgeSharedSettings(attemptedOperation, sharedSettingsFromRemote(data));
             continue;
           }
           const { data, error } = await client
@@ -1518,7 +1558,7 @@
             await registerSharedSettingsConflict(attemptedOperation);
             continue;
           }
-          mergeSharedSettings(sharedSettingsFromRemote(updatedRow));
+          acknowledgeSharedSettings(attemptedOperation, sharedSettingsFromRemote(updatedRow));
         } catch (error) {
           const sanitizedError = sanitizeSupabaseError(error);
           remaining.push({
@@ -1529,20 +1569,20 @@
             lastErrorMessage: sanitizedError.message,
             state: 'pending',
           });
-          setSharedSettingsCache({ ...attemptedOperation.payload, syncStatus: navigator.onLine ? 'waiting' : 'offline', syncError: 'Patient and clinic information will retry syncing.' });
+          // Keep newer local configuration intact after an older request fails.
         }
       }
-      setSharedSettingsQueue(remaining);
+      setSharedSettingsQueue([...getSharedSettingsQueue().filter((item) => !snapshot.some((old) => old.id === item.id)), ...remaining.filter((item) => getSharedSettingsQueue().some((current) => current.id === item.id))]);
       processingSharedSettings = false;
       emit();
       return getSyncStatus();
     }
 
-    function mergeRemoteRecords(remoteRecords) {
+    function mergeRemoteRecords(remoteRecords, { force = false } = {}) {
       if (!remoteRecords.length) return;
       const current = getDocument();
-      const pendingIds = new Set(getQueue().map((operation) => operation.recordId));
-      const safeRemote = remoteRecords.filter((record) => !pendingIds.has(record.id));
+      const pendingIds = new Set([...getQueue(), ...getConflicts()].map((operation) => operation.recordId));
+      const safeRemote = remoteRecords.filter((record) => force || !pendingIds.has(record.id));
       const merged = mergeDocuments(current, { ...current, records: safeRemote });
       saveDocument(merged, { keepStatus: true });
       onRemoteChange?.(merged);
@@ -1635,14 +1675,22 @@
       return getSyncStatus();
     }
 
-    async function processFoodLibraryQueue() {
+    let processFoodLibraryQueuePromise = null;
+    function processFoodLibraryQueue(...args) {
+      if (processFoodLibraryQueuePromise) return processFoodLibraryQueuePromise;
+      processFoodLibraryQueuePromise = Promise.resolve().then(() => processFoodLibraryQueueInternal(...args)).finally(() => { processFoodLibraryQueuePromise = null; processingFoodLibrary = false; });
+      return processFoodLibraryQueuePromise;
+    }
+
+    async function processFoodLibraryQueueInternal() {
       if (processingFoodLibrary || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       processingFoodLibrary = true;
       emit();
       const remaining = [];
-      for (const operation of pruneDefaultSeedFoodQueue()) {
+      const snapshot = pruneDefaultSeedFoodQueue();
+      for (const operation of snapshot) {
         const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
         try {
           const normalized = normalizeLibraryItem(attemptedOperation.entityType, attemptedOperation.payload);
@@ -1653,6 +1701,8 @@
             .select()
             .single();
           if (error) throw error;
+          if (!data?.id) throw new Error('Food upload returned no acknowledgement.');
+          setFoodLibraryQueue(getFoodLibraryQueue().filter((item) => item.id !== operation.id));
           const mergedItem = normalizeLibraryItem(attemptedOperation.entityType, libraryItemFromRemote(data, attemptedOperation.entityType));
           if (mergedItem) mergeRemoteLibraryItems(attemptedOperation.entityType, [mergedItem]);
         } catch (error) {
@@ -1668,7 +1718,7 @@
           setMetadata({ lastError: 'Food Library sync will retry when the connection is available.' });
         }
       }
-      setFoodLibraryQueue(remaining);
+      setFoodLibraryQueue([...getFoodLibraryQueue().filter((item) => !snapshot.some((old) => old.id === item.id)), ...remaining.filter((item) => getFoodLibraryQueue().some((current) => current.id === item.id))]);
       processingFoodLibrary = false;
       emit();
       return getSyncStatus();
@@ -1739,13 +1789,13 @@
       if (!conflict) return;
       if (conflict.entityType === 'shared-settings') {
         setSharedSettingsQueue(getSharedSettingsQueue().filter((operation) => operation.recordId !== recordId));
-        if (conflict.sharedRecord) mergeSharedSettings(conflict.sharedRecord);
+        if (conflict.sharedRecord) mergeSharedSettings(conflict.sharedRecord, { force: true });
         setConflicts(conflicts.filter((item) => item.recordId !== recordId));
         emit();
         return;
       }
       setQueue(getQueue().filter((operation) => operation.recordId !== recordId));
-      if (conflict.sharedRecord) mergeRemoteRecords([conflict.sharedRecord]);
+      if (conflict.sharedRecord) mergeRemoteRecords([conflict.sharedRecord], { force: true });
       setConflicts(conflicts.filter((item) => item.recordId !== recordId));
       emit();
     }
@@ -1760,7 +1810,7 @@
         setSharedSettingsQueue([
           ...getSharedSettingsQueue().filter((operation) => operation.recordId !== recordId),
           createSharedSettingsOperation({
-            ...conflict.localRecord,
+            ...(getSharedSettingsQueue().at(-1)?.payload || conflict.localRecord),
             version: sharedVersion,
             lastEditedBy: getDeviceIdentity() || null,
           }, sharedVersion),
@@ -1796,9 +1846,9 @@
           resolvedCount += 1;
           resolvedIds.add(conflict.recordId);
           if (conflict.entityType === 'shared-settings') {
-            mergeSharedSettings(conflict.sharedRecord);
+            mergeSharedSettings(conflict.sharedRecord, { force: true });
           } else {
-            mergeRemoteRecords([conflict.sharedRecord]);
+            mergeRemoteRecords([conflict.sharedRecord], { force: true });
           }
           return;
         }
@@ -1838,16 +1888,21 @@
     function syncAll(options = {}) {
       if (fullSyncPromise) return fullSyncPromise;
       fullSyncPromise = (async () => {
+        setMetadata({ lastError: '' });
         emit();
         try {
           await reconcile(options);
           await reconcileSharedSettings();
           await reconcileFoodLibrary();
-          return getSyncStatus();
+          const status = getSyncStatus();
+          if (status.signedIn && navigator.onLine && !status.pendingCount && !status.conflictCount && !status.lastError) {
+            setMetadata({ lastSuccessfulSyncAt: nowIso() });
+          }
         } finally {
           fullSyncPromise = null;
           emit();
         }
+        return getSyncStatus();
       })();
       return fullSyncPromise;
     }

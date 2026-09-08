@@ -1699,8 +1699,8 @@ test('entry card footer actions stay compact and preserve delete confirmation', 
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit[\s\S]*min-height: 36px/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger[\s\S]*#fca5a5/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit:focus-visible/);
-  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id\)/);
-  assert.match(trackerSource, /function deleteRecord\(recordId\)[\s\S]*renderDeleteConfirmation\(record\)/);
+  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id, target\.dataset\.returnTo\)/);
+  assert.match(trackerSource, /function deleteRecord\(recordId, returnTo\)[\s\S]*renderDeleteConfirmation\(record, returnTo\)/);
   assert.match(trackerSource, /data-action="confirm-delete-record"/);
 });
 
