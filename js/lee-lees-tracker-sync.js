@@ -1483,6 +1483,7 @@
       } else {
         mergeSharedSettings(remote);
       }
+      setMetadata({ lastError: '' });
     }
 
     async function registerSharedSettingsConflict(operation, knownSharedSettings = null) {

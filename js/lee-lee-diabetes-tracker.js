@@ -7785,6 +7785,12 @@
     if (currentEditor.mode === 'settings') {
       const section = getRoot()?.querySelector('[aria-labelledby="lee-lee-sync-title"]');
       if (section) section.outerHTML = renderSyncStatusSection();
+      const sharedSettingsStatus = syncStatus.sharedSettingsStatus;
+      const patientStatus = getRoot()?.querySelector('[aria-labelledby="lee-lee-patient-title"] .lee_lee_diabetes_save_status');
+      if (patientStatus && sharedSettingsStatus && !patientSettingsError && !patientSettingsMessage) {
+        patientStatus.className = `lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${sharedSettingsStatus.state}`;
+        patientStatus.textContent = sharedSettingsStatus.message;
+      }
     }
     if (currentEditor.mode === 'foods') renderFoodLibrary();
     if (currentEditor.mode === 'history') renderHistory();
