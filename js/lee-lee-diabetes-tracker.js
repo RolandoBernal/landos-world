@@ -4055,7 +4055,7 @@
             <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(food ? formatCarbAmount(food.carbs) : '')}" required></label>
             <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food?.servingLabel || '')}"></label>
             <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food?.brand || '')}"></label>
-            <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food?.favorite ? 'checked' : ''}> Favorite</label>
+            <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food?.favorite ? 'checked' : ''}><span>Favorite</span></label>
             <div class="lee_lee_diabetes_food_editor_actions">
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
@@ -4961,7 +4961,7 @@
         <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(food.carbs ?? '')}" required></label>
         <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.servingLabel || '')}"></label>
         <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.brand || '')}"></label>
-        <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food.favorite ? 'checked' : ''}> Favorite</label>
+        <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food.favorite ? 'checked' : ''}><span>Favorite</span></label>
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-food-editor">Cancel</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-food-editor">Save Food</button>

@@ -1824,6 +1824,20 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
     actionBottom: dialog.querySelector('.lee_lee_diabetes_food_editor_actions')?.getBoundingClientRect().bottom || 0,
     focusedInputOutlineWidth: getComputedStyle(dialog.querySelector('[name="foodName"]')).outlineWidth,
     focusedInputBoxShadow: getComputedStyle(dialog.querySelector('[name="foodName"]')).boxShadow,
+    favoriteCheckline: (() => {
+      const label = dialog.querySelector('.lee_lee_diabetes_checkline');
+      const input = label?.querySelector('[name="foodFavorite"]');
+      const text = label?.querySelector('span');
+      const labelRect = label?.getBoundingClientRect();
+      const inputRect = input?.getBoundingClientRect();
+      const textRect = text?.getBoundingClientRect();
+      return {
+        display: label ? getComputedStyle(label).display : '',
+        justifyContent: label ? getComputedStyle(label).justifyContent : '',
+        textGap: inputRect && textRect ? textRect.left - inputRect.right : 999,
+        inputOffset: labelRect && inputRect ? inputRect.left - labelRect.left : 999,
+      };
+    })(),
   }));
   expect(dialogMetrics.top).toBe(0);
   expect(Math.abs(dialogMetrics.height - dialogMetrics.viewportHeight)).toBeLessThanOrEqual(1);
@@ -1837,6 +1851,11 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
   expect(dialogMetrics.overflowY).toBe('auto');
   expect(dialogMetrics.focusedInputOutlineWidth).toBe('0px');
   expect(dialogMetrics.focusedInputBoxShadow).not.toBe('none');
+  expect(dialogMetrics.favoriteCheckline.display).toBe('flex');
+  expect(dialogMetrics.favoriteCheckline.justifyContent).toBe('flex-start');
+  expect(dialogMetrics.favoriteCheckline.textGap).toBeGreaterThanOrEqual(8);
+  expect(dialogMetrics.favoriteCheckline.textGap).toBeLessThanOrEqual(14);
+  expect(dialogMetrics.favoriteCheckline.inputOffset).toBeLessThanOrEqual(6);
 
   await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');
   await editorLayer.getByLabel('Emoji').fill('🐉');
