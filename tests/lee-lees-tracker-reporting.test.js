@@ -1741,6 +1741,88 @@ test('shared sync status copy explains healthy, syncing, and offline states', ()
   }, now).message, 'Offline — 1 record waiting to sync');
 });
 
+test('today header suppresses routine pending sync copy but keeps conflicts visible', () => {
+  const reports = createTrackerReports();
+
+  assert.equal(reports.getTopSyncStatusForSurface({
+    configured: true,
+    signedIn: true,
+    pendingCount: 4,
+    foodLibraryPendingCount: 4,
+    conflictCount: 0,
+    realtimeStatus: 'connected',
+    state: 'waiting',
+    message: '4 food items waiting to sync',
+  }, 'today'), null);
+
+  assert.equal(reports.getTopSyncStatusForSurface({
+    configured: true,
+    signedIn: true,
+    pendingCount: 1,
+    conflictCount: 1,
+    realtimeStatus: 'connected',
+    state: 'conflict',
+    message: 'Conflict needs review',
+  }, 'today').message, 'Conflict needs review');
+});
+
+test('manual sync result messages do not report false success', () => {
+  const reports = createTrackerReports();
+
+  assert.equal(reports.summarizeSyncResult({
+    configured: true,
+    signedIn: true,
+    pendingCount: 0,
+    conflictCount: 0,
+    realtimeStatus: 'connected',
+    state: 'synced',
+    lastError: '',
+  }).message, 'Sync complete. All data is up to date.');
+
+  assert.equal(reports.summarizeSyncResult({
+    configured: true,
+    signedIn: true,
+    pendingCount: 4,
+    recordPendingCount: 0,
+    sharedSettingsPendingCount: 0,
+    foodLibraryPendingCount: 4,
+    conflictCount: 0,
+    realtimeStatus: 'connected',
+    state: 'waiting',
+    lastError: '',
+  }).message, 'Sync completed with 4 food items still pending. See Sync Diagnostics for details.');
+
+  assert.equal(reports.summarizeSyncResult({
+    configured: true,
+    signedIn: true,
+    pendingCount: 0,
+    conflictCount: 1,
+    realtimeStatus: 'connected',
+    state: 'conflict',
+    lastError: '',
+  }).message, 'Sync complete — 1 conflict needs review.');
+
+  assert.equal(reports.summarizeSyncResult({
+    configured: true,
+    signedIn: true,
+    pendingCount: 0,
+    conflictCount: 0,
+    realtimeStatus: 'connected',
+    state: 'waiting',
+    lastError: 'Food Library could not be refreshed.',
+  }, new Error('Food Library could not be refreshed.')).message, 'Sync failed. Food Library could not be refreshed.');
+
+  assert.equal(reports.summarizeSyncResult({
+    configured: true,
+    signedIn: true,
+    pendingCount: 4,
+    conflictCount: 0,
+    realtimeStatus: 'idle',
+    state: 'offline',
+    lastError: '',
+  }).message, 'Cannot sync while offline.');
+});
+
 test('settings sync status is consolidated into one global sync action', () => {
   const syncButtonMatches = trackerSource.match(/data-action="sync-now"/g) || [];
   assert.equal(syncButtonMatches.length, 1);
@@ -1752,6 +1834,10 @@ test('settings sync status is consolidated into one global sync action', () => {
   assert.match(trackerSource, /Records in cloud/);
   assert.match(trackerSource, /renderSyncDiagnostics\(diagnostics\)/);
   assert.match(trackerSource, /syncRepository\.syncNow\(\{ includeNeedsAttention: true \}\)/);
+  assert.match(trackerSource, /let manualSyncPromise = null/);
+  assert.match(trackerSource, /if \(manualSyncPromise\) return manualSyncPromise/);
+  assert.match(trackerSource, /manualSyncState = \{ state: 'syncing', message: 'Syncing\.\.\.' \}/);
+  assert.match(trackerSource, /aria-busy="true"/);
   assert.doesNotMatch(trackerSource, /id="lee-lee-cloud-status-title">Cloud Status/);
 });
 
@@ -1763,7 +1849,8 @@ test('settings review and migration diagnostics are shown only when useful', () 
 });
 
 test('today screen keeps routine sync queue counts out of primary activity', () => {
-  assert.match(trackerSource, /function renderPersistenceStatus\(\)[\s\S]*data-action="retry-save"/);
+  assert.match(trackerSource, /function renderPersistenceStatus\(\{ surface = '' \} = \{\}\)[\s\S]*data-action="retry-save"/);
+  assert.match(trackerSource, /surface === 'today' && \['offline', 'synced', 'syncing', 'waiting'\]\.includes\(friendlyStatus\.state\)/);
   assert.doesNotMatch(trackerSource, /renderHome\(\)[\s\S]{0,1400}food item[^`]*waiting to sync/);
 });
 

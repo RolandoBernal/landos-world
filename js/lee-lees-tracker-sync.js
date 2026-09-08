@@ -795,6 +795,7 @@
     let processing = false;
     let processingSharedSettings = false;
     let processingFoodLibrary = false;
+    let fullSyncPromise = null;
     let realtimeChannel = null;
     let sharedSettingsChannel = null;
 
@@ -863,6 +864,9 @@
           sharedSettingsPendingCount: sharedPendingCount,
           foodLibraryPendingCount,
         }, 'Offline — ');
+      } else if (fullSyncPromise) {
+        state = 'syncing';
+        message = 'Syncing...';
       } else if (totalPendingCount) {
         state = processing || processingSharedSettings || processingFoodLibrary ? 'syncing' : 'waiting';
         message = processing || processingSharedSettings || processingFoodLibrary
@@ -1625,6 +1629,7 @@
         await processFoodLibraryQueue();
       } catch (error) {
         setMetadata({ lastError: 'Food Library could not be refreshed.' });
+        await processFoodLibraryQueue();
       }
       emit();
       return getSyncStatus();
@@ -1830,11 +1835,21 @@
       return summary;
     }
 
-    async function syncAll(options = {}) {
-      await reconcile(options);
-      await reconcileSharedSettings();
-      await reconcileFoodLibrary();
-      return getSyncStatus();
+    function syncAll(options = {}) {
+      if (fullSyncPromise) return fullSyncPromise;
+      fullSyncPromise = (async () => {
+        emit();
+        try {
+          await reconcile(options);
+          await reconcileSharedSettings();
+          await reconcileFoodLibrary();
+          return getSyncStatus();
+        } finally {
+          fullSyncPromise = null;
+          emit();
+        }
+      })();
+      return fullSyncPromise;
     }
 
     function inspectLegacyMigration(keys = legacyRecordKeys) {
