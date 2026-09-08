@@ -6823,9 +6823,10 @@
     const deleted = deletedRecords();
     return `
       <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-deleted-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-deleted-title">Recently Deleted</h2>
-        ${deleted.length
-          ? `<div class="lee_lee_diabetes_timeline">${deleted.map((record) => `
+        <details class="lee_lee_diabetes_details">
+          <summary id="lee-lee-deleted-title">Recently Deleted${deleted.length ? ` (${deleted.length})` : ''}</summary>
+          ${deleted.length
+            ? `<div class="lee_lee_diabetes_timeline">${deleted.map((record) => `
             <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
               <div>
                 <div class="lee_lee_diabetes_timeline_type">${escapeHtml(record.type)}</div>
@@ -6839,8 +6840,9 @@
                 <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="restore-record" data-id="${escapeHtml(record.id)}">Restore</button>
               </div>
             </article>
-          `).join('')}</div>`
-          : '<p class="lee_lee_diabetes_empty">No deleted records.</p>'}
+            `).join('')}</div>`
+            : '<p class="lee_lee_diabetes_empty">No deleted records.</p>'}
+        </details>
       </section>
     `;
   }

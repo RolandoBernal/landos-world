@@ -2398,6 +2398,12 @@ test('Lee-Lee Today and History deletion confirms, persists, and survives reload
   const records = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records);
   expect(records.filter(item => item.deletedAt)).toHaveLength(2);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const deletedSection = page.locator('[aria-labelledby="lee-lee-deleted-title"]');
+  await expect(deletedSection.locator('details')).not.toHaveAttribute('open', '');
+  await expect(deletedSection.getByRole('button', { name: 'Restore', exact: true })).toHaveCount(0);
+  await deletedSection.getByText('Recently Deleted (2)', { exact: true }).click();
+  await expect(deletedSection.locator('details')).toHaveAttribute('open', '');
+  await expect(deletedSection.getByRole('button', { name: 'Restore', exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sync Now', exact: true })).toBeEnabled();
