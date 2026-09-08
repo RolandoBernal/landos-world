@@ -780,7 +780,7 @@ async function openProtectedLeeLeeTracker(page) {
         from: () => ({
           select() { return this; },
           eq() { return this; },
-          order: async () => ({ data: [], error: null }),
+          order: async () => { await window.__lltSyncReadGate; return { data: [], error: null }; },
           maybeSingle: async () => ({ data: null, error: null }),
           insert() { return { select: () => ({ single: async () => ({ data: null, error: { message: 'offline test client' } }) }) }; },
         }),
@@ -2361,4 +2361,58 @@ test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display
   await expect(calculator.getByLabel('Meal Total')).toHaveText('72 g');
 
   expect(await calculator.locator('[tabindex]').count()).toBe(0);
+});
+
+
+test('Lee-Lee Today and History deletion confirms, persists, and survives reload', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  const now = new Date();
+  const dateKey = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+  await seedLeeLeeRecords(page, ['delete-today', 'delete-history'].map(id => ({
+    id, type: 'Other', eventType: 'check-insulin', bloodSugar: 123,
+    recordTimestamp: now.toISOString(), createdAt: now.toISOString(), updatedAt: now.toISOString(),
+  })));
+  await chooseLeeLeeSection(page, 'Today');
+  const actionLayout = await page.locator('[aria-label="Today record actions"]').first().evaluate((group) => {
+    const footer = group.closest('.lee_lee_diabetes_timeline_footer').getBoundingClientRect();
+    const actions = group.getBoundingClientRect();
+    const buttons = [...group.querySelectorAll('button')].map(button => button.getBoundingClientRect());
+    return { rightGap: footer.right - actions.right, buttonGap: buttons[1].left - buttons[0].right };
+  });
+  expect(Math.abs(actionLayout.rightGap)).toBeLessThanOrEqual(2);
+  expect(actionLayout.buttonGap).toBeGreaterThanOrEqual(0);
+  expect(actionLayout.buttonGap).toBeLessThan(30);
+  await page.locator('[data-action="delete-record"][data-id="delete-today"]').click();
+  await expect(page.getByRole('heading', { name: 'Delete this record?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('[data-action="delete-record"][data-id="delete-today"]')).toBeVisible();
+  await page.locator('[data-action="delete-record"][data-id="delete-today"]').click();
+  await page.getByRole('button', { name: 'Delete Record', exact: true }).click();
+  await expect(page.locator('[data-action="delete-record"][data-id="delete-today"]')).toHaveCount(0);
+  await openSeededLeeLeeHistoryDay(page, dateKey);
+  await page.locator('[data-action="delete-record"][data-id="delete-history"]').click();
+  await page.getByRole('button', { name: 'Delete Record', exact: true }).click();
+  await expect(page.locator('[data-action="delete-record"]')).toHaveCount(0);
+  await page.reload();
+  const records = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records);
+  expect(records.filter(item => item.deletedAt)).toHaveLength(2);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sync Now', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sync Now', exact: true })).toBeEnabled();
+});
+
+
+test('Lee-Lee global sync reports its result and preserves Settings input', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('[name="patientName"]').fill('Unsaved draft');
+  await page.evaluate(() => { window.__lltSyncReadGate = new Promise(resolve => { window.__lltReleaseSync = resolve; }); });
+  await page.getByRole('button', { name: 'Sync Now', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Syncing...', exact: true })).toBeDisabled();
+  await expect(page.locator('[name="patientName"]')).toHaveValue('Unsaved draft');
+  await page.evaluate(() => window.__lltReleaseSync());
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('[name="patientName"]')).toHaveValue('Unsaved draft');
+  await expect(page.getByText('Sync complete. All data is up to date.', { exact: true })).toBeVisible();
 });

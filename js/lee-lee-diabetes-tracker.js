@@ -226,7 +226,6 @@
   });
   const BEDTIME_CONTEXT_TYPE = 'Bedtime';
   const DEFAULT_BEDTIME_BASE_UNITS = 17;
-  const LEGACY_BEDTIME_BASE_UNITS = 15;
   const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
   const SNACK_CARB_COVERAGE_THRESHOLD_GRAMS = 15;
   const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
@@ -614,19 +613,6 @@
     return { minGlucose, maxGlucose, correctionUnits };
   }
 
-  function ensureHighGlucoseCorrectionRange(correctionRanges) {
-    const ranges = Array.isArray(correctionRanges) ? correctionRanges : [];
-    const hasHighGlucoseRange = ranges.some((range) => (
-      (range.minGlucose == null || HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose >= range.minGlucose)
-      && range.maxGlucose == null
-    ));
-    if (hasHighGlucoseRange) return ranges;
-    const finalRange = ranges[ranges.length - 1];
-    if (finalRange?.maxGlucose === HIGH_GLUCOSE_CORRECTION_RANGE.minGlucose - 1) {
-      return [...ranges, { ...HIGH_GLUCOSE_CORRECTION_RANGE }];
-    }
-    return ranges;
-  }
 
   function getMealBaseUnitsByType(plan = {}) {
     const source = plan.mealBaseUnitsByType && typeof plan.mealBaseUnitsByType === 'object'
@@ -634,7 +620,7 @@
       : {};
     return Object.fromEntries(MEAL_TYPES.map((type) => [
       type,
-      normalizeNumber(source[type]) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
+      normalizeNumber(source[type]) ?? normalizeNumber(plan.mealBaseUnits) ?? DEFAULT_MEAL_BASE_UNITS_BY_TYPE[type],
     ]));
   }
 
@@ -646,7 +632,6 @@
   function getBedtimeBaseUnits(plan = {}) {
     const value = normalizeNumber(plan.bedtimeBaseUnits);
     if (value == null) return DEFAULT_BEDTIME_BASE_UNITS;
-    if (value === LEGACY_BEDTIME_BASE_UNITS && plan.bedtimeBaseUnitsMigratedTo17 !== true) return DEFAULT_BEDTIME_BASE_UNITS;
     return value;
   }
 
@@ -1269,7 +1254,7 @@
     const correctionRanges = Array.isArray(plan.correctionRanges)
       ? plan.correctionRanges.map(normalizeCorrectionRange).filter(Boolean)
       : [];
-    const normalizedCorrectionRanges = ensureHighGlucoseCorrectionRange(correctionRanges);
+    const normalizedCorrectionRanges = correctionRanges;
     const supportedMealTypes = Array.isArray(plan.supportedMealTypes)
       ? plan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
@@ -1284,7 +1269,7 @@
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
       bedtimeBaseUnits: getBedtimeBaseUnits(plan),
-      bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true || normalizeNumber(plan.bedtimeBaseUnits) === LEGACY_BEDTIME_BASE_UNITS,
+      bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true,
       insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
       doseRoundingMode: getDoseRoundingMode(plan),
       doseIncrementUnits: getDoseIncrementUnits(plan),
@@ -1754,7 +1739,10 @@
     sourceRecords.forEach((record) => {
       const key = getRecordIdentity(record);
       const existing = byIdentity.get(key);
-      if (!existing || getRecordTimestamp(record) >= getRecordTimestamp(existing)) {
+      const revision = (item) => parseTimestamp(item?.updatedAt) || parseTimestamp(item?.createdAt) || 0;
+      if (!existing || revision(record) > revision(existing)
+        || (revision(record) === revision(existing) && (Number(record.version || 0) > Number(existing.version || 0)
+          || (Number(record.version || 0) === Number(existing.version || 0) && (!existing.deletedAt || record.deletedAt))))) {
         byIdentity.set(key, record);
       }
     });
@@ -1894,7 +1882,7 @@
       if (key === TRACKER_STORAGE_KEY) return;
       const legacy = readStoredJson(key);
       const legacyPayload = legacy.exists ? migrateLegacyPayload(key, legacy.data) : null;
-      if (legacyPayload) {
+      if (legacyPayload && !(stored.exists && stored.data)) {
         data = mergeTrackerDocuments(data, legacyPayload);
         shouldWrite = true;
       }
@@ -2113,7 +2101,7 @@
     if (isSyncEnabled && !friendlyStatus) return '';
     const statusClass = isSyncEnabled ? friendlyStatus.state : persistenceStatus;
     const statusMessage = isSyncEnabled ? friendlyStatus.message : persistenceMessage;
-    const retry = persistenceStatus === 'failed' || syncStatus.state === 'waiting' || syncStatus.state === 'offline'
+    const retry = persistenceStatus === 'failed'
       ? '<button type="button" class="lee_lee_diabetes_status_retry" data-action="retry-save">Retry</button>'
       : '';
     return `
@@ -2449,7 +2437,7 @@
   function retrySave() {
     setPersistenceStatus('saving');
     saveTrackerData(trackerData);
-    renderHome();
+    refreshCurrentViewForSync();
   }
 
   function requestPersistentStorage() {
@@ -3776,7 +3764,7 @@
   function renderTimelineItem(record) {
     return renderTrackerEntryCard(record, {
       variant: 'today',
-      actions: `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button>`,
+      actions: `<div class="lee_lee_diabetes_timeline_actions" aria-label="Today record actions"><button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button><button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record" data-return-to="today" data-id="${escapeHtml(record.id)}">Delete</button></div>`,
     });
   }
 
@@ -4104,11 +4092,12 @@
     `;
   }
 
-  function renderDeleteConfirmation(record) {
+  function renderDeleteConfirmation(record, returnTo = 'history-day') {
     const root = getRoot();
     if (!root) return;
     currentEditor = {
       mode: 'delete-confirmation',
+      returnTo,
       pendingDeleteId: record.id,
       returnDateKey: getRecordEventDateKey(record),
     };
@@ -4812,7 +4801,7 @@
             <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
               <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Item</div>
-              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">×</div>
+              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">@</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Carbs</div>
               <div class="lee_lee_diabetes_carb_calc_heading lee_lee_diabetes_carb_calc_total_heading">Total</div>
               <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true"></div>
@@ -5002,7 +4991,7 @@
           </span>
           ${sourceParts.length ? `<small>${sourceParts.map(escapeHtml).join(' · ')}</small>` : ''}
         </div>
-        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×</span>
+        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@</span>
         <span class="lee_lee_diabetes_carb_calc_carbs">${renderCarbGrams(formatCarbAmount(item.carbs || 0))}</span>
         <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : renderCarbGrams(formatCarbAmount(rowTotal))}</output>
         <div class="lee_lee_diabetes_carb_calc_actions">
@@ -6624,9 +6613,8 @@
   }
 
   function getCloudRecordCount() {
-    const metadata = getSharedSyncMigrationMetadata();
-    if (!metadata.migrationCompleted) return null;
-    return Math.max(Number(metadata.recordsMigrated || 0), activeRecords().length);
+    // A local or historical migration count is not a verified current cloud count.
+    return null;
   }
 
   function renderSyncDiagnostics(diagnostics) {
@@ -6656,6 +6644,12 @@
       <details class="lee_lee_diabetes_details">
         <summary>Sync Diagnostics</summary>
         ${renderStatusGrid(rows)}
+        ${(diagnostics?.foodLibraryQueue || []).map((item) => `<section><h3>Pending ${escapeHtml(item.entityType || 'food')}</h3>${renderStatusGrid([
+          ['Item ID', item.recordId], ['Operation ID', item.id], ['Table', item.targetTable],
+          ['Operation', item.operationType], ['State', item.state], ['Attempts', String(item.retryCount)],
+          ['Last attempted', item.lastAttemptAt || 'Never'], ['Error code', item.lastErrorCode || 'None'],
+          ['Error', item.lastErrorMessage || 'No response recorded'],
+        ])}</section>`).join('')}
       </details>
     `;
   }
@@ -7436,7 +7430,7 @@
     if (syncRepository?.saveSharedSettings) {
       syncRepository.saveSharedSettings(sharedSettings);
       patientSettingsMessage = navigator.onLine
-        ? 'Patient and clinic information updated on all devices.'
+        ? 'Saved on this device — waiting for sync confirmation.'
         : 'Offline — waiting to sync.';
     } else {
       patientSettingsMessage = 'Patient and clinic information saved on this device.';
@@ -7479,13 +7473,14 @@
     });
   }
 
-  function deleteRecord(recordId) {
+  function deleteRecord(recordId, returnTo) {
     const record = records.find((item) => item.id === recordId);
     if (!record) return;
-    renderDeleteConfirmation(record);
+    renderDeleteConfirmation(record, returnTo);
   }
 
   function confirmDeleteRecord() {
+    const returnTo = currentEditor?.returnTo;
     const recordId = currentEditor?.pendingDeleteId;
     const returnDateKey = currentEditor?.returnDateKey;
     if (!recordId) return;
@@ -7506,7 +7501,9 @@
       records: current.records.map((record) => (record.id === recordId ? deletedRecord : record)),
     }));
     syncRepository?.queueSoftDelete(deletedRecord);
-    if (returnDateKey) {
+    if (returnTo === 'today') {
+      renderHome();
+    } else if (returnDateKey) {
       renderHistoryDay(returnDateKey);
     } else {
       renderHistory();
@@ -7716,7 +7713,7 @@
           else if (currentEditor?.mode === 'reports') renderReports();
           else if (currentEditor?.mode === 'export') renderReports();
           else if (currentEditor?.mode === 'foods') renderFoodLibrary();
-          else if (currentEditor?.mode === 'settings') renderSettings();
+          else if (currentEditor?.mode === 'settings') refreshCurrentViewForSync();
           else renderHome();
         }
       },
@@ -7782,7 +7779,10 @@
       return;
     }
     if (!currentEditor) return;
-    if (currentEditor.mode === 'settings') renderSettings();
+    if (currentEditor.mode === 'settings') {
+      const section = getRoot()?.querySelector('[aria-labelledby="lee-lee-sync-title"]');
+      if (section) section.outerHTML = renderSyncStatusSection();
+    }
     if (currentEditor.mode === 'foods') renderFoodLibrary();
     if (currentEditor.mode === 'history') renderHistory();
     if (currentEditor.mode === 'reports') renderReports();
@@ -8194,7 +8194,7 @@
       }
       if (action === 'retry-save') {
         retrySave();
-        syncRepository?.processQueue?.({ includeNeedsAttention: true });
+        runManualSyncNow();
       }
       if (action === 'export-backup') {
         exportDataBackup();
@@ -8221,10 +8221,11 @@
         openRecordEditor(target.dataset.id, 'today');
       }
       if (action === 'delete-record') {
-        deleteRecord(target.dataset.id);
+        deleteRecord(target.dataset.id, target.dataset.returnTo);
       }
       if (action === 'cancel-delete') {
-        renderHistoryDay(currentEditor?.returnDateKey || getLocalDateKey());
+        if (currentEditor?.returnTo === 'today') renderHome();
+        else renderHistoryDay(currentEditor?.returnDateKey || getLocalDateKey());
       }
       if (action === 'confirm-delete-record') {
         confirmDeleteRecord();
@@ -8354,7 +8355,7 @@
           completedAt: new Date().toISOString(),
         });
         patientSettingsMessage = navigator.onLine
-          ? 'Patient and clinic information updated on all devices.'
+          ? 'Saved on this device — waiting for sync confirmation.'
           : 'Offline — waiting to sync.';
         renderInitialRoute();
       }

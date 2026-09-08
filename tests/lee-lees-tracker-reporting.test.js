@@ -1442,7 +1442,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /Open Carb Calc/);
   assert.match(trackerSource, /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
-  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×/);
+  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
   assert.match(trackerSource, /enableCarbCalculatorModalViewport/);
   assert.match(trackerSource, /lockCarbCalculatorDocumentScroll/);
@@ -1699,8 +1699,8 @@ test('entry card footer actions stay compact and preserve delete confirmation', 
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit[\s\S]*min-height: 36px/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger[\s\S]*#fca5a5/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit:focus-visible/);
-  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id\)/);
-  assert.match(trackerSource, /function deleteRecord\(recordId\)[\s\S]*renderDeleteConfirmation\(record\)/);
+  assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id, target\.dataset\.returnTo\)/);
+  assert.match(trackerSource, /function deleteRecord\(recordId, returnTo\)[\s\S]*renderDeleteConfirmation\(record, returnTo\)/);
   assert.match(trackerSource, /data-action="confirm-delete-record"/);
 });
 
