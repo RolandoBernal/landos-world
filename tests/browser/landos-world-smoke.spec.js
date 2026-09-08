@@ -2424,6 +2424,23 @@ test('Lee-Lee global sync reports its result and preserves Settings input', asyn
   await expect(page.getByText('Sync complete. All data is up to date.', { exact: true })).toBeVisible();
 });
 
+test('Lee-Lee dose inline controls stay on one line with compact three-digit inputs', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  for (const name of ['insulinCarbRatioGrams', 'doseIncrementUnits', 'minimumAllowableDoseUnits']) {
+    const input = page.locator(`[name="${name}"]`);
+    const layout = await input.evaluate((inputNode) => {
+      const node = inputNode.parentElement;
+      const box = node.getBoundingClientRect();
+      const inputBox = inputNode.getBoundingClientRect();
+      return { height: box.height, inputWidth: inputBox.width, overflow: node.scrollWidth - node.clientWidth };
+    });
+    expect(layout.height).toBeLessThan(60);
+    expect(layout.inputWidth).toBeLessThanOrEqual(88);
+    expect(layout.overflow).toBeLessThanOrEqual(1);
+  }
+});
+
 
 test('Lee-Lee food upload failures appear beside Sync Now and in food attempt diagnostics', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
