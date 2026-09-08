@@ -1442,7 +1442,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /Open Carb Calc/);
   assert.match(trackerSource, /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
-  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×/);
+  assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
   assert.match(trackerSource, /enableCarbCalculatorModalViewport/);
   assert.match(trackerSource, /lockCarbCalculatorDocumentScroll/);

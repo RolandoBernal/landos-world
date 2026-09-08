@@ -1279,7 +1279,7 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator.getByRole('heading', { name: 'Carb Calculator' })).toBeVisible();
   await expect(calculator.getByText('No items added yet.')).toHaveCount(0);
   await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
-  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('×');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator').first()).toHaveText('@');
   await expect(calculator.getByText('Orange')).toBeVisible();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('30 g');
 
@@ -2352,7 +2352,7 @@ test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display
 
   await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(3);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('100 g');
-  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator')).toHaveText(['×', '×', '×']);
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator')).toHaveText(['@', '@', '@']);
 
   await calculator.getByRole('button', { name: 'Edit Manual Amount' }).nth(1).click();
   await calculator.getByLabel('Quantity').fill('1.5');
@@ -2373,6 +2373,15 @@ test('Lee-Lee Today and History deletion confirms, persists, and survives reload
     recordTimestamp: now.toISOString(), createdAt: now.toISOString(), updatedAt: now.toISOString(),
   })));
   await chooseLeeLeeSection(page, 'Today');
+  const actionLayout = await page.locator('[aria-label="Today record actions"]').first().evaluate((group) => {
+    const footer = group.closest('.lee_lee_diabetes_timeline_footer').getBoundingClientRect();
+    const actions = group.getBoundingClientRect();
+    const buttons = [...group.querySelectorAll('button')].map(button => button.getBoundingClientRect());
+    return { rightGap: footer.right - actions.right, buttonGap: buttons[1].left - buttons[0].right };
+  });
+  expect(Math.abs(actionLayout.rightGap)).toBeLessThanOrEqual(2);
+  expect(actionLayout.buttonGap).toBeGreaterThanOrEqual(0);
+  expect(actionLayout.buttonGap).toBeLessThan(30);
   await page.locator('[data-action="delete-record"][data-id="delete-today"]').click();
   await expect(page.getByRole('heading', { name: 'Delete this record?' })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();

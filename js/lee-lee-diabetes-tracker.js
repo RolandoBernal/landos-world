@@ -3764,7 +3764,7 @@
   function renderTimelineItem(record) {
     return renderTrackerEntryCard(record, {
       variant: 'today',
-      actions: `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button><button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record" data-return-to="today" data-id="${escapeHtml(record.id)}">Delete</button>`,
+      actions: `<div class="lee_lee_diabetes_timeline_actions" aria-label="Today record actions"><button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-today-record" data-id="${escapeHtml(record.id)}">Edit</button><button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record" data-return-to="today" data-id="${escapeHtml(record.id)}">Delete</button></div>`,
     });
   }
 
@@ -4801,7 +4801,7 @@
             <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
               <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Item</div>
-              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">×</div>
+              <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true">@</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Carbs</div>
               <div class="lee_lee_diabetes_carb_calc_heading lee_lee_diabetes_carb_calc_total_heading">Total</div>
               <div class="lee_lee_diabetes_carb_calc_heading" aria-hidden="true"></div>
@@ -4991,7 +4991,7 @@
           </span>
           ${sourceParts.length ? `<small>${sourceParts.map(escapeHtml).join(' · ')}</small>` : ''}
         </div>
-        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">×</span>
+        <span class="lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@</span>
         <span class="lee_lee_diabetes_carb_calc_carbs">${renderCarbGrams(formatCarbAmount(item.carbs || 0))}</span>
         <output class="lee_lee_diabetes_carb_calc_row_total" aria-label="Calculated row total">${rowTotal == null ? '—' : renderCarbGrams(formatCarbAmount(rowTotal))}</output>
         <div class="lee_lee_diabetes_carb_calc_actions">
