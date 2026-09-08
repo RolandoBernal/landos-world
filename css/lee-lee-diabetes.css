@@ -826,10 +826,16 @@
 }
 
 .lee_lee_diabetes_inline_control {
-  display: grid;
-  grid-template-columns: auto minmax(5rem, 8rem) auto;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.lee_lee_diabetes_inline_control .lee_lee_diabetes_input {
+  width: 5.5rem;
+  max-width: 5.5rem;
 }
 
 .lee_lee_diabetes_help,

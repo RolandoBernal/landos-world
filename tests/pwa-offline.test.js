@@ -197,7 +197,7 @@ test('service worker uses separate versioned caches and strategy-specific runtim
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260825-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260908-2/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260908-3/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260908-7/],
     [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260908-7/],
     [html, /css\/sprints\.css\?v=20260825-1/],
