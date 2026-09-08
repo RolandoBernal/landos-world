@@ -6578,7 +6578,7 @@
         status.sharedSettingsPendingCount ? `${status.sharedSettingsPendingCount} ${status.sharedSettingsPendingCount === 1 ? 'setting' : 'settings'}` : '',
         status.foodLibraryPendingCount ? `${status.foodLibraryPendingCount} ${status.foodLibraryPendingCount === 1 ? 'food item' : 'food items'}` : '',
       ].filter(Boolean).join(', ');
-      return { state: 'waiting', message: `Sync completed with ${parts || `${status.pendingCount} items`} still pending. See Sync Diagnostics for details.` };
+      return { state: 'waiting', message: `Sync completed with ${parts || `${status.pendingCount} items`} still pending. ${status.lastError ? `${status.lastError} ` : ''}See Sync Diagnostics for details.` };
     }
     if (status.lastError) return { state: 'failed', message: `Sync failed. ${status.lastError}` };
     return { state: 'synced', message: 'Sync complete. All data is up to date.' };
@@ -6621,6 +6621,7 @@
     const summary = diagnostics?.summary || {};
     const states = summary.byState || {};
     const lastAttempt = diagnostics?.lastSyncAttempt || null;
+    const foodAttempt = diagnostics?.lastFoodSyncAttempt || null;
     const conflict = diagnostics?.conflicts?.[0] || null;
     const failedItems = Number(states['needs-attention'] || 0) + Number(states.failed || 0);
     const queueBlocked = syncStatus.signedIn && syncStatus.configured
@@ -6635,8 +6636,10 @@
       ['Failed / needs review', String(failedItems)],
       ['Queue blocked', queueBlocked],
       ['Sync in progress', syncStatus.state === 'syncing' ? 'Yes' : 'No'],
-      ['Last attempt', lastAttempt ? formatDiagnosticTimestamp(lastAttempt.finishedAt || lastAttempt.startedAt) : 'Not yet'],
-      ['Last attempt result', lastAttempt ? `${Number(lastAttempt.succeeded || 0)} succeeded / ${Number(lastAttempt.failed || 0)} failed` : 'Not yet'],
+      ['Last record attempt', lastAttempt?.attempted ? formatDiagnosticTimestamp(lastAttempt.finishedAt || lastAttempt.startedAt || lastAttempt.createdAt) : 'No records attempted'],
+      ['Last record attempt result', lastAttempt ? `${Number(lastAttempt.succeeded || 0)} succeeded / ${Number(lastAttempt.failed || 0)} failed` : 'Not yet'],
+      ['Last food attempt', foodAttempt ? formatDiagnosticTimestamp(foodAttempt.finishedAt || foodAttempt.startedAt) : 'No food uploads attempted'],
+      ['Last food attempt result', foodAttempt ? `${foodAttempt.succeeded} succeeded / ${foodAttempt.failed} failed` : 'Not yet'],
       ['Last error', syncStatus.lastError || diagnostics?.lastError || 'None'],
       ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
     ];
