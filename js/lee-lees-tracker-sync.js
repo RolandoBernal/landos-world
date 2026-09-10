@@ -114,10 +114,11 @@
     return nextValue;
   }
 
-  function getMetadata() {
-    return {
-      lastSuccessfulSyncAt: null,
-      realtimeStatus: 'idle',
+    function getMetadata() {
+      return {
+        lastSuccessfulSyncAt: null,
+        lastFullSyncAttemptAt: null,
+        realtimeStatus: 'idle',
       lastError: '',
       lastSyncAttempt: null,
       ...readJson(SYNC_METADATA_KEY, {}),
@@ -907,6 +908,7 @@
         conflictCount: conflicts.length,
         sharedSettingsStatus: getSharedSettingsStatus(),
         lastSuccessfulSyncAt: metadata.lastSuccessfulSyncAt,
+        lastFullSyncAttemptAt: metadata.lastFullSyncAttemptAt || null,
         realtimeStatus: metadata.realtimeStatus || 'idle',
         lastError: metadata.lastError || '',
         lastSyncAttempt: metadata.lastSyncAttempt || null,
@@ -1583,6 +1585,11 @@
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
           if (!updatedRow) {
+            const latestSharedSettings = await fetchSharedSettings();
+            if (latestSharedSettings && sharedSettingsAreSame(latestSharedSettings, attemptedOperation.payload)) {
+              acknowledgeSharedSettings(attemptedOperation, latestSharedSettings);
+              continue;
+            }
             await registerSharedSettingsConflict(attemptedOperation);
             continue;
           }
@@ -1920,12 +1927,15 @@
     function syncAll(options = {}) {
       if (fullSyncPromise) return fullSyncPromise;
       fullSyncPromise = (async () => {
+        setMetadata({ lastFullSyncAttemptAt: nowIso() });
         setMetadata({ lastError: '' });
+        cleanupIdenticalConflicts();
         emit();
         try {
           await reconcile(options);
           await reconcileSharedSettings();
           await reconcileFoodLibrary();
+          cleanupIdenticalConflicts();
           const status = getSyncStatus();
           if (status.signedIn && navigator.onLine && !status.pendingCount && !status.conflictCount && !status.lastError) {
             setMetadata({ lastSuccessfulSyncAt: nowIso() });

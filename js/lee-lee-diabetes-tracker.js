@@ -6646,6 +6646,7 @@
       ['Last record attempt result', lastAttempt ? `${Number(lastAttempt.succeeded || 0)} succeeded / ${Number(lastAttempt.failed || 0)} failed` : 'Not yet'],
       ['Last food attempt', foodAttempt ? formatDiagnosticTimestamp(foodAttempt.finishedAt || foodAttempt.startedAt) : 'No food uploads attempted'],
       ['Last food attempt result', foodAttempt ? `${foodAttempt.succeeded} succeeded / ${foodAttempt.failed} failed` : 'Not yet'],
+      ['Last full sync attempt', formatDiagnosticTimestamp(syncStatus.lastFullSyncAttemptAt)],
       ['Last error', syncStatus.lastError || diagnostics?.lastError || 'None'],
       ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
     ];
