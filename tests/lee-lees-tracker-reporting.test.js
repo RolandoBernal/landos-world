@@ -1853,12 +1853,14 @@ test('settings sync status is consolidated into one global sync action', () => {
   const syncButtonMatches = trackerSource.match(/data-action="sync-now"/g) || [];
   assert.equal(syncButtonMatches.length, 1);
   assert.match(trackerSource, /id="lee-lee-sync-title">Sync Status/);
+  assert.match(trackerSource, /data-settings-accordion open aria-labelledby="lee-lee-sync-title"/);
+  assert.match(trackerSource, /querySelector\('\[aria-labelledby="lee-lee-sync-title"\]'\)/);
   assert.match(trackerSource, /Overall status/);
   assert.match(trackerSource, /Records pending/);
   assert.match(trackerSource, /Settings pending/);
   assert.match(trackerSource, /Foods pending/);
   assert.match(trackerSource, /Records in cloud/);
-  assert.match(trackerSource, /renderSyncDiagnostics\(diagnostics\)/);
+  assert.match(trackerSource, /renderSyncDiagnostics\(syncRepository\?\.getSyncDiagnostics\?\.\(\) \|\| null\)/);
   assert.match(trackerSource, /syncRepository\.syncNow\(\{ includeNeedsAttention: true \}\)/);
   assert.match(trackerSource, /let manualSyncPromise = null/);
   assert.match(trackerSource, /if \(manualSyncPromise\) return manualSyncPromise/);

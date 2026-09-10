@@ -6670,7 +6670,7 @@
     ];
     return `
       <h2 class="lee_lee_diabetes_visually_hidden">Sync Status</h2>
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion open>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion open aria-labelledby="lee-lee-sync-title">
         <summary id="lee-lee-sync-title">Sync Status <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
         <div class="lee_lee_diabetes_settings_accordion_body">
         <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(friendlySyncStatus.state)}" aria-live="polite">
