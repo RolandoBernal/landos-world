@@ -876,7 +876,7 @@ test('LLT entry cards semantically separate numeric values from labels and units
   assert.match(html, /<time[^>]*><span class="lee_lee_diabetes_numeric">/);
 });
 
-test('reports target percentages require explicit min and max settings', () => {
+test('reports target percentages use configured inclusive range and safe defaults', () => {
   const reports = createTrackerReports();
   const source = [
     record({ id: 'low', bloodSugar: 70 }),
@@ -884,12 +884,30 @@ test('reports target percentages require explicit min and max settings', () => {
     record({ id: 'high', bloodSugar: 190 }),
   ];
 
-  assert.equal(reports.calculateReportSummary(source).glucose.targetRange, null);
+  assert.equal(reports.calculateReportSummary(source).glucose.targetRange.min, 70);
+  assert.equal(reports.calculateReportSummary(source).glucose.targetRange.max, 180);
   const summary = reports.calculateReportSummary(source, {}, { glucoseTargetMin: 80, glucoseTargetMax: 150 });
   assert.equal(summary.glucose.targetCounts.inRange, 1);
   assert.equal(summary.glucose.targetCounts.below, 1);
   assert.equal(summary.glucose.targetCounts.above, 1);
   assert.equal(Math.round(summary.glucose.inRangePercent), 33);
+});
+
+test('reports in-target range counts inclusive boundaries and no-data safely', () => {
+  const reports = createTrackerReports();
+  const settings = { glucoseTargetMin: 70, glucoseTargetMax: 180 };
+  const summary = reports.calculateReportSummary([
+    record({ id: 'below', bloodSugar: 65 }),
+    record({ id: 'low-boundary', bloodSugar: 70 }),
+    record({ id: 'middle', bloodSugar: 100 }),
+    record({ id: 'high-boundary', bloodSugar: 180 }),
+    record({ id: 'above', bloodSugar: 200 }),
+  ], {}, settings);
+  assert.equal(summary.glucose.targetCounts.inRange, 3);
+  assert.equal(summary.glucose.inRangePercent, 60);
+  const empty = reports.calculateReportSummary([], {}, settings);
+  assert.equal(empty.glucose.inRangePercent, null);
+  assert.equal(empty.glucose.targetCounts, null);
 });
 
 test('context averages use only present values for each metric', () => {
@@ -1099,7 +1117,7 @@ test('meal dose helper uses carb coverage plus existing correction table', () =>
   assert.equal(dinner.correctionUnits, 2);
   assert.equal(dinner.suggestedTotalUnits, 9);
   assert.equal(dinner.rawAggregateDose, 9.15);
-  assert.equal(dinner.doseRoundingMode, 'nearest');
+  assert.equal(dinner.doseRoundingMode, 'down');
   assert.equal(dinner.doseIncrementUnits, 0.5);
   assert.equal(breakfast550.status, 'calculated');
   assert.equal(breakfast550.correctionUnits, 6);
@@ -1108,12 +1126,14 @@ test('meal dose helper uses carb coverage plus existing correction table', () =>
   assert.equal(breakfast550.matchedRange.maxGlucose, null);
 });
 
-test('snack boundary uses carb coverage only over 15 grams', () => {
+test('snacks use configured carb coverage only with one final rounding pass', () => {
   const runtime = createTrackerRuntime();
   const plan = {
     id: 'plan',
     supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
-    insulinCarbRatioGrams: 20,
+    insulinCarbRatioGrams: 12,
+    doseRoundingMode: 'down',
+    doseIncrementUnits: 0.5,
     correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 1 }],
   };
   const calc = (totalCarbs) => runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({
@@ -1125,13 +1145,14 @@ test('snack boundary uses carb coverage only over 15 grams', () => {
   });
 
   assert.equal(calc(0).suggestedTotalUnits, 0);
-  assert.equal(calc(12).suggestedTotalUnits, 0);
-  assert.equal(calc(15).suggestedTotalUnits, 0);
-  assert.equal(calc(15.0).suggestedTotalUnits, 0);
-  assert.equal(calc(16).suggestedTotalUnits, 1);
-  assert.equal(calc(20).suggestedTotalUnits, 1);
-  assert.equal(calc(28).suggestedTotalUnits, 1.5);
+  assert.equal(calc(6).suggestedTotalUnits, 0.5);
+  assert.equal(calc(12).suggestedTotalUnits, 1);
+  assert.equal(calc(14).rawCarbDose, 14 / 12);
+  assert.equal(calc(14).suggestedTotalUnits, 1);
+  assert.equal(calc(18).suggestedTotalUnits, 1.5);
+  assert.equal(calc(24).suggestedTotalUnits, 2);
   assert.equal(calc(28).correctionUnits, null);
+  assert.equal(calc(28).suggestedTotalUnits, 2);
 });
 
 test('meal dose rounds once after aggregating raw components', () => {
@@ -1339,6 +1360,8 @@ test('shared settings contract applies restored patient and dose settings to cal
       doseRoundingMode: 'down',
       doseIncrementUnits: 0.1,
       minimumAllowableDoseUnits: 0.5,
+      targetGlucoseMin: 80,
+      targetGlucoseMax: 150,
       supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
       correctionRanges: [
         { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -1369,6 +1392,8 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(plan.doseRoundingMode, 'down');
   assert.equal(plan.doseIncrementUnits, 0.1);
   assert.equal(plan.minimumAllowableDoseUnits, 0.5);
+  assert.equal(plan.targetGlucoseMin, 80);
+  assert.equal(plan.targetGlucoseMax, 150);
   assert.equal(plan.bedtimeBaseUnits, 17);
   assert.equal(plan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(plan.correctionRanges.at(-1).maxGlucose, null);
@@ -1397,6 +1422,7 @@ test('shared settings inventory classifies every current LLT settings control', 
     'Dose Rounding',
     'Dose Increment',
     'Minimum Allowable Dose',
+    'Target Range',
     'Bedtime Base Dose',
     'Correction Table',
     'Plan Notes',
@@ -1827,12 +1853,14 @@ test('settings sync status is consolidated into one global sync action', () => {
   const syncButtonMatches = trackerSource.match(/data-action="sync-now"/g) || [];
   assert.equal(syncButtonMatches.length, 1);
   assert.match(trackerSource, /id="lee-lee-sync-title">Sync Status/);
+  assert.match(trackerSource, /data-settings-accordion open aria-labelledby="lee-lee-sync-title"/);
+  assert.match(trackerSource, /querySelector\('\[aria-labelledby="lee-lee-sync-title"\]'\)/);
   assert.match(trackerSource, /Overall status/);
   assert.match(trackerSource, /Records pending/);
   assert.match(trackerSource, /Settings pending/);
   assert.match(trackerSource, /Foods pending/);
   assert.match(trackerSource, /Records in cloud/);
-  assert.match(trackerSource, /renderSyncDiagnostics\(diagnostics\)/);
+  assert.match(trackerSource, /renderSyncDiagnostics\(syncRepository\?\.getSyncDiagnostics\?\.\(\) \|\| null\)/);
   assert.match(trackerSource, /syncRepository\.syncNow\(\{ includeNeedsAttention: true \}\)/);
   assert.match(trackerSource, /let manualSyncPromise = null/);
   assert.match(trackerSource, /if \(manualSyncPromise\) return manualSyncPromise/);
@@ -1843,9 +1871,18 @@ test('settings sync status is consolidated into one global sync action', () => {
 
 test('settings review and migration diagnostics are shown only when useful', () => {
   assert.match(trackerSource, /\$\{syncStatus\.conflictCount \? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts<\/button>' : ''\}/);
-  assert.match(trackerSource, /<details class="lee_lee_diabetes_details">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics<\/summary>/);
+  assert.match(trackerSource, /<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion aria-labelledby="lee-lee-migration-diagnostics-title">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron"/);
   assert.match(trackerSource, /data-action="save-device-identity" hidden/);
   assert.match(trackerSource, /event\.target\.matches\('\[name="deviceIdentity"\]\[data-current-device-identity\]'\)/);
+});
+
+test('food editors preserve drafts until explicit cancel or successful save', () => {
+  assert.match(trackerSource, /collectFoodLibraryEditorDraft/);
+  assert.match(trackerSource, /foodLibraryEditorDraft: options\.foodLibraryEditorDraft \|\| null/);
+  assert.match(trackerSource, /carbCalculatorFoodDraft: options\.carbCalculatorFoodDraft !== undefined/);
+  assert.match(trackerSource, /data-food-library-editor/);
+  assert.match(trackerSource, /carb-calculator\] \.lee_lee_diabetes_carb_editor_panel/);
+  assert.match(trackerSource, /result\.error \? foodDraft : null/);
 });
 
 test('today screen keeps routine sync queue counts out of primary activity', () => {

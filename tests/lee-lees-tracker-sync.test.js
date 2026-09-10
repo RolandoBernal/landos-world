@@ -861,10 +861,10 @@ test('legacy shared settings payloads are upgraded with the current dose default
 
   assert.equal(restored.patientName, 'Legacy Lee');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
-  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 20);
-  assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
+  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 12);
+  assert.equal(restored.insulinPlan.doseRoundingMode, 'down');
   assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
-  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
+  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0.5);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);
@@ -1123,6 +1123,15 @@ test('sync repository exposes a read-only record queue snapshot for migration re
   assert.match(syncSource, /getRecordQueueSnapshot,/);
   assert.match(syncSource, /getQueue\(\)\.map\(sanitizeOperationMetadata\)/);
   assert.match(syncSource, /lastErrorCategory: operation\?\.lastErrorCategory/);
+});
+
+test('shared settings ignore the legacy bedtime migration marker when comparing conflicts', () => {
+  const context = createSyncContext();
+  const base = sharedInsulinPlan({ bedtimeBaseUnits: 16 });
+  assert.equal(context.LeeLeeTrackerSync.sharedSettingsAreSame(
+    { patientName: 'Lee', insulinPlan: { ...base, bedtimeBaseUnitsMigratedTo17: false } },
+    { patientName: 'Lee', insulinPlan: { ...base, bedtimeBaseUnitsMigratedTo17: true } },
+  ), true);
 });
 
 test('identical conflicts are auto-resolved while meaningful differences remain', async () => {

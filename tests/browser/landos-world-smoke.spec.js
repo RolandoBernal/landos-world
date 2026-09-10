@@ -1822,6 +1822,7 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
     dialogRight: dialog.getBoundingClientRect().right,
     borderTopLeftRadius: getComputedStyle(dialog).borderTopLeftRadius,
     overflowY: getComputedStyle(dialog).overflowY,
+    paddingBottom: getComputedStyle(dialog).paddingBottom,
     actionBottom: dialog.querySelector('.lee_lee_diabetes_food_editor_actions')?.getBoundingClientRect().bottom || 0,
     focusedInputOutlineWidth: getComputedStyle(dialog.querySelector('[name="foodName"]')).outlineWidth,
     focusedInputBoxShadow: getComputedStyle(dialog.querySelector('[name="foodName"]')).boxShadow,
@@ -1844,6 +1845,7 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
   expect(Math.abs(dialogMetrics.height - dialogMetrics.viewportHeight)).toBeLessThanOrEqual(1);
   expect(dialogMetrics.bottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
   expect(dialogMetrics.actionBottom).toBeLessThanOrEqual(dialogMetrics.viewportHeight + 1);
+  expect(Number.parseFloat(dialogMetrics.paddingBottom)).toBeGreaterThanOrEqual(16);
   expect(dialogMetrics.headerDisplay).toBe('flex');
   expect(dialogMetrics.headerAlignItems).toBe('center');
   expect(Math.abs(dialogMetrics.titleCenterY - dialogMetrics.cancelCenterY)).toBeLessThanOrEqual(2);
@@ -1860,6 +1862,13 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
 
   await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');
   await editorLayer.getByLabel('Emoji').fill('🐉');
+  await expect(editorLayer).toBeVisible();
+  await expect(editorLayer.getByLabel('Food Name')).toHaveValue('Dragonfruit Test');
+  await expect(editorLayer.getByLabel('Emoji')).toHaveValue('🐉');
+  await editorLayer.getByRole('button', { name: 'Save Food' }).click();
+  await expect(editorLayer).toBeVisible();
+  await expect(editorLayer.getByLabel('Food Name')).toHaveValue('Dragonfruit Test');
+  await expect(editorLayer.getByLabel('Emoji')).toHaveValue('🐉');
   await editorLayer.getByLabel('Carbs').fill('18');
   await editorLayer.getByLabel('Serving Label').fill('1 bowl');
   await editorLayer.getByLabel('Brand / Notes').fill('Kitchen');
@@ -2064,6 +2073,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const qtyStyle = getComputedStyle(qtyInput);
     const labelStyle = getComputedStyle(labelInput);
     const carbsStyle = getComputedStyle(carbsInput);
+    const actions = node.querySelector('.lee_lee_diabetes_actions');
+    const actionsStyle = getComputedStyle(actions);
     return {
       qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -2072,6 +2083,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       carbsUnitGap: unitBox.left - carbsBox.right,
       labelGap: qtyBox.top - node.querySelector('label').getBoundingClientRect().top,
       inputGap: labelBox.top - qtyBox.bottom,
+      actionsPosition: actionsStyle.position,
+      editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
     };
   });
   expect(editorMetrics.qtyHasVisibleBox).toBe(true);
@@ -2082,6 +2095,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.carbsUnitGap).toBeLessThanOrEqual(12);
   expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(24);
   expect(editorMetrics.inputGap).toBeGreaterThanOrEqual(8);
+  expect(editorMetrics.actionsPosition).toBe('sticky');
+  expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
   const carbsInput = calculator.locator('[name="carbItemCarbs"]');
   await carbsInput.click();
 

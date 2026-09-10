@@ -109,8 +109,8 @@ test('migrates legacy record and plan keys into the stable tracker document with
   const migratedPlan = stored.insulinPlans.find((plan) => plan.id === 'plan-1');
   assert.deepEqual(migratedPlan.mealBaseUnitsByType, { Breakfast: 4, Lunch: 4, Dinner: 4 });
   assert.equal(migratedPlan.mealBaseUnits, 4);
-  assert.equal(migratedPlan.bedtimeBaseUnits, 17);
-  assert.equal(migratedPlan.insulinCarbRatioGrams, 20);
+  assert.equal(migratedPlan.bedtimeBaseUnits, 16);
+  assert.equal(migratedPlan.insulinCarbRatioGrams, 12);
   assert.equal(Object.hasOwn(migratedPlan, 'savedFoods'), false);
   assert.ok(localStorage.getItem(legacyRecordsKey));
   assert.ok(localStorage.getItem(legacyPlansKey));
@@ -145,8 +145,8 @@ test('legacy explicit meal base dose is preserved during normalization', () => {
   const plan = stored.insulinPlans[0];
   assert.deepEqual(plan.mealBaseUnitsByType, { Breakfast: 4, Lunch: 4, Dinner: 4 });
   assert.equal(plan.mealBaseUnits, 4);
-  assert.equal(plan.bedtimeBaseUnits, 17);
-  assert.equal(plan.insulinCarbRatioGrams, 20);
+  assert.equal(plan.bedtimeBaseUnits, 16);
+  assert.equal(plan.insulinCarbRatioGrams, 12);
   assert.equal(plan.notes, 'keep this');
   assert.equal(stored.settings.targetRange, 'custom');
 });
