@@ -1871,7 +1871,7 @@ test('settings sync status is consolidated into one global sync action', () => {
 
 test('settings review and migration diagnostics are shown only when useful', () => {
   assert.match(trackerSource, /\$\{syncStatus\.conflictCount \? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts<\/button>' : ''\}/);
-  assert.match(trackerSource, /<details class="lee_lee_diabetes_details">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics<\/summary>/);
+  assert.match(trackerSource, /<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion aria-labelledby="lee-lee-migration-diagnostics-title">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron"/);
   assert.match(trackerSource, /data-action="save-device-identity" hidden/);
   assert.match(trackerSource, /event\.target\.matches\('\[name="deviceIdentity"\]\[data-current-device-identity\]'\)/);
 });

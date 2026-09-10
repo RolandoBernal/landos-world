@@ -6881,9 +6881,9 @@
       ? `Retry ${Number(session.retryCount || 0)}`
       : (session.status || 'idle');
     return `
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-migration-diagnostics-title">
-        <details class="lee_lee_diabetes_details">
-          <summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics</summary>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion aria-labelledby="lee-lee-migration-diagnostics-title">
+          <summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+          <div class="lee_lee_diabetes_settings_accordion_body">
         <dl class="lee_lee_diabetes_status_grid">
           <div>
             <dt>Status</dt>
@@ -6939,8 +6939,8 @@
           </div>
         </dl>
         ${session.lastErrorMessage ? `<p class="lee_lee_diabetes_help">${escapeHtml(session.lastErrorMessage)}</p>` : ''}
-        </details>
-      </section>
+          </div>
+      </details>
     `;
   }
 
