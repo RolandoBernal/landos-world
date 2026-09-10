@@ -26,6 +26,8 @@
   const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
   const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const DEFAULT_TARGET_GLUCOSE_MIN = 70;
+  const DEFAULT_TARGET_GLUCOSE_MAX = 180;
   const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
   const DEFAULT_SHARED_INSULIN_PLAN = Object.freeze({
@@ -214,6 +216,11 @@
     return number == null ? DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS : number;
   }
 
+  function normalizeSharedTargetGlucose(value, fallback) {
+    const number = normalizeSharedNumber(value);
+    return number != null && number > 0 ? number : fallback;
+  }
+
   function normalizeSharedCorrectionRange(range) {
     const source = range && typeof range === 'object' ? range : {};
     const minGlucose = source.minGlucose == null || source.minGlucose === '' ? null : Number(source.minGlucose);
@@ -270,6 +277,8 @@
       doseRoundingMode: normalizeSharedDoseRoundingMode(source.doseRoundingMode),
       doseIncrementUnits: normalizeSharedDoseIncrement(source.doseIncrementUnits),
       minimumAllowableDoseUnits: normalizeSharedMinimumAllowableDose(source.minimumAllowableDoseUnits),
+      targetGlucoseMin: normalizeSharedTargetGlucose(source.targetGlucoseMin ?? source.glucoseTargetMin ?? source.targetGlucoseLow, DEFAULT_TARGET_GLUCOSE_MIN),
+      targetGlucoseMax: normalizeSharedTargetGlucose(source.targetGlucoseMax ?? source.glucoseTargetMax ?? source.targetGlucoseHigh, DEFAULT_TARGET_GLUCOSE_MAX),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length
         ? normalizedCorrectionRanges
@@ -294,6 +303,8 @@
       doseRoundingMode: normalized.doseRoundingMode,
       doseIncrementUnits: normalized.doseIncrementUnits,
       minimumAllowableDoseUnits: normalized.minimumAllowableDoseUnits,
+      targetGlucoseMin: normalized.targetGlucoseMin,
+      targetGlucoseMax: normalized.targetGlucoseMax,
       supportedMealTypes: normalized.supportedMealTypes,
       correctionRanges: normalized.correctionRanges,
       notes: normalized.notes,

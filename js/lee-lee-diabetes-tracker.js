@@ -209,6 +209,7 @@
     { label: 'Dose Rounding', key: 'insulinPlans[].doseRoundingMode', classification: 'SHARED' },
     { label: 'Dose Increment', key: 'insulinPlans[].doseIncrementUnits', classification: 'SHARED' },
     { label: 'Minimum Allowable Dose', key: 'insulinPlans[].minimumAllowableDoseUnits', classification: 'SHARED' },
+    { label: 'Target Range', key: 'insulinPlans[].targetGlucoseMin/targetGlucoseMax', classification: 'SHARED' },
     { label: 'Bedtime Base Dose', key: 'insulinPlans[].bedtimeBaseUnits', classification: 'SHARED' },
     { label: 'Correction Table', key: 'insulinPlans[].correctionRanges', classification: 'SHARED' },
     { label: 'Plan Notes', key: 'insulinPlans[].notes', classification: 'SHARED' },
@@ -227,7 +228,8 @@
   const BEDTIME_CONTEXT_TYPE = 'Bedtime';
   const DEFAULT_BEDTIME_BASE_UNITS = 17;
   const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
-  const SNACK_CARB_COVERAGE_THRESHOLD_GRAMS = 15;
+  const DEFAULT_TARGET_GLUCOSE_MIN = 70;
+  const DEFAULT_TARGET_GLUCOSE_MAX = 180;
   const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
   const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
@@ -250,6 +252,8 @@
     doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
     doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
     minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+    targetGlucoseMin: DEFAULT_TARGET_GLUCOSE_MIN,
+    targetGlucoseMax: DEFAULT_TARGET_GLUCOSE_MAX,
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -410,6 +414,8 @@
       doseRoundingMode: getDoseRoundingMode(plan),
       doseIncrementUnits: getDoseIncrementUnits(plan),
       minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(plan),
+      targetGlucoseMin: normalizeBloodSugar(plan.targetGlucoseMin ?? plan.glucoseTargetMin ?? plan.targetGlucoseLow) ?? DEFAULT_TARGET_GLUCOSE_MIN,
+      targetGlucoseMax: normalizeBloodSugar(plan.targetGlucoseMax ?? plan.glucoseTargetMax ?? plan.targetGlucoseHigh) ?? DEFAULT_TARGET_GLUCOSE_MAX,
       supportedMealTypes: [...plan.supportedMealTypes],
       correctionRanges: plan.correctionRanges.map((range) => ({ ...range })),
       notes: plan.notes || '',
@@ -1206,24 +1212,6 @@
     const roundingMode = getDoseRoundingMode(insulinPlan);
     const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
     const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
-    if (carbs <= SNACK_CARB_COVERAGE_THRESHOLD_GRAMS) {
-      return {
-        status: 'calculated',
-        totalCarbs: carbs,
-        insulinCarbRatioGrams: getInsulinCarbRatioGrams(insulinPlan),
-        rawCarbDose: 0,
-        roundedCarbDose: 0,
-        correctionUnits: null,
-        rawAggregateDose: 0,
-        suggestedTotalUnits: 0,
-        doseRoundingMode: roundingMode,
-        doseIncrementUnits,
-        minimumAllowableDoseUnits,
-        minimumDoseWarning: '',
-        matchedRange: null,
-        message: 'No fast-acting carb dose is suggested for snacks at 15 g carbs or less.',
-      };
-    }
     const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan), { roundingMode, doseIncrementUnits });
     const rawAggregateDose = carbDose.rawCarbDose ?? null;
     const suggestedTotalUnits = rawAggregateDose == null ? null : applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
@@ -1239,7 +1227,7 @@
       minimumAllowableDoseUnits,
       minimumDoseWarning,
       matchedRange: null,
-      message: minimumDoseWarning || carbDose.message || 'Snack carb coverage only. Correction insulin is logged separately.',
+      message: minimumDoseWarning || carbDose.message || 'Snack carb coverage only. Snacks do not receive correction insulin.',
     };
   }
 
@@ -1316,6 +1304,7 @@
 
   function applySharedSettingsToDocument(current, settings) {
     const source = settings && typeof settings === 'object' ? settings : {};
+    const sharedPlan = source.insulinPlan || DEFAULT_INSULIN_PLAN;
     return mergeSharedInsulinPlan({
       ...current,
       settings: {
@@ -1324,8 +1313,10 @@
         patientBirthDate: source.patientBirthDate || '',
         clinicName: source.clinicName || '',
         clinicPhone: source.clinicPhone || '',
+        glucoseTargetMin: sharedPlan.targetGlucoseMin ?? DEFAULT_TARGET_GLUCOSE_MIN,
+        glucoseTargetMax: sharedPlan.targetGlucoseMax ?? DEFAULT_TARGET_GLUCOSE_MAX,
       },
-    }, source.insulinPlan || DEFAULT_INSULIN_PLAN);
+    }, sharedPlan);
   }
 
   function normalizeDoseStatus(value) {
@@ -2961,8 +2952,9 @@
   }
 
   function getGlucoseTargetRange(settings = trackerData.settings || {}) {
-    const min = normalizeBloodSugar(settings.glucoseTargetMin ?? settings.targetGlucoseMin ?? settings.targetRangeMin);
-    const max = normalizeBloodSugar(settings.glucoseTargetMax ?? settings.targetGlucoseMax ?? settings.targetRangeMax);
+    const plan = getCurrentPlan() || {};
+    const min = normalizeBloodSugar(settings.glucoseTargetMin ?? settings.targetGlucoseMin ?? settings.targetRangeMin ?? plan.targetGlucoseMin ?? plan.targetGlucoseLow);
+    const max = normalizeBloodSugar(settings.glucoseTargetMax ?? settings.targetGlucoseMax ?? settings.targetRangeMax ?? plan.targetGlucoseMax ?? plan.targetGlucoseHigh);
     return min != null && max != null && min <= max ? { min, max } : null;
   }
 
@@ -4234,9 +4226,9 @@
   function renderReportsSummary(reportRecords, resolvedRange = resolveReportRange(reportOptions)) {
     const summary = calculateReportSummary(reportRecords, resolvedRange);
     const targetItems = summary.glucose.targetRange ? [
-      { label: 'In target range', value: formatPercent(summary.glucose.inRangePercent), detail: pluralize(summary.glucose.targetCounts.inRange, 'reading') },
-      { label: 'Below target', value: formatPercent(summary.glucose.belowRangePercent), detail: pluralize(summary.glucose.targetCounts.below, 'reading') },
-      { label: 'Above target', value: formatPercent(summary.glucose.aboveRangePercent), detail: pluralize(summary.glucose.targetCounts.above, 'reading') },
+      { label: 'IN TARGET RANGE', value: summary.glucose.targetCounts ? formatPercent(summary.glucose.inRangePercent) : 'No data', detail: summary.glucose.targetCounts ? `${summary.glucose.targetCounts.inRange} of ${summary.glucose.count} readings` : `${summary.glucose.targetRange.min}–${summary.glucose.targetRange.max} mg/dL` },
+      { label: 'Below target', value: summary.glucose.targetCounts ? formatPercent(summary.glucose.belowRangePercent) : 'No data', detail: summary.glucose.targetCounts ? pluralize(summary.glucose.targetCounts.below, 'reading') : '' },
+      { label: 'Above target', value: summary.glucose.targetCounts ? formatPercent(summary.glucose.aboveRangePercent) : 'No data', detail: summary.glucose.targetCounts ? pluralize(summary.glucose.targetCounts.above, 'reading') : '' },
     ] : [
       { label: 'Target range', value: 'Not configured', detail: 'Target percentages will appear when settings include a target range.' },
     ];
@@ -6644,8 +6636,9 @@
       ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
     ];
     return `
-      <details class="lee_lee_diabetes_details">
-        <summary>Sync Diagnostics</summary>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+        <summary role="heading" aria-level="2">Sync Diagnostics <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+        <div class="lee_lee_diabetes_settings_accordion_body">
         ${renderStatusGrid(rows)}
         ${(diagnostics?.foodLibraryQueue || []).map((item) => `<section><h3>Pending ${escapeHtml(item.entityType || 'food')}</h3>${renderStatusGrid([
           ['Item ID', item.recordId], ['Operation ID', item.id], ['Table', item.targetTable],
@@ -6653,13 +6646,13 @@
           ['Last attempted', item.lastAttemptAt || 'Never'], ['Error code', item.lastErrorCode || 'None'],
           ['Error', item.lastErrorMessage || 'No response recorded'],
         ])}</section>`).join('')}
+        </div>
       </details>
     `;
   }
 
   function renderSyncStatusSection() {
     const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
-    const diagnostics = syncRepository?.getSyncDiagnostics?.() || null;
     const syncIsRunning = manualSyncState.state === 'syncing' || syncStatus.state === 'syncing';
     const syncButtonLabel = syncIsRunning ? 'Syncing...' : 'Sync Now';
     const rows = [
@@ -6676,8 +6669,10 @@
       ['Records in cloud', getCloudRecordCount() == null ? 'Not available' : String(getCloudRecordCount())],
     ];
     return `
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-sync-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-sync-title">Sync Status</h2>
+      <h2 class="lee_lee_diabetes_visually_hidden">Sync Status</h2>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion open>
+        <summary id="lee-lee-sync-title">Sync Status <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+        <div class="lee_lee_diabetes_settings_accordion_body">
         <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(friendlySyncStatus.state)}" aria-live="polite">
           ${escapeHtml(friendlySyncStatus.message)}
         </p>
@@ -6698,8 +6693,17 @@
           ${syncStatus.conflictCount ? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts</button>' : ''}
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="sign-out">Sign Out This Device</button>
         </div>
-        ${renderSyncDiagnostics(diagnostics)}
-      </section>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderSettingsAccordion(title, id, content, open = false) {
+    return `
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion${open ? ' open' : ''}>
+        <summary id="${escapeHtml(id)}" role="heading" aria-level="2">${escapeHtml(title)} <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+        <div class="lee_lee_diabetes_settings_accordion_body">${content}</div>
+      </details>
     `;
   }
 
@@ -6714,8 +6718,8 @@
         ${renderTrackerTop({ active: 'settings', kicker: 'Lee-Lee’s Tracker', title: 'Settings' })}
         ${renderTrackerNav('settings')}
         ${renderSyncStatusSection()}
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-patient-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-patient-title">Patient & Clinic</h2>
+        ${renderSyncDiagnostics(syncRepository?.getSyncDiagnostics?.() || null)}
+        ${renderSettingsAccordion('Patient & Clinic Info', 'lee-lee-patient-title', `
           <p class="lee_lee_diabetes_help">Patient and clinic information syncs across signed-in devices.</p>
           <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(sharedSettingsStatus.state)}" aria-live="polite">
             ${escapeHtml(patientSettingsError || patientSettingsMessage || sharedSettingsStatus.message)}
@@ -6737,9 +6741,8 @@
             <input class="lee_lee_diabetes_input" name="clinicPhone" type="tel" maxlength="40" value="${escapeHtml(trackerData.settings?.clinicPhone || '')}">
           </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-patient-settings">Save Patient Info</button>
-        </section>
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-history-preferences-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-history-preferences-title">History Preferences</h2>
+        `, false)}
+        ${renderSettingsAccordion('History Preferences', 'lee-lee-history-preferences-title', `
           <label class="lee_lee_diabetes_field">
             History Initial Window
             <select class="lee_lee_diabetes_select" name="historyInitialWindow">
@@ -6750,11 +6753,10 @@
             </select>
           </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-history-preference">Save History Preference</button>
-        </section>
+        `, false)}
         ${renderMigrationSettings()}
         ${renderMigrationDiagnostics()}
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-insulin-plan-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-insulin-plan-title">Insulin Dose Guidance</h2>
+        ${renderSettingsAccordion('Insulin Dose Guidance', 'lee-lee-insulin-plan-title', `
           ${errorMessage ? `<p class="lee_lee_diabetes_error">${escapeHtml(errorMessage)}</p>` : ''}
           <label class="lee_lee_diabetes_field">
             Plan Name
@@ -6787,21 +6789,31 @@
             Bedtime Long-Acting Dose
             <input class="lee_lee_diabetes_input" name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getBedtimeBaseUnits(plan))}">
           </label>
+          <div class="lee_lee_diabetes_target_range" role="group" aria-labelledby="lee-lee-target-range-label">
+            <span class="lee_lee_diabetes_field_label" id="lee-lee-target-range-label">Target Range</span>
+            <div class="lee_lee_diabetes_inline_control">
+              <input class="lee_lee_diabetes_input" name="targetGlucoseMin" type="number" inputmode="numeric" min="1" step="1" required aria-label="Target Range low" value="${escapeHtml(plan.targetGlucoseMin ?? DEFAULT_TARGET_GLUCOSE_MIN)}">
+              <span>to</span>
+              <input class="lee_lee_diabetes_input" name="targetGlucoseMax" type="number" inputmode="numeric" min="1" step="1" required aria-label="Target Range high" value="${escapeHtml(plan.targetGlucoseMax ?? DEFAULT_TARGET_GLUCOSE_MAX)}">
+              <span>mg/dL</span>
+            </div>
+          </div>
           <div class="lee_lee_diabetes_plan_meta">
             <span>Active contexts: Breakfast, Lunch, Dinner, Snacks, Bedtime, Correction</span>
             <span>Last updated: ${escapeHtml(formatDate(new Date(plan.updatedAt)))}</span>
           </div>
-          <fieldset class="lee_lee_diabetes_ranges">
-            <legend>Correction Table</legend>
-            ${plan.correctionRanges.map(renderRangeEditorRow).join('')}
-          </fieldset>
           <label class="lee_lee_diabetes_field">
             Plan Notes
             <textarea class="lee_lee_diabetes_textarea" name="notes" rows="4">${escapeHtml(plan.notes || '')}</textarea>
           </label>
-        </section>
-        <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-backup-title">
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-backup-title">Local Backup</h2>
+        `, false)}
+        ${renderSettingsAccordion('Correction Table', 'lee-lee-correction-table-title', `
+          <fieldset class="lee_lee_diabetes_ranges">
+            <legend class="lee_lee_diabetes_visually_hidden">Correction Table</legend>
+            ${plan.correctionRanges.map(renderRangeEditorRow).join('')}
+          </fieldset>
+        `, false)}
+        ${renderSettingsAccordion('Local Backup', 'lee-lee-backup-title', `
           <p class="lee_lee_diabetes_help">JSON backups are for restore. CSV files are for human-readable review and cannot restore the tracker.</p>
           <div class="lee_lee_diabetes_backup_actions">
             <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="export-backup">Export Data Backup</button>
@@ -6809,7 +6821,7 @@
             <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="import-backup">Import Data Backup</button>
           </div>
           <input class="lee_lee_diabetes_backup_input" type="file" accept="application/json,.json" data-backup-import aria-label="Import Lee-Lee’s Tracker data backup">
-        </section>
+        `, false)}
         ${renderRecentlyDeletedSettings()}
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel">Cancel</button>
@@ -6822,9 +6834,8 @@
   function renderRecentlyDeletedSettings() {
     const deleted = deletedRecords();
     return `
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-deleted-title">
-        <details class="lee_lee_diabetes_details">
-          <summary id="lee-lee-deleted-title">Recently Deleted${deleted.length ? ` (${deleted.length})` : ''}</summary>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+          <summary id="lee-lee-deleted-title" role="heading" aria-level="2">Recently Deleted${deleted.length ? ` (${deleted.length})` : ''} <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
           ${deleted.length
             ? `<div class="lee_lee_diabetes_timeline">${deleted.map((record) => `
             <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
@@ -6842,8 +6853,7 @@
             </article>
             `).join('')}</div>`
             : '<p class="lee_lee_diabetes_empty">No deleted records.</p>'}
-        </details>
-      </section>
+      </details>
     `;
   }
 
@@ -7298,6 +7308,14 @@
     if (!alignsWithDosePrecision(minimumAllowableDoseUnits)) {
       return { error: 'Minimum allowable dose must use 0.05-unit precision.' };
     }
+    const targetGlucoseMin = normalizeBloodSugar(form.elements.targetGlucoseMin?.value);
+    const targetGlucoseMax = normalizeBloodSugar(form.elements.targetGlucoseMax?.value);
+    if (targetGlucoseMin == null || targetGlucoseMin <= 0 || targetGlucoseMax == null || targetGlucoseMax <= 0) {
+      return { error: 'Target Range values must be positive glucose numbers.' };
+    }
+    if (targetGlucoseMin >= targetGlucoseMax) {
+      return { error: 'Target Range low must be less than Target Range high.' };
+    }
     const effectiveFrom = form.elements.effectiveFrom.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return { error: 'Effective date is required.' };
     const now = new Date().toISOString();
@@ -7315,6 +7333,8 @@
         doseRoundingMode,
         doseIncrementUnits: roundToPrecision(doseIncrementUnits),
         minimumAllowableDoseUnits: roundToPrecision(minimumAllowableDoseUnits),
+        targetGlucoseMin,
+        targetGlucoseMax,
         supportedMealTypes: [...MEAL_TYPES],
         correctionRanges: ranges,
         notes: sanitizeNotes(form.elements.notes.value),
@@ -7330,6 +7350,7 @@
     currentEditor = {
       mode: 'plan-confirmation',
       pendingPlan: plan,
+      pendingTargetRange: { min: plan.targetGlucoseMin, max: plan.targetGlucoseMax },
     };
     root.innerHTML = `
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
@@ -7395,10 +7416,22 @@
         ...current,
         insulinPlans: nextPlans,
         activeInsulinPlanId: pendingPlan.id,
+        settings: {
+          ...(current.settings || {}),
+          glucoseTargetMin: pendingPlan.targetGlucoseMin,
+          glucoseTargetMax: pendingPlan.targetGlucoseMax,
+        },
       };
     });
     if (syncRepository?.saveSharedSettings) {
-      syncRepository.saveSharedSettings(createSharedSettingsSnapshot({ plan: pendingPlan }));
+      syncRepository.saveSharedSettings(createSharedSettingsSnapshot({
+        plan: pendingPlan,
+        settings: {
+          ...(trackerData.settings || {}),
+          glucoseTargetMin: pendingPlan.targetGlucoseMin,
+          glucoseTargetMax: pendingPlan.targetGlucoseMax,
+        },
+      }));
     }
     renderSettings();
   }
@@ -8449,6 +8482,13 @@
       if (action === 'load-older-history') {
         loadOlderHistory();
       }
+    });
+    root.addEventListener('toggle', (event) => {
+      const opened = event.target;
+      if (!opened.matches?.('details[data-settings-accordion][open]')) return;
+      root.querySelectorAll('details[data-settings-accordion][open]').forEach((section) => {
+        if (section !== opened) section.removeAttribute('open');
+      });
     });
     root.addEventListener('submit', (event) => {
       if (!event.target.matches('[data-auth-form], [data-device-identity-form], [data-lee-lee-editor], [data-plan-editor]')) return;
