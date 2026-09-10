@@ -2272,8 +2272,8 @@
                 return `
                   <div class="${differs ? 'is-different' : ''}">
                     <dt>${escapeHtml(label)}</dt>
-                    <dd><strong>Shared</strong><span>${escapeHtml(formatConflictValue(sharedValue))}</span></dd>
-                    <dd><strong>This device</strong><span>${escapeHtml(formatConflictValue(localValue))}</span></dd>
+                    <dd><strong>Shared</strong><span>${renderFormattedValue(formatConflictValue(sharedValue))}</span></dd>
+                    <dd><strong>This device</strong><span>${renderFormattedValue(formatConflictValue(localValue))}</span></dd>
                   </div>
                 `;
               }).join('')}
@@ -4691,14 +4691,14 @@
     ].filter(Boolean).join(' | ');
     return `
       <tr>
-        <th scope="row">${escapeHtml(formatShortDateKey(group.dateKey))}</th>
+        <th scope="row">${renderNumeric(formatShortDateKey(group.dateKey))}</th>
         ${PRIMARY_TYPES.map((type) => {
           const record = group.primary[type];
           const bloodSugar = record ? formatClinicalLogCell(record.bloodSugar, formatBloodSugar) : '';
           const insulin = record ? formatClinicalLogCell(getRecordActualInsulin(record), formatInsulin) : '';
           return `
-            <td>${escapeHtml(bloodSugar)}</td>
-            <td>${escapeHtml(insulin)}</td>
+            <td>${renderFormattedValue(bloodSugar)}</td>
+            <td>${renderFormattedValue(insulin)}</td>
           `;
         }).join('')}
         <td>${escapeHtml(notes)}</td>

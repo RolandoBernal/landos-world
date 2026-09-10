@@ -348,10 +348,10 @@ test('printable clinical report uses report title and leaves missing values blan
   assert.match(html, /Glucose &amp; Insulin Log/);
   assert.doesNotMatch(html, /<h2>Lee-Lee’s Tracker<\/h2>/);
   assert.doesNotMatch(html, /—/);
-  assert.match(compact, /<td>124 mg\/dL<\/td> <td>4 units<\/td>/);
+  assert.match(compact, /<td><span class="lee_lee_diabetes_numeric">124<\/span> mg\/dL<\/td> <td><span class="lee_lee_diabetes_numeric">4<\/span> units<\/td>/);
   assert.match(compact, /<th scope="col">Lunch BG<\/th> <th scope="col">Lunch Insulin<\/th>/);
   assert.match(compact, /<td><\/td> <td><\/td>/);
-  assert.match(compact, /<td>100 mg\/dL<\/td> <td>0 units<\/td>/);
+  assert.match(compact, /<td><span class="lee_lee_diabetes_numeric">100<\/span> mg\/dL<\/td> <td><span class="lee_lee_diabetes_numeric">0<\/span> units<\/td>/);
 });
 
 test('printable report header includes patient metadata from tracker settings', () => {
@@ -1279,15 +1279,25 @@ test('LLT typography uses bundled DM Sans without affecting sibling apps', () =>
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'DM Sans'[\s\S]*font-weight: 400 700[\s\S]*url\('\.\.\/fonts\/dm-sans-latin\.woff2'\)/);
   assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/dm-sans-latin-ext\.woff2'\)/);
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Roboto Mono'[\s\S]*url\('\.\.\/fonts\/roboto-mono-regular\.ttf'\)/);
-  assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif[\s\S]*font-weight: 400/);
+  assert.match(cssSource, /--llt-ui-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif/);
+  assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: var\(--llt-ui-font\)[\s\S]*font-weight: 400/);
   assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
   assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[type="date"\],[\s\S]*\.lee_lee_diabetes_shell input\[type="time"\],[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_chart_tick,[\s\S]*\.lee_lee_diabetes_chart_unit \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_timeline_values,\n.lee_lee_diabetes_timeline_notes'), /font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_dose_breakdown'), /font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
+  assert.match(cssSource, /\.lee_lee_diabetes_shell input::placeholder,[\s\S]*\.lee_lee_diabetes_shell textarea::placeholder \{[\s\S]*font-family: inherit/);
   assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'DM Sans'/);
   assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
+});
+
+test('LLT report and conflict data preserve numeric typography in generated cells', () => {
+  assert.match(trackerSource, /<th scope="row">\$\{renderNumeric\(formatShortDateKey\(group\.dateKey\)\)\}<\/th>/);
+  assert.match(trackerSource, /<td>\$\{renderFormattedValue\(bloodSugar\)\}<\/td>/);
+  assert.match(trackerSource, /<td>\$\{renderFormattedValue\(insulin\)\}<\/td>/);
+  assert.match(trackerSource, /renderFormattedValue\(formatConflictValue\(sharedValue\)\)/);
+  assert.match(trackerSource, /renderFormattedValue\(formatConflictValue\(localValue\)\)/);
 });
 
 test('carb calculator uses display rows with a focused item editor', () => {
