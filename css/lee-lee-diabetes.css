@@ -1043,8 +1043,9 @@
 
 .lee_lee_diabetes_food_editor_dialog {
   width: min(100%, 30rem);
-  max-height: min(36rem, calc(100dvh - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
   grid-template-rows: auto minmax(0, 1fr);
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1300,6 +1301,7 @@
 
 .lee_lee_diabetes_carb_editor_panel {
   padding: 0.75rem;
+  padding-bottom: 1.25rem;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 8px;
   background: rgb(0 0 0 / 16%);
@@ -1428,6 +1430,7 @@
 .lee_lee_diabetes_carb_item_editor {
   display: grid;
   gap: 0.85rem;
+  padding-bottom: 0.75rem;
 }
 
 .lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_field {
@@ -1463,6 +1466,13 @@
 
 .lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_unit_input span {
   font-weight: 400;
+}
+
+.lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_actions {
+  position: sticky;
+  bottom: 0;
+  padding: 0.3rem 0;
+  background: #06142b;
 }
 
 .lee_lee_diabetes_carb_calc_operator {
@@ -2060,6 +2070,10 @@
   border-color: var(--lee-lee-border);
   color: var(--lee-lee-text);
   box-shadow: 0 16px 42px rgb(15 63 110 / 12%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_actions {
+  background: #e8f3ff;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_sheet_backdrop {
