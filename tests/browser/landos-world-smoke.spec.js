@@ -1860,6 +1860,13 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
 
   await editorLayer.getByLabel('Food Name').fill('Dragonfruit Test');
   await editorLayer.getByLabel('Emoji').fill('🐉');
+  await expect(editorLayer).toBeVisible();
+  await expect(editorLayer.getByLabel('Food Name')).toHaveValue('Dragonfruit Test');
+  await expect(editorLayer.getByLabel('Emoji')).toHaveValue('🐉');
+  await editorLayer.getByRole('button', { name: 'Save Food' }).click();
+  await expect(editorLayer).toBeVisible();
+  await expect(editorLayer.getByLabel('Food Name')).toHaveValue('Dragonfruit Test');
+  await expect(editorLayer.getByLabel('Emoji')).toHaveValue('🐉');
   await editorLayer.getByLabel('Carbs').fill('18');
   await editorLayer.getByLabel('Serving Label').fill('1 bowl');
   await editorLayer.getByLabel('Brand / Notes').fill('Kitchen');

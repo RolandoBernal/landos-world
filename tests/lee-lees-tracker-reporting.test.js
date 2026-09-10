@@ -1876,6 +1876,15 @@ test('settings review and migration diagnostics are shown only when useful', () 
   assert.match(trackerSource, /event\.target\.matches\('\[name="deviceIdentity"\]\[data-current-device-identity\]'\)/);
 });
 
+test('food editors preserve drafts until explicit cancel or successful save', () => {
+  assert.match(trackerSource, /collectFoodLibraryEditorDraft/);
+  assert.match(trackerSource, /foodLibraryEditorDraft: options\.foodLibraryEditorDraft \|\| null/);
+  assert.match(trackerSource, /carbCalculatorFoodDraft: options\.carbCalculatorFoodDraft !== undefined/);
+  assert.match(trackerSource, /data-food-library-editor/);
+  assert.match(trackerSource, /carb-calculator\] \.lee_lee_diabetes_carb_editor_panel/);
+  assert.match(trackerSource, /result\.error \? foodDraft : null/);
+});
+
 test('today screen keeps routine sync queue counts out of primary activity', () => {
   assert.match(trackerSource, /function renderPersistenceStatus\(\{ surface = '' \} = \{\}\)[\s\S]*data-action="retry-save"/);
   assert.match(trackerSource, /surface === 'today' && \['offline', 'synced', 'syncing', 'waiting'\]\.includes\(friendlyStatus\.state\)/);

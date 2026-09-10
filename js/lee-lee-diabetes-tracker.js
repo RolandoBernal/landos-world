@@ -3971,13 +3971,14 @@
       mode: 'foods',
       foodLibraryEditorOpen: options.foodLibraryEditorOpen === true,
       foodLibraryEditorId: options.foodLibraryEditorId || '',
+      foodLibraryEditorDraft: options.foodLibraryEditorDraft || null,
     };
     const foods = searchFoodItems(foodLibrary, foodLibrarySearch);
     const meals = searchSavedMealItems(savedMeals, savedMealsSearch);
-    const editorFood = currentEditor.foodLibraryEditorId
+    const editorFood = currentEditor.foodLibraryEditorDraft || (currentEditor.foodLibraryEditorId
       ? foodLibrary.find((food) => food.id === currentEditor.foodLibraryEditorId && !isLibraryItemDeleted(food))
-      : null;
-    const editorTitle = editorFood ? 'Edit Food' : 'Add New Food';
+      : null);
+    const editorTitle = editorFood?.id ? 'Edit Food' : 'Add New Food';
     root.innerHTML = `
       ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
@@ -4058,6 +4059,18 @@
         </section>
       </div>
     `;
+  }
+
+  function collectFoodLibraryEditorDraft(panel) {
+    return {
+      id: panel?.querySelector('[name="foodId"]')?.value || '',
+      name: panel?.querySelector('[name="foodName"]')?.value || '',
+      emoji: panel?.querySelector('[name="foodEmoji"]')?.value || '',
+      carbs: panel?.querySelector('[name="foodCarbs"]')?.value || '',
+      servingLabel: panel?.querySelector('[name="foodServingLabel"]')?.value || '',
+      brand: panel?.querySelector('[name="foodBrand"]')?.value || '',
+      favorite: panel?.querySelector('[name="foodFavorite"]')?.checked === true,
+    };
   }
 
   function renderFoodLibraryRow(food) {
@@ -4948,15 +4961,16 @@
   }
 
   function renderFoodEditorPanel(food = {}) {
+    const draft = food && Object.keys(food).length ? food : (currentEditor?.carbCalculatorFoodDraft || {});
     return `
       <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-food-editor-title">
         <h3 id="lee-lee-carb-food-editor-title">Add Food</h3>
-        <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.name || '')}" required></label>
-        <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="foodEmoji" type="text" maxlength="16" autocomplete="off" value="${escapeHtml(food.emoji || '')}"></label>
-        <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(food.carbs ?? '')}" required></label>
-        <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.servingLabel || '')}"></label>
-        <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(food.brand || '')}"></label>
-        <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food.favorite ? 'checked' : ''}><span>Favorite</span></label>
+        <label class="lee_lee_diabetes_field">Food Name<input class="lee_lee_diabetes_input" name="foodName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(draft.name || '')}" required></label>
+        <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="foodEmoji" type="text" maxlength="16" autocomplete="off" value="${escapeHtml(draft.emoji || '')}"></label>
+        <label class="lee_lee_diabetes_field">Carbs<input class="lee_lee_diabetes_input" name="foodCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs ?? '')}" required></label>
+        <label class="lee_lee_diabetes_field">Serving Label<input class="lee_lee_diabetes_input" name="foodServingLabel" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(draft.servingLabel || '')}"></label>
+        <label class="lee_lee_diabetes_field">Brand / Notes<input class="lee_lee_diabetes_input" name="foodBrand" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(draft.brand || '')}"></label>
+        <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${draft.favorite ? 'checked' : ''}><span>Favorite</span></label>
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-food-editor">Cancel</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-food-editor">Save Food</button>
@@ -5159,6 +5173,9 @@
       carbCalculatorItemEditId: options.carbCalculatorItemEditId || '',
       carbCalculatorItemDraft: options.carbCalculatorItemDraft || null,
       carbCalculatorFoodEditorOpen: options.carbCalculatorFoodEditorOpen === true,
+      carbCalculatorFoodDraft: options.carbCalculatorFoodDraft !== undefined
+        ? options.carbCalculatorFoodDraft
+        : (previousEditor?.carbCalculatorFoodDraft || null),
       carbCalculatorMealEditorOpen: options.carbCalculatorMealEditorOpen === true,
       carbCalculatorScrollSnapshot: options.carbCalculatorOpen === true
         ? (options.carbCalculatorScrollSnapshot || previousEditor?.carbCalculatorScrollSnapshot || null)
@@ -5934,20 +5951,17 @@
 
   function saveFoodFromCarbCalculator(form) {
     const calculator = form?.querySelector('[data-carb-calculator]');
+    const foodDraft = collectFoodLibraryEditorDraft(calculator?.querySelector('.lee_lee_diabetes_carb_editor_panel'));
     const result = saveFoodLibraryItem({
-      name: calculator?.querySelector('[name="foodName"]')?.value || '',
-      emoji: calculator?.querySelector('[name="foodEmoji"]')?.value || '',
-      carbs: calculator?.querySelector('[name="foodCarbs"]')?.value || '',
-      servingLabel: calculator?.querySelector('[name="foodServingLabel"]')?.value || '',
-      brand: calculator?.querySelector('[name="foodBrand"]')?.value || '',
+      ...foodDraft,
       sourceType: 'user',
-      favorite: calculator?.querySelector('[name="foodFavorite"]')?.checked === true,
     }, { addToCalculator: true });
     if (result.error) {
       foodLibraryError = result.error;
     } else {
       foodLibraryError = '';
       currentEditor.carbCalculatorFoodEditorOpen = false;
+      currentEditor.carbCalculatorFoodDraft = null;
     }
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
@@ -5963,6 +5977,7 @@
       carbCalculatorSearch: currentEditor?.carbCalculatorSearch || '',
       carbCalculatorPicker: currentEditor?.carbCalculatorPicker || 'foods',
       carbCalculatorFoodEditorOpen: currentEditor.carbCalculatorFoodEditorOpen,
+      carbCalculatorFoodDraft: result.error ? foodDraft : null,
       carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
       preventFocusScroll: true,
     });
@@ -8126,6 +8141,7 @@
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
         currentEditor.carbCalculatorFoodEditorOpen = action === 'open-carb-food-editor';
+        currentEditor.carbCalculatorFoodDraft = action === 'open-carb-food-editor' ? {} : null;
         renderEditor({
           mode: currentEditor?.mode || 'log-entry',
           eventType: getEditorEventType(form),
@@ -8297,20 +8313,17 @@
       }
       if (action === 'save-food-library-item') {
         const panel = target.closest('[data-food-library-editor]');
+        const draft = collectFoodLibraryEditorDraft(panel);
         const id = panel?.querySelector('[name="foodId"]')?.value || '';
         const result = saveFoodLibraryItem({
-          id,
-          name: panel?.querySelector('[name="foodName"]')?.value || '',
-          emoji: panel?.querySelector('[name="foodEmoji"]')?.value || '',
-          carbs: panel?.querySelector('[name="foodCarbs"]')?.value || '',
-          servingLabel: panel?.querySelector('[name="foodServingLabel"]')?.value || '',
-          brand: panel?.querySelector('[name="foodBrand"]')?.value || '',
+          ...draft,
           sourceType: id ? undefined : 'user',
-          favorite: panel?.querySelector('[name="foodFavorite"]')?.checked === true,
         });
         foodLibraryError = result.error || '';
         foodLibraryMessage = result.food ? 'Food saved.' : '';
-        renderFoodLibrary(result.error ? { foodLibraryEditorOpen: true, foodLibraryEditorId: id } : {});
+        renderFoodLibrary(result.error
+          ? { foodLibraryEditorOpen: true, foodLibraryEditorId: id, foodLibraryEditorDraft: draft }
+          : {});
       }
       if (action === 'open-food-library-editor') {
         foodLibraryError = '';
@@ -8319,6 +8332,7 @@
       }
       if (action === 'cancel-food-library-editor') {
         foodLibraryError = '';
+        currentEditor.foodLibraryEditorDraft = null;
         renderFoodLibrary();
       }
       if (action === 'edit-food-library-item') {
@@ -8326,7 +8340,7 @@
         if (food) {
           foodLibraryError = '';
           foodLibraryMessage = '';
-          renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorId: food.id });
+          renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorId: food.id, foodLibraryEditorDraft: null });
         }
       }
       if (action === 'select-report-chart-point') {
@@ -8549,6 +8563,16 @@
       handleSave(event.target);
     });
     root.addEventListener('input', (event) => {
+      const foodLibraryPanel = event.target.closest('[data-food-library-editor]');
+      if (foodLibraryPanel) {
+        currentEditor.foodLibraryEditorDraft = collectFoodLibraryEditorDraft(foodLibraryPanel);
+        return;
+      }
+      const carbFoodPanel = event.target.closest('[data-carb-calculator] .lee_lee_diabetes_carb_editor_panel');
+      if (carbFoodPanel && currentEditor?.carbCalculatorFoodEditorOpen) {
+        currentEditor.carbCalculatorFoodDraft = collectFoodLibraryEditorDraft(carbFoodPanel);
+        return;
+      }
       if (event.target.name === 'foodLibrarySearch') {
         foodLibrarySearch = event.target.value;
         refreshFoodLibrarySearchResults();
@@ -8685,6 +8709,31 @@
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
           carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[data-action="open-carb-calculator-search"]',
+          preventFocusScroll: true,
+        });
+        return;
+      }
+      if (currentEditor?.carbCalculatorOpen === true && currentEditor?.carbCalculatorFoodEditorOpen && event.key === 'Escape') {
+        event.preventDefault();
+        const form = root.querySelector('[data-lee-lee-editor]');
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        currentEditor.carbCalculatorFoodEditorOpen = false;
+        currentEditor.carbCalculatorFoodDraft = null;
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorTab: currentEditor?.carbCalculatorTab || 'foods',
+          carbCalculatorPicker: currentEditor?.carbCalculatorPicker || 'foods',
+          carbCalculatorFoodEditorOpen: false,
+          carbCalculatorFoodDraft: null,
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
           preventFocusScroll: true,
         });
         return;
