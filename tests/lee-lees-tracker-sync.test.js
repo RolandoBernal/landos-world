@@ -1125,6 +1125,15 @@ test('sync repository exposes a read-only record queue snapshot for migration re
   assert.match(syncSource, /lastErrorCategory: operation\?\.lastErrorCategory/);
 });
 
+test('shared settings ignore the legacy bedtime migration marker when comparing conflicts', () => {
+  const context = createSyncContext();
+  const base = sharedInsulinPlan({ bedtimeBaseUnits: 16 });
+  assert.equal(context.LeeLeeTrackerSync.sharedSettingsAreSame(
+    { patientName: 'Lee', insulinPlan: { ...base, bedtimeBaseUnitsMigratedTo17: false } },
+    { patientName: 'Lee', insulinPlan: { ...base, bedtimeBaseUnitsMigratedTo17: true } },
+  ), true);
+});
+
 test('identical conflicts are auto-resolved while meaningful differences remain', async () => {
   const supabase = createMockSupabase([{
     id: 'same-content',

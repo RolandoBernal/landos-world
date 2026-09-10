@@ -313,7 +313,6 @@
       mealBaseUnitsByType: normalized.mealBaseUnitsByType,
       mealBaseUnits: normalized.mealBaseUnits,
       bedtimeBaseUnits: normalized.bedtimeBaseUnits,
-      bedtimeBaseUnitsMigratedTo17: normalized.bedtimeBaseUnitsMigratedTo17,
       insulinCarbRatioGrams: normalized.insulinCarbRatioGrams,
       doseRoundingMode: normalized.doseRoundingMode,
       doseIncrementUnits: normalized.doseIncrementUnits,
