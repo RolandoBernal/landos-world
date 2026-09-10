@@ -226,14 +226,20 @@
     Dinner: 6,
   });
   const BEDTIME_CONTEXT_TYPE = 'Bedtime';
-  const DEFAULT_BEDTIME_BASE_UNITS = 17;
-  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
+  const DEFAULT_BEDTIME_BASE_UNITS = 16;
+  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 12;
   const DEFAULT_TARGET_GLUCOSE_MIN = 70;
   const DEFAULT_TARGET_GLUCOSE_MAX = 180;
   const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
-  const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
+  const DEFAULT_DOSE_ROUNDING_MODE = 'down';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
-  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0.5;
+  const LEGACY_DEFAULT_INSULIN_GUIDANCE = Object.freeze({
+    bedtimeBaseUnits: 17,
+    insulinCarbRatioGrams: 20,
+    doseRoundingMode: 'nearest',
+    minimumAllowableDoseUnits: 0,
+  });
   const DOSE_PRECISION_STEP_UNITS = 0.05;
   const CARB_CALCULATOR_MIN_QTY = 1;
   const CARB_CALCULATOR_MAX_QTY = 99;
@@ -467,7 +473,7 @@
   }
 
   function roundToNearestHalf(value) {
-    return applyConfiguredDoseRounding(value, DEFAULT_DOSE_ROUNDING_MODE, DEFAULT_DOSE_INCREMENT_UNITS);
+    return applyConfiguredDoseRounding(value, 'nearest', DEFAULT_DOSE_INCREMENT_UNITS);
   }
 
   function normalizeDoseRoundingMode(value) {
@@ -1233,40 +1239,48 @@
 
   function normalizeInsulinPlan(plan) {
     if (!plan || typeof plan !== 'object') return null;
-    const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(plan.effectiveFrom || ''))
-      ? plan.effectiveFrom
+    const isLegacySeededPlan = plan.id === DEFAULT_INSULIN_PLAN.id
+      && normalizeNumber(plan.bedtimeBaseUnits) === LEGACY_DEFAULT_INSULIN_GUIDANCE.bedtimeBaseUnits
+      && normalizeNumber(plan.insulinCarbRatioGrams) === LEGACY_DEFAULT_INSULIN_GUIDANCE.insulinCarbRatioGrams
+      && normalizeDoseRoundingMode(plan.doseRoundingMode) === LEGACY_DEFAULT_INSULIN_GUIDANCE.doseRoundingMode
+      && normalizeNumber(plan.minimumAllowableDoseUnits) === LEGACY_DEFAULT_INSULIN_GUIDANCE.minimumAllowableDoseUnits;
+    const sourcePlan = isLegacySeededPlan
+      ? { ...plan, bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS, insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS, doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE, minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS }
+      : plan;
+    const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(sourcePlan.effectiveFrom || ''))
+      ? sourcePlan.effectiveFrom
       : DEFAULT_PLAN_EFFECTIVE_FROM;
-    const effectiveTo = /^\d{4}-\d{2}-\d{2}$/.test(String(plan.effectiveTo || ''))
-      ? plan.effectiveTo
+    const effectiveTo = /^\d{4}-\d{2}-\d{2}$/.test(String(sourcePlan.effectiveTo || ''))
+      ? sourcePlan.effectiveTo
       : null;
-    const correctionRanges = Array.isArray(plan.correctionRanges)
-      ? plan.correctionRanges.map(normalizeCorrectionRange).filter(Boolean)
+    const correctionRanges = Array.isArray(sourcePlan.correctionRanges)
+      ? sourcePlan.correctionRanges.map(normalizeCorrectionRange).filter(Boolean)
       : [];
     const normalizedCorrectionRanges = correctionRanges;
-    const supportedMealTypes = Array.isArray(plan.supportedMealTypes)
-      ? plan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
+    const supportedMealTypes = Array.isArray(sourcePlan.supportedMealTypes)
+      ? sourcePlan.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
-    const mealBaseUnitsByType = getMealBaseUnitsByType(plan);
+    const mealBaseUnitsByType = getMealBaseUnitsByType(sourcePlan);
     const nowTimestamp = new Date().toISOString();
     return {
-      ...plan,
-      id: typeof plan.id === 'string' ? plan.id : createId(),
-      name: String(plan.name || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
+      ...sourcePlan,
+      id: typeof sourcePlan.id === 'string' ? sourcePlan.id : createId(),
+      name: String(sourcePlan.name || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
       effectiveFrom,
       effectiveTo,
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
-      bedtimeBaseUnits: getBedtimeBaseUnits(plan),
-      bedtimeBaseUnitsMigratedTo17: plan.bedtimeBaseUnitsMigratedTo17 === true,
-      insulinCarbRatioGrams: getInsulinCarbRatioGrams(plan),
-      doseRoundingMode: getDoseRoundingMode(plan),
-      doseIncrementUnits: getDoseIncrementUnits(plan),
-      minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(plan),
+      bedtimeBaseUnits: getBedtimeBaseUnits(sourcePlan),
+      bedtimeBaseUnitsMigratedTo17: sourcePlan.bedtimeBaseUnitsMigratedTo17 === true,
+      insulinCarbRatioGrams: getInsulinCarbRatioGrams(sourcePlan),
+      doseRoundingMode: getDoseRoundingMode(sourcePlan),
+      doseIncrementUnits: getDoseIncrementUnits(sourcePlan),
+      minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(sourcePlan),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
-      notes: sanitizeNotes(plan.notes),
-      createdAt: toIsoTimestamp(plan.createdAt, nowTimestamp),
-      updatedAt: toIsoTimestamp(plan.updatedAt, nowTimestamp),
+      notes: sanitizeNotes(sourcePlan.notes),
+      createdAt: toIsoTimestamp(sourcePlan.createdAt, nowTimestamp),
+      updatedAt: toIsoTimestamp(sourcePlan.updatedAt, nowTimestamp),
     };
   }
 

@@ -861,10 +861,10 @@ test('legacy shared settings payloads are upgraded with the current dose default
 
   assert.equal(restored.patientName, 'Legacy Lee');
   assert.deepEqual(restored.insulinPlan.mealBaseUnitsByType, { Breakfast: 5, Lunch: 6, Dinner: 6 });
-  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 20);
-  assert.equal(restored.insulinPlan.doseRoundingMode, 'nearest');
+  assert.equal(restored.insulinPlan.insulinCarbRatioGrams, 12);
+  assert.equal(restored.insulinPlan.doseRoundingMode, 'down');
   assert.equal(restored.insulinPlan.doseIncrementUnits, 0.5);
-  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0);
+  assert.equal(restored.insulinPlan.minimumAllowableDoseUnits, 0.5);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).minGlucose, 550);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).maxGlucose, null);
   assert.equal(restored.insulinPlan.correctionRanges.at(-1).correctionUnits, 6);

@@ -1117,7 +1117,7 @@ test('meal dose helper uses carb coverage plus existing correction table', () =>
   assert.equal(dinner.correctionUnits, 2);
   assert.equal(dinner.suggestedTotalUnits, 9);
   assert.equal(dinner.rawAggregateDose, 9.15);
-  assert.equal(dinner.doseRoundingMode, 'nearest');
+  assert.equal(dinner.doseRoundingMode, 'down');
   assert.equal(dinner.doseIncrementUnits, 0.5);
   assert.equal(breakfast550.status, 'calculated');
   assert.equal(breakfast550.correctionUnits, 6);

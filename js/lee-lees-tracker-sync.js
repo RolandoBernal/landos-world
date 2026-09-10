@@ -21,11 +21,17 @@
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
   const DEFAULT_MEAL_BASE_UNITS_BY_TYPE = Object.freeze({ Breakfast: 5, Lunch: 6, Dinner: 6 });
-  const DEFAULT_BEDTIME_BASE_UNITS = 17;
-  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 20;
-  const DEFAULT_DOSE_ROUNDING_MODE = 'nearest';
+  const DEFAULT_BEDTIME_BASE_UNITS = 16;
+  const DEFAULT_INSULIN_CARB_RATIO_GRAMS = 12;
+  const DEFAULT_DOSE_ROUNDING_MODE = 'down';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
-  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0;
+  const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0.5;
+  const LEGACY_DEFAULT_INSULIN_GUIDANCE = Object.freeze({
+    bedtimeBaseUnits: 17,
+    insulinCarbRatioGrams: 20,
+    doseRoundingMode: 'nearest',
+    minimumAllowableDoseUnits: 0,
+  });
   const DEFAULT_TARGET_GLUCOSE_MIN = 70;
   const DEFAULT_TARGET_GLUCOSE_MAX = 180;
   const DOSE_ROUNDING_MODES = Object.freeze(['down', 'nearest', 'up']);
@@ -249,6 +255,14 @@
 
   function normalizeSharedInsulinPlan(plan) {
     const source = plan && typeof plan === 'object' ? plan : DEFAULT_SHARED_INSULIN_PLAN;
+    const isLegacySeededPlan = source.id === DEFAULT_SHARED_INSULIN_PLAN.id
+      && normalizeSharedNumber(source.bedtimeBaseUnits) === LEGACY_DEFAULT_INSULIN_GUIDANCE.bedtimeBaseUnits
+      && normalizeSharedNumber(source.insulinCarbRatioGrams) === LEGACY_DEFAULT_INSULIN_GUIDANCE.insulinCarbRatioGrams
+      && normalizeSharedDoseRoundingMode(source.doseRoundingMode) === LEGACY_DEFAULT_INSULIN_GUIDANCE.doseRoundingMode
+      && normalizeSharedNumber(source.minimumAllowableDoseUnits) === LEGACY_DEFAULT_INSULIN_GUIDANCE.minimumAllowableDoseUnits;
+    const normalizedSource = isLegacySeededPlan
+      ? { ...source, bedtimeBaseUnits: DEFAULT_BEDTIME_BASE_UNITS, insulinCarbRatioGrams: DEFAULT_INSULIN_CARB_RATIO_GRAMS, doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE, minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS }
+      : source;
     const effectiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(source.effectiveFrom || ''))
       ? source.effectiveFrom
       : DEFAULT_PLAN_EFFECTIVE_FROM;
@@ -263,29 +277,29 @@
       ? source.supportedMealTypes.filter((type) => MEAL_TYPES.includes(type))
       : [...MEAL_TYPES];
     const mealBaseUnitsByType = normalizeSharedMealBaseUnitsByType(source);
-    const bedtimeValue = normalizeSharedNumber(source.bedtimeBaseUnits);
+    const bedtimeValue = normalizeSharedNumber(normalizedSource.bedtimeBaseUnits);
     return {
-      id: typeof source.id === 'string' && source.id ? source.id : DEFAULT_SHARED_INSULIN_PLAN.id,
-      name: String(source.name || DEFAULT_SHARED_INSULIN_PLAN.name).trim().slice(0, 80),
+      id: typeof normalizedSource.id === 'string' && normalizedSource.id ? normalizedSource.id : DEFAULT_SHARED_INSULIN_PLAN.id,
+      name: String(normalizedSource.name || DEFAULT_SHARED_INSULIN_PLAN.name).trim().slice(0, 80),
       effectiveFrom,
       effectiveTo,
       mealBaseUnitsByType,
       mealBaseUnits: mealBaseUnitsByType.Breakfast,
       bedtimeBaseUnits: bedtimeValue ?? DEFAULT_BEDTIME_BASE_UNITS,
-      bedtimeBaseUnitsMigratedTo17: source.bedtimeBaseUnitsMigratedTo17 === true,
-      insulinCarbRatioGrams: normalizeSharedNumber(source.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
-      doseRoundingMode: normalizeSharedDoseRoundingMode(source.doseRoundingMode),
-      doseIncrementUnits: normalizeSharedDoseIncrement(source.doseIncrementUnits),
-      minimumAllowableDoseUnits: normalizeSharedMinimumAllowableDose(source.minimumAllowableDoseUnits),
-      targetGlucoseMin: normalizeSharedTargetGlucose(source.targetGlucoseMin ?? source.glucoseTargetMin ?? source.targetGlucoseLow, DEFAULT_TARGET_GLUCOSE_MIN),
-      targetGlucoseMax: normalizeSharedTargetGlucose(source.targetGlucoseMax ?? source.glucoseTargetMax ?? source.targetGlucoseHigh, DEFAULT_TARGET_GLUCOSE_MAX),
+      bedtimeBaseUnitsMigratedTo17: normalizedSource.bedtimeBaseUnitsMigratedTo17 === true,
+      insulinCarbRatioGrams: normalizeSharedNumber(normalizedSource.insulinCarbRatioGrams) ?? DEFAULT_INSULIN_CARB_RATIO_GRAMS,
+      doseRoundingMode: normalizeSharedDoseRoundingMode(normalizedSource.doseRoundingMode),
+      doseIncrementUnits: normalizeSharedDoseIncrement(normalizedSource.doseIncrementUnits),
+      minimumAllowableDoseUnits: normalizeSharedMinimumAllowableDose(normalizedSource.minimumAllowableDoseUnits),
+      targetGlucoseMin: normalizeSharedTargetGlucose(normalizedSource.targetGlucoseMin ?? normalizedSource.glucoseTargetMin ?? normalizedSource.targetGlucoseLow, DEFAULT_TARGET_GLUCOSE_MIN),
+      targetGlucoseMax: normalizeSharedTargetGlucose(normalizedSource.targetGlucoseMax ?? normalizedSource.glucoseTargetMax ?? normalizedSource.targetGlucoseHigh, DEFAULT_TARGET_GLUCOSE_MAX),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length
         ? normalizedCorrectionRanges
         : DEFAULT_SHARED_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
-      notes: String(source.notes || '').trim().slice(0, 500),
-      createdAt: source.createdAt || DEFAULT_SHARED_INSULIN_PLAN.createdAt,
-      updatedAt: source.updatedAt || DEFAULT_SHARED_INSULIN_PLAN.updatedAt,
+      notes: String(normalizedSource.notes || '').trim().slice(0, 500),
+      createdAt: normalizedSource.createdAt || DEFAULT_SHARED_INSULIN_PLAN.createdAt,
+      updatedAt: normalizedSource.updatedAt || DEFAULT_SHARED_INSULIN_PLAN.updatedAt,
     };
   }
 
