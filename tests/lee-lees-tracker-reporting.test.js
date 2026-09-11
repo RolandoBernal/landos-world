@@ -1051,30 +1051,50 @@ test('carb ratio and configurable dose rounding are deterministic', () => {
   });
 });
 
-test('carb calculator rows use integer quantities and derived row totals', () => {
+test('carb calculator rows preserve positive decimal quantities and derived row totals', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const rows = helper.normalizeCarbCalculatorRows([
     { qty: '1', carbs: '25' },
     { qty: '2', carbs: '15' },
-    { qty: '1.5', carbs: '19' },
+    { qty: '1.5', carbs: '26' },
+    { qty: '0.25', carbs: '26' },
+    { qty: '0.75', carbs: '26' },
+    { qty: '1.25', carbs: '38' },
+    { qty: '2.25', carbs: '26' },
     { qty: '120', carbs: '1' },
     { qty: '0', carbs: '12' },
     { qty: '1', carbs: '46.5' },
   ]);
 
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 10);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[0]), 25);
   assert.equal(helper.calculateCarbCalculatorRowTotal(rows[1]), 30);
-  assert.equal(rows[2].qty, '1');
-  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[2]), 19);
-  assert.equal(rows[3].qty, '99');
-  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[3]), 99);
-  assert.equal(rows[4].qty, '1');
-  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[4]), 12);
-  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 231.5);
+  assert.equal(rows[2].qty, '1.5');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[2]), 39);
+  assert.equal(rows[3].qty, '0.25');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[3]), 6.5);
+  assert.equal(rows[4].qty, '0.75');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[4]), 19.5);
+  assert.equal(rows[5].qty, '1.25');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[5]), 47.5);
+  assert.equal(rows[6].qty, '2.25');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[6]), 58.5);
+  assert.equal(rows[7].qty, '99');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[7]), 99);
+  assert.equal(rows[8].qty, '0');
+  assert.equal(helper.calculateCarbCalculatorRowTotal(rows[8]), null);
+  assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 371.5);
+  assert.equal(helper.normalizeCarbCalculatorRows([{ qty: '', carbs: '26' }])[0].qty, '');
+  assert.equal(helper.normalizeCarbCalculatorRows([{ qty: '0.', carbs: '26' }])[0].qty, '0.');
   assert.equal(helper.hasValidCarbCalculatorTotal(rows), true);
   assert.equal(helper.hasValidCarbCalculatorTotal(helper.normalizeCarbCalculatorRows([])), false);
+  ['0.5', '0.25', '0.75', '1', '1.5', '1.25', '2.25', '9.99'].forEach((value) => {
+    assert.equal(helper.isValidCarbCalculatorQuantity(value), true, value);
+  });
+  ['', '0', '0.', '-0.5', '1.234', '99.99', '100', 'abc'].forEach((value) => {
+    assert.equal(helper.isValidCarbCalculatorQuantity(value), false, value);
+  });
 });
 
 test('meal dose helper uses carb coverage plus existing correction table', () => {
@@ -1302,7 +1322,9 @@ test('LLT report and conflict data preserve numeric typography in generated cell
 
 test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
-  assert.match(trackerSource, /name="carbItemQty" type="number" inputmode="numeric" min="\$\{CARB_CALCULATOR_MIN_QTY\}" max="\$\{CARB_CALCULATOR_MAX_QTY\}" step="1"/);
+  assert.match(trackerSource, /name="carbItemQty" type="text" inputmode="decimal" maxlength="5"/);
+  assert.match(trackerSource, /isValidCarbCalculatorQuantity\(qtyText\)/);
+  assert.match(trackerSource, /setCustomValidity\('Enter a quantity greater than 0 with up to two decimal places\.'/);
   assert.match(trackerSource, /name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e\.g\. Orange"/);
   assert.match(trackerSource, /name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0\.1"/);
   assert.match(trackerSource, /data-action="edit-carb-calculator-row"/);

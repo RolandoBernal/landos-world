@@ -2097,6 +2097,12 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.inputGap).toBeGreaterThanOrEqual(8);
   expect(editorMetrics.actionsPosition).toBe('sticky');
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
+  const qtyInput = calculator.locator('[name="carbItemQty"]');
+  for (const value of ['0', '0.', '0.5']) {
+    await qtyInput.fill(value);
+    await expect(qtyInput).toHaveValue(value);
+  }
+  await expect(qtyInput).toHaveAttribute('inputmode', 'decimal');
   const carbsInput = calculator.locator('[name="carbItemCarbs"]');
   await carbsInput.click();
 
@@ -2113,14 +2119,22 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(firstNodeStableAfterInput).toBe(true);
   await expect(carbsInput).toHaveValue('35');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('35 g');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('17.5 g');
   await expect(calculator.getByRole('button', { name: 'Edit Manual Amount' })).toBeFocused();
 
-  await calculator.getByRole('button', { name: 'Use 35 grams' }).dispatchEvent('pointerdown');
-  await calculator.getByRole('button', { name: 'Use 35 grams' }).dispatchEvent('pointerup');
+  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Edit Food Item' })).toBeVisible();
+  await expect(qtyInput).toHaveValue('0.5');
+  await qtyInput.fill('0.25');
+  await carbsInput.fill('26');
+  await calculator.getByRole('button', { name: 'Save Item' }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('6.5 g');
+
+  await calculator.getByRole('button', { name: 'Use 6.5 grams' }).dispatchEvent('pointerdown');
+  await calculator.getByRole('button', { name: 'Use 6.5 grams' }).dispatchEvent('pointerup');
 
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
-  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('35');
+  await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('6.5');
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
 });
 

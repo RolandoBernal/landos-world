@@ -241,8 +241,9 @@
     minimumAllowableDoseUnits: 0,
   });
   const DOSE_PRECISION_STEP_UNITS = 0.05;
-  const CARB_CALCULATOR_MIN_QTY = 1;
+  const CARB_CALCULATOR_MIN_QTY = 0.01;
   const CARB_CALCULATOR_MAX_QTY = 99;
+  const CARB_CALCULATOR_QTY_PATTERN = /^(?:0|[1-9]\d{0,1})(?:\.\d{0,2})?$/;
   const CARB_SEARCH_MIN_QUERY_LENGTH = 2;
   const CARB_SEARCH_RESULT_LIMIT = 40;
   const HIGH_GLUCOSE_CORRECTION_RANGE = Object.freeze({ minGlucose: 550, maxGlucose: null, correctionUnits: 6 });
@@ -702,12 +703,21 @@
   function normalizeCarbCalculatorQuantity(value, fallback = CARB_CALCULATOR_MIN_QTY) {
     const number = Number(value);
     if (!Number.isFinite(number)) return fallback;
-    return Math.max(CARB_CALCULATOR_MIN_QTY, Math.min(CARB_CALCULATOR_MAX_QTY, Math.trunc(number)));
+    return Math.max(CARB_CALCULATOR_MIN_QTY, Math.min(CARB_CALCULATOR_MAX_QTY, Math.round((number + Number.EPSILON) * 100) / 100));
   }
 
-  function isIntegerQuantityValue(value) {
+  function isValidCarbCalculatorQuantity(value) {
     const text = String(value ?? '').trim();
-    return /^\d+$/.test(text) && Number(text) >= CARB_CALCULATOR_MIN_QTY && Number(text) <= CARB_CALCULATOR_MAX_QTY;
+    if (!CARB_CALCULATOR_QTY_PATTERN.test(text)) return false;
+    const number = Number(text);
+    return number >= CARB_CALCULATOR_MIN_QTY && number <= CARB_CALCULATOR_MAX_QTY;
+  }
+
+  function preserveCarbCalculatorQuantity(value, fallback = '1') {
+    const text = String(value ?? '').trim();
+    if (text === '' || CARB_CALCULATOR_QTY_PATTERN.test(text)) return text;
+    const number = Number(text);
+    return Number.isFinite(number) ? String(normalizeCarbCalculatorQuantity(number)) : fallback;
   }
 
   function normalizeFoodEmoji(value) {
@@ -957,7 +967,7 @@
 
   function normalizeCarbCalculatorRow(row = {}) {
     const sourceType = row.sourceType === 'food' ? 'food' : 'manual';
-    const qtyText = String(normalizeCarbCalculatorQuantity(row.qty, CARB_CALCULATOR_MIN_QTY));
+    const qtyText = preserveCarbCalculatorQuantity(row.qty, '1');
     const carbsText = row.carbs == null ? '' : String(row.carbs);
     return {
       id: typeof row.id === 'string' && row.id ? row.id : createId(),
@@ -999,10 +1009,10 @@
   }
 
   function calculateCarbCalculatorRowTotal(row = {}) {
-    const qty = isIntegerQuantityValue(row.qty) ? normalizeCarbCalculatorQuantity(row.qty) : null;
+    const qty = isValidCarbCalculatorQuantity(row.qty) ? Number(String(row.qty).trim()) : null;
     const carbs = normalizeNumber(row.carbs);
     if (qty == null || carbs == null || String(row.qty ?? '').trim() === '' || String(row.carbs ?? '').trim() === '') return null;
-    return Math.round((qty * carbs + Number.EPSILON) * 100) / 100;
+    return qty * carbs;
   }
 
   function normalizeCarbCalculatorRows(rows = []) {
@@ -1016,7 +1026,7 @@
   }
 
   function calculateCarbCalculatorMealTotal(rows = []) {
-    return Math.round((rows || []).reduce((sum, row) => sum + (calculateCarbCalculatorRowTotal(row) ?? 0), 0) * 100) / 100;
+    return (rows || []).reduce((sum, row) => sum + (calculateCarbCalculatorRowTotal(row) ?? 0), 0);
   }
 
   function hasValidCarbCalculatorTotal(rows = []) {
@@ -1062,7 +1072,7 @@
         ? merged.find((row) => row.sourceType === 'food' && row.foodId === incoming.foodId)
         : null;
       if (existing) {
-        existing.qty = String(Math.min(CARB_CALCULATOR_MAX_QTY, normalizeCarbCalculatorQuantity(existing.qty) + normalizeCarbCalculatorQuantity(incoming.qty)));
+        existing.qty = String(Math.min(CARB_CALCULATOR_MAX_QTY, Number(existing.qty) + Number(incoming.qty)));
       } else if (merged.length === 0 && incoming.sourceType === 'food') {
         merged.push({ ...incoming, id: incoming.id || createId() });
       } else {
@@ -1086,8 +1096,8 @@
         brand: component.brandSnapshot || '',
         sourceTypeSnapshot: component.sourceTypeSnapshot || '',
         sourceNameSnapshot: component.sourceNameSnapshot || '',
-        qty: isIntegerQuantityValue(component.quantity) ? String(component.quantity) : '1',
-        carbs: isIntegerQuantityValue(component.quantity) && normalizeNumber(component.carbsPerServing) != null
+        qty: isValidCarbCalculatorQuantity(component.quantity) ? String(component.quantity) : '1',
+        carbs: isValidCarbCalculatorQuantity(component.quantity) && normalizeNumber(component.carbsPerServing) != null
           ? formatCarbAmount(component.carbsPerServing)
           : formatCarbAmount(component.carbTotal),
       }));
@@ -2685,6 +2695,7 @@
   window.LeeLeeTrackerDoseHelper = {
     calculateFoodCarbs,
     calculateTotalCarbs,
+    isValidCarbCalculatorQuantity,
     normalizeCarbCalculatorRows,
     calculateCarbCalculatorRowTotal,
     calculateCarbCalculatorMealTotal,
@@ -5037,7 +5048,7 @@
         </div>
         <label class="lee_lee_diabetes_field">
           Quantity
-          <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="number" inputmode="numeric" min="${CARB_CALCULATOR_MIN_QTY}" max="${CARB_CALCULATOR_MAX_QTY}" step="1" autocomplete="off" value="${escapeHtml(draft.qty)}">
+          <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
         </label>
         <label class="lee_lee_diabetes_field">
           Label
@@ -5677,7 +5688,14 @@
   function saveCarbCalculatorItemEditor(form) {
     const panel = form?.querySelector('[data-carb-item-editor]');
     if (!panel) return;
-    const qty = normalizeCarbCalculatorQuantity(panel.querySelector('[name="carbItemQty"]')?.value || '1');
+    const qtyInput = panel.querySelector('[name="carbItemQty"]');
+    const qtyText = qtyInput?.value?.trim() || '';
+    if (!isValidCarbCalculatorQuantity(qtyText)) {
+      qtyInput?.setCustomValidity('Enter a quantity greater than 0 with up to two decimal places.');
+      qtyInput?.reportValidity?.();
+      return;
+    }
+    qtyInput?.setCustomValidity('');
     const carbsValue = normalizeNumber(panel.querySelector('[name="carbItemCarbs"]')?.value);
     if (carbsValue == null || carbsValue < 0) return;
     const label = sanitizeShortText(panel.querySelector('[name="carbItemLabel"]')?.value || '', 80);
@@ -5687,7 +5705,7 @@
       ...(existing || {}),
       id: existing?.id || createId(),
       sourceType: existing?.sourceType || 'manual',
-      qty: String(qty),
+      qty: qtyText,
       name: label || 'Manual Amount',
       carbs: formatCarbAmount(carbsValue),
     });
@@ -8571,6 +8589,10 @@
       const carbFoodPanel = event.target.closest('[data-carb-calculator] .lee_lee_diabetes_carb_editor_panel');
       if (carbFoodPanel && currentEditor?.carbCalculatorFoodEditorOpen) {
         currentEditor.carbCalculatorFoodDraft = collectFoodLibraryEditorDraft(carbFoodPanel);
+        return;
+      }
+      if (event.target.name === 'carbItemQty') {
+        event.target.setCustomValidity('');
         return;
       }
       if (event.target.name === 'foodLibrarySearch') {
