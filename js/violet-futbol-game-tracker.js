@@ -5,6 +5,7 @@
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
   const ACTION_GUARD_MS = 350;
+  const HUME_FOGG_TEAM = 'Hume-Fogg';
   const SEVEN_SEGMENT_NAMES = ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'];
   const SEVEN_SEGMENT_DIGITS = {
     0: ['top', 'upper-left', 'upper-right', 'lower-left', 'lower-right', 'bottom'],
@@ -125,6 +126,44 @@
       team1: clampScore(game.firstHalfGoalsTeam1) + clampScore(game.secondHalfGoalsTeam1),
       team2: clampScore(game.firstHalfGoalsTeam2) + clampScore(game.secondHalfGoalsTeam2),
     };
+  }
+
+  function calculateSeasonRecord(games = []) {
+    return games.reduce((record, game) => {
+      if (!game || game.phase !== 'final') return record;
+      const team1 = String(game.team1 || '').trim().toLowerCase();
+      const team2 = String(game.team2 || '').trim().toLowerCase();
+      const humeFogg = HUME_FOGG_TEAM.toLowerCase();
+      const scores = finalScores(game);
+      let teamScore;
+      let opponentScore;
+      if (team1 === humeFogg && team2 !== humeFogg) {
+        teamScore = scores.team1;
+        opponentScore = scores.team2;
+      } else if (team2 === humeFogg && team1 !== humeFogg) {
+        teamScore = scores.team2;
+        opponentScore = scores.team1;
+      } else {
+        return record;
+      }
+      if (teamScore > opponentScore) record.wins += 1;
+      else if (teamScore < opponentScore) record.losses += 1;
+      else record.draws += 1;
+      return record;
+    }, { wins: 0, losses: 0, draws: 0 });
+  }
+
+  function pluralizeResult(count, singular, plural) {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+
+  function seasonRecordMarkup(games) {
+    const record = calculateSeasonRecord(games);
+    return `<div class="vfgt_season_summary" aria-label="Hume-Fogg season record">
+      <h3>Hume-Fogg</h3>
+      <p class="vfgt_season_record">Season Record: ${record.wins}&ndash;${record.losses}&ndash;${record.draws}</p>
+      <p class="vfgt_season_totals">${pluralizeResult(record.wins, 'Win', 'Wins')} · ${pluralizeResult(record.losses, 'Loss', 'Losses')} · ${pluralizeResult(record.draws, 'Draw', 'Draws')}</p>
+    </div>`;
   }
 
   function elapsedForHalf(game, phase, now = Date.now()) {
@@ -665,6 +704,7 @@
         </section>` : ''}
         <section class="vfgt_section" aria-labelledby="vfgt-history-title">
           <h2 id="vfgt-history-title">Saved Games</h2>
+          ${seasonRecordMarkup(savedGames)}
           ${history}
         </section>
       </section>`;
@@ -1180,11 +1220,13 @@
 
   window.VioletFutbolGameTracker = {
     ACTIVE_GAME_KEY,
+    HUME_FOGG_TEAM,
     HALFTIME_SECONDS,
     REGULATION_SECONDS,
     SAVED_GAMES_KEY,
     adjustScore,
     clampScore,
+    calculateSeasonRecord,
     createGame,
     createManualGame,
     deriveTimerState,
@@ -1206,6 +1248,7 @@
     renderSevenSegmentDisplay,
     requestScreenWakeLock,
     scoreForPhase,
+    seasonRecordMarkup,
     serializeCompletedGame,
     setScoreForPhase,
     shouldHoldScreenWakeLock,
