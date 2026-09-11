@@ -716,7 +716,7 @@ test('game type is captured on new, manual, and edit game forms and shown in his
     assert.ok(source.includes(label.replaceAll('\\', '')));
   });
   assert.match(source, /class="vfgt_history_game_type"/);
-  assert.match(css, /\.vfgt_form select[\s\S]*min-height: 50px/);
+  assert.match(css, /\.vfgt_form select[\s\S]*height: 50px[\s\S]*min-height: 50px[\s\S]*line-height: 1\.2/);
   assert.match(css, /\.vfgt_history_game_type[\s\S]*font-weight: 800/);
 });
 
