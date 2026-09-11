@@ -147,8 +147,8 @@
 
   function gameTypeSelectMarkup(selected = '') {
     const normalized = normalizeGameType(selected);
-    return `<select name="gameType" required aria-label="Game Type">
-      <option value="" ${normalized ? '' : 'selected'}>Select game type</option>
+    return `<select name="gameType" required aria-label="Game Type" class="vfgt_game_type_select${normalized ? '' : ' vfgt_game_type_select--placeholder'}">
+      <option value="" disabled ${normalized ? '' : 'selected'}>Select game type</option>
       ${Object.entries(GAME_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${normalized === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select>`;
   }
@@ -1172,6 +1172,11 @@
     saveActiveGame();
   }
 
+  function handleChange(event) {
+    const select = event.target.closest('select[name="gameType"]');
+    if (select) select.classList.toggle('vfgt_game_type_select--placeholder', select.value === '');
+  }
+
   function handleSubmit(event) {
     const manualForm = event.target.closest('[data-vfgt-manual-form]');
     if (manualForm) {
@@ -1241,6 +1246,7 @@
     }
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
+    root.addEventListener('change', handleChange);
     root.addEventListener('submit', handleSubmit);
     window.addEventListener('focus', handleLifecycleResume);
     window.addEventListener('pageshow', handleLifecycleResume);

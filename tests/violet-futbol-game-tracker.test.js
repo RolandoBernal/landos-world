@@ -703,8 +703,10 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
 });
 
 test('game type is captured on new, manual, and edit game forms and shown in history', () => {
-  assert.equal((source.match(/name="gameType"/g) || []).length, 1);
+  assert.equal((source.match(/name="gameType"/g) || []).length, 2);
   assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 4);
+  assert.match(source, /<option value="" disabled[\s\S]*>Select game type<\/option>/);
+  assert.match(source, /vfgt_game_type_select--placeholder/);
   Object.entries({
     regularSeason: 'Regular Season',
     districtTournament: 'District Tournament \(Playoffs\)',
@@ -718,6 +720,7 @@ test('game type is captured on new, manual, and edit game forms and shown in his
   assert.match(source, /class="vfgt_history_game_type"/);
   assert.match(css, /\.vfgt_form select[\s\S]*height: 50px[\s\S]*min-height: 50px[\s\S]*line-height: 1\.2/);
   assert.match(css, /\.vfgt_history_game_type[\s\S]*font-weight: 800/);
+  assert.match(css, /\.vfgt_game_type_select--placeholder[\s\S]*color: var\(--vfgt-placeholder\)[\s\S]*opacity: 0\.78/);
 });
 
 test('seven-segment timer replaces font-rendered clock text and is responsive', () => {

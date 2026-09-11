@@ -436,6 +436,15 @@
   outline: none;
 }
 
+.vfgt_form select.vfgt_game_type_select--placeholder {
+  color: var(--vfgt-placeholder);
+  opacity: 0.78;
+}
+
+.vfgt_form select.vfgt_game_type_select option:disabled {
+  color: var(--vfgt-placeholder);
+}
+
 .vfgt_form_grid,
 .vfgt_summary_grid {
   display: grid;
