@@ -229,6 +229,23 @@ test('VFGT settings edits the current season half duration', async ({ page }) =>
   await expect(page.getByRole('button', { name: /Half Duration/ })).toContainText('Applies to 2026 Fall');
 });
 
+test('VFGT settings uses a compact top-right back button', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/violet-futbol-game-tracker');
+  await page.getByRole('button', { name: 'VFGT Settings' }).click();
+  const header = page.locator('.vfgt_page_header--with-back');
+  const backButton = page.getByRole('button', { name: 'Back to tracker' });
+  const [headerBox, buttonBox] = await Promise.all([header.boundingBox(), backButton.boundingBox()]);
+  expect(headerBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
+  expect(buttonBox.x).toBeGreaterThan(headerBox.x + headerBox.width - 70);
+  expect(buttonBox.y).toBeGreaterThan(headerBox.y);
+  expect(buttonBox.y + buttonBox.height).toBeLessThan(headerBox.y + headerBox.height);
+  await backButton.click();
+  await expect(page.getByRole('button', { name: 'VFGT Settings' })).toBeVisible();
+});
+
 test('VFGT mobile settings cog stays in the hero top-right corner', async ({ page }) => {
   await page.goto('/#/violet-futbol-game-tracker');
   const hero = page.locator('.vfgt_hero');
