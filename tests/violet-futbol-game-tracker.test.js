@@ -385,7 +385,7 @@ test('completed games serialize with final scores that equal half totals', () =>
   game.secondHalfGoalsTeam2 = 1;
 
   const saved = api.serializeCompletedGame(game, '2026-08-22T12:00:00.000Z');
-  assert.equal(saved.schemaVersion, 2);
+  assert.equal(saved.schemaVersion, 3);
   assert.equal(saved.entryType, 'live');
   assert.equal(saved.finalTeam1Score, 3);
   assert.equal(saved.finalTeam2Score, 1);
@@ -436,6 +436,43 @@ test('season record derives Hume-Fogg results from completed saved games only', 
     losses: 1,
     draws: 1,
   });
+});
+
+test('season records use stable team and season context without changing game-type rules', () => {
+  const { api } = createRuntime();
+  const games = [
+    api.createManualGame({ team1: 'Old Team Name', team2: 'Opponent', teamId: 'team-1', seasonId: 'season-1', teamSide: 1, gameType: 'regularSeason', firstHalfGoalsTeam1: 2 }),
+    api.createManualGame({ team1: 'Other Team', team2: 'Opponent', teamId: 'team-2', seasonId: 'season-1', teamSide: 1, gameType: 'regularSeason', firstHalfGoalsTeam1: 4 }),
+    api.createManualGame({ team1: 'Old Team Name', team2: 'Opponent', teamId: 'team-1', seasonId: 'season-2', teamSide: 1, gameType: 'regularSeason', firstHalfGoalsTeam1: 4 }),
+    api.createManualGame({ team1: 'Old Team Name', team2: 'Opponent', teamId: 'team-1', seasonId: 'season-1', teamSide: 1, gameType: 'friendly', firstHalfGoalsTeam1: 4 }),
+  ];
+  assert.deepEqual(JSON.parse(JSON.stringify(api.calculateSeasonRecords(games.filter((game) => game.seasonId === 'season-1'), 'Renamed Team', 'team-1'))), {
+    regularSeason: { wins: 1, losses: 0, draws: 0 },
+    overallSeason: { wins: 1, losses: 0, draws: 0 },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.calculateSeasonRecords(games.filter((game) => game.seasonId === 'season-2'), 'Renamed Team', 'team-1').regularSeason)), { wins: 1, losses: 0, draws: 0 });
+});
+
+test('legacy games migrate once into the default Hume-Fogg team and season', () => {
+  const legacyGame = {
+    id: 'legacy-game', phase: 'final', entryType: 'manual', team1: 'Hume-Fogg', team2: 'Opponent',
+    gameType: 'regularSeason', firstHalfGoalsTeam1: 2, firstHalfGoalsTeam2: 1,
+  };
+  const storage = new Map([['lando-world:violet-futbol-game-tracker:saved-games:v1', JSON.stringify([legacyGame])]]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  const teams = JSON.parse(storage.get(api.TEAMS_KEY));
+  const seasons = JSON.parse(storage.get(api.SEASONS_KEY));
+  const games = JSON.parse(storage.get(api.SAVED_GAMES_KEY));
+  assert.equal(teams.length, 1);
+  assert.equal(seasons.length, 1);
+  assert.equal(games.length, 1);
+  assert.equal(games[0].id, 'legacy-game');
+  assert.equal(games[0].teamId, teams[0].id);
+  assert.equal(games[0].seasonId, seasons[0].id);
+  const firstSnapshot = storage.get(api.TEAMS_KEY);
+  api.initializeContext();
+  assert.equal(storage.get(api.TEAMS_KEY), firstSnapshot);
 });
 
 test('season record updates when a saved score changes or a saved game is removed', () => {
@@ -769,4 +806,13 @@ test('VFGT light mode uses readable semantic foreground and timer tokens', () =>
   assert.match(css, /\.vfgt_final_score span \{[\s\S]*color: var\(--vfgt-final-score-text\)/);
   assert.match(css, /\.vfgt_summary_grid p \{[\s\S]*color: var\(--vfgt-summary-text\)/);
   assert.match(css, /\.vfgt_phase \{[\s\S]*color: var\(--vfgt-phase-text\)/);
+});
+
+test('VFGT uses DM Sans for normal UI while retaining dedicated seven-segment markup', () => {
+  assert.match(css, /font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif/);
+  assert.match(css, /\.vfgt_seven_segment_visual/);
+  assert.match(source, /class="vfgt_clock vfgt_seven_segment_display"/);
+  assert.match(source, /TEAMS_KEY/);
+  assert.match(source, /SEASONS_KEY/);
+  assert.match(source, /SETTINGS_KEY/);
 });

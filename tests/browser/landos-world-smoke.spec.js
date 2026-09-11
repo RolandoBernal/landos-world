@@ -192,6 +192,31 @@ for (const route of LOCAL_APP_ROUTES) {
   });
 }
 
+test('VFGT settings manages a second team and season without losing the active context', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  await page.getByRole('button', { name: 'VFGT Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Manage Teams' }).click();
+  await page.getByRole('button', { name: 'Add Team' }).click();
+  await page.getByLabel('Team Name').fill('Future University');
+  await page.getByLabel('Short Name / Abbreviation').fill('FU');
+  await page.getByRole('button', { name: 'Save Team' }).click();
+  const futureTeam = page.locator('.vfgt_manage_row').filter({ hasText: 'Future University' });
+  await expect(futureTeam).toContainText('Future University');
+  await futureTeam.getByRole('button', { name: 'Select' }).click();
+  await page.getByRole('button', { name: 'VFGT Settings' }).click();
+  await page.getByRole('button', { name: 'Manage Seasons' }).click();
+  await page.getByRole('button', { name: 'Add Season' }).click();
+  await page.getByLabel('Season Name').fill('2027 Fall');
+  await page.getByLabel('Team').selectOption({ label: 'Future University' });
+  await page.getByRole('button', { name: 'Save Season' }).click();
+  const futureSeason = page.locator('.vfgt_manage_row').filter({ hasText: '2027 Fall' });
+  await expect(futureSeason).toContainText('Future University');
+  await futureSeason.getByRole('button', { name: 'Select' }).click();
+  await expect(page.locator('.vfgt_context')).toContainText('Future University');
+  await expect(page.locator('.vfgt_context')).toContainText('2027 Fall');
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');

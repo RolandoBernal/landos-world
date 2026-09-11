@@ -1,11 +1,16 @@
 (() => {
   const SAVED_GAMES_KEY = 'lando-world:violet-futbol-game-tracker:saved-games:v1';
   const ACTIVE_GAME_KEY = 'lando-world:violet-futbol-game-tracker:active-game:v1';
-  const SCHEMA_VERSION = 2;
+  const TEAMS_KEY = 'lando-world:violet-futbol-game-tracker:teams:v1';
+  const SEASONS_KEY = 'lando-world:violet-futbol-game-tracker:seasons:v1';
+  const SETTINGS_KEY = 'lando-world:violet-futbol-game-tracker:settings:v1';
+  const MIGRATION_KEY = 'lando-world:violet-futbol-game-tracker:migration:v1';
+  const SCHEMA_VERSION = 3;
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
   const ACTION_GUARD_MS = 350;
   const HUME_FOGG_TEAM = 'Hume-Fogg';
+  const DEFAULT_SEASON_NAME = '2026 Fall';
   const GAME_TYPE_LABELS = {
     regularSeason: 'Regular Season',
     districtTournament: 'District Tournament (Playoffs)',
@@ -31,6 +36,11 @@
 
   let state = null;
   let savedGames = [];
+  let teams = [];
+  let seasons = [];
+  let vfgtSettings = {};
+  let screen = 'home';
+  let editingEntityId = '';
   let refreshTimer = null;
   let audioCtx = null;
   let audioUnlocked = false;
@@ -45,6 +55,108 @@
 
   function nowIso() {
     return new Date(Date.now()).toISOString();
+  }
+
+  function normalizeTeam(team) {
+    if (!team || typeof team !== 'object') return null;
+    const name = String(team.name || '').trim();
+    if (!name || !team.id) return null;
+    return {
+      id: String(team.id),
+      name,
+      shortName: String(team.shortName || '').trim(),
+      archived: team.archived === true,
+      createdAt: team.createdAt || nowIso(),
+      updatedAt: team.updatedAt || team.createdAt || nowIso(),
+    };
+  }
+
+  function normalizeSeason(season) {
+    if (!season || typeof season !== 'object') return null;
+    const name = String(season.name || '').trim();
+    if (!name || !season.id || !season.teamId) return null;
+    return {
+      id: String(season.id),
+      teamId: String(season.teamId),
+      name,
+      archived: season.archived === true,
+      createdAt: season.createdAt || nowIso(),
+      updatedAt: season.updatedAt || season.createdAt || nowIso(),
+    };
+  }
+
+  function readCollection(key, normalizer) {
+    const parsed = readJson(key, []);
+    return Array.isArray(parsed) ? parsed.map(normalizer).filter(Boolean) : [];
+  }
+
+  function writeContext() {
+    localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
+    localStorage.setItem(SEASONS_KEY, JSON.stringify(seasons));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(vfgtSettings));
+  }
+
+  function currentTeam() {
+    return teams.find((team) => team.id === vfgtSettings.currentTeamId) || null;
+  }
+
+  function currentSeason() {
+    return seasons.find((season) => season.id === vfgtSettings.currentSeasonId) || null;
+  }
+
+  function ensureCurrentContext() {
+    const season = currentSeason();
+    const team = season ? teams.find((item) => item.id === season.teamId) : currentTeam();
+    if (season && team) {
+      vfgtSettings.currentTeamId = team.id;
+      return;
+    }
+    const availableSeason = seasons.find((item) => !item.archived && teams.some((teamItem) => teamItem.id === item.teamId && !teamItem.archived));
+    const fallbackTeam = availableSeason ? teams.find((item) => item.id === availableSeason.teamId) : teams.find((item) => !item.archived);
+    vfgtSettings.currentSeasonId = availableSeason?.id || '';
+    vfgtSettings.currentTeamId = availableSeason?.teamId || fallbackTeam?.id || '';
+  }
+
+  function initializeContext() {
+    teams = readCollection(TEAMS_KEY, normalizeTeam);
+    seasons = readCollection(SEASONS_KEY, normalizeSeason);
+    vfgtSettings = readJson(SETTINGS_KEY, {});
+    const migrationVersion = Number(readJson(MIGRATION_KEY, 0));
+    let changed = false;
+    if (!teams.length) {
+      const timestamp = nowIso();
+      teams = [{ id: createId(), name: HUME_FOGG_TEAM, shortName: 'HF', archived: false, createdAt: timestamp, updatedAt: timestamp }];
+      changed = true;
+    }
+    const initialTeam = teams[0];
+    if (!seasons.length) {
+      const timestamp = nowIso();
+      seasons = [{ id: createId(), teamId: initialTeam.id, name: DEFAULT_SEASON_NAME, archived: false, createdAt: timestamp, updatedAt: timestamp }];
+      changed = true;
+    }
+    const previousTeamId = vfgtSettings.currentTeamId || '';
+    const previousSeasonId = vfgtSettings.currentSeasonId || '';
+    ensureCurrentContext();
+    if (previousTeamId !== vfgtSettings.currentTeamId || previousSeasonId !== vfgtSettings.currentSeasonId) changed = true;
+    if (!vfgtSettings.currentTeamId || !vfgtSettings.currentSeasonId || migrationVersion < 1) changed = true;
+    savedGames = sortedGames(readSavedGames());
+    if (migrationVersion < 1) {
+      const initialSeason = seasons.find((season) => season.teamId === initialTeam.id) || seasons[0];
+      savedGames = savedGames.map((game) => ({
+        ...game,
+        teamId: game.teamId || initialTeam.id,
+        seasonId: game.seasonId || initialSeason.id,
+        teamSide: game.teamSide === 1 || game.teamSide === 2
+          ? game.teamSide
+          : (String(game.team1 || '').trim().toLowerCase() === HUME_FOGG_TEAM.toLowerCase() ? 1 : 2),
+      }));
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      const active = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
+      if (active) localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({ ...active, teamId: active.teamId || initialTeam.id, seasonId: active.seasonId || initialSeason.id }));
+      localStorage.setItem(MIGRATION_KEY, '1');
+      changed = true;
+    }
+    if (changed) writeContext();
   }
 
   function pad(value) {
@@ -154,19 +266,23 @@
     </select>`;
   }
 
-  function calculateSeasonRecord(games = [], allowedGameTypes = OFFICIAL_GAME_TYPES) {
+  function calculateSeasonRecord(games = [], allowedGameTypes = OFFICIAL_GAME_TYPES, trackedTeamName = HUME_FOGG_TEAM, trackedTeamId = '') {
     return games.reduce((record, game) => {
       if (!game || game.phase !== 'final' || !allowedGameTypes.includes(normalizeGameType(game.gameType))) return record;
+      if (trackedTeamId && game.teamId && game.teamId !== trackedTeamId) return record;
       const team1 = String(game.team1 || '').trim().toLowerCase();
       const team2 = String(game.team2 || '').trim().toLowerCase();
-      const humeFogg = HUME_FOGG_TEAM.toLowerCase();
+      const trackedTeam = String(trackedTeamName || HUME_FOGG_TEAM).trim().toLowerCase();
       const scores = finalScores(game);
       let teamScore;
       let opponentScore;
-      if (team1 === humeFogg && team2 !== humeFogg) {
+      if (trackedTeamId && (game.teamSide === 1 || game.teamSide === 2)) {
+        teamScore = game.teamSide === 1 ? scores.team1 : scores.team2;
+        opponentScore = game.teamSide === 1 ? scores.team2 : scores.team1;
+      } else if (team1 === trackedTeam && team2 !== trackedTeam) {
         teamScore = scores.team1;
         opponentScore = scores.team2;
-      } else if (team2 === humeFogg && team1 !== humeFogg) {
+      } else if (team2 === trackedTeam && team1 !== trackedTeam) {
         teamScore = scores.team2;
         opponentScore = scores.team1;
       } else {
@@ -179,10 +295,10 @@
     }, { wins: 0, losses: 0, draws: 0 });
   }
 
-  function calculateSeasonRecords(games = []) {
+  function calculateSeasonRecords(games = [], trackedTeamName = HUME_FOGG_TEAM, trackedTeamId = '') {
     return {
-      regularSeason: calculateSeasonRecord(games, ['regularSeason']),
-      overallSeason: calculateSeasonRecord(games, OFFICIAL_GAME_TYPES),
+      regularSeason: calculateSeasonRecord(games, ['regularSeason'], trackedTeamName, trackedTeamId),
+      overallSeason: calculateSeasonRecord(games, OFFICIAL_GAME_TYPES, trackedTeamName, trackedTeamId),
     };
   }
 
@@ -190,12 +306,13 @@
     return `${count} ${count === 1 ? singular : plural}`;
   }
 
-  function seasonRecordMarkup(games) {
-    const records = calculateSeasonRecords(games);
+  function seasonRecordMarkup(games, team = currentTeam(), season = currentSeason()) {
+    const records = calculateSeasonRecords(games, team?.name || HUME_FOGG_TEAM, team?.id || '');
     const recordLine = (label, record) => `<p class="vfgt_season_record">${label}: ${record.wins}&ndash;${record.losses}&ndash;${record.draws}</p>
       <p class="vfgt_season_totals">${pluralizeResult(record.wins, 'Win', 'Wins')} · ${pluralizeResult(record.losses, 'Loss', 'Losses')} · ${pluralizeResult(record.draws, 'Draw', 'Draws')}</p>`;
-    return `<div class="vfgt_season_summary" aria-label="Hume-Fogg season record">
-      <h3>Hume-Fogg</h3>
+    return `<div class="vfgt_season_summary" aria-label="${escapeHtml(season?.name || 'Season')} record">
+      <h3>${escapeHtml(team?.name || HUME_FOGG_TEAM)}</h3>
+      <p class="vfgt_season_context">${escapeHtml(season?.name || 'Season')}</p>
       ${recordLine('Regular Season', records.regularSeason)}
       ${recordLine('Overall Season', records.overallSeason)}
     </div>`;
@@ -290,7 +407,7 @@
     return false;
   }
 
-  function createGame({ team1, team2, location = '', date, time, gameType = '' } = {}) {
+  function createGame({ team1, team2, location = '', date, time, gameType = '', teamId = '', seasonId = '', teamSide = '' } = {}) {
     const defaults = localDateTimeParts();
     return {
       id: createId(),
@@ -299,6 +416,9 @@
       phase: 'pregame',
       team1: String(team1 || '').trim(),
       team2: String(team2 || '').trim(),
+      teamId: String(teamId || '').trim(),
+      seasonId: String(seasonId || '').trim(),
+      teamSide: teamSide === 1 || teamSide === 2 ? teamSide : '',
       location: String(location || '').trim(),
       gameType: normalizeGameType(gameType),
       date: date || defaults.date,
@@ -333,8 +453,11 @@
     secondHalfGoalsTeam2 = 0,
     firstHalfDurationSeconds = null,
     secondHalfDurationSeconds = null,
+    teamId = '',
+    seasonId = '',
+    teamSide = '',
   } = {}) {
-    const game = createGame({ team1, team2, location, date, time, gameType });
+    const game = createGame({ team1, team2, location, date, time, gameType, teamId, seasonId, teamSide });
     return {
       ...game,
       entryType: 'manual',
@@ -383,6 +506,9 @@
     normalized.entryType = normalized.entryType === 'manual' ? 'manual' : 'live';
     normalized.team1 = String(normalized.team1 || '').trim();
     normalized.team2 = String(normalized.team2 || '').trim();
+    normalized.teamId = String(normalized.teamId || '').trim();
+    normalized.seasonId = String(normalized.seasonId || '').trim();
+    normalized.teamSide = normalized.teamSide === 1 || normalized.teamSide === 2 ? normalized.teamSide : '';
     normalized.location = String(normalized.location || '').trim();
     normalized.gameType = normalizeGameType(normalized.gameType);
     [
@@ -695,13 +821,80 @@
     return true;
   }
 
+  function gamesForCurrentSeason() {
+    const season = currentSeason();
+    return season ? savedGames.filter((game) => game.seasonId === season.id) : [];
+  }
+
+  function settingsButtonMarkup() {
+    return `<button type="button" class="vfgt_icon_button" data-vfgt-action="settings" aria-label="VFGT Settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+      </svg>
+    </button>`;
+  }
+
+  function contextMarkup() {
+    const team = currentTeam();
+    const season = currentSeason();
+    return `<div class="vfgt_context" aria-label="Current team and season"><strong>${escapeHtml(team?.name || 'No team selected')}</strong><span>${escapeHtml(season?.name || 'No season selected')}</span></div>`;
+  }
+
+  function renderSettings() {
+    const team = currentTeam();
+    const season = currentSeason();
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-settings-title">
+      <header class="vfgt_page_header vfgt_page_header--with-back">
+        <button type="button" class="vfgt_back_button" data-vfgt-action="home" aria-label="Back to tracker">←</button>
+        <div><p class="vfgt_kicker">VFGT</p><h1 id="vfgt-settings-title">Settings</h1></div>
+      </header>
+      <section class="vfgt_settings_group" aria-labelledby="vfgt-team-season-settings-title">
+        <h2 id="vfgt-team-season-settings-title">Team &amp; Season</h2>
+        <button type="button" class="vfgt_settings_row" data-vfgt-action="teams"><span><small>Current Team</small><strong>${escapeHtml(team?.name || 'None selected')}</strong></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="vfgt_settings_row" data-vfgt-action="seasons"><span><small>Current Season</small><strong>${escapeHtml(season?.name || 'None selected')}</strong></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="vfgt_settings_row" data-vfgt-action="teams"><span><strong>Manage Teams</strong></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="vfgt_settings_row" data-vfgt-action="seasons"><span><strong>Manage Seasons</strong></span><span aria-hidden="true">›</span></button>
+      </section>
+      <section class="vfgt_settings_group" aria-labelledby="vfgt-game-settings-title"><h2 id="vfgt-game-settings-title">Game Settings</h2><p class="vfgt_settings_note">Game timing and scoring use the current VFGT defaults.</p></section>
+      <section class="vfgt_settings_group" aria-labelledby="vfgt-about-title"><h2 id="vfgt-about-title">About</h2><p>Violet Futbol Game Tracker</p><p class="vfgt_settings_note">Long-term team and season history tracker.</p></section>
+    </section>`;
+  }
+
+  function renderTeams() {
+    const activeTeams = teams.filter((team) => !team.archived);
+    const archivedTeams = teams.filter((team) => team.archived);
+    const teamRow = (team) => `<article class="vfgt_manage_row"><div><strong>${escapeHtml(team.name)}</strong>${team.shortName ? `<span>${escapeHtml(team.shortName)}</span>` : ''}<small>${team.archived ? 'Archived' : (team.id === vfgtSettings.currentTeamId ? 'Current' : '')}</small></div><div class="vfgt_manage_actions"><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="select-team" data-id="${escapeHtml(team.id)}">${team.id === vfgtSettings.currentTeamId ? 'Current' : 'Select'}</button><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="edit-team" data-id="${escapeHtml(team.id)}">Edit</button><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="${team.archived ? 'restore-team' : 'archive-team'}" data-id="${escapeHtml(team.id)}">${team.archived ? 'Restore' : 'Archive'}</button></div></article>`;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-teams-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="settings">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-teams-title">Manage Teams</h1></div></header><div class="vfgt_manage_toolbar"><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="add-team">Add Team</button></div><section class="vfgt_manage_list" aria-label="Active teams">${activeTeams.map(teamRow).join('') || '<p class="vfgt_settings_note">No active teams.</p>'}</section>${archivedTeams.length ? `<section class="vfgt_manage_list vfgt_manage_list--archived" aria-label="Archived teams"><h2>Archived</h2>${archivedTeams.map(teamRow).join('')}</section>` : ''}</section>`;
+  }
+
+  function renderSeasons() {
+    const seasonRow = (season) => { const team = teams.find((item) => item.id === season.teamId); return `<article class="vfgt_manage_row"><div><strong>${escapeHtml(season.name)}</strong><span>${escapeHtml(team?.name || 'Unknown team')}</span><small>${season.archived ? 'Archived' : (season.id === vfgtSettings.currentSeasonId ? 'Current' : '')}</small></div><div class="vfgt_manage_actions"><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="select-season" data-id="${escapeHtml(season.id)}">${season.id === vfgtSettings.currentSeasonId ? 'Current' : 'Select'}</button><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="edit-season" data-id="${escapeHtml(season.id)}">Edit</button><button type="button" class="vfgt_button vfgt_button--small" data-vfgt-action="${season.archived ? 'restore-season' : 'archive-season'}" data-id="${escapeHtml(season.id)}">${season.archived ? 'Restore' : 'Archive'}</button></div></article>`; };
+    const active = seasons.filter((season) => !season.archived);
+    const archived = seasons.filter((season) => season.archived);
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-seasons-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="settings">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-seasons-title">Manage Seasons</h1></div></header><div class="vfgt_manage_toolbar"><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="add-season">Add Season</button></div><section class="vfgt_manage_list" aria-label="Active seasons">${active.map(seasonRow).join('') || '<p class="vfgt_settings_note">No active seasons.</p>'}</section>${archived.length ? `<section class="vfgt_manage_list vfgt_manage_list--archived" aria-label="Archived seasons"><h2>Archived</h2>${archived.map(seasonRow).join('')}</section>` : ''}</section>`;
+  }
+
+  function renderTeamForm(id = '') {
+    const team = teams.find((item) => item.id === id) || { name: '', shortName: '' };
+    editingEntityId = id;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-team-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="teams">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-team-form-title">${id ? 'Edit Team' : 'Add Team'}</h1></div></header><form class="vfgt_form" data-vfgt-team-form><label>Team Name <input name="name" required maxlength="80" value="${escapeHtml(team.name)}"></label><label>Short Name / Abbreviation <input name="shortName" maxlength="12" value="${escapeHtml(team.shortName)}"></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="teams">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Team</button></div></form></section>`;
+  }
+
+  function renderSeasonForm(id = '') {
+    const season = seasons.find((item) => item.id === id) || { name: '', teamId: currentTeam()?.id || '' };
+    editingEntityId = id;
+    const options = teams.filter((team) => !team.archived).map((team) => `<option value="${escapeHtml(team.id)}" ${team.id === season.teamId ? 'selected' : ''}>${escapeHtml(team.name)}</option>`).join('');
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-season-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="seasons">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-season-form-title">${id ? 'Edit Season' : 'Add Season'}</h1></div></header><form class="vfgt_form" data-vfgt-season-form><label>Season Name <input name="name" required maxlength="80" placeholder="2027 Fall" value="${escapeHtml(season.name)}"></label><label>Team <select name="teamId" required>${options}</select></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="seasons">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Season</button></div></form></section>`;
+  }
+
   function renderHome() {
     stopRefreshTimer();
     savedGames = sortedGames(readSavedGames());
+    const currentGames = gamesForCurrentSeason();
     const unfinished = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
-    const history = savedGames.length
+    const history = currentGames.length
       ? `<div class="vfgt_history" role="list">
-          ${savedGames.map((game) => {
+          ${currentGames.map((game) => {
             const score = finalScores(game);
             return `<button type="button" class="vfgt_history_item" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" role="listitem">
               <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
@@ -725,11 +918,13 @@
           <div>
             <p class="vfgt_kicker">VFGT</p>
             <h1 id="vfgt-title">Violet Futbol Game Tracker</h1>
+            ${contextMarkup()}
           </div>
           <div class="vfgt_home_actions">
             <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="new">New Game</button>
             <button type="button" class="vfgt_button" data-vfgt-action="past">Add Game</button>
           </div>
+          ${settingsButtonMarkup()}
         </header>
         ${unfinished ? `<section class="vfgt_resume" aria-label="Unfinished game">
           <div>
@@ -742,7 +937,7 @@
           </div>
         </section>` : ''}
         <section class="vfgt_section" aria-label="Saved Games">
-          ${seasonRecordMarkup(savedGames)}
+          ${seasonRecordMarkup(currentGames)}
           ${history}
         </section>
       </section>`;
@@ -757,7 +952,7 @@
           <h1 id="vfgt-setup-title">Game Setup</h1>
         </header>
         <form class="vfgt_form" data-vfgt-setup>
-          <label>School/Team 1 <input name="team1" required autocomplete="organization"></label>
+          <label>School/Team 1 <input name="team1" required autocomplete="organization" value="${escapeHtml(currentTeam()?.name || '')}"></label>
           <label>School/Team 2 <input name="team2" required autocomplete="organization"></label>
           <label>Location <input name="location" autocomplete="street-address"></label>
           <label>Game Type ${gameTypeSelectMarkup()}</label>
@@ -802,7 +997,7 @@
           <label>Location <input name="location" autocomplete="street-address" placeholder="Optional"></label>
           <label>Game Type ${gameTypeSelectMarkup()}</label>
           <div class="vfgt_form_grid">
-            <label>School/Team 1 <input name="team1" required autocomplete="organization" data-vfgt-manual-team="1"></label>
+            <label>School/Team 1 <input name="team1" required autocomplete="organization" data-vfgt-manual-team="1" value="${escapeHtml(currentTeam()?.name || '')}"></label>
             <label>School/Team 2 <input name="team2" required autocomplete="organization" data-vfgt-manual-team="2"></label>
           </div>
           <section class="vfgt_manual_half" aria-labelledby="vfgt-manual-first-half">
@@ -1077,6 +1272,77 @@
     if (output) output.textContent = `Final: ${team1} - ${team2}`;
   }
 
+  function saveTeamForm(form) {
+    const data = new FormData(form);
+    const name = String(data.get('name') || '').trim();
+    if (!name) return;
+    const timestamp = nowIso();
+    if (editingEntityId) {
+      teams = teams.map((team) => team.id === editingEntityId ? { ...team, name, shortName: String(data.get('shortName') || '').trim(), updatedAt: timestamp } : team);
+    } else {
+      teams = [...teams, { id: createId(), name, shortName: String(data.get('shortName') || '').trim(), archived: false, createdAt: timestamp, updatedAt: timestamp }];
+    }
+    writeContext();
+    screen = 'teams';
+    renderTeams();
+  }
+
+  function saveSeasonForm(form) {
+    const data = new FormData(form);
+    const name = String(data.get('name') || '').trim();
+    const teamId = String(data.get('teamId') || '').trim();
+    if (!name || !teams.some((team) => team.id === teamId && !team.archived)) return;
+    const timestamp = nowIso();
+    if (editingEntityId) {
+      seasons = seasons.map((season) => season.id === editingEntityId ? { ...season, name, teamId, updatedAt: timestamp } : season);
+    } else {
+      seasons = [...seasons, { id: createId(), teamId, name, archived: false, createdAt: timestamp, updatedAt: timestamp }];
+    }
+    writeContext();
+    screen = 'seasons';
+    renderSeasons();
+  }
+
+  function selectTeam(id) {
+    const team = teams.find((item) => item.id === id);
+    if (!team) return;
+    const matchingSeason = seasons.find((season) => season.teamId === id && !season.archived)
+      || seasons.find((season) => season.teamId === id);
+    vfgtSettings.currentTeamId = id;
+    vfgtSettings.currentSeasonId = matchingSeason?.id || '';
+    writeContext();
+    screen = 'home';
+    renderHome();
+  }
+
+  function selectSeason(id) {
+    const season = seasons.find((item) => item.id === id);
+    const team = season && teams.find((item) => item.id === season.teamId);
+    if (!season || !team) return;
+    vfgtSettings.currentSeasonId = season.id;
+    vfgtSettings.currentTeamId = team.id;
+    writeContext();
+    screen = 'home';
+    renderHome();
+  }
+
+  function setArchived(type, id, archived) {
+    if (type === 'team') {
+      const team = teams.find((item) => item.id === id);
+      if (!team) return;
+      teams = teams.map((item) => item.id === id ? { ...item, archived, updatedAt: nowIso() } : item);
+      if (archived && vfgtSettings.currentTeamId === id) ensureCurrentContext();
+    } else {
+      const season = seasons.find((item) => item.id === id);
+      if (!season) return;
+      seasons = seasons.map((item) => item.id === id ? { ...item, archived, updatedAt: nowIso() } : item);
+      if (archived && vfgtSettings.currentSeasonId === id) ensureCurrentContext();
+    }
+    writeContext();
+    if (screen === 'teams') renderTeams();
+    else renderSeasons();
+  }
+
   function handleClick(event) {
     const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
     const now = Date.now();
@@ -1107,8 +1373,22 @@
     }
     if (action === 'home') {
       state = null;
+      screen = 'home';
       renderHome();
     }
+    if (action === 'settings') { screen = 'settings'; renderSettings(); }
+    if (action === 'teams') { screen = 'teams'; renderTeams(); }
+    if (action === 'seasons') { screen = 'seasons'; renderSeasons(); }
+    if (action === 'add-team') renderTeamForm();
+    if (action === 'edit-team') renderTeamForm(button.dataset.id);
+    if (action === 'add-season') renderSeasonForm();
+    if (action === 'edit-season') renderSeasonForm(button.dataset.id);
+    if (action === 'select-team') selectTeam(button.dataset.id);
+    if (action === 'select-season') selectSeason(button.dataset.id);
+    if (action === 'archive-team') setArchived('team', button.dataset.id, true);
+    if (action === 'restore-team') setArchived('team', button.dataset.id, false);
+    if (action === 'archive-season') setArchived('season', button.dataset.id, true);
+    if (action === 'restore-season') setArchived('season', button.dataset.id, false);
     if (action === 'new') renderSetup();
     if (action === 'past') renderManualForm();
     if (action === 'resume') resumeStoredGame();
@@ -1178,6 +1458,18 @@
   }
 
   function handleSubmit(event) {
+    const teamForm = event.target.closest('[data-vfgt-team-form]');
+    if (teamForm) {
+      event.preventDefault();
+      saveTeamForm(teamForm);
+      return;
+    }
+    const seasonForm = event.target.closest('[data-vfgt-season-form]');
+    if (seasonForm) {
+      event.preventDefault();
+      saveSeasonForm(seasonForm);
+      return;
+    }
     const manualForm = event.target.closest('[data-vfgt-manual-form]');
     if (manualForm) {
       event.preventDefault();
@@ -1195,6 +1487,9 @@
         secondHalfGoalsTeam2: data.get('secondHalfGoalsTeam2'),
         firstHalfDurationSeconds: parseOptionalDuration(data.get('firstHalfDuration')),
         secondHalfDurationSeconds: parseOptionalDuration(data.get('secondHalfDuration')),
+        teamId: vfgtSettings.currentTeamId,
+        seasonId: vfgtSettings.currentSeasonId,
+        teamSide: String(data.get('team1') || '').trim().toLowerCase() === String(currentTeam()?.name || '').trim().toLowerCase() ? 1 : 2,
       });
       if (!game.team1 || !game.team2) return;
       saveManualGame(game);
@@ -1221,6 +1516,9 @@
       gameType: data.get('gameType'),
       date: data.get('date'),
       time: data.get('time'),
+      teamId: vfgtSettings.currentTeamId,
+      seasonId: vfgtSettings.currentSeasonId,
+      teamSide: String(data.get('team1') || '').trim().toLowerCase() === String(currentTeam()?.name || '').trim().toLowerCase() ? 1 : 2,
     });
     if (!game.team1 || !game.team2) return;
     state = startFirstHalf(game);
@@ -1238,6 +1536,7 @@
   function init() {
     const root = getRoot();
     if (!root) return;
+    initializeContext();
     savedGames = sortedGames(readSavedGames());
     if (window.PointerEvent) {
       root.addEventListener('pointerup', handleClick);
@@ -1270,10 +1569,15 @@
 
   window.VioletFutbolGameTracker = {
     ACTIVE_GAME_KEY,
+    DEFAULT_SEASON_NAME,
     HUME_FOGG_TEAM,
     HALFTIME_SECONDS,
     REGULATION_SECONDS,
     SAVED_GAMES_KEY,
+    SCHEMA_VERSION,
+    SEASONS_KEY,
+    SETTINGS_KEY,
+    TEAMS_KEY,
     adjustScore,
     clampScore,
     calculateSeasonRecord,
@@ -1292,8 +1596,11 @@
     gameSortTime,
     halftimeRemaining,
     isRunningHalf,
+    initializeContext,
     maybeMarkRegulation,
     normalizeGame,
+    normalizeSeason,
+    normalizeTeam,
     parseOptionalDuration,
     reconcileTimerState,
     releaseScreenWakeLock,
