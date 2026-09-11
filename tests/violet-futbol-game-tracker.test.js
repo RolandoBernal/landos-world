@@ -419,8 +419,9 @@ test('manual past games preserve half scores and optional durations', () => {
 
 test('season record derives Hume-Fogg results from completed saved games only', () => {
   const { api } = createRuntime();
-  const savedGame = (team1, team2, team1Score, team2Score) => api.serializeCompletedGame({
+  const savedGame = (team1, team2, team1Score, team2Score, gameType = 'regularSeason') => api.serializeCompletedGame({
     ...api.createGame({ team1, team2 }),
+    gameType,
     phase: 'final',
     firstHalfGoalsTeam1: team1Score,
     firstHalfGoalsTeam2: team2Score,
@@ -440,7 +441,7 @@ test('season record derives Hume-Fogg results from completed saved games only', 
 test('season record updates when a saved score changes or a saved game is removed', () => {
   const { api } = createRuntime();
   const game = (id, team1Score, team2Score) => ({
-    ...api.createGame({ team1: 'Hume-Fogg', team2: `Opponent ${id}` }),
+    ...api.createGame({ team1: 'Hume-Fogg', team2: `Opponent ${id}`, gameType: 'regularSeason' }),
     id,
     phase: 'final',
     firstHalfGoalsTeam1: team1Score,
@@ -460,8 +461,9 @@ test('season record updates when a saved score changes or a saved game is remove
 
 test('season record summary has responsive singular and plural wording', () => {
   const { api } = createRuntime();
-  const saved = (team1, team2, team1Score, team2Score) => api.serializeCompletedGame({
+  const saved = (team1, team2, team1Score, team2Score, gameType = 'regularSeason') => api.serializeCompletedGame({
     ...api.createGame({ team1, team2 }),
+    gameType,
     phase: 'final',
     firstHalfGoalsTeam1: team1Score,
     firstHalfGoalsTeam2: team2Score,
@@ -472,7 +474,8 @@ test('season record summary has responsive singular and plural wording', () => {
     saved('B', 'Hume-Fogg', 0, 1),
     saved('Hume-Fogg', 'C', 2, 2),
   ]);
-  assert.match(singular, /Season Record: 2&ndash;0&ndash;1/);
+  assert.match(singular, /Regular Season: 2&ndash;0&ndash;1/);
+  assert.match(singular, /Overall Season: 2&ndash;0&ndash;1/);
   assert.match(singular, />2 Wins · 0 Losses · 1 Draw</);
 
   const plural = api.seasonRecordMarkup([
@@ -481,6 +484,31 @@ test('season record summary has responsive singular and plural wording', () => {
     saved('Hume-Fogg', 'C', 1, 1),
   ]);
   assert.match(plural, />0 Wins · 2 Losses · 1 Draw</);
+});
+
+test('game types qualify regular and overall records without classifying legacy games', () => {
+  const { api } = createRuntime();
+  const saved = (gameType, team1Score, team2Score) => api.serializeCompletedGame({
+    ...api.createGame({ team1: 'Hume-Fogg', team2: 'Opponent', gameType }),
+    phase: 'final',
+    firstHalfGoalsTeam1: team1Score,
+    firstHalfGoalsTeam2: team2Score,
+  });
+  const games = [
+    saved('regularSeason', 2, 1),
+    saved('regularSeason', 0, 1),
+    saved('regularSeason', 1, 1),
+    saved('districtTournament', 3, 0),
+    saved('districtTournament', 2, 0),
+    saved('friendly', 4, 0),
+    saved('preseason', 0, 2),
+    saved('specialTournament', 5, 0),
+    saved('', 9, 0),
+  ];
+
+  assert.deepEqual({ ...api.calculateSeasonRecords(games).regularSeason }, { wins: 1, losses: 1, draws: 1 });
+  assert.deepEqual({ ...api.calculateSeasonRecords(games).overallSeason }, { wins: 3, losses: 1, draws: 1 });
+  assert.equal(api.normalizeGame({ team1: 'Hume-Fogg', team2: 'Opponent' }).gameType, '');
 });
 
 test('saved history sorts by game date and time instead of save time', () => {
@@ -672,6 +700,24 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
   assert.doesNotMatch(source, /Manually entered/);
   assert.match(source, /entryType: 'manual'/);
   assert.match(source, /entryType: 'live'/);
+});
+
+test('game type is captured on new, manual, and edit game forms and shown in history', () => {
+  assert.equal((source.match(/name="gameType"/g) || []).length, 1);
+  assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 4);
+  Object.entries({
+    regularSeason: 'Regular Season',
+    districtTournament: 'District Tournament \(Playoffs\)',
+    preseason: 'Pre-season',
+    friendly: 'Friendly',
+    specialTournament: 'Special Tournament',
+  }).forEach(([value, label]) => {
+    assert.match(source, new RegExp(`${value}: '${label.replace(/[()]/g, '\\$&')}'`));
+    assert.ok(source.includes(label.replaceAll('\\', '')));
+  });
+  assert.match(source, /class="vfgt_history_game_type"/);
+  assert.match(css, /\.vfgt_form select[\s\S]*min-height: 50px/);
+  assert.match(css, /\.vfgt_history_game_type[\s\S]*font-weight: 800/);
 });
 
 test('seven-segment timer replaces font-rendered clock text and is responsive', () => {

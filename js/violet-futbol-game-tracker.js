@@ -6,6 +6,14 @@
   const HALFTIME_SECONDS = 10 * 60;
   const ACTION_GUARD_MS = 350;
   const HUME_FOGG_TEAM = 'Hume-Fogg';
+  const GAME_TYPE_LABELS = {
+    regularSeason: 'Regular Season',
+    districtTournament: 'District Tournament (Playoffs)',
+    preseason: 'Pre-season',
+    friendly: 'Friendly',
+    specialTournament: 'Special Tournament',
+  };
+  const OFFICIAL_GAME_TYPES = ['regularSeason', 'districtTournament'];
   const SEVEN_SEGMENT_NAMES = ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'];
   const SEVEN_SEGMENT_DIGITS = {
     0: ['top', 'upper-left', 'upper-right', 'lower-left', 'lower-right', 'bottom'],
@@ -128,9 +136,26 @@
     };
   }
 
-  function calculateSeasonRecord(games = []) {
+  function normalizeGameType(value) {
+    const gameType = String(value || '').trim();
+    return Object.prototype.hasOwnProperty.call(GAME_TYPE_LABELS, gameType) ? gameType : '';
+  }
+
+  function gameTypeLabel(gameType) {
+    return GAME_TYPE_LABELS[normalizeGameType(gameType)] || 'Game Type Not Set';
+  }
+
+  function gameTypeSelectMarkup(selected = '') {
+    const normalized = normalizeGameType(selected);
+    return `<select name="gameType" required aria-label="Game Type">
+      <option value="" ${normalized ? '' : 'selected'}>Select game type</option>
+      ${Object.entries(GAME_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${normalized === value ? 'selected' : ''}>${label}</option>`).join('')}
+    </select>`;
+  }
+
+  function calculateSeasonRecord(games = [], allowedGameTypes = OFFICIAL_GAME_TYPES) {
     return games.reduce((record, game) => {
-      if (!game || game.phase !== 'final') return record;
+      if (!game || game.phase !== 'final' || !allowedGameTypes.includes(normalizeGameType(game.gameType))) return record;
       const team1 = String(game.team1 || '').trim().toLowerCase();
       const team2 = String(game.team2 || '').trim().toLowerCase();
       const humeFogg = HUME_FOGG_TEAM.toLowerCase();
@@ -153,16 +178,25 @@
     }, { wins: 0, losses: 0, draws: 0 });
   }
 
+  function calculateSeasonRecords(games = []) {
+    return {
+      regularSeason: calculateSeasonRecord(games, ['regularSeason']),
+      overallSeason: calculateSeasonRecord(games, OFFICIAL_GAME_TYPES),
+    };
+  }
+
   function pluralizeResult(count, singular, plural) {
     return `${count} ${count === 1 ? singular : plural}`;
   }
 
   function seasonRecordMarkup(games) {
-    const record = calculateSeasonRecord(games);
+    const records = calculateSeasonRecords(games);
+    const recordLine = (label, record) => `<p class="vfgt_season_record">${label}: ${record.wins}&ndash;${record.losses}&ndash;${record.draws}</p>
+      <p class="vfgt_season_totals">${pluralizeResult(record.wins, 'Win', 'Wins')} · ${pluralizeResult(record.losses, 'Loss', 'Losses')} · ${pluralizeResult(record.draws, 'Draw', 'Draws')}</p>`;
     return `<div class="vfgt_season_summary" aria-label="Hume-Fogg season record">
       <h3>Hume-Fogg</h3>
-      <p class="vfgt_season_record">Season Record: ${record.wins}&ndash;${record.losses}&ndash;${record.draws}</p>
-      <p class="vfgt_season_totals">${pluralizeResult(record.wins, 'Win', 'Wins')} · ${pluralizeResult(record.losses, 'Loss', 'Losses')} · ${pluralizeResult(record.draws, 'Draw', 'Draws')}</p>
+      ${recordLine('Regular Season', records.regularSeason)}
+      ${recordLine('Overall Season', records.overallSeason)}
     </div>`;
   }
 
@@ -255,7 +289,7 @@
     return false;
   }
 
-  function createGame({ team1, team2, location = '', date, time } = {}) {
+  function createGame({ team1, team2, location = '', date, time, gameType = '' } = {}) {
     const defaults = localDateTimeParts();
     return {
       id: createId(),
@@ -265,6 +299,7 @@
       team1: String(team1 || '').trim(),
       team2: String(team2 || '').trim(),
       location: String(location || '').trim(),
+      gameType: normalizeGameType(gameType),
       date: date || defaults.date,
       startTime: time || defaults.time,
       actualStartedAt: null,
@@ -288,6 +323,7 @@
     team1,
     team2,
     location = '',
+    gameType = '',
     date,
     time = '',
     firstHalfGoalsTeam1 = 0,
@@ -297,7 +333,7 @@
     firstHalfDurationSeconds = null,
     secondHalfDurationSeconds = null,
   } = {}) {
-    const game = createGame({ team1, team2, location, date, time });
+    const game = createGame({ team1, team2, location, date, time, gameType });
     return {
       ...game,
       entryType: 'manual',
@@ -347,6 +383,7 @@
     normalized.team1 = String(normalized.team1 || '').trim();
     normalized.team2 = String(normalized.team2 || '').trim();
     normalized.location = String(normalized.location || '').trim();
+    normalized.gameType = normalizeGameType(normalized.gameType);
     [
       'firstHalfGoalsTeam1',
       'firstHalfGoalsTeam2',
@@ -673,6 +710,7 @@
                 <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
               </span>
               ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
+              <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
             </button>`;
           }).join('')}
         </div>`
@@ -722,6 +760,7 @@
           <label>School/Team 1 <input name="team1" required autocomplete="organization"></label>
           <label>School/Team 2 <input name="team2" required autocomplete="organization"></label>
           <label>Location <input name="location" autocomplete="street-address"></label>
+          <label>Game Type ${gameTypeSelectMarkup()}</label>
           <div class="vfgt_form_grid">
             <label>Date <input name="date" type="date" value="${defaults.date}"></label>
             <label>Start time <input name="time" type="time" value="${defaults.time}"></label>
@@ -761,6 +800,7 @@
             <label>Start time <input name="time" type="time"></label>
           </div>
           <label>Location <input name="location" autocomplete="street-address" placeholder="Optional"></label>
+          <label>Game Type ${gameTypeSelectMarkup()}</label>
           <div class="vfgt_form_grid">
             <label>School/Team 1 <input name="team1" required autocomplete="organization" data-vfgt-manual-team="1"></label>
             <label>School/Team 2 <input name="team2" required autocomplete="organization" data-vfgt-manual-team="2"></label>
@@ -930,6 +970,7 @@
             <label>Start time <input name="time" type="time" value="${escapeHtml(game.startTime || '')}"></label>
           </div>
           <label>Location <input name="location" autocomplete="street-address" value="${escapeHtml(game.location || '')}"></label>
+          <label>Game Type ${gameTypeSelectMarkup(game.gameType)}</label>
           <div class="vfgt_form_grid">
             <label>School/Team 1 <input name="team1" required autocomplete="organization" value="${escapeHtml(game.team1)}"></label>
             <label>School/Team 2 <input name="team2" required autocomplete="organization" value="${escapeHtml(game.team2)}"></label>
@@ -969,6 +1010,7 @@
       team1: String(data.get('team1') || '').trim(),
       team2: String(data.get('team2') || '').trim(),
       location: String(data.get('location') || '').trim(),
+      gameType: normalizeGameType(data.get('gameType')),
       date: String(data.get('date') || '').trim(),
       startTime: String(data.get('time') || '').trim(),
       firstHalfGoalsTeam1: clampScore(data.get('firstHalfGoalsTeam1')),
@@ -1139,6 +1181,7 @@
         team1: data.get('team1'),
         team2: data.get('team2'),
         location: data.get('location'),
+        gameType: data.get('gameType'),
         date: data.get('date'),
         time: data.get('time'),
         firstHalfGoalsTeam1: data.get('firstHalfGoalsTeam1'),
@@ -1170,6 +1213,7 @@
       team1: data.get('team1'),
       team2: data.get('team2'),
       location: data.get('location'),
+      gameType: data.get('gameType'),
       date: data.get('date'),
       time: data.get('time'),
     });
@@ -1227,6 +1271,7 @@
     adjustScore,
     clampScore,
     calculateSeasonRecord,
+    calculateSeasonRecords,
     createGame,
     createManualGame,
     deriveTimerState,
@@ -1236,6 +1281,8 @@
     finalScores,
     formatClock,
     formatDurationInput,
+    gameTypeLabel,
+    gameTypeSelectMarkup,
     gameSortTime,
     halftimeRemaining,
     isRunningHalf,
