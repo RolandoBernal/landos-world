@@ -487,6 +487,41 @@ test('legacy games migrate once into the default Hume-Fogg team and season', () 
   assert.equal(storage.get(api.TEAMS_KEY), firstSnapshot);
 });
 
+test('season half duration changes the regulation threshold without changing timer progression', () => {
+  const { api, now, advance } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'Hume-Fogg', team2: 'Opponent', halfDurationMinutes: 45 }), now());
+  advance(45 * 60);
+  assert.equal(api.deriveTimerState(game, now()).regulationSeconds, 45 * 60);
+  assert.equal(api.maybeMarkRegulation(game, now()), true);
+  advance(1);
+  assert.equal(api.deriveTimerState(game, now()).stoppageSeconds, 1);
+  assert.equal(api.createManualGame({ team1: 'Hume-Fogg', team2: 'Opponent', halfDurationMinutes: 45 }).halfDurationMinutes, 45);
+});
+
+test('season duration migration defaults missing values once and preserves configured values', () => {
+  const season = { id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false };
+  const configuredSeason = { id: 'season-2', teamId: 'team-1', name: '2027 Fall', halfDurationMinutes: 45, archived: false };
+  const game = { id: 'game-1', phase: 'final', entryType: 'manual', team1: 'Hume-Fogg', team2: 'Opponent', gameType: 'regularSeason', teamId: 'team-1', seasonId: 'season-1', firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 0 };
+  const storage = new Map([
+    ["lando-world:violet-futbol-game-tracker:teams:v1", JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', archived: false }])],
+    ["lando-world:violet-futbol-game-tracker:seasons:v1", JSON.stringify([season, configuredSeason])],
+    ["lando-world:violet-futbol-game-tracker:settings:v1", JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' })],
+    ["lando-world:violet-futbol-game-tracker:migration:v1", '2'],
+    ["lando-world:violet-futbol-game-tracker:saved-games:v1", JSON.stringify([game])],
+  ]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  const seasons = JSON.parse(storage.get(api.SEASONS_KEY));
+  const games = JSON.parse(storage.get(api.SAVED_GAMES_KEY));
+  assert.equal(seasons.find((item) => item.id === 'season-1').halfDurationMinutes, 40);
+  assert.equal(seasons.find((item) => item.id === 'season-2').halfDurationMinutes, 45);
+  assert.equal(games[0].id, 'game-1');
+  assert.equal(games[0].halfDurationMinutes, 40);
+  const snapshot = storage.get(api.SEASONS_KEY);
+  api.initializeContext();
+  assert.equal(storage.get(api.SEASONS_KEY), snapshot);
+});
+
 test('season record updates when a saved score changes or a saved game is removed', () => {
   const { api } = createRuntime();
   const game = (id, team1Score, team2Score) => ({
@@ -833,4 +868,11 @@ test('VFGT uses DM Sans for normal UI while retaining dedicated seven-segment ma
   assert.match(source, /TEAMS_KEY/);
   assert.match(source, /SEASONS_KEY/);
   assert.match(source, /SETTINGS_KEY/);
+});
+
+test('VFGT settings exposes the current season half-duration control', () => {
+  assert.match(source, /data-vfgt-action="half-duration"/);
+  assert.match(source, /data-vfgt-duration-form/);
+  assert.match(source, /halfDurationMinutes/);
+  assert.match(source, /Half Duration/);
 });
