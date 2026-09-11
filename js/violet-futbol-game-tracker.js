@@ -12,6 +12,7 @@
     preseason: 'Pre-season',
     friendly: 'Friendly',
     specialTournament: 'Special Tournament',
+    other: 'Other',
   };
   const OFFICIAL_GAME_TYPES = ['regularSeason', 'districtTournament'];
   const SEVEN_SEGMENT_NAMES = ['top', 'upper-left', 'upper-right', 'middle', 'lower-left', 'lower-right', 'bottom'];
