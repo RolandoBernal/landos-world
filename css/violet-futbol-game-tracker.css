@@ -816,6 +816,10 @@
 }
 
 @media (max-width: 680px) {
+  .vfgt_history_item {
+    text-align: left;
+  }
+
   .vfgt_hero,
   .vfgt_resume {
     align-items: stretch;
