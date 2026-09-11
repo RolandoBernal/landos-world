@@ -112,7 +112,7 @@ const LOCAL_APP_ROUTES = [
       { role: 'heading', name: 'Violet Futbol Game Tracker' },
       { text: 'New Game' },
       { text: 'Add Game' },
-      { text: 'Saved Games' },
+      { text: 'Hume-Fogg' },
     ],
   },
   {
