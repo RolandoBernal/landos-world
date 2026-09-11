@@ -741,8 +741,7 @@
             <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="abandon">Abandon Game</button>
           </div>
         </section>` : ''}
-        <section class="vfgt_section" aria-labelledby="vfgt-history-title">
-          <h2 id="vfgt-history-title">Saved Games</h2>
+        <section class="vfgt_section" aria-label="Saved Games">
           ${seasonRecordMarkup(savedGames)}
           ${history}
         </section>
