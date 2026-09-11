@@ -417,6 +417,72 @@ test('manual past games preserve half scores and optional durations', () => {
   assert.equal(saved.secondHalfDurationSeconds, null);
 });
 
+test('season record derives Hume-Fogg results from completed saved games only', () => {
+  const { api } = createRuntime();
+  const savedGame = (team1, team2, team1Score, team2Score) => api.serializeCompletedGame({
+    ...api.createGame({ team1, team2 }),
+    phase: 'final',
+    firstHalfGoalsTeam1: team1Score,
+    firstHalfGoalsTeam2: team2Score,
+  });
+  const win = savedGame('Hume-Fogg', 'Opponent A', 2, 1);
+  const loss = savedGame('Opponent B', 'Hume-Fogg', 3, 0);
+  const draw = savedGame('Hume-Fogg', 'Opponent C', 1, 1);
+  const upcoming = { ...api.createGame({ team1: 'Hume-Fogg', team2: 'Opponent D' }), phase: 'pregame' };
+
+  assert.deepEqual({ ...api.calculateSeasonRecord([win, loss, draw, upcoming]) }, {
+    wins: 1,
+    losses: 1,
+    draws: 1,
+  });
+});
+
+test('season record updates when a saved score changes or a saved game is removed', () => {
+  const { api } = createRuntime();
+  const game = (id, team1Score, team2Score) => ({
+    ...api.createGame({ team1: 'Hume-Fogg', team2: `Opponent ${id}` }),
+    id,
+    phase: 'final',
+    firstHalfGoalsTeam1: team1Score,
+    firstHalfGoalsTeam2: team2Score,
+  });
+  const win = game('win', 3, 1);
+  const draw = game('draw', 2, 2);
+
+  assert.deepEqual({ ...api.calculateSeasonRecord([win, draw]) }, { wins: 1, losses: 0, draws: 1 });
+  win.firstHalfGoalsTeam1 = 0;
+  assert.deepEqual({ ...api.calculateSeasonRecord([win, draw]) }, { wins: 0, losses: 1, draws: 1 });
+  win.firstHalfGoalsTeam1 = 1;
+  win.firstHalfGoalsTeam2 = 1;
+  assert.deepEqual({ ...api.calculateSeasonRecord([win, draw]) }, { wins: 0, losses: 0, draws: 2 });
+  assert.deepEqual({ ...api.calculateSeasonRecord([draw]) }, { wins: 0, losses: 0, draws: 1 });
+});
+
+test('season record summary has responsive singular and plural wording', () => {
+  const { api } = createRuntime();
+  const saved = (team1, team2, team1Score, team2Score) => api.serializeCompletedGame({
+    ...api.createGame({ team1, team2 }),
+    phase: 'final',
+    firstHalfGoalsTeam1: team1Score,
+    firstHalfGoalsTeam2: team2Score,
+  });
+
+  const singular = api.seasonRecordMarkup([
+    saved('Hume-Fogg', 'A', 1, 0),
+    saved('B', 'Hume-Fogg', 0, 1),
+    saved('Hume-Fogg', 'C', 2, 2),
+  ]);
+  assert.match(singular, /Season Record: 2&ndash;0&ndash;1/);
+  assert.match(singular, />2 Wins · 0 Losses · 1 Draw</);
+
+  const plural = api.seasonRecordMarkup([
+    saved('Hume-Fogg', 'A', 0, 1),
+    saved('Hume-Fogg', 'B', 0, 2),
+    saved('Hume-Fogg', 'C', 1, 1),
+  ]);
+  assert.match(plural, />0 Wins · 2 Losses · 1 Draw</);
+});
+
 test('saved history sorts by game date and time instead of save time', () => {
   const { api } = createRuntime();
   const games = [
