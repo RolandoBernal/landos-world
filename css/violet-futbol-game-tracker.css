@@ -991,6 +991,24 @@
 }
 
 @media (max-width: 680px) {
+  .vfgt_hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .vfgt_hero .vfgt_home_actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .vfgt_hero .vfgt_icon_button {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
   .vfgt_history_item {
     text-align: left;
   }

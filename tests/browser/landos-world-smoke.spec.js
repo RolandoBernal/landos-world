@@ -217,6 +217,19 @@ test('VFGT settings manages a second team and season without losing the active c
   await expect(page.locator('.vfgt_context')).toContainText('2027 Fall');
 });
 
+test('VFGT mobile settings cog stays in the hero top-right corner', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  const hero = page.locator('.vfgt_hero');
+  const cog = page.getByRole('button', { name: 'VFGT Settings' });
+  const actions = page.locator('.vfgt_home_actions');
+  const [heroBox, cogBox, actionsBox] = await Promise.all([hero.boundingBox(), cog.boundingBox(), actions.boundingBox()]);
+  expect(heroBox).not.toBeNull();
+  expect(cogBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(cogBox.x + cogBox.width).toBeGreaterThan(heroBox.x + heroBox.width - 20);
+  if (page.viewportSize().width <= 680) expect(cogBox.y).toBeLessThan(actionsBox.y);
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
