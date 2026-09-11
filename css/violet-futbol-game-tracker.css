@@ -207,14 +207,24 @@
 }
 
 .vfgt_page_header--with-back {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  position: relative;
 }
 
 .vfgt_page_header--with-back .vfgt_back_button {
-  flex: 0 0 auto;
-  margin-left: -0.6rem;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  margin: 0;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  background: rgb(74 163 255 / 6%);
+  border-color: var(--vfgt-border);
+}
+
+.vfgt_page_header--with-back > div {
+  padding-right: 3.25rem;
 }
 
 .vfgt_page_header,

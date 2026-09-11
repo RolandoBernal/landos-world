@@ -6,6 +6,7 @@
   const SETTINGS_KEY = 'lando-world:violet-futbol-game-tracker:settings:v1';
   const MIGRATION_KEY = 'lando-world:violet-futbol-game-tracker:migration:v1';
   const SCHEMA_VERSION = 3;
+  const DEFAULT_HALF_DURATION_MINUTES = 40;
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
   const ACTION_GUARD_MS = 350;
@@ -79,10 +80,16 @@
       id: String(season.id),
       teamId: String(season.teamId),
       name,
+      halfDurationMinutes: normalizeHalfDurationMinutes(season.halfDurationMinutes),
       archived: season.archived === true,
       createdAt: season.createdAt || nowIso(),
       updatedAt: season.updatedAt || season.createdAt || nowIso(),
     };
+  }
+
+  function normalizeHalfDurationMinutes(value, fallback = DEFAULT_HALF_DURATION_MINUTES) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   function readCollection(key, normalizer) {
@@ -118,6 +125,8 @@
   }
 
   function initializeContext() {
+    const rawSeasons = readJson(SEASONS_KEY, []);
+    const rawSavedGames = readJson(SAVED_GAMES_KEY, []);
     teams = readCollection(TEAMS_KEY, normalizeTeam);
     seasons = readCollection(SEASONS_KEY, normalizeSeason);
     vfgtSettings = readJson(SETTINGS_KEY, {});
@@ -131,7 +140,7 @@
     const initialTeam = teams[0];
     if (!seasons.length) {
       const timestamp = nowIso();
-      seasons = [{ id: createId(), teamId: initialTeam.id, name: DEFAULT_SEASON_NAME, archived: false, createdAt: timestamp, updatedAt: timestamp }];
+      seasons = [{ id: createId(), teamId: initialTeam.id, name: DEFAULT_SEASON_NAME, halfDurationMinutes: DEFAULT_HALF_DURATION_MINUTES, archived: false, createdAt: timestamp, updatedAt: timestamp }];
       changed = true;
     }
     const previousTeamId = vfgtSettings.currentTeamId || '';
@@ -169,6 +178,24 @@
       });
       localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
       localStorage.setItem(MIGRATION_KEY, '2');
+      changed = true;
+    }
+    const seasonsNeedDurationMigration = !Array.isArray(rawSeasons)
+      || rawSeasons.some((season) => !Number.isInteger(Number(season?.halfDurationMinutes)) || Number(season.halfDurationMinutes) <= 0);
+    const gamesNeedDurationMigration = !Array.isArray(rawSavedGames)
+      || rawSavedGames.some((game) => !Number.isInteger(Number(game?.halfDurationMinutes)) || Number(game.halfDurationMinutes) <= 0);
+    if (migrationVersion < 3 || seasonsNeedDurationMigration || gamesNeedDurationMigration) {
+      seasons = seasons.map((season) => ({ ...season, halfDurationMinutes: normalizeHalfDurationMinutes(season.halfDurationMinutes) }));
+      savedGames = savedGames.map((game) => ({ ...game, halfDurationMinutes: normalizeHalfDurationMinutes(game.halfDurationMinutes) }));
+      const activeGame = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
+      if (activeGame) {
+        localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({
+          ...activeGame,
+          halfDurationMinutes: normalizeHalfDurationMinutes(activeGame.halfDurationMinutes),
+        }));
+      }
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      localStorage.setItem(MIGRATION_KEY, '3');
       changed = true;
     }
     if (changed) writeContext();
@@ -317,6 +344,10 @@
     };
   }
 
+  function regulationSecondsForGame(game) {
+    return normalizeHalfDurationMinutes(game?.halfDurationMinutes) * 60;
+  }
+
   function pluralizeResult(count, singular, plural) {
     return `${count} ${count === 1 ? singular : plural}`;
   }
@@ -365,7 +396,7 @@
         halfStartedAt: null,
         isRunning: false,
         phase: 'pregame',
-        regulationSeconds: REGULATION_SECONDS,
+        regulationSeconds: regulationSecondsForGame(game),
         stoppageSeconds: 0,
       };
     }
@@ -388,7 +419,7 @@
         halfStartedAt: null,
         isRunning: false,
         phase,
-        regulationSeconds: REGULATION_SECONDS,
+        regulationSeconds: regulationSecondsForGame(game),
         stoppageSeconds: 0,
       };
     }
@@ -399,9 +430,9 @@
       halfStartedAt: game[startedAtKey] || null,
       isRunning: true,
       phase,
-      regulationSeconds: REGULATION_SECONDS,
+      regulationSeconds: regulationSecondsForGame(game),
       remainingSeconds: null,
-      stoppageSeconds: Math.max(0, elapsedSeconds - REGULATION_SECONDS),
+      stoppageSeconds: Math.max(0, elapsedSeconds - regulationSecondsForGame(game)),
     };
   }
 
@@ -415,14 +446,14 @@
     const phase = game.phase;
     const elapsed = elapsedForHalf(game, phase, now);
     const { regulationFlag: flag } = activeHalfKeys(phase);
-    if (elapsed >= REGULATION_SECONDS && !game[flag]) {
+    if (elapsed >= regulationSecondsForGame(game) && !game[flag]) {
       game[flag] = true;
       return true;
     }
     return false;
   }
 
-  function createGame({ team1, team2, location = '', date, time, gameType = '', teamId = '', seasonId = '', teamSide = '' } = {}) {
+  function createGame({ team1, team2, location = '', date, time, gameType = '', teamId = '', seasonId = '', teamSide = '', halfDurationMinutes = DEFAULT_HALF_DURATION_MINUTES } = {}) {
     const defaults = localDateTimeParts();
     return {
       id: createId(),
@@ -434,6 +465,7 @@
       teamId: String(teamId || '').trim(),
       seasonId: String(seasonId || '').trim(),
       teamSide: teamSide === 1 || teamSide === 2 ? teamSide : '',
+      halfDurationMinutes: normalizeHalfDurationMinutes(halfDurationMinutes),
       location: String(location || '').trim(),
       gameType: normalizeGameType(gameType),
       date: date || defaults.date,
@@ -471,8 +503,9 @@
     teamId = '',
     seasonId = '',
     teamSide = '',
+    halfDurationMinutes = DEFAULT_HALF_DURATION_MINUTES,
   } = {}) {
-    const game = createGame({ team1, team2, location, date, time, gameType, teamId, seasonId, teamSide });
+    const game = createGame({ team1, team2, location, date, time, gameType, teamId, seasonId, teamSide, halfDurationMinutes });
     return {
       ...game,
       entryType: 'manual',
@@ -524,6 +557,7 @@
     normalized.teamId = String(normalized.teamId || '').trim();
     normalized.seasonId = String(normalized.seasonId || '').trim();
     normalized.teamSide = normalized.teamSide === 1 || normalized.teamSide === 2 ? normalized.teamSide : '';
+    normalized.halfDurationMinutes = normalizeHalfDurationMinutes(normalized.halfDurationMinutes);
     normalized.location = String(normalized.location || '').trim();
     normalized.gameType = normalizeGameType(normalized.gameType);
     [
@@ -870,9 +904,18 @@
         <button type="button" class="vfgt_settings_row" data-vfgt-action="teams"><span><strong>Manage Teams</strong></span><span aria-hidden="true">›</span></button>
         <button type="button" class="vfgt_settings_row" data-vfgt-action="seasons"><span><strong>Manage Seasons</strong></span><span aria-hidden="true">›</span></button>
       </section>
-      <section class="vfgt_settings_group" aria-labelledby="vfgt-game-settings-title"><h2 id="vfgt-game-settings-title">Game Settings</h2><p class="vfgt_settings_note">Game timing and scoring use the current VFGT defaults.</p></section>
+      <section class="vfgt_settings_group" aria-labelledby="vfgt-game-settings-title"><h2 id="vfgt-game-settings-title">Game Settings</h2><button type="button" class="vfgt_settings_row" data-vfgt-action="half-duration"><span><small>Half Duration</small><strong>${season ? `${season.halfDurationMinutes} minutes` : 'No season selected'}</strong><small>Applies to ${escapeHtml(season?.name || 'the current season')}</small></span><span aria-hidden="true">›</span></button></section>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-about-title"><h2 id="vfgt-about-title">About</h2><p>Violet Futbol Game Tracker</p><p class="vfgt_settings_note">Long-term team and season history tracker.</p></section>
     </section>`;
+  }
+
+  function renderHalfDurationForm() {
+    const season = currentSeason();
+    if (!season) {
+      renderSettings();
+      return;
+    }
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-duration-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="settings">←</button><div><p class="vfgt_kicker">Game Settings</p><h1 id="vfgt-duration-title">Half Duration</h1></div></header><form class="vfgt_form" data-vfgt-duration-form><p class="vfgt_settings_note">Applies to ${escapeHtml(season.name)}.</p><label>Minutes <input name="halfDurationMinutes" type="number" inputmode="numeric" min="1" step="1" required value="${season.halfDurationMinutes}"></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="settings">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Duration</button></div></form></section>`;
   }
 
   function renderTeams() {
@@ -1118,6 +1161,7 @@
         <p class="vfgt_kicker">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</p>
         <h1 id="vfgt-summary-title">FINAL</h1>
         ${game.location ? `<p>${escapeHtml(game.location)}</p>` : ''}
+        <p>Half Duration: ${normalizeHalfDurationMinutes(game.halfDurationMinutes)} minutes</p>
       </header>
       <section class="vfgt_final_score">
         <strong>${escapeHtml(game.team1)}</strong>
@@ -1318,6 +1362,16 @@
     renderSeasons();
   }
 
+  function saveHalfDuration(form) {
+    const season = currentSeason();
+    const minutes = Number(new FormData(form).get('halfDurationMinutes'));
+    if (!season || !Number.isInteger(minutes) || minutes <= 0) return;
+    seasons = seasons.map((item) => item.id === season.id ? { ...item, halfDurationMinutes: minutes, updatedAt: nowIso() } : item);
+    writeContext();
+    screen = 'settings';
+    renderSettings();
+  }
+
   function selectTeam(id) {
     const team = teams.find((item) => item.id === id);
     if (!team) return;
@@ -1398,6 +1452,7 @@
     if (action === 'edit-team') renderTeamForm(button.dataset.id);
     if (action === 'add-season') renderSeasonForm();
     if (action === 'edit-season') renderSeasonForm(button.dataset.id);
+    if (action === 'half-duration') renderHalfDurationForm();
     if (action === 'select-team') selectTeam(button.dataset.id);
     if (action === 'select-season') selectSeason(button.dataset.id);
     if (action === 'archive-team') setArchived('team', button.dataset.id, true);
@@ -1485,6 +1540,12 @@
       saveSeasonForm(seasonForm);
       return;
     }
+    const durationForm = event.target.closest('[data-vfgt-duration-form]');
+    if (durationForm) {
+      event.preventDefault();
+      saveHalfDuration(durationForm);
+      return;
+    }
     const manualForm = event.target.closest('[data-vfgt-manual-form]');
     if (manualForm) {
       event.preventDefault();
@@ -1505,6 +1566,7 @@
         teamId: vfgtSettings.currentTeamId,
         seasonId: vfgtSettings.currentSeasonId,
         teamSide: String(data.get('team1') || '').trim().toLowerCase() === String(currentTeam()?.name || '').trim().toLowerCase() ? 1 : 2,
+        halfDurationMinutes: currentSeason()?.halfDurationMinutes,
       });
       if (!game.team1 || !game.team2) return;
       saveManualGame(game);
@@ -1534,6 +1596,7 @@
       teamId: vfgtSettings.currentTeamId,
       seasonId: vfgtSettings.currentSeasonId,
       teamSide: String(data.get('team1') || '').trim().toLowerCase() === String(currentTeam()?.name || '').trim().toLowerCase() ? 1 : 2,
+      halfDurationMinutes: currentSeason()?.halfDurationMinutes,
     });
     if (!game.team1 || !game.team2) return;
     state = startFirstHalf(game);
@@ -1585,6 +1648,7 @@
   window.VioletFutbolGameTracker = {
     ACTIVE_GAME_KEY,
     DEFAULT_SEASON_NAME,
+    DEFAULT_HALF_DURATION_MINUTES,
     HUME_FOGG_TEAM,
     HALFTIME_SECONDS,
     REGULATION_SECONDS,
@@ -1617,6 +1681,8 @@
     normalizeSeason,
     normalizeTeam,
     parseOptionalDuration,
+    normalizeHalfDurationMinutes,
+    regulationSecondsForGame,
     reconcileTimerState,
     releaseScreenWakeLock,
     renderSevenSegmentDigit,
