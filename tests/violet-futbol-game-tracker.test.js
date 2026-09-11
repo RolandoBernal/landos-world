@@ -503,6 +503,7 @@ test('game types qualify regular and overall records without classifying legacy 
     saved('friendly', 4, 0),
     saved('preseason', 0, 2),
     saved('specialTournament', 5, 0),
+    saved('other', 6, 0),
     saved('', 9, 0),
   ];
 
@@ -713,6 +714,7 @@ test('game type is captured on new, manual, and edit game forms and shown in his
     preseason: 'Pre-season',
     friendly: 'Friendly',
     specialTournament: 'Special Tournament',
+    other: 'Other',
   }).forEach(([value, label]) => {
     assert.match(source, new RegExp(`${value}: '${label.replace(/[()]/g, '\\$&')}'`));
     assert.ok(source.includes(label.replaceAll('\\', '')));
