@@ -303,7 +303,7 @@
   min-height: 72px;
   padding: 0.85rem;
   color: var(--vfgt-text);
-  text-align: left;
+  text-align: center;
   background: var(--vfgt-history-bg);
   border: 1px solid var(--vfgt-history-border);
   border-radius: 6px;
@@ -353,11 +353,11 @@
 }
 
 .vfgt_history_team--home {
-  text-align: left;
+  text-align: center;
 }
 
 .vfgt_history_team--away {
-  text-align: right;
+  text-align: center;
 }
 
 .vfgt_form {

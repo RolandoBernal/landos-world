@@ -649,8 +649,8 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(source, /class="vfgt_matchup_title"/);
   assert.match(source, /class="vfgt_matchup_vs">VS<\/span>/);
   assert.match(css, /\.vfgt_history_matchup[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
-  assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: left/);
-  assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: right/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_team--home[\s\S]*text-align: left/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
   assert.match(css, /\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*align-self: end/);
@@ -664,6 +664,9 @@ test('saved games and live headers separate team names from score and VS labels'
 });
 
 test('mobile keeps saved history in a row while stacking live score controls', () => {
+  assert.match(css, /\.vfgt_history_item[\s\S]*text-align: center/);
+  assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: center/);
+  assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: center/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_matchup \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_vs \{[\s\S]*width: auto/);
