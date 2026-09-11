@@ -192,6 +192,77 @@ for (const route of LOCAL_APP_ROUTES) {
   });
 }
 
+test('VFGT settings manages a second team and season without losing the active context', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  await page.getByRole('button', { name: 'VFGT Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Manage Teams' }).click();
+  await page.getByRole('button', { name: 'Add Team' }).click();
+  await page.getByLabel('Team Name').fill('Future University');
+  await page.getByLabel('Short Name / Abbreviation').fill('FU');
+  await page.getByRole('button', { name: 'Save Team' }).click();
+  const futureTeam = page.locator('.vfgt_manage_row').filter({ hasText: 'Future University' });
+  await expect(futureTeam).toContainText('Future University');
+  await futureTeam.getByRole('button', { name: 'Select' }).click();
+  await page.getByRole('button', { name: 'VFGT Settings' }).click();
+  await page.getByRole('button', { name: 'Manage Seasons' }).click();
+  await page.getByRole('button', { name: 'Add Season' }).click();
+  await page.getByLabel('Season Name').fill('2027 Fall');
+  await page.getByLabel('Team').selectOption({ label: 'Future University' });
+  await page.getByRole('button', { name: 'Save Season' }).click();
+  const futureSeason = page.locator('.vfgt_manage_row').filter({ hasText: '2027 Fall' });
+  await expect(futureSeason).toContainText('Future University');
+  await futureSeason.getByRole('button', { name: 'Select' }).click();
+  await expect(page.locator('.vfgt_context')).toContainText('Future University');
+  await expect(page.locator('.vfgt_context')).toContainText('2027 Fall');
+});
+
+test('VFGT mobile settings cog stays in the hero top-right corner', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  const hero = page.locator('.vfgt_hero');
+  const cog = page.getByRole('button', { name: 'VFGT Settings' });
+  const actions = page.locator('.vfgt_home_actions');
+  const [heroBox, cogBox, actionsBox] = await Promise.all([hero.boundingBox(), cog.boundingBox(), actions.boundingBox()]);
+  expect(heroBox).not.toBeNull();
+  expect(cogBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(cogBox.x + cogBox.width).toBeGreaterThan(heroBox.x + heroBox.width - 20);
+  if (page.viewportSize().width <= 680) expect(cogBox.y).toBeLessThan(actionsBox.y);
+});
+
+test('VFGT displays the record from the visible saved scores', async ({ page }) => {
+  await page.addInitScript(() => {
+    const game = (id, opponent, team1Score, team2Score) => ({
+      id,
+      schemaVersion: 3,
+      phase: 'final',
+      entryType: 'manual',
+      team1: 'Hume-Fogg',
+      team2: opponent,
+      teamId: 'team-1',
+      seasonId: 'season-1',
+      teamSide: 2,
+      gameType: 'regularSeason',
+      date: '2026-08-22',
+      startTime: '12:00',
+      firstHalfGoalsTeam1: team1Score,
+      firstHalfGoalsTeam2: team2Score,
+      secondHalfGoalsTeam1: 0,
+      secondHalfGoalsTeam2: 0,
+    });
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:teams:v1', JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', shortName: 'HF', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:seasons:v1', JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:settings:v1', JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' }));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:migration:v1', '2');
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:saved-games:v1', JSON.stringify([
+      game('g1', 'Other HS', 1, 2), game('g2', 'Test School 2', 3, 1), game('g3', 'Sayre High School', 3, 2), game('g4', 'Sayre High School', 3, 3),
+    ]));
+  });
+  await page.goto('/#/violet-futbol-game-tracker');
+  await expect(page.locator('.vfgt_season_summary')).toContainText('Regular Season: 2–1–1');
+  await expect(page.locator('.vfgt_season_summary')).toContainText('2 Wins · 1 Loss · 1 Draw');
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
