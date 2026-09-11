@@ -697,7 +697,7 @@ body {
 
 .digit_clock_time {
   --vfgt-segment-on: currentColor;
-  --vfgt-segment-off: rgb(102 255 153 / 18%);
+  --vfgt-segment-off: rgba(102, 255, 153, 0.025);
   --vfgt-segment-glow: 0 0 14px rgb(102 255 153 / 64%), 0 0 30px rgb(102 255 153 / 30%);
   --digit-width: clamp(1.2rem, 6vw, 2.05rem);
   --digit-height: calc(var(--digit-width) * 1.72);
