@@ -137,6 +137,11 @@
   border-color: var(--vfgt-border);
 }
 
+:root[data-theme="light"] .vfgt_form select {
+  background: var(--vfgt-input);
+  border-color: var(--vfgt-border);
+}
+
 .vfgt_hero {
   display: flex;
   align-items: center;
@@ -263,7 +268,7 @@
 
 .vfgt_season_summary h3 {
   color: var(--vfgt-team-text);
-  font-size: 1.05rem;
+  font-size: 1.5rem;
   font-weight: 900;
 }
 
@@ -282,6 +287,10 @@
   font-weight: 700;
 }
 
+.vfgt_season_record + .vfgt_season_totals {
+  margin-bottom: 0.6rem;
+}
+
 .vfgt_history {
   display: grid;
   gap: 0.75rem;
@@ -294,7 +303,7 @@
   min-height: 72px;
   padding: 0.85rem;
   color: var(--vfgt-text);
-  text-align: left;
+  text-align: center;
   background: var(--vfgt-history-bg);
   border: 1px solid var(--vfgt-history-border);
   border-radius: 6px;
@@ -303,9 +312,16 @@
 }
 
 .vfgt_history_date,
-.vfgt_history_location {
+.vfgt_history_location,
+.vfgt_history_game_type {
   color: var(--vfgt-muted);
   font-size: 0.92rem;
+}
+
+.vfgt_history_game_type {
+  color: var(--vfgt-muted-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .vfgt_history_score {
@@ -337,11 +353,11 @@
 }
 
 .vfgt_history_team--home {
-  text-align: left;
+  text-align: center;
 }
 
 .vfgt_history_team--away {
-  text-align: right;
+  text-align: center;
 }
 
 .vfgt_form {
@@ -377,6 +393,25 @@
   color-scheme: dark;
 }
 
+.vfgt_form select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 50px;
+  min-height: 50px;
+  display: block;
+  padding: 0.75rem;
+  box-sizing: border-box;
+  color: var(--vfgt-text);
+  background: var(--vfgt-input);
+  border: 1px solid var(--vfgt-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+  color-scheme: dark;
+}
+
 .vfgt_form input[type="date"],
 .vfgt_form input[type="time"] {
   width: 100%;
@@ -393,6 +428,21 @@
   border-color: var(--vfgt-accent-strong);
   box-shadow: 0 0 0 3px rgb(74 163 255 / 18%);
   outline: none;
+}
+
+.vfgt_form select:focus {
+  border-color: var(--vfgt-accent-strong);
+  box-shadow: 0 0 0 3px rgb(74 163 255 / 18%);
+  outline: none;
+}
+
+.vfgt_form select.vfgt_game_type_select--placeholder {
+  color: var(--vfgt-placeholder);
+  opacity: 0.78;
+}
+
+.vfgt_form select.vfgt_game_type_select option:disabled {
+  color: var(--vfgt-placeholder);
 }
 
 .vfgt_form_grid,
@@ -766,6 +816,10 @@
 }
 
 @media (max-width: 680px) {
+  .vfgt_history_item {
+    text-align: left;
+  }
+
   .vfgt_hero,
   .vfgt_resume {
     align-items: stretch;
