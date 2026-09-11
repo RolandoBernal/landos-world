@@ -156,6 +156,21 @@
       localStorage.setItem(MIGRATION_KEY, '1');
       changed = true;
     }
+    if (migrationVersion < 2) {
+      savedGames = savedGames.map((game) => {
+        const team = teams.find((item) => item.id === game.teamId);
+        if (!team) return game;
+        const team1 = String(game.team1 || '').trim().toLowerCase();
+        const team2 = String(game.team2 || '').trim().toLowerCase();
+        const tracked = team.name.trim().toLowerCase();
+        if (team1 === tracked && team2 !== tracked) return { ...game, teamSide: 1 };
+        if (team2 === tracked && team1 !== tracked) return { ...game, teamSide: 2 };
+        return game;
+      });
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      localStorage.setItem(MIGRATION_KEY, '2');
+      changed = true;
+    }
     if (changed) writeContext();
   }
 
@@ -276,15 +291,15 @@
       const scores = finalScores(game);
       let teamScore;
       let opponentScore;
-      if (trackedTeamId && (game.teamSide === 1 || game.teamSide === 2)) {
-        teamScore = game.teamSide === 1 ? scores.team1 : scores.team2;
-        opponentScore = game.teamSide === 1 ? scores.team2 : scores.team1;
-      } else if (team1 === trackedTeam && team2 !== trackedTeam) {
+      if (team1 === trackedTeam && team2 !== trackedTeam) {
         teamScore = scores.team1;
         opponentScore = scores.team2;
       } else if (team2 === trackedTeam && team1 !== trackedTeam) {
         teamScore = scores.team2;
         opponentScore = scores.team1;
+      } else if (trackedTeamId && (game.teamSide === 1 || game.teamSide === 2)) {
+        teamScore = game.teamSide === 1 ? scores.team1 : scores.team2;
+        opponentScore = game.teamSide === 1 ? scores.team2 : scores.team1;
       } else {
         return record;
       }

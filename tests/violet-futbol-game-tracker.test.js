@@ -453,6 +453,17 @@ test('season records use stable team and season context without changing game-ty
   assert.deepEqual(JSON.parse(JSON.stringify(api.calculateSeasonRecords(games.filter((game) => game.seasonId === 'season-2'), 'Renamed Team', 'team-1').regularSeason)), { wins: 1, losses: 0, draws: 0 });
 });
 
+test('season records prefer the visible team position when stale side metadata disagrees', () => {
+  const { api } = createRuntime();
+  const games = [
+    api.createManualGame({ team1: 'Hume-Fogg', team2: 'Other HS', teamId: 'team-1', seasonId: 'season-1', teamSide: 2, gameType: 'regularSeason', firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 2 }),
+    api.createManualGame({ team1: 'Hume-Fogg', team2: 'Test School 2', teamId: 'team-1', seasonId: 'season-1', teamSide: 2, gameType: 'regularSeason', firstHalfGoalsTeam1: 3, firstHalfGoalsTeam2: 1 }),
+    api.createManualGame({ team1: 'Hume-Fogg', team2: 'Sayre High School', teamId: 'team-1', seasonId: 'season-1', teamSide: 2, gameType: 'regularSeason', firstHalfGoalsTeam1: 3, firstHalfGoalsTeam2: 2 }),
+    api.createManualGame({ team1: 'Hume-Fogg', team2: 'Sayre High School', teamId: 'team-1', seasonId: 'season-1', teamSide: 2, gameType: 'regularSeason', firstHalfGoalsTeam1: 3, firstHalfGoalsTeam2: 3 }),
+  ];
+  assert.deepEqual(JSON.parse(JSON.stringify(api.calculateSeasonRecord(games, ['regularSeason'], 'Hume-Fogg', 'team-1'))), { wins: 2, losses: 1, draws: 1 });
+});
+
 test('legacy games migrate once into the default Hume-Fogg team and season', () => {
   const legacyGame = {
     id: 'legacy-game', phase: 'final', entryType: 'manual', team1: 'Hume-Fogg', team2: 'Opponent',
@@ -470,6 +481,7 @@ test('legacy games migrate once into the default Hume-Fogg team and season', () 
   assert.equal(games[0].id, 'legacy-game');
   assert.equal(games[0].teamId, teams[0].id);
   assert.equal(games[0].seasonId, seasons[0].id);
+  assert.equal(games[0].teamSide, 1);
   const firstSnapshot = storage.get(api.TEAMS_KEY);
   api.initializeContext();
   assert.equal(storage.get(api.TEAMS_KEY), firstSnapshot);

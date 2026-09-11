@@ -230,6 +230,39 @@ test('VFGT mobile settings cog stays in the hero top-right corner', async ({ pag
   if (page.viewportSize().width <= 680) expect(cogBox.y).toBeLessThan(actionsBox.y);
 });
 
+test('VFGT displays the record from the visible saved scores', async ({ page }) => {
+  await page.addInitScript(() => {
+    const game = (id, opponent, team1Score, team2Score) => ({
+      id,
+      schemaVersion: 3,
+      phase: 'final',
+      entryType: 'manual',
+      team1: 'Hume-Fogg',
+      team2: opponent,
+      teamId: 'team-1',
+      seasonId: 'season-1',
+      teamSide: 2,
+      gameType: 'regularSeason',
+      date: '2026-08-22',
+      startTime: '12:00',
+      firstHalfGoalsTeam1: team1Score,
+      firstHalfGoalsTeam2: team2Score,
+      secondHalfGoalsTeam1: 0,
+      secondHalfGoalsTeam2: 0,
+    });
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:teams:v1', JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', shortName: 'HF', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:seasons:v1', JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:settings:v1', JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' }));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:migration:v1', '2');
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:saved-games:v1', JSON.stringify([
+      game('g1', 'Other HS', 1, 2), game('g2', 'Test School 2', 3, 1), game('g3', 'Sayre High School', 3, 2), game('g4', 'Sayre High School', 3, 3),
+    ]));
+  });
+  await page.goto('/#/violet-futbol-game-tracker');
+  await expect(page.locator('.vfgt_season_summary')).toContainText('Regular Season: 2–1–1');
+  await expect(page.locator('.vfgt_season_summary')).toContainText('2 Wins · 1 Loss · 1 Draw');
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
