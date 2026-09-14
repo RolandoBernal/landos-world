@@ -3726,7 +3726,7 @@
           </div>
           <button
             type="button"
-            class="lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
+            class="lando_settings_link lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
             data-action="settings"
             aria-label="${settingsActive ? 'Close Settings' : 'Settings'}"
             aria-pressed="${settingsActive ? 'true' : 'false'}"

@@ -34,6 +34,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
   <link rel="stylesheet" href="css/sprints.css?v=20260825-1">
   <link rel="stylesheet" href="css/violet-futbol-game-tracker.css?v=20260911-2">
   <link rel="stylesheet" href="css/road-bike-checklist.css?v=20260822-4">
+  <link rel="stylesheet" href="css/maintenance-total.css?v=20260913-15">
 </head>
 
 <body>
@@ -315,6 +316,13 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       <p class="road_bike_loading">Loading checklist...</p>
     </main>
   </div>
+  <div class="maintenance_total_view app_theme app_theme--maintenance-total" id="maintenance-total-view" hidden>
+    <nav class="ecosystem_nav" aria-label="Lando’s World app navigation" data-ecosystem-nav>
+      <a class="ecosystem_nav_back" href="#/" aria-label="Return to Lando’s World home"><span class="ecosystem_nav_arrow" aria-hidden="true">←</span><span>Lando’s World</span></a>
+    </nav>
+    <div class="digit_clock_header"><div class="digit_clock_header_row"><div class="digit_clock_brand lando_world_brand"><img class="digit_clock_logo" src="icons/imaintenancetotal-pearl-white.png" alt="" aria-hidden="true"><span class="digit_clock_title">iMaintenanceTotal</span></div></div></div>
+    <main class="maintenance_total_app" id="maintenance-total-root" aria-label="iMaintenanceTotal"><p>Loading maintenance manager...</p></main>
+  </div>
   <div class="pwa_network_status" id="pwa-network-status" role="status" aria-live="polite" hidden></div>
   <div class="pwa_toast" id="pwa-toast" role="status" aria-live="polite" hidden></div>
   <script src="js/weather-service.js?v=20260801-1"></script>
@@ -507,6 +515,19 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         theme: 'road-bike-checklist',
       },
       {
+        id: 'maintenance-total',
+        iconSrc: 'icons/imaintenancetotal-pearl-white.png',
+        iconAlt: '',
+        iconClass: 'clock_utility_icon--exact',
+        title: 'iMaintenanceTotal',
+        description: 'Your total maintenance manager for bikes, cars, and household assets.',
+        buttonId: 'open-maintenance-total',
+        buttonLabel: 'Open iMaintenanceTotal',
+        route: 'maintenance-total',
+        accent: 'maintenance-total',
+        theme: 'maintenance-total',
+      },
+      {
         id: 'death-on-notecards',
         iconSrc: 'icons/death-on-notecards.png',
         iconAlt: '',
@@ -654,6 +675,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       'violet-sprints',
       'violet-futbol-game-tracker',
       'road-bike-checklist',
+      'maintenance-total',
     ]);
     const LANDO_SCROLL_RESTORATION_SUPPORTED = 'scrollRestoration' in window.history;
     if (LANDO_SCROLL_RESTORATION_SUPPORTED) {
@@ -672,6 +694,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         'violet-sprints': document.getElementById('sprints-view'),
         'violet-futbol-game-tracker': document.getElementById('violet-futbol-game-tracker-view'),
         'road-bike-checklist': document.getElementById('road-bike-checklist-view'),
+        'maintenance-total': document.getElementById('maintenance-total-view'),
       };
       Object.entries(views).forEach(([name, element]) => {
         if (element) element.hidden = name !== viewName;
@@ -689,6 +712,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       if (viewName === 'violet-sprints') return 'Violet Sprints';
       if (viewName === 'violet-futbol-game-tracker') return 'Violet Futbol Game Tracker';
       if (viewName === 'road-bike-checklist') return 'Road Bike Trip Checklist';
+      if (viewName === 'maintenance-total') return 'iMaintenanceTotal';
       return "Lando's World";
     }
 
@@ -1384,6 +1408,7 @@ ${dateLongParts.year}`;
   <script src="js/sprints-app.js?v=20260814-1"></script>
   <script src="js/violet-futbol-game-tracker.js?v=20260911-2"></script>
   <script src="js/road-bike-checklist.js?v=20260812-1"></script>
+  <script src="js/maintenance-total-v2.js"></script>
 </body>
 
 </html>
