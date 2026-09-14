@@ -533,6 +533,10 @@
   margin-top: 1rem;
 }
 
+.vfgt_game_choices + .vfgt_actions {
+  margin-top: 0.85rem;
+}
+
 .vfgt_game_choice {
   display: grid;
   gap: 0.3rem;
