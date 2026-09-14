@@ -5,7 +5,7 @@
   const SEASONS_KEY = 'lando-world:violet-futbol-game-tracker:seasons:v1';
   const SETTINGS_KEY = 'lando-world:violet-futbol-game-tracker:settings:v1';
   const MIGRATION_KEY = 'lando-world:violet-futbol-game-tracker:migration:v1';
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const DEFAULT_HALF_DURATION_MINUTES = 40;
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
@@ -198,6 +198,12 @@
       localStorage.setItem(MIGRATION_KEY, '3');
       changed = true;
     }
+    if (migrationVersion < 4) {
+      savedGames = savedGames.map((game) => ({ ...game, status: game.status || 'completed', phase: 'final' }));
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      localStorage.setItem(MIGRATION_KEY, '4');
+      changed = true;
+    }
     if (changed) writeContext();
   }
 
@@ -302,7 +308,7 @@
 
   function gameTypeSelectMarkup(selected = '') {
     const normalized = normalizeGameType(selected);
-    return `<select name="gameType" required aria-label="Game Type" class="vfgt_game_type_select${normalized ? '' : ' vfgt_game_type_select--placeholder'}">
+    return `<select name="gameType" aria-label="Game Type" class="vfgt_game_type_select${normalized ? '' : ' vfgt_game_type_select--placeholder'}">
       <option value="" disabled ${normalized ? '' : 'selected'}>Select game type</option>
       ${Object.entries(GAME_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${normalized === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select>`;
@@ -453,12 +459,13 @@
     return false;
   }
 
-  function createGame({ team1, team2, location = '', date, time, gameType = '', teamId = '', seasonId = '', teamSide = '', halfDurationMinutes = DEFAULT_HALF_DURATION_MINUTES } = {}) {
+  function createGame({ team1, team2, location = '', notes = '', date, time, gameType = '', teamId = '', seasonId = '', teamSide = '', halfDurationMinutes = DEFAULT_HALF_DURATION_MINUTES } = {}) {
     const defaults = localDateTimeParts();
     return {
       id: createId(),
       schemaVersion: SCHEMA_VERSION,
       entryType: 'live',
+      status: 'inProgress',
       phase: 'pregame',
       team1: String(team1 || '').trim(),
       team2: String(team2 || '').trim(),
@@ -467,6 +474,7 @@
       teamSide: teamSide === 1 || teamSide === 2 ? teamSide : '',
       halfDurationMinutes: normalizeHalfDurationMinutes(halfDurationMinutes),
       location: String(location || '').trim(),
+      notes: String(notes || '').trim(),
       gameType: normalizeGameType(gameType),
       date: date || defaults.date,
       startTime: time || defaults.time,
@@ -522,6 +530,7 @@
   }
 
   function startFirstHalf(game, now = Date.now()) {
+    game.status = 'inProgress';
     game.phase = 'first_half';
     game.actualStartedAt = game.actualStartedAt || new Date(now).toISOString();
     game.firstHalfStartedAt = now;
@@ -544,6 +553,7 @@
   function endSecondHalf(game, now = Date.now()) {
     game.secondHalfDurationSeconds = elapsedForHalf(game, 'second_half', now);
     game.phase = 'final';
+    game.status = 'completed';
     game.completedAt = new Date(now).toISOString();
     return game;
   }
@@ -552,6 +562,9 @@
     if (!game || typeof game !== 'object') return null;
     const normalized = { ...createGame(), ...game, schemaVersion: SCHEMA_VERSION };
     normalized.entryType = normalized.entryType === 'manual' ? 'manual' : 'live';
+    normalized.status = ['scheduled', 'inProgress', 'completed'].includes(game.status)
+      ? game.status
+      : (normalized.phase === 'final' ? 'completed' : 'inProgress');
     normalized.team1 = String(normalized.team1 || '').trim();
     normalized.team2 = String(normalized.team2 || '').trim();
     normalized.teamId = String(normalized.teamId || '').trim();
@@ -559,6 +572,7 @@
     normalized.teamSide = normalized.teamSide === 1 || normalized.teamSide === 2 ? normalized.teamSide : '';
     normalized.halfDurationMinutes = normalizeHalfDurationMinutes(normalized.halfDurationMinutes);
     normalized.location = String(normalized.location || '').trim();
+    normalized.notes = String(normalized.notes || '').trim();
     normalized.gameType = normalizeGameType(normalized.gameType);
     [
       'firstHalfGoalsTeam1',
@@ -589,6 +603,7 @@
     const score = finalScores(normalized);
     return {
       ...normalized,
+      status: 'completed',
       finalTeam1Score: score.team1,
       finalTeam2Score: score.team2,
       savedAt,
@@ -621,12 +636,22 @@
   function readSavedGames() {
     const parsed = readJson(SAVED_GAMES_KEY, []);
     return Array.isArray(parsed)
-      ? parsed.map((game) => serializeCompletedGame({ ...game, phase: 'final' }, game.savedAt)).filter(Boolean)
+      ? parsed.map((game) => normalizeGame(game)).filter((game) => game && game.status === 'completed').map((game) => serializeCompletedGame(game, game.savedAt)).filter(Boolean)
       : [];
   }
 
+  function readAllGames() {
+    const parsed = readJson(SAVED_GAMES_KEY, []);
+    return Array.isArray(parsed) ? parsed.map(normalizeGame).filter(Boolean) : [];
+  }
+
+  function readScheduledGames() {
+    return readAllGames().filter((game) => game.status === 'scheduled');
+  }
+
   function writeSavedGames() {
-    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+    const scheduled = readAllGames().filter((game) => game.status === 'scheduled');
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...scheduled, ...savedGames]));
   }
 
   function gameSortTime(game, index = 0) {
@@ -872,7 +897,7 @@
 
   function gamesForCurrentSeason() {
     const season = currentSeason();
-    return season ? savedGames.filter((game) => game.seasonId === season.id) : [];
+    return season ? savedGames.filter((game) => game.seasonId === season.id && game.status === 'completed') : [];
   }
 
   function settingsButtonMarkup() {
@@ -945,10 +970,98 @@
     getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-season-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="seasons">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-season-form-title">${id ? 'Edit Season' : 'Add Season'}</h1></div></header><form class="vfgt_form" data-vfgt-season-form><label>Season Name <input name="name" required maxlength="80" placeholder="2027 Fall" value="${escapeHtml(season.name)}"></label><label>Team <select name="teamId" required>${options}</select></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="seasons">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Season</button></div></form></section>`;
   }
 
+  function scheduledGameMarkup(game) {
+    return `<article class="vfgt_history_item vfgt_scheduled_card">
+      <span class="vfgt_scheduled_badge">Scheduled</span>
+      <strong class="vfgt_scheduled_opponent">${escapeHtml(game.team2)}</strong>
+      <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
+      ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
+      ${game.gameType ? `<span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>` : ''}
+      ${game.notes ? `<p class="vfgt_scheduled_notes">${escapeHtml(game.notes)}</p>` : ''}
+      <div class="vfgt_actions vfgt_card_actions">
+        <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="quick-start" data-id="${escapeHtml(game.id)}">Quick Start</button>
+        <button type="button" class="vfgt_button" data-vfgt-action="edit-scheduled" data-id="${escapeHtml(game.id)}">Edit</button>
+        <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-scheduled" data-id="${escapeHtml(game.id)}">Delete</button>
+      </div>
+    </article>`;
+  }
+
+  function renderFutureForm(id = '') {
+    const game = readScheduledGames().find((item) => item.id === id);
+    const defaults = game || {
+      team1: currentTeam()?.name || '', team2: '', location: '', notes: '', date: localDateTimeParts().date, startTime: localDateTimeParts().time, gameType: '',
+    };
+    getRoot().innerHTML = `
+      <section class="vfgt_app" aria-labelledby="vfgt-future-title">
+        <header class="vfgt_page_header">
+          <p class="vfgt_kicker">Future Game</p>
+          <h1 id="vfgt-future-title">${id ? 'Edit Future Game' : 'Add Future Game'}</h1>
+        </header>
+        <form class="vfgt_form" data-vfgt-future-form data-id="${escapeHtml(id)}">
+          <label>Opponent <input name="team2" required autocomplete="organization" value="${escapeHtml(defaults.team2)}"></label>
+          <div class="vfgt_form_grid">
+            <label>Date <input name="date" type="date" required value="${escapeHtml(defaults.date || '')}"></label>
+            <label>Time <input name="time" type="time" required value="${escapeHtml(defaults.startTime || '')}"></label>
+          </div>
+          <label>Location <input name="location" autocomplete="street-address" placeholder="Optional" value="${escapeHtml(defaults.location)}"></label>
+          <label>Game Type ${gameTypeSelectMarkup(defaults.gameType)}</label>
+          <label>Notes <textarea name="notes" rows="3" placeholder="Optional">${escapeHtml(defaults.notes)}</textarea></label>
+          <div class="vfgt_actions vfgt_actions--sticky">
+            <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+            <button type="submit" class="vfgt_button vfgt_button--primary">Save Future Game</button>
+          </div>
+        </form>
+      </section>`;
+  }
+
+  function saveFutureGame(form) {
+    const data = new FormData(form);
+    const opponent = String(data.get('team2') || '').trim();
+    const date = String(data.get('date') || '').trim();
+    const time = String(data.get('time') || '').trim();
+    if (!opponent || !date || !time) return;
+    const id = form.dataset.id;
+    const original = id && readScheduledGames().find((game) => game.id === id);
+    const game = normalizeGame({
+      ...(original || createGame()),
+      id: original?.id || createId(),
+      team1: original?.team1 || currentTeam()?.name || HUME_FOGG_TEAM,
+      team2: opponent,
+      location: data.get('location'),
+      notes: data.get('notes'),
+      gameType: data.get('gameType'),
+      date,
+      startTime: time,
+      status: 'scheduled',
+      phase: 'pregame',
+      entryType: 'live',
+      teamId: original?.teamId || vfgtSettings.currentTeamId,
+      seasonId: original?.seasonId || vfgtSettings.currentSeasonId,
+      teamSide: original?.teamSide || 1,
+      updatedAt: nowIso(),
+    });
+    if (!game) return;
+    const games = readAllGames().filter((item) => item.id !== game.id);
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...games, game]));
+    savedGames = sortedGames(readSavedGames());
+    renderHome();
+  }
+
+  function quickStartGame(id) {
+    const scheduled = readScheduledGames().find((game) => game.id === id);
+    if (!scheduled || !window.confirm(`Start game vs. ${scheduled.team2}?\n\n${formatDateTimeLabel(scheduled.date, scheduled.startTime)}\n\nStart Game`)) return;
+    state = startFirstHalf({ ...scheduled, status: 'inProgress' });
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((game) => game.id !== id)));
+    saveActiveGame();
+    syncScreenWakeLock(state);
+    renderLive();
+  }
+
   function renderHome() {
     stopRefreshTimer();
     savedGames = sortedGames(readSavedGames());
     const currentGames = gamesForCurrentSeason();
+    const futureGames = readScheduledGames().filter((game) => game.seasonId === currentSeason()?.id).sort((a, b) => gameSortTime(a) - gameSortTime(b));
     const unfinished = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
     const history = currentGames.length
       ? `<div class="vfgt_history" role="list">
@@ -970,6 +1083,14 @@
           <h2>No saved games yet</h2>
           <p>Start a new match or add a past result.</p>
         </div>`;
+    const futureSection = `<details class="vfgt_accordion" ${futureGames.length ? 'open' : ''}>
+      <summary>Future Games <span>${futureGames.length}</span></summary>
+      <div class="vfgt_accordion_content">${futureGames.length ? `<div class="vfgt_history" role="list">${futureGames.map(scheduledGameMarkup).join('')}</div>` : '<div class="vfgt_empty vfgt_empty--compact"><p>No future games scheduled</p><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="add-future">Add Future Game</button></div>'}</div>
+    </details>`;
+    const pastSection = `<details class="vfgt_accordion" ${futureGames.length ? '' : 'open'}>
+      <summary>Past Games <span>${currentGames.length}</span></summary>
+      <div class="vfgt_accordion_content">${history}</div>
+    </details>`;
     getRoot().innerHTML = `
       <section class="vfgt_app" aria-labelledby="vfgt-title">
         <header class="vfgt_hero">
@@ -981,6 +1102,7 @@
           <div class="vfgt_home_actions">
             <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="new">New Game</button>
             <button type="button" class="vfgt_button" data-vfgt-action="past">Add Game</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="add-future">Add Future Game</button>
           </div>
           ${settingsButtonMarkup()}
         </header>
@@ -996,7 +1118,8 @@
         </section>` : ''}
         <section class="vfgt_section" aria-label="Saved Games">
           ${seasonRecordMarkup(currentGames)}
-          ${history}
+          ${futureSection}
+          ${pastSection}
         </section>
       </section>`;
   }
@@ -1309,8 +1432,9 @@
   function saveCompletedGame() {
     const saved = serializeCompletedGame(state);
     if (!saved) return;
+    const allGames = readAllGames().filter((game) => game.id !== saved.id && game.status !== 'scheduled');
     savedGames = sortedGames([saved, ...readSavedGames().filter((game) => game.id !== saved.id)]);
-    writeSavedGames();
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...allGames, saved]));
     clearActiveGame();
     renderHome();
   }
@@ -1318,8 +1442,9 @@
   function saveManualGame(game) {
     const saved = serializeCompletedGame(game);
     if (!saved) return;
+    const allGames = readAllGames().filter((item) => item.id !== saved.id && item.status !== 'scheduled');
     savedGames = sortedGames([saved, ...readSavedGames().filter((item) => item.id !== saved.id)]);
-    writeSavedGames();
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...allGames, saved]));
     renderHome();
   }
 
@@ -1461,6 +1586,9 @@
     if (action === 'restore-season') setArchived('season', button.dataset.id, false);
     if (action === 'new') renderSetup();
     if (action === 'past') renderManualForm();
+    if (action === 'add-future') renderFutureForm();
+    if (action === 'edit-scheduled') renderFutureForm(button.dataset.id);
+    if (action === 'quick-start') quickStartGame(button.dataset.id);
     if (action === 'resume') resumeStoredGame();
     if (action === 'abandon' && window.confirm('Abandon the unfinished game?')) {
       clearActiveGame();
@@ -1500,6 +1628,12 @@
       if (!game || !window.confirm(deleteConfirmationMessage(game))) return;
       savedGames = readSavedGames().filter((game) => game.id !== button.dataset.id);
       writeSavedGames();
+      renderHome();
+    }
+    if (action === 'delete-scheduled') {
+      const game = readScheduledGames().find((item) => item.id === button.dataset.id);
+      if (!game || !window.confirm(`Delete this scheduled game?\n\n${game.team1} vs ${game.team2}\n\nThis action cannot be undone.`)) return;
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((item) => item.id !== game.id)));
       renderHome();
     }
   }
@@ -1570,6 +1704,13 @@
       });
       if (!game.team1 || !game.team2) return;
       saveManualGame(game);
+      return;
+    }
+
+    const futureForm = event.target.closest('[data-vfgt-future-form]');
+    if (futureForm) {
+      event.preventDefault();
+      saveFutureGame(futureForm);
       return;
     }
 

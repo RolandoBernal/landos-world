@@ -385,7 +385,8 @@ test('completed games serialize with final scores that equal half totals', () =>
   game.secondHalfGoalsTeam2 = 1;
 
   const saved = api.serializeCompletedGame(game, '2026-08-22T12:00:00.000Z');
-  assert.equal(saved.schemaVersion, 3);
+  assert.equal(saved.schemaVersion, 4);
+  assert.equal(saved.status, 'completed');
   assert.equal(saved.entryType, 'live');
   assert.equal(saved.finalTeam1Score, 3);
   assert.equal(saved.finalTeam2Score, 1);
@@ -760,9 +761,9 @@ test('mobile keeps saved history in a row while stacking live score controls', (
 });
 
 test('mobile VFGT hero keeps the settings cog in the top-right row', () => {
-  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_hero \{[\s\S]*display: grid[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto/);
-  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_hero \.vfgt_icon_button \{[\s\S]*grid-column: 2[\s\S]*grid-row: 1/);
-  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_hero \.vfgt_home_actions \{[\s\S]*grid-column: 1 \/ -1[\s\S]*grid-row: 2/);
+  assert.match(css, /\.vfgt_hero \{[\s\S]*display: grid[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.vfgt_hero \.vfgt_icon_button \{[\s\S]*grid-column: 2[\s\S]*grid-row: 1/);
+  assert.match(css, /\.vfgt_home_actions \{[\s\S]*grid-column: 1 \/ -1[\s\S]*grid-row: 2/);
 });
 
 test('saved game detail keeps compact mobile final-summary spacing', () => {
@@ -799,7 +800,11 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
 
 test('game type is captured on new, manual, and edit game forms and shown in history', () => {
   assert.equal((source.match(/name="gameType"/g) || []).length, 2);
-  assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 4);
+  assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 5);
+  assert.match(source, /data-vfgt-future-form/);
+  assert.match(source, /Save Future Game/);
+  assert.match(source, /data-vfgt-action="quick-start"/);
+  assert.match(source, /status: 'scheduled'/);
   assert.match(source, /<option value="" disabled[\s\S]*>Select game type<\/option>/);
   assert.match(source, /vfgt_game_type_select--placeholder/);
   Object.entries({

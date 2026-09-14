@@ -292,6 +292,52 @@ test('VFGT displays the record from the visible saved scores', async ({ page }) 
   await expect(page.locator('.vfgt_season_summary')).toContainText('2 Wins · 1 Loss · 1 Draw');
 });
 
+test('VFGT schedules, edits, quick-starts, and completes one future game without duplication', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  const app = page.locator('#violet-futbol-game-tracker-view');
+  await app.getByRole('button', { name: 'Add Future Game' }).first().click();
+  await app.getByLabel('Opponent').fill('Brentwood Academy');
+  await app.getByLabel('Date').fill('2026-09-18');
+  await app.getByLabel('Time').fill('19:00');
+  await app.getByLabel('Location').fill('Home');
+  await app.getByLabel('Game Type').selectOption('regularSeason');
+  await app.getByLabel('Notes').fill('Arrive by 5:45');
+  await app.getByRole('button', { name: 'Save Future Game' }).click();
+
+  const future = app.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
+  await expect(future).toContainText('Brentwood Academy');
+  await expect(future).toContainText('Arrive by 5:45');
+  const scheduledId = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1'))[0].id);
+
+  await future.getByRole('button', { name: 'Edit' }).click();
+  await app.getByLabel('Opponent').fill('Franklin Road Academy');
+  await app.getByRole('button', { name: 'Save Future Game' }).click();
+  await expect(future).toContainText('Franklin Road Academy');
+  await expect(future).not.toContainText('Brentwood Academy');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await future.getByRole('button', { name: 'Quick Start' }).click();
+  await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
+  const active = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
+  expect(active.id).toBe(scheduledId);
+  expect(active.status).toBe('inProgress');
+  expect(active.team2).toBe('Franklin Road Academy');
+  expect(active.location).toBe('Home');
+  expect(active.notes).toBe('Arrive by 5:45');
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1')))).toHaveLength(0);
+
+  await app.getByRole('button', { name: 'End First Half' }).click();
+  await app.getByRole('button', { name: 'Start Second Half' }).click();
+  await app.getByRole('button', { name: 'End Second Half' }).click();
+  await app.getByRole('button', { name: 'Save Game' }).click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1')));
+  expect(saved).toHaveLength(1);
+  expect(saved[0].id).toBe(scheduledId);
+  expect(saved[0].status).toBe('completed');
+  expect(saved[0].team2).toBe('Franklin Road Academy');
+  await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Franklin Road Academy');
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
