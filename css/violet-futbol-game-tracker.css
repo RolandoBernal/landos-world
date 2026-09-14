@@ -480,6 +480,9 @@
 .vfgt_history {
   display: grid;
   gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .vfgt_history_item {
@@ -487,6 +490,7 @@
   gap: 0.3rem;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   min-height: 72px;
   box-sizing: border-box;
   padding: 0.85rem;
@@ -528,6 +532,7 @@
 .vfgt_card_actions {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   margin-top: 0.45rem;
   padding-top: 0.75rem;
@@ -630,6 +635,9 @@
 }
 
 .vfgt_accordion_content {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0 0.75rem 0.75rem;
 }
 
