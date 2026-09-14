@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="iMaintenanceTotal">
+  <rect width="512" height="512" rx="88" fill="#0b0c0d" stroke="#f4f1ea" stroke-width="8"/>
+  <g fill="none" stroke="#f4f1ea" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="24" d="M75 229 190 125l115 104M104 208v142h64v-96h45v96h64V208"/>
+    <path stroke-width="30" d="m294 291 78-78a65 65 0 0 1 88-88l-48 48 35 35 48-48a65 65 0 0 1-88 88l-78 78-91 91"/>
+    <circle cx="222" cy="404" r="35" stroke-width="20"/>
+    <path stroke-width="20" d="M335 326h99l25 55H310zm-2 55v50m101-50v50M324 431h120"/>
+    <circle cx="183" cy="415" r="48" stroke-width="15"/><circle cx="341" cy="415" r="48" stroke-width="15"/>
+    <path stroke-width="13" d="m183 415 32-56 40 56 86-56m-86 56-18-56m18 56h86m-86 0-20 34"/>
+  </g>
+</svg>

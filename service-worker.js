@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-09-11-2';
+const SW_VERSION = '2026-09-13-17';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -27,6 +27,7 @@ const PRECACHE_URLS = [
   './css/sprints.css',
   './css/violet-futbol-game-tracker.css',
   './css/road-bike-checklist.css',
+  './css/maintenance-total.css',
   './js/theme-manager.js',
   './js/pwa-manager.js',
   './js/weather-service.js',
@@ -38,6 +39,8 @@ const PRECACHE_URLS = [
   './js/sprints-app.js',
   './js/violet-futbol-game-tracker.js',
   './js/road-bike-checklist.js',
+  './js/maintenance-total.js',
+  './js/maintenance-total-v2.js',
   './fonts/digital-7.ttf',
   './fonts/dm-sans-latin.woff2',
   './fonts/dm-sans-latin-ext.woff2',
@@ -57,6 +60,8 @@ const PRECACHE_URLS = [
   './icons/violet-futbol-game-tracker.png',
   './icons/road-bike-checklist.svg',
   './icons/road-bike-checklist.png',
+  './icons/imt-maintenance-icon-pearl-white.svg',
+  './icons/imaintenancetotal-pearl-white.png',
   './icons/death-on-notecards.svg',
   './icons/death-on-notecards.png',
   './icons/daily-chief-briefing.svg',
@@ -202,10 +207,7 @@ async function clearApplicationCaches() {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    precacheApplicationShell('install')
-      .then(() => self.registration.update()),
-  );
+  event.waitUntil(precacheApplicationShell('install'));
 });
 
 self.addEventListener('activate', (event) => {

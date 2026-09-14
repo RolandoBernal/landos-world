@@ -137,6 +137,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './css/sprints.css',
     './css/violet-futbol-game-tracker.css',
     './css/road-bike-checklist.css',
+    './css/maintenance-total.css',
     './js/pwa-manager.js',
     './js/weather-service.js',
     './js/weather-app.js',
@@ -146,6 +147,8 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/sprints-app.js',
     './js/violet-futbol-game-tracker.js',
     './js/road-bike-checklist.js',
+    './js/maintenance-total.js',
+    './js/maintenance-total-v2.js',
     './fonts/digital-7.ttf',
     './fonts/dm-sans-latin.woff2',
     './fonts/dm-sans-latin-ext.woff2',
@@ -157,6 +160,8 @@ test('service worker precaches the app shell and app modules needed for offline 
     './icons/violet-sprints.png',
     './icons/violet-futbol-game-tracker.png',
     './icons/road-bike-checklist.png',
+    './icons/imt-maintenance-icon-pearl-white.svg',
+    './icons/imaintenancetotal-pearl-white.png',
     './icons/death-on-notecards.png',
   ].forEach((asset) => assert.match(sw, new RegExp(asset.replaceAll('.', '\\.'))));
 });
@@ -183,7 +188,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-11-2'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-13-17'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);

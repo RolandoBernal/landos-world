@@ -99,6 +99,15 @@
   --app-accent-contrast: #fff7fa;
 }
 
+.app_theme--maintenance-total {
+  --app-accent: #f4f1ea;
+  --app-accent-rgb: 244 241 234;
+  --app-accent-soft: #fffdf7;
+  --app-accent-bg: #252522;
+  --app-accent-deep: #111211;
+  --app-accent-contrast: #111;
+}
+
 .app_theme--death-on-notecards {
   --app-accent: #ff4d4d;
   --app-accent-rgb: 255 77 77;
