@@ -750,6 +750,11 @@ test('saved games and live headers separate team names from score and VS labels'
 
 test('mobile keeps saved history in a row while stacking live score controls', () => {
   assert.match(css, /\.vfgt_history_item[\s\S]*text-align: center/);
+  assert.match(css, /\.vfgt_history_item[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_card_actions[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_history \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_accordion_content \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_button \{[\s\S]*box-sizing: border-box/);
   assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: center/);
   assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: center/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_item \{[\s\S]*text-align: left/);
@@ -801,6 +806,12 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
 test('game type is captured on new, manual, and edit game forms and shown in history', () => {
   assert.equal((source.match(/name="gameType"/g) || []).length, 2);
   assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 5);
+  assert.match(source, /What type of game would you like to add\?/);
+  assert.match(source, /data-vfgt-action="choose-played"/);
+  assert.match(source, /data-vfgt-action="choose-future"/);
+  assert.doesNotMatch(source, /data-vfgt-action="add-future"/);
+  assert.doesNotMatch(source, /data-vfgt-action="past"/);
+  assert.doesNotMatch(source, /data-vfgt-action="new"/);
   assert.match(source, /data-vfgt-future-form/);
   assert.match(source, /Save Future Game/);
   assert.match(source, /data-vfgt-action="quick-start"/);

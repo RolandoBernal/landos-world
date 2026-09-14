@@ -986,6 +986,29 @@
     </article>`;
   }
 
+  function renderGameTypeChoice() {
+    getRoot().innerHTML = `
+      <section class="vfgt_app" aria-labelledby="vfgt-game-choice-title">
+        <header class="vfgt_page_header">
+          <p class="vfgt_kicker">Add Game</p>
+          <h1 id="vfgt-game-choice-title">What type of game would you like to add?</h1>
+        </header>
+        <section class="vfgt_game_choices" aria-label="Game type choices">
+          <button type="button" class="vfgt_game_choice" data-vfgt-action="choose-played">
+            <strong>Played Game</strong>
+            <span>Enter a completed result</span>
+          </button>
+          <button type="button" class="vfgt_game_choice" data-vfgt-action="choose-future">
+            <strong>Future Game</strong>
+            <span>Schedule a game to prepare ahead</span>
+          </button>
+        </section>
+        <div class="vfgt_actions vfgt_actions--sticky">
+          <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+        </div>
+      </section>`;
+  }
+
   function renderFutureForm(id = '') {
     const game = readScheduledGames().find((item) => item.id === id);
     const defaults = game || {
@@ -1007,7 +1030,7 @@
           <label>Game Type ${gameTypeSelectMarkup(defaults.gameType)}</label>
           <label>Notes <textarea name="notes" rows="3" placeholder="Optional">${escapeHtml(defaults.notes)}</textarea></label>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Save Future Game</button>
           </div>
         </form>
@@ -1085,7 +1108,7 @@
         </div>`;
     const futureSection = `<details class="vfgt_accordion" ${futureGames.length ? 'open' : ''}>
       <summary>Future Games <span>${futureGames.length}</span></summary>
-      <div class="vfgt_accordion_content">${futureGames.length ? `<div class="vfgt_history" role="list">${futureGames.map(scheduledGameMarkup).join('')}</div>` : '<div class="vfgt_empty vfgt_empty--compact"><p>No future games scheduled</p><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="add-future">Add Future Game</button></div>'}</div>
+      <div class="vfgt_accordion_content">${futureGames.length ? `<div class="vfgt_history" role="list">${futureGames.map(scheduledGameMarkup).join('')}</div>` : '<div class="vfgt_empty vfgt_empty--compact"><p>No future games scheduled</p></div>'}</div>
     </details>`;
     const pastSection = `<details class="vfgt_accordion" ${futureGames.length ? '' : 'open'}>
       <summary>Past Games <span>${currentGames.length}</span></summary>
@@ -1100,9 +1123,7 @@
             ${contextMarkup()}
           </div>
           <div class="vfgt_home_actions">
-            <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="new">New Game</button>
-            <button type="button" class="vfgt_button" data-vfgt-action="past">Add Game</button>
-            <button type="button" class="vfgt_button" data-vfgt-action="add-future">Add Future Game</button>
+            <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="choose-game-type">Add Game</button>
           </div>
           ${settingsButtonMarkup()}
         </header>
@@ -1142,7 +1163,7 @@
             <label>Start time <input name="time" type="time" value="${defaults.time}"></label>
           </div>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Start Game</button>
           </div>
         </form>
@@ -1199,7 +1220,7 @@
           </section>
           <output class="vfgt_manual_total" data-vfgt-manual-final aria-live="polite">Final: 0 - 0</output>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="home">Cancel</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Save Past Game</button>
           </div>
         </form>
@@ -1586,6 +1607,9 @@
     if (action === 'restore-season') setArchived('season', button.dataset.id, false);
     if (action === 'new') renderSetup();
     if (action === 'past') renderManualForm();
+    if (action === 'choose-game-type') renderGameTypeChoice();
+    if (action === 'choose-played') renderManualForm();
+    if (action === 'choose-future') renderFutureForm();
     if (action === 'add-future') renderFutureForm();
     if (action === 'edit-scheduled') renderFutureForm(button.dataset.id);
     if (action === 'quick-start') quickStartGame(button.dataset.id);
