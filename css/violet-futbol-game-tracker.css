@@ -145,9 +145,9 @@
 }
 
 .vfgt_hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 1rem;
   padding: 1rem;
 }
@@ -754,8 +754,20 @@
 .vfgt_home_actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-content: flex-start;
   gap: 0.75rem;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--vfgt-border);
+}
+
+.vfgt_hero .vfgt_icon_button {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
 }
 
 .vfgt_actions--sticky {
@@ -1103,21 +1115,7 @@
 
 @media (max-width: 680px) {
   .vfgt_hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-  }
-
-  .vfgt_hero .vfgt_home_actions {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-  }
-
-  .vfgt_hero .vfgt_icon_button {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
   }
 
   .vfgt_history_item {
