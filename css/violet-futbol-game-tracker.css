@@ -259,6 +259,7 @@
 }
 
 .vfgt_button {
+  box-sizing: border-box;
   min-height: 48px;
   padding: 0.75rem 1rem;
   color: var(--vfgt-button-text);
@@ -485,7 +486,9 @@
   display: grid;
   gap: 0.3rem;
   width: 100%;
+  max-width: 100%;
   min-height: 72px;
+  box-sizing: border-box;
   padding: 0.85rem;
   color: var(--vfgt-text);
   text-align: center;
@@ -515,6 +518,8 @@
 
 .vfgt_scheduled_notes {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 0;
   color: var(--vfgt-muted);
   overflow-wrap: anywhere;
@@ -522,6 +527,8 @@
 
 .vfgt_card_actions {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   margin-top: 0.45rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--vfgt-history-border);

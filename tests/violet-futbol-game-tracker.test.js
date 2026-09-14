@@ -750,6 +750,9 @@ test('saved games and live headers separate team names from score and VS labels'
 
 test('mobile keeps saved history in a row while stacking live score controls', () => {
   assert.match(css, /\.vfgt_history_item[\s\S]*text-align: center/);
+  assert.match(css, /\.vfgt_history_item[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_card_actions[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_button \{[\s\S]*box-sizing: border-box/);
   assert.match(css, /\.vfgt_history_team--home[\s\S]*text-align: center/);
   assert.match(css, /\.vfgt_history_team--away[\s\S]*text-align: center/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_item \{[\s\S]*text-align: left/);
