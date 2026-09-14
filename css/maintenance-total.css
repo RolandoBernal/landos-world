@@ -80,6 +80,7 @@
 .imt_detail_hero { display: grid; gap: 1rem; }
 .imt_bike_visual { min-height: 9rem; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, #31312d, #151615); font-size: 4rem; }
 .imt_actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .9rem; }
+@media (min-width: 601px) { .imt_bottom_nav { width: min(100%, var(--landos-page-max-width)); box-sizing: border-box; right: 50%; left: 50%; transform: translateX(-50%); border-right: 1px solid rgb(244 241 234 / 25%); border-left: 1px solid rgb(244 241 234 / 25%); } }
 @media (max-width: 600px) { .imt_nav_button { min-height: 3.35rem; padding: .45rem .2rem; } .imt_nav_icon { width: 32px; height: 32px; } .imt_nav_label { display: none; } }
 @media (min-width: 700px) { .imt_grid { grid-template-columns: repeat(2, 1fr); } .imt_detail_hero { grid-template-columns: 1fr 1fr; } .imt_section--wide { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .maintenance_total_view * { scroll-behavior: auto !important; transition: none !important; } }
