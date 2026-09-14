@@ -71,7 +71,7 @@
 .imt_record_action:hover, .imt_record_action:focus-visible { border-color: rgb(244 241 234 / 35%); background: rgb(255 255 255 / 6%); }
 .imt_record_action--danger { color: #fca5a5; }
 .imt_record_action--danger:hover, .imt_record_action--danger:focus-visible { color: #fecaca; }
-.imt_bottom_nav { position: fixed; z-index: 5; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: .15rem; padding: .5rem .5rem max(.5rem, env(safe-area-inset-bottom)); border-top: 1px solid rgb(244 241 234 / 25%); background: rgb(11 12 13 / 96%); }
+.imt_bottom_nav { position: fixed; z-index: 5; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: .15rem; padding: .5rem .5rem max(.5rem, env(safe-area-inset-bottom)); border: 0; background: rgb(11 12 13 / 96%); }
 .imt_nav_button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; min-height: 3.7rem; padding: .55rem .2rem; border: 0; border-radius: 10px; background: transparent; color: #aaa9a4; font: inherit; font-size: .78rem; cursor: pointer; }
 .imt_nav_button.is-active { background: #f4f1ea; color: #111; font-weight: 500; }
 .imt_nav_icon { display: grid; width: 30px; height: 30px; place-items: center; font-weight: 500; line-height: 1; }
@@ -80,7 +80,7 @@
 .imt_detail_hero { display: grid; gap: 1rem; }
 .imt_bike_visual { min-height: 9rem; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, #31312d, #151615); font-size: 4rem; }
 .imt_actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .9rem; }
-@media (min-width: 601px) { .imt_bottom_nav { width: min(100%, var(--landos-page-max-width)); box-sizing: border-box; right: 50%; left: 50%; transform: translateX(-50%); border-right: 1px solid rgb(244 241 234 / 25%); border-left: 1px solid rgb(244 241 234 / 25%); } }
+@media (min-width: 601px) { .imt_bottom_nav { width: min(100%, var(--landos-page-max-width)); box-sizing: border-box; right: 50%; left: 50%; transform: translateX(-50%); } }
 @media (max-width: 600px) { .imt_nav_button { min-height: 3.35rem; padding: .45rem .2rem; } .imt_nav_icon { width: 32px; height: 32px; } .imt_nav_label { display: none; } }
 @media (min-width: 700px) { .imt_grid { grid-template-columns: repeat(2, 1fr); } .imt_detail_hero { grid-template-columns: 1fr 1fr; } .imt_section--wide { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .maintenance_total_view * { scroll-behavior: auto !important; transition: none !important; } }
@@ -154,7 +154,6 @@
 }
 
 :root[data-theme="light"] .maintenance_total_view .imt_bottom_nav {
-  border-top-color: rgb(23 32 51 / 16%);
   background: rgb(255 255 255 / 96%);
 }
 
