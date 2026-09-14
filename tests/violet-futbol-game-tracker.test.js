@@ -801,6 +801,12 @@ test('saved game UI uses edit and delete terminology without entry-type labels',
 test('game type is captured on new, manual, and edit game forms and shown in history', () => {
   assert.equal((source.match(/name="gameType"/g) || []).length, 2);
   assert.equal((source.match(/gameTypeSelectMarkup\(/g) || []).length, 5);
+  assert.match(source, /What type of game would you like to add\?/);
+  assert.match(source, /data-vfgt-action="choose-played"/);
+  assert.match(source, /data-vfgt-action="choose-future"/);
+  assert.doesNotMatch(source, /data-vfgt-action="add-future"/);
+  assert.doesNotMatch(source, /data-vfgt-action="past"/);
+  assert.doesNotMatch(source, /data-vfgt-action="new"/);
   assert.match(source, /data-vfgt-future-form/);
   assert.match(source, /Save Future Game/);
   assert.match(source, /data-vfgt-action="quick-start"/);

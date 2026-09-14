@@ -110,7 +110,6 @@ const LOCAL_APP_ROUTES = [
     root: '#violet-futbol-game-tracker-view',
     visible: [
       { role: 'heading', name: 'Violet Futbol Game Tracker' },
-      { text: 'New Game' },
       { text: 'Add Game' },
       { text: 'Hume-Fogg' },
     ],
@@ -295,7 +294,9 @@ test('VFGT displays the record from the visible saved scores', async ({ page }) 
 test('VFGT schedules, edits, quick-starts, and completes one future game without duplication', async ({ page }) => {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
-  await app.getByRole('button', { name: 'Add Future Game' }).first().click();
+  await app.getByRole('button', { name: 'Add Game', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'What type of game would you like to add?' })).toBeVisible();
+  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
   await app.getByLabel('Opponent').fill('Brentwood Academy');
   await app.getByLabel('Date').fill('2026-09-18');
   await app.getByLabel('Time').fill('19:00');
@@ -338,13 +339,36 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Franklin Road Academy');
 });
 
+test('VFGT unified Add Game opens the played-game workflow and cancellation stays non-destructive', async ({ page }) => {
+  await page.goto('/#/violet-futbol-game-tracker');
+  const app = page.locator('#violet-futbol-game-tracker-view');
+  await app.getByRole('button', { name: 'Add Game', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'What type of game would you like to add?' })).toBeVisible();
+  await app.getByRole('button', { name: 'Played Game', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'Add Game', exact: true })).toBeVisible();
+  await app.getByLabel('School/Team 2').fill('Ravenwood');
+  await app.getByLabel('Date').fill('2026-09-12');
+  await app.getByRole('button', { name: 'Save Past Game' }).click();
+  await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Ravenwood');
+
+  await app.getByRole('button', { name: 'Add Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Back', exact: true }).click();
+  await app.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1') || '[]'));
+  expect(saved).toHaveLength(1);
+  expect(saved[0].team2).toBe('Ravenwood');
+});
+
 async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
-  await app.getByRole('button', { name: 'New Game' }).click();
-  await app.getByLabel('School/Team 1').fill('Violet');
-  await app.getByLabel('School/Team 2').fill('Hume-Fogg');
-  await app.getByRole('button', { name: 'Start Game' }).click();
+  await app.getByRole('button', { name: 'Add Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
+  await app.getByLabel('Opponent').fill('Hume-Fogg');
+  await app.getByRole('button', { name: 'Save Future Game' }).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await app.locator('.vfgt_scheduled_card').getByRole('button', { name: 'Quick Start' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
   return app;
 }

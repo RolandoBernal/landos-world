@@ -527,6 +527,54 @@
   border-top: 1px solid var(--vfgt-history-border);
 }
 
+.vfgt_game_choices {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.vfgt_game_choice {
+  display: grid;
+  gap: 0.3rem;
+  min-height: 92px;
+  padding: 1rem;
+  color: var(--vfgt-text);
+  text-align: left;
+  background: var(--vfgt-history-bg);
+  border: 2px solid var(--vfgt-history-border);
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vfgt_game_choice::before {
+  content: '○';
+  color: var(--vfgt-muted-strong);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.vfgt_game_choice:hover,
+.vfgt_game_choice:focus-visible {
+  background: rgb(74 163 255 / 12%);
+  border-color: var(--vfgt-accent-strong);
+}
+
+.vfgt_game_choice:focus-visible {
+  outline: 3px solid #82bdff;
+  outline-offset: 3px;
+}
+
+.vfgt_game_choice strong {
+  font-size: 1.1rem;
+}
+
+.vfgt_game_choice span {
+  color: var(--vfgt-muted);
+  font-size: 0.9rem;
+}
+
 .vfgt_accordion {
   margin-top: 0.9rem;
   border: 1px solid var(--vfgt-history-border);
