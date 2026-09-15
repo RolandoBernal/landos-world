@@ -295,7 +295,6 @@
   let historyDraftFilters = { ...historyFilters };
   let historyVisibleDayCount = null;
   let historyFilterSheetOpen = false;
-  let trackerMenuOpen = false;
   let lastFocusedElement = null;
   let reportOptions = {
     range: 'last7',
@@ -3666,8 +3665,15 @@
     `;
   }
 
-  function getTrackerNavLabel(active) {
-    return TRACKER_NAV_ITEMS.find(([action]) => action === active)?.[1] || 'Menu';
+  function renderTrackerNavIcon(action) {
+    const paths = {
+      today: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path>',
+      history: '<path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 7v5l3 2"></path>',
+      reports: '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 3-4 3 2 5-6"></path>',
+      foods: '<path d="M4 11h16v1a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z"></path><path d="M8 8c0-2 1-3 2-4"></path><path d="M12 8c0-2 1-3 2-4"></path><path d="M16 8c0-2 1-3 2-4"></path>',
+      log: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+    };
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[action] || paths.today}</svg>`;
   }
 
   function getCurrentTopLevelSection() {
@@ -3689,25 +3695,21 @@
 
   function renderTrackerNav(active) {
     return `
-      <div class="lee_lee_diabetes_nav_shell ${trackerMenuOpen ? 'is-open' : ''}">
-        <button
-          type="button"
-          class="lee_lee_diabetes_mobile_nav_button"
-          data-action="toggle-tracker-nav"
-          aria-controls="lee-lee-diabetes-nav"
-          aria-expanded="${trackerMenuOpen ? 'true' : 'false'}"
-        >
-          <span>${escapeHtml(getTrackerNavLabel(active))}</span>
-          <span aria-hidden="true">☰</span>
-        </button>
-        <nav class="lee_lee_diabetes_nav" id="lee-lee-diabetes-nav" aria-label="Lee-Lee’s Tracker sections">
-          ${TRACKER_NAV_ITEMS.map(([action, label]) => `
+      <div class="lee_lee_diabetes_nav_shell">
+        <nav class="lee_lee_diabetes_bottom_nav" aria-label="Lee-Lee’s Tracker mobile navigation">
+          ${[
+            ...TRACKER_NAV_ITEMS.slice(0, 2),
+            ['log-entry', 'Log Entry'],
+            ...TRACKER_NAV_ITEMS.slice(2),
+          ].map(([action, label]) => `
             <button
               type="button"
-              class="lee_lee_diabetes_nav_button ${active === action ? 'is-active' : ''}"
+              class="lee_lee_diabetes_bottom_nav_button ${action === 'log-entry' ? 'lee_lee_diabetes_bottom_nav_button--primary' : ''} ${active === action ? 'is-active' : ''}"
               data-action="${escapeHtml(action)}"
-              aria-current="${active === action ? 'page' : 'false'}"
-            >${escapeHtml(label)}</button>
+              aria-label="${escapeHtml(label)}"
+              title="${escapeHtml(label)}"
+              ${action !== 'log-entry' ? `aria-current="${active === action ? 'page' : 'false'}"` : ''}
+            ><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon(action === 'log-entry' ? 'log' : action)}</span><span class="lee_lee_diabetes_sr_only">${escapeHtml(label)}</span></button>
           `).join('')}
         </nav>
       </div>
@@ -3753,9 +3755,6 @@
     root.innerHTML = `
       ${renderTrackerTop({ active: 'today' })}
       ${renderTrackerNav('today')}
-      <section class="lee_lee_diabetes_today_actions" aria-label="Log an entry">
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="log-entry">+ Log Entry</button>
-      </section>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
         ${timeline.length ? `<div class="lee_lee_diabetes_timeline">${timeline.map(renderTimelineItem).join('')}</div>` : '<p class="lee_lee_diabetes_empty">No entries today.</p>'}
@@ -5194,7 +5193,6 @@
       userEditedInsulin: options.userEditedInsulin === true || (sameEditorSession && previousEditor.userEditedInsulin === true),
       autofilledInsulinUnits: sameEditorSession ? previousEditor.autofilledInsulinUnits : null,
     };
-    trackerMenuOpen = false;
     const now = new Date();
     const recordTimestamp = record.recordTimestamp != null
       ? getRecordTimestamp(record)
@@ -6140,7 +6138,6 @@
     const root = getRoot();
     if (!root) return;
     currentEditor = { mode: 'event-picker' };
-    trackerMenuOpen = false;
     root.innerHTML = `
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Log Entry</h1>
@@ -8016,11 +8013,6 @@
         return;
       }
       if (!shouldShowProtectedApp() && !['reset-password'].includes(action)) return;
-      if (action === 'toggle-tracker-nav') {
-        trackerMenuOpen = !trackerMenuOpen;
-        renderCurrentTopLevelSection();
-        return;
-      }
       if (action === 'edit-primary') {
         openPrimaryEditor(target.dataset.type);
       }
@@ -8214,16 +8206,13 @@
         openEventEditor(target.dataset.eventType || DEFAULT_EVENT_TYPE);
       }
       if (action === 'today') {
-        trackerMenuOpen = false;
         renderHome();
       }
       if (action === 'history') {
-        trackerMenuOpen = false;
         resetHistoryVisibleWindow();
         renderHistory();
       }
       if (action === 'reports') {
-        trackerMenuOpen = false;
         renderReports();
       }
       if (action === 'report-view') {
@@ -8235,13 +8224,11 @@
         renderReports();
       }
       if (action === 'foods') {
-        trackerMenuOpen = false;
         foodLibraryMessage = '';
         foodLibraryError = '';
         renderFoodLibrary();
       }
       if (action === 'settings') {
-        trackerMenuOpen = false;
         if (currentEditor?.mode === 'settings') {
           handleCancel();
           return;
@@ -8546,12 +8533,20 @@
         authError = '';
         authMessage = 'Signing in…';
         renderSignIn();
-        syncRepository?.signIn?.(email, password).then((result) => {
-          authMessage = '';
-          authError = result?.error || '';
-          syncStatus = syncRepository.getSyncStatus();
-          renderInitialRoute();
-        });
+        Promise.resolve(syncRepository?.signIn?.(email, password))
+          .then((result) => {
+            authMessage = '';
+            authError = result?.error || '';
+            syncStatus = syncRepository.getSyncStatus();
+            renderInitialRoute();
+          })
+          .catch((error) => {
+            console.warn('[LLT] Sign-in failed before a response was returned.', error);
+            authMessage = '';
+            authError = 'Sign-in could not be completed. Check your connection and try again.';
+            syncStatus = syncRepository?.getSyncStatus?.() || syncStatus;
+            renderSignIn();
+          });
         return;
       }
       if (event.target.matches('[data-device-identity-form]')) {
@@ -8701,12 +8696,6 @@
       }
     });
     root.addEventListener('keydown', (event) => {
-      if (trackerMenuOpen && event.key === 'Escape') {
-        event.preventDefault();
-        trackerMenuOpen = false;
-        renderCurrentTopLevelSection();
-        return;
-      }
       if (historyFilterSheetOpen && event.key === 'Escape') {
         event.preventDefault();
         closeHistoryFilters();
