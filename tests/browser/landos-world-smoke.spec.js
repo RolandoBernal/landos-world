@@ -1280,6 +1280,7 @@ test('Lee-Lee editing context updates the same record after confirmation', async
   await page.getByRole('button', { name: 'Edit' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
+  const foodLibraryCountBefore = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.length);
   await expect(form.getByRole('heading', { name: 'Edit Entry' })).toBeVisible();
   await form.getByLabel('Context').selectOption('Lunch');
   await form.getByRole('button', { name: 'Save' }).click();
@@ -1498,6 +1499,50 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
     insulinUnits: 5.5,
     foods: [],
   });
+});
+
+test('Lee-Lee Carb Calc adds, edits, removes, and mixes temporary manual carb amounts', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: '+ Log Entry' }).click();
+
+  const form = page.locator('[data-lee-lee-editor]');
+  const foodLibraryCountBefore = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.length);
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  const calculator = page.locator('[data-carb-calculator]');
+
+  await calculator.getByRole('button', { name: '+ Add Carb Amount' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Add Carb Amount' })).toBeVisible();
+  const amount = calculator.getByLabel('Carbs');
+  await expect(amount).toBeFocused();
+  await amount.fill('51');
+  await calculator.getByRole('button', { name: 'Add Amount' }).click();
+
+  await calculator.getByRole('button', { name: '+ Add Carb Amount' }).click();
+  await calculator.getByLabel('Carbs').fill('27');
+  await calculator.getByRole('button', { name: 'Add Amount' }).click();
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(2);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('78 g');
+  await expect(calculator.getByRole('button', { name: 'Use 78 grams' })).toBeEnabled();
+
+  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).first().click();
+  await calculator.getByLabel('Carbs').fill('41');
+  await calculator.getByRole('button', { name: 'Save Amount' }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('68 g');
+
+  await calculator.getByRole('button', { name: 'Remove Manual Amount' }).last().click();
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('41 g');
+
+  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByLabel('Carbs per serving').fill('24');
+  await calculator.getByRole('button', { name: 'Add Item' }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('65 g');
+  await calculator.getByRole('button', { name: 'Use 65 grams' }).click();
+  await expect(form.getByLabel('Total Carbs')).toHaveValue('65');
+
+  const foodLibrary = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary);
+  expect(foodLibrary).toHaveLength(foodLibraryCountBefore);
 });
 
 test('Lee-Lee Food Library builds carb totals and saves historical snapshots', async ({ page }) => {
