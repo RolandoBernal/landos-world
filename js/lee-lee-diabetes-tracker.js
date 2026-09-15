@@ -4805,14 +4805,14 @@
     return `
       <section class="lee_lee_diabetes_carb_entry" data-carb-entry aria-labelledby="lee-lee-carb-entry-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-entry-title">Meal Carbs</h2>
-        <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_total_field">
-          Total Carbs
-          <span class="lee_lee_diabetes_unit_input">
-            <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required value="${escapeHtml(value)}">
-            <span>g</span>
-          </span>
-        </label>
-        <div>
+        <div class="lee_lee_diabetes_carb_entry_controls">
+          <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_total_field">
+            Total Carbs
+            <span class="lee_lee_diabetes_unit_input">
+              <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required value="${escapeHtml(value)}">
+              <span>g</span>
+            </span>
+          </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-calculator" aria-label="Open Carb Calculator">Open Carb Calc</button>
         </div>
       </section>
