@@ -713,13 +713,6 @@
     return number >= CARB_CALCULATOR_MIN_QTY && number <= CARB_CALCULATOR_MAX_QTY;
   }
 
-  function isValidManualCarbAmount(value) {
-    const text = String(value ?? '').trim();
-    if (!/^\d+(?:\.\d{0,2})?$/.test(text)) return false;
-    const number = Number(text);
-    return Number.isFinite(number) && number > 0;
-  }
-
   function preserveCarbCalculatorQuantity(value, fallback = '1') {
     const text = String(value ?? '').trim();
     if (text === '' || CARB_CALCULATOR_QTY_PATTERN.test(text)) return text;
@@ -979,7 +972,6 @@
     return {
       id: typeof row.id === 'string' && row.id ? row.id : createId(),
       sourceType,
-      manualEntryMode: sourceType === 'manual' && row.manualEntryMode === true,
       foodId: sourceType === 'food' && typeof row.foodId === 'string' ? row.foodId : '',
       name: sanitizeShortText(row.name || row.nameSnapshot || row.label, 80),
       emoji: sourceType === 'food' ? normalizeFoodEmoji(row.emoji || row.emojiSnapshot) : '',
@@ -4805,14 +4797,14 @@
     return `
       <section class="lee_lee_diabetes_carb_entry" data-carb-entry aria-labelledby="lee-lee-carb-entry-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-entry-title">Meal Carbs</h2>
-        <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_total_field">
-          Total Carbs
-          <span class="lee_lee_diabetes_unit_input">
-            <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required value="${escapeHtml(value)}">
-            <span>g</span>
-          </span>
-        </label>
-        <div>
+        <div class="lee_lee_diabetes_carb_entry_controls">
+          <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_total_field">
+            Total Carbs
+            <span class="lee_lee_diabetes_unit_input">
+              <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required value="${escapeHtml(value)}">
+              <span>g</span>
+            </span>
+          </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-calculator" aria-label="Open Carb Calculator">Open Carb Calc</button>
         </div>
       </section>
@@ -4883,8 +4875,7 @@
             <button type="button" class="lee_lee_diabetes_nav_button ${activePicker === tab ? 'is-active' : ''}" data-action="open-carb-calculator-picker" data-picker="${escapeHtml(tab)}" aria-pressed="${activePicker === tab ? 'true' : 'false'}" aria-expanded="${activePicker === tab ? 'true' : 'false'}" aria-controls="lee-lee-carb-picker-panel">${escapeHtml(label)}</button>
           `).join('')}
         </div>
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Food Item...</button>
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-manual-amount">+ Add Carb Amount</button>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount...</button>
         ${!activePicker && !normalizedSearch && !hasAnyStartedRows ? `
           <div class="lee_lee_diabetes_empty lee_lee_diabetes_carb_calc_empty" data-carb-calculator-empty>
             <p>No foods added yet.</p>
@@ -5049,33 +5040,11 @@
   function renderCarbCalculatorItemEditor(mode) {
     const draft = normalizeCarbCalculatorRow(currentEditor?.carbCalculatorItemDraft || createBlankCarbCalculatorRow());
     const isEdit = mode === 'edit';
-    const isManualAmount = mode === 'manual-amount-add' || mode === 'manual-amount-edit';
-    if (isManualAmount) {
-      return `
-        <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor data-carb-manual-amount-editor>
-          <div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
-            <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator">‹ Carb Calculator</button>
-            <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${mode === 'manual-amount-edit' ? 'Edit Carb Amount' : 'Add Carb Amount'}</h2>
-          </div>
-          <label class="lee_lee_diabetes_field">
-            Carbs
-            <span class="lee_lee_diabetes_unit_input">
-              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="manualCarbAmount" type="text" inputmode="decimal" maxlength="7" autocomplete="off" value="${escapeHtml(draft.carbs)}" aria-describedby="manual-carb-amount-unit">
-              <span id="manual-carb-amount-unit">g</span>
-            </span>
-          </label>
-          <div class="lee_lee_diabetes_actions">
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
-            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-manual-amount">${mode === 'manual-amount-edit' ? 'Save Amount' : 'Add Amount'}</button>
-          </div>
-        </div>
-      `;
-    }
     return `
       <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor>
         <div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
           <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator">‹ Carb Calculator</button>
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${isEdit ? 'Edit Food Item' : 'Add Food Item'}</h2>
+          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${isEdit ? 'Edit Manual Amount' : 'Add Manual Amount'}</h2>
         </div>
         <label class="lee_lee_diabetes_field">
           Quantity
@@ -5330,7 +5299,7 @@
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker) {
       focusTarget(currentEditor.carbCalculatorPicker === 'search' ? '[name="carbFoodSearch"]' : '[data-action="close-carb-calculator-picker"], [data-carb-picker] [data-action]');
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode) {
-      focusTarget(currentEditor.carbCalculatorItemEditorMode.startsWith('manual-amount-') ? '[name="manualCarbAmount"]' : '[name="carbItemQty"]');
+      focusTarget('[name="carbItemCarbs"]');
     } else if (currentEditor.carbCalculatorOpen) {
       focusTarget('[data-action="open-carb-calculator-item-editor"], [data-action="use-carb-calculator-total"]');
     } else if (options.focusAction) {
@@ -5709,31 +5678,6 @@
     });
   }
 
-  function openCarbCalculatorManualAmountEditor(form, rowId = '') {
-    currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-    const existing = rowId ? currentEditor.carbCalculatorRows.find((row) => row.id === rowId && row.sourceType === 'manual') : null;
-    currentEditor.carbCalculatorItemEditorMode = existing ? 'manual-amount-edit' : 'manual-amount-add';
-    currentEditor.carbCalculatorItemEditId = existing?.id || '';
-    currentEditor.carbCalculatorItemDraft = existing ? { ...existing } : { ...createBlankCarbCalculatorRow(), qty: '1', carbs: '' };
-    renderEditor({
-      mode: currentEditor?.mode || 'log-entry',
-      eventType: getEditorEventType(form),
-      type: getEditorType(form),
-      record: buildDraftFromEditor(form),
-      returnTo: currentEditor?.returnTo || null,
-      returnDateKey: currentEditor?.returnDateKey || null,
-      carbCalculatorOpen: true,
-      carbCalculatorRows: currentEditor.carbCalculatorRows,
-      mealComponents: currentEditor?.mealComponents || [],
-      carbCalculatorItemEditorMode: currentEditor.carbCalculatorItemEditorMode,
-      carbCalculatorItemEditId: currentEditor.carbCalculatorItemEditId,
-      carbCalculatorItemDraft: currentEditor.carbCalculatorItemDraft,
-      carbCalculatorPickerFocus: '[name="manualCarbAmount"]',
-      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-      preventFocusScroll: true,
-    });
-  }
-
   function closeCarbCalculatorItemEditor(form) {
     currentEditor.carbCalculatorItemEditorMode = '';
     currentEditor.carbCalculatorItemEditId = '';
@@ -5744,35 +5688,6 @@
   function saveCarbCalculatorItemEditor(form) {
     const panel = form?.querySelector('[data-carb-item-editor]');
     if (!panel) return;
-    if (panel.matches('[data-carb-manual-amount-editor]')) {
-      const amountInput = panel.querySelector('[name="manualCarbAmount"]');
-      const amountText = amountInput?.value?.trim() || '';
-      if (!isValidManualCarbAmount(amountText)) {
-        amountInput?.setCustomValidity('Enter a positive carb amount with up to two decimal places.');
-        amountInput?.reportValidity?.();
-        return;
-      }
-      amountInput?.setCustomValidity('');
-      const editId = currentEditor?.carbCalculatorItemEditId || '';
-      const existing = editId ? getCarbCalculatorRowsFromState().find((row) => row.id === editId) : null;
-      const nextRow = normalizeCarbCalculatorRow({
-        ...(existing || {}),
-        id: existing?.id || createId(),
-        sourceType: 'manual',
-        manualEntryMode: true,
-        name: 'Manual Amount',
-        qty: '1',
-        carbs: formatCarbAmount(Number(amountText)),
-      });
-      currentEditor.carbCalculatorRows = existing
-        ? getCarbCalculatorRowsFromState().map((row) => (row.id === existing.id ? nextRow : row))
-        : [...getCarbCalculatorRowsFromState(), nextRow];
-      currentEditor.carbCalculatorItemEditorMode = '';
-      currentEditor.carbCalculatorItemEditId = '';
-      currentEditor.carbCalculatorItemDraft = null;
-      renderCarbCalculatorMainFromForm(form, { focus: `[data-action="edit-carb-calculator-row"]${getCarbRowSelector(nextRow.id)}` });
-      return;
-    }
     const qtyInput = panel.querySelector('[name="carbItemQty"]');
     const qtyText = qtyInput?.value?.trim() || '';
     if (!isValidCarbCalculatorQuantity(qtyText)) {
@@ -8145,18 +8060,8 @@
         openCarbCalculatorItemEditor(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
         return;
       }
-      if (action === 'open-carb-calculator-manual-amount') {
-        openCarbCalculatorManualAmountEditor(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
-        return;
-      }
       if (action === 'edit-carb-calculator-row') {
-        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
-        const row = getCarbCalculatorRowsFromState().find((item) => item.id === (target.dataset.carbRowId || ''));
-        if (row?.manualEntryMode === true) {
-          openCarbCalculatorManualAmountEditor(form, target.dataset.carbRowId || '');
-        } else {
-          openCarbCalculatorItemEditor(form, target.dataset.carbRowId || '');
-        }
+        openCarbCalculatorItemEditor(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'), target.dataset.carbRowId || '');
         return;
       }
       if (action === 'cancel-carb-calculator-item-editor') {
@@ -8164,10 +8069,6 @@
         return;
       }
       if (action === 'save-carb-calculator-item-editor') {
-        saveCarbCalculatorItemEditor(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
-        return;
-      }
-      if (action === 'save-carb-calculator-manual-amount') {
         saveCarbCalculatorItemEditor(target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]'));
         return;
       }

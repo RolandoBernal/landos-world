@@ -1322,11 +1322,14 @@ test('LLT report and conflict data preserve numeric typography in generated cell
 
 test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
+  assert.match(trackerSource, /\+ Add Manual Amount\.\.\./);
+  assert.match(trackerSource, /\$\{isEdit \? 'Edit Manual Amount' : 'Add Manual Amount'\}/);
   assert.match(trackerSource, /name="carbItemQty" type="text" inputmode="decimal" maxlength="5"/);
   assert.match(trackerSource, /isValidCarbCalculatorQuantity\(qtyText\)/);
   assert.match(trackerSource, /setCustomValidity\('Enter a quantity greater than 0 with up to two decimal places\.'/);
   assert.match(trackerSource, /name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e\.g\. Orange"/);
   assert.match(trackerSource, /name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0\.1"/);
+  assert.match(trackerSource, /focusTarget\('\[name="carbItemCarbs"\]'\)/);
   assert.match(trackerSource, /data-action="edit-carb-calculator-row"/);
   assert.match(trackerSource, /data-action="remove-carb-calculator-row"/);
   assert.match(trackerSource, /aria-label="\$\{escapeHtml\(editLabel\)\}"/);
@@ -1335,6 +1338,7 @@ test('carb calculator uses display rows with a focused item editor', () => {
   assert.doesNotMatch(trackerSource, /data-action="increment-carb-row"/);
   assert.doesNotMatch(trackerSource, /data-action="decrement-carb-row"/);
   assert.doesNotMatch(trackerSource, /setCarbRowQuantity/);
+  assert.doesNotMatch(trackerSource, /Add Carb Amount|manualCarbAmount|manual-amount/);
   assert.match(trackerSource, /shouldSelectValue = \['carbCalcQty', 'carbCalcCarbs', 'carbItemQty', 'carbItemCarbs'\]\.includes/);
   assert.match(trackerSource, /input\.select\(\)/);
 });

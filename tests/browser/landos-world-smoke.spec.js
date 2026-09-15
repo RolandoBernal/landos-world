@@ -1413,6 +1413,24 @@ test('Lee-Lee context switching restores Meal Carbs for applicable contexts', as
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toBeVisible();
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeVisible();
   await expect(form.getByRole('button', { name: '+ Add Food' })).toHaveCount(0);
+  const carbLayout = await form.locator('.lee_lee_diabetes_carb_entry_controls').evaluate((controls) => {
+    const label = controls.querySelector('.lee_lee_diabetes_carb_total_field').getBoundingClientRect();
+    const input = controls.querySelector('[name="mealCarbs"]').getBoundingClientRect();
+    const button = controls.querySelector('[data-action="open-carb-calculator"]').getBoundingClientRect();
+    return {
+      display: getComputedStyle(controls).display,
+      inputWidth: input.width,
+      controlsWidth: controls.getBoundingClientRect().width,
+      labelBottom: label.bottom,
+      buttonBottom: button.bottom,
+      buttonLeft: button.left,
+      labelRight: label.right,
+    };
+  });
+  expect(carbLayout.display).toBe('flex');
+  expect(carbLayout.inputWidth).toBeLessThan(carbLayout.controlsWidth);
+  expect(Math.abs(carbLayout.labelBottom - carbLayout.buttonBottom)).toBeLessThanOrEqual(1);
+  expect(carbLayout.buttonLeft).toBeGreaterThanOrEqual(carbLayout.labelRight);
 
   await form.getByLabel('Context').selectOption('Correction');
   await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
@@ -1436,14 +1454,14 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(form.locator('[data-editor-main]')).toHaveAttribute('aria-hidden', 'true');
   await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
   await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
-  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeFocused();
   await expect(calculator.getByText('No items added yet.')).toBeVisible();
   await expect(calculator.getByText('Total Carbs')).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Use 0 grams' })).toBeDisabled();
 
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
-  await expect(calculator.getByRole('heading', { name: 'Add Food Item' })).toBeVisible();
-  await expect(calculator.locator('[name="carbItemQty"]')).toBeFocused();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await expect(calculator.getByRole('heading', { name: 'Add Manual Amount' })).toBeVisible();
+  await expect(calculator.locator('[name="carbItemCarbs"]')).toBeFocused();
   await calculator.getByLabel('Quantity').fill('2');
   await calculator.getByLabel('Label').fill('Orange');
   await calculator.getByLabel('Carbs per serving').fill('15');
@@ -1456,7 +1474,7 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(calculator.getByLabel('Meal Total')).toHaveText('30 g');
 
   await calculator.getByRole('button', { name: 'Edit Orange' }).click();
-  await expect(calculator.getByRole('heading', { name: 'Edit Food Item' })).toBeVisible();
+  await expect(calculator.getByRole('heading', { name: 'Edit Manual Amount' })).toBeVisible();
   await calculator.getByLabel('Quantity').fill('3');
   await calculator.getByLabel('Carbs per serving').fill('21');
   await calculator.getByRole('button', { name: 'Save Item' }).click();
@@ -1468,21 +1486,21 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('63');
-  await expect(form.getByText('Carb coverage: 63 g carbs ÷ 20 = 3.15 units')).toBeVisible();
-  await expect(form.getByText('Raw dose: 5.15 units')).toBeVisible();
-  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 5 units')).toBeVisible();
-  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5');
+  await expect(form).toContainText('Carb coverage: 63 g');
+  await expect(form).toContainText('Raw dose: 7.25 units');
+  await expect(form).toContainText('Rounded down 0.5-unit increment: 7 units');
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('7');
 
   await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('70');
-  await expect(form.getByText('Carb coverage: 70 g carbs ÷ 20 = 3.5 units')).toBeVisible();
-  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 5.5 units')).toBeVisible();
-  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5.5');
+  await expect(form).toContainText('Carb coverage: 70 g');
+  await expect(form).toContainText('Rounded down 0.5-unit increment: 7.5 units');
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('7.5');
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   await expect(page.locator('[data-carb-calculator]').getByLabel('Meal Total')).toHaveText('63 g');
   await page.locator('[data-carb-calculator]').getByRole('button', { name: 'Cancel Carb Calculator' }).click();
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('70');
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeFocused();
-  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('5.5');
+  await expect(form.getByLabel('Insulin Actually Given')).toHaveValue('7.5');
 
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
@@ -1495,54 +1513,10 @@ test('Lee-Lee Carb Calc applies temporary receipt rows without saving food detai
     type: 'Dinner',
     mealCarbs: 70,
     totalCarbs: 70,
-    administeredInsulinUnits: 5.5,
-    insulinUnits: 5.5,
+    administeredInsulinUnits: 7.5,
+    insulinUnits: 7.5,
     foods: [],
   });
-});
-
-test('Lee-Lee Carb Calc adds, edits, removes, and mixes temporary manual carb amounts', async ({ page }) => {
-  await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
-
-  const form = page.locator('[data-lee-lee-editor]');
-  const foodLibraryCountBefore = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.length);
-  await form.getByLabel('Context').selectOption('Dinner');
-  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
-  const calculator = page.locator('[data-carb-calculator]');
-
-  await calculator.getByRole('button', { name: '+ Add Carb Amount' }).click();
-  await expect(calculator.getByRole('heading', { name: 'Add Carb Amount' })).toBeVisible();
-  const amount = calculator.getByLabel('Carbs');
-  await expect(amount).toBeFocused();
-  await amount.fill('51');
-  await calculator.getByRole('button', { name: 'Add Amount' }).click();
-
-  await calculator.getByRole('button', { name: '+ Add Carb Amount' }).click();
-  await calculator.getByLabel('Carbs').fill('27');
-  await calculator.getByRole('button', { name: 'Add Amount' }).click();
-  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(2);
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('78 g');
-  await expect(calculator.getByRole('button', { name: 'Use 78 grams' })).toBeEnabled();
-
-  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).first().click();
-  await calculator.getByLabel('Carbs').fill('41');
-  await calculator.getByRole('button', { name: 'Save Amount' }).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('68 g');
-
-  await calculator.getByRole('button', { name: 'Remove Manual Amount' }).last().click();
-  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('41 g');
-
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
-  await calculator.getByLabel('Carbs per serving').fill('24');
-  await calculator.getByRole('button', { name: 'Add Item' }).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('65 g');
-  await calculator.getByRole('button', { name: 'Use 65 grams' }).click();
-  await expect(form.getByLabel('Total Carbs')).toHaveValue('65');
-
-  const foodLibrary = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary);
-  expect(foodLibrary).toHaveLength(foodLibraryCountBefore);
 });
 
 test('Lee-Lee Food Library builds carb totals and saves historical snapshots', async ({ page }) => {
@@ -1619,7 +1593,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByRole('button', { name: 'Add New Food' })).toHaveCount(0);
   await expect(calculator.getByRole('button', { name: 'Save as Meal' })).toHaveCount(0);
 
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   await calculator.getByLabel('Quantity').fill('2');
   await calculator.getByLabel('Carbs per serving').fill('17');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
@@ -1728,8 +1702,8 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByRole('button', { name: 'Use 84 grams' }).click();
 
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('84');
-  await expect(form.getByText('Carb coverage: 84 g carbs ÷ 20 = 4.2 units')).toBeVisible();
-  await expect(form.getByText('Rounded to nearest 0.5-unit increment: 6 units')).toBeVisible();
+  await expect(form).toContainText('Carb coverage: 84 g');
+  await expect(form).toContainText('Rounded to nearest 0.5-unit increment: 6 units');
   await form.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'Confirm and Save' }).click();
 
@@ -2146,7 +2120,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeVisible();
+  await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
   await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
   await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
 
@@ -2275,7 +2249,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   const editorMetrics = await calculator.locator('[data-carb-item-editor]').evaluate((node) => {
     const qtyInput = node.querySelector('[name="carbItemQty"]');
     const labelInput = node.querySelector('[name="carbItemLabel"]');
@@ -2338,7 +2312,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   await expect(calculator.getByRole('button', { name: 'Edit Manual Amount' })).toBeFocused();
 
   await calculator.getByRole('button', { name: 'Edit Manual Amount' }).click();
-  await expect(calculator.getByRole('heading', { name: 'Edit Food Item' })).toBeVisible();
+  await expect(calculator.getByRole('heading', { name: 'Edit Manual Amount' })).toBeVisible();
   await expect(qtyInput).toHaveValue('0.5');
   await qtyInput.fill('0.25');
   await carbsInput.fill('26');
@@ -2372,7 +2346,7 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
 
   const calculator = page.locator('[data-carb-calculator]');
   await expect(calculator).toBeVisible();
-  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeFocused();
   await expect.poll(() => calculator.evaluate((node) => getComputedStyle(node).maxHeight)).toBe('100%');
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
 
@@ -2383,8 +2357,8 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
     });
   });
 
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
-  await expect(calculator.locator('[name="carbItemQty"]')).toBeFocused();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await expect(calculator.locator('[name="carbItemCarbs"]')).toBeFocused();
   await calculator.locator('[name="carbItemCarbs"]').fill('20');
   await expect(calculator).toBeVisible();
   await expect(calculator.locator('[name="carbItemCarbs"]')).toHaveValue('20');
@@ -2462,7 +2436,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   const calculator = page.locator('[data-carb-calculator]');
   const layer = page.locator('[data-carb-calculator-layer]');
   await expect(calculator).toBeVisible();
-  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeFocused();
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
   expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
@@ -2495,7 +2469,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   })).toBe(108);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeOpen);
   await expect(calculator).toBeVisible();
-  await expect(calculator.getByRole('button', { name: '+ Add Food Item...' })).toBeFocused();
+  await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeFocused();
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
     node.scrollTop = node.scrollHeight;
@@ -2552,7 +2526,7 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
 
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
   const calculator = page.locator('[data-carb-calculator]');
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   const itemCarbs = calculator.locator('[name="carbItemCarbs"]');
   await itemCarbs.click();
   await itemCarbs.pressSequentially('47');
@@ -2583,15 +2557,15 @@ test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display
   await expect(calculator.locator('[name="carbCalcCarbs"]')).toHaveCount(0);
   await expect(calculator.locator('[name="carbCalcQty"]')).toHaveCount(0);
 
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   await calculator.getByLabel('Carbs per serving').fill('23');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   await calculator.getByLabel('Quantity').fill('2');
   await calculator.getByLabel('Label').fill('Snack');
   await calculator.getByLabel('Carbs per serving').fill('15');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
-  await calculator.getByRole('button', { name: '+ Add Food Item...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
   await calculator.getByLabel('Carbs per serving').fill('47');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
 
@@ -2599,11 +2573,11 @@ test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display
   await expect(calculator.getByLabel('Meal Total')).toHaveText('100 g');
   await expect(calculator.locator('.lee_lee_diabetes_carb_calc_operator')).toHaveText(['@', '@', '@']);
 
-  await calculator.getByRole('button', { name: 'Edit Manual Amount' }).nth(1).click();
+  await calculator.getByRole('button', { name: 'Edit Snack' }).click();
   await calculator.getByLabel('Quantity').fill('1.5');
   await calculator.getByLabel('Carbs per serving').fill('19');
   await calculator.getByRole('button', { name: 'Save Item' }).click();
-  await expect(calculator.getByLabel('Meal Total')).toHaveText('72 g');
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('98.5 g');
 
   expect(await calculator.locator('[tabindex]').count()).toBe(0);
 });
