@@ -1413,6 +1413,24 @@ test('Lee-Lee context switching restores Meal Carbs for applicable contexts', as
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toBeVisible();
   await expect(form.getByRole('button', { name: 'Open Carb Calculator' })).toBeVisible();
   await expect(form.getByRole('button', { name: '+ Add Food' })).toHaveCount(0);
+  const carbLayout = await form.locator('.lee_lee_diabetes_carb_entry_controls').evaluate((controls) => {
+    const label = controls.querySelector('.lee_lee_diabetes_carb_total_field').getBoundingClientRect();
+    const input = controls.querySelector('[name="mealCarbs"]').getBoundingClientRect();
+    const button = controls.querySelector('[data-action="open-carb-calculator"]').getBoundingClientRect();
+    return {
+      display: getComputedStyle(controls).display,
+      inputWidth: input.width,
+      controlsWidth: controls.getBoundingClientRect().width,
+      labelBottom: label.bottom,
+      buttonBottom: button.bottom,
+      buttonLeft: button.left,
+      labelRight: label.right,
+    };
+  });
+  expect(carbLayout.display).toBe('flex');
+  expect(carbLayout.inputWidth).toBeLessThan(carbLayout.controlsWidth);
+  expect(Math.abs(carbLayout.labelBottom - carbLayout.buttonBottom)).toBeLessThanOrEqual(1);
+  expect(carbLayout.buttonLeft).toBeGreaterThanOrEqual(carbLayout.labelRight);
 
   await form.getByLabel('Context').selectOption('Correction');
   await expect(form.getByRole('heading', { name: 'Meal Carbs' })).toHaveCount(0);
