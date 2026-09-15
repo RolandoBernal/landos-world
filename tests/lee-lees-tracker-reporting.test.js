@@ -1718,17 +1718,26 @@ test('today activity helper returns only current-day active records newest first
 
 test('today UI uses one log-entry CTA and responsive navigation contracts', () => {
   assert.match(trackerSource, /Today’s Activity/);
-  assert.match(trackerSource, /data-action="log-entry"/);
-  assert.match(trackerSource, />\+ Log Entry<\/button>/);
+  assert.match(trackerSource, /\['log-entry', 'Log Entry'\]/);
+  assert.doesNotMatch(trackerSource, /lee_lee_diabetes_today_actions/);
   assert.match(trackerSource, /id="lee-lee-diabetes-title">Log Entry<\/h1>/);
   assert.doesNotMatch(trackerSource, />\+ Add Event<\/button>/);
   assert.doesNotMatch(trackerSource, /id="lee-lee-diabetes-title">Add Event<\/h1>/);
   assert.doesNotMatch(trackerSource, /PRIMARY_TYPES\.map\(renderPrimaryCard\)/);
-  assert.match(trackerSource, /data-action="toggle-tracker-nav"/);
-  assert.match(trackerSource, /aria-expanded/);
-  assert.match(cssSource, /\.lee_lee_diabetes_mobile_nav_button/);
-  assert.match(cssSource, /max-width: 520px[\s\S]*\.lee_lee_diabetes_nav_shell\.is-open \.lee_lee_diabetes_nav/);
+  assert.match(trackerSource, /lee_lee_diabetes_bottom_nav/);
+  assert.match(trackerSource, /data-action="\$\{escapeHtml\(action\)\}"/);
+  assert.match(trackerSource, /aria-label="\$\{escapeHtml\(label\)\}"/);
+  assert.match(cssSource, /\.lee_lee_diabetes_bottom_nav \{/);
+  assert.match(cssSource, /position: fixed/);
+  assert.match(cssSource, /safe-area-inset-bottom/);
   assert.match(cssSource, /min-width: 680px[\s\S]*\.lee_lee_diabetes_cards/);
+});
+
+test('LLT sign-in returns failed auth and sync promises to the form', () => {
+  assert.match(trackerSource, /Sign-in could not be completed\. Check your connection and try again\./);
+  assert.match(trackerSource, /\.catch\(\(error\) => \{/);
+  assert.match(trackerSource, /authMessage = '';/);
+  assert.match(trackerSource, /renderSignIn\(\);/);
 });
 
 test('check insulin scheduled contexts are marked logged and rechecked before save', () => {
