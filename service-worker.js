@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-09-15-1';
+const SW_VERSION = '2026-09-15-2';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -87,7 +87,8 @@ async function putIfOk(cacheName, request, response) {
 
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request, { ignoreSearch: true })
+  const cached = await cache.match(request)
+    || await cache.match(request, { ignoreSearch: true })
     || await cache.match(stripVersionSearch(request));
   if (cached) return cached;
   const response = await fetch(request);
@@ -207,6 +208,7 @@ async function clearApplicationCaches() {
 }
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(precacheApplicationShell('install'));
 });
 
