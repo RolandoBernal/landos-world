@@ -193,10 +193,19 @@ test('service worker uses separate versioned caches and strategy-specific runtim
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
   assert.match(sw, /async function cacheFirst/);
+  assert.match(sw, /const cached = await cache\.match\(request\)\s*\n\s*\|\| await cache\.match\(request, \{ ignoreSearch: true \}\)/);
+  assert.match(sw, /self\.skipWaiting\(\)/);
   assert.match(sw, /async function staleWhileRevalidate/);
   assert.match(sw, /async function networkFirst/);
   assert.match(sw, /new Request\(url, \{ cache: 'reload' \}\)/);
   assert.match(sw, /WEATHER_HOSTS\.has\(url\.hostname\)/);
+});
+
+test('localhost previews bypass service-worker registration', () => {
+  assert.match(pwaManager, /LOCAL_PREVIEW_HOSTS = new Set\(\['localhost', '127\.0\.0\.1', '\[::1\]', '::1'\]\)/);
+  assert.match(pwaManager, /if \(isLocalPreview\(\)\) \{/);
+  assert.match(pwaManager, /disableLocalPreviewServiceWorkers\(\)/);
+  assert.match(pwaManager, /registration\.unregister\(\)/);
 });
 
 test('app dropdowns use padded custom select arrows', () => {
