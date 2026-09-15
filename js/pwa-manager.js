@@ -1,6 +1,8 @@
 (() => {
   const INSTALL_DISMISSED_KEY = 'landos_world_install_dismissed_v1';
   const STORAGE_PERSIST_REQUESTED_KEY = 'landos_world_storage_persist_requested_v1';
+  const LOCAL_SW_RELOAD_KEY = 'landos_world_local_sw_disabled_v1';
+  const LOCAL_PREVIEW_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
   const SW_PATH = './service-worker.js';
   const STATUS_REQUEST_TIMEOUT_MS = 4000;
 
@@ -14,6 +16,24 @@
   let restartRequested = false;
   let activeRegistration = null;
   let statusRequestSequence = 0;
+
+  function isLocalPreview() {
+    return LOCAL_PREVIEW_HOSTS.has(window.location?.hostname || '');
+  }
+
+  async function disableLocalPreviewServiceWorkers() {
+    if (!navigator.serviceWorker?.getRegistrations) return;
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    if (!registrations.length) {
+      window.sessionStorage?.removeItem(LOCAL_SW_RELOAD_KEY);
+      return;
+    }
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    if (navigator.serviceWorker.controller && window.location?.reload && window.sessionStorage?.getItem(LOCAL_SW_RELOAD_KEY) !== '1') {
+      window.sessionStorage.setItem(LOCAL_SW_RELOAD_KEY, '1');
+      window.location.reload();
+    }
+  }
 
   function getStatusEl() {
     return document.getElementById('pwa-network-status');
@@ -328,6 +348,16 @@
   }
 
   async function registerServiceWorker() {
+    if (isLocalPreview()) {
+      offlineReadiness = 'unavailable';
+      updateUi();
+      try {
+        await disableLocalPreviewServiceWorkers();
+      } catch (error) {
+        console.warn('Local preview service-worker cleanup failed.', error);
+      }
+      return;
+    }
     if (!('serviceWorker' in navigator)) {
       offlineReadiness = 'unavailable';
       updateUi();
