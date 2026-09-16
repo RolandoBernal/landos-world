@@ -5,6 +5,7 @@
   const SEASONS_KEY = 'lando-world:violet-futbol-game-tracker:seasons:v1';
   const SETTINGS_KEY = 'lando-world:violet-futbol-game-tracker:settings:v1';
   const MIGRATION_KEY = 'lando-world:violet-futbol-game-tracker:migration:v1';
+  const RECOVERY_BACKUP_KEY_PREFIX = 'lando-world:violet-futbol-game-tracker:recovery-backup:';
   const SCHEMA_VERSION = 4;
   const DEFAULT_HALF_DURATION_MINUTES = 40;
   const REGULATION_SECONDS = 40 * 60;
@@ -48,6 +49,7 @@
   let screenWakeLock = null;
   let screenWakeLockRequest = null;
   let lastDirectActivationAt = 0;
+  let recoveryScan = null;
   const guardedActions = new WeakMap();
 
   function createId() {
@@ -92,6 +94,16 @@
     return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
   }
 
+  function readStoredJson(key) {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return { present: false, valid: true, value: null };
+    try {
+      return { present: true, valid: true, value: JSON.parse(raw) };
+    } catch {
+      return { present: true, valid: false, value: null };
+    }
+  }
+
   function readCollection(key, normalizer) {
     const parsed = readJson(key, []);
     return Array.isArray(parsed) ? parsed.map(normalizer).filter(Boolean) : [];
@@ -126,7 +138,9 @@
 
   function initializeContext() {
     const rawSeasons = readJson(SEASONS_KEY, []);
-    const rawSavedGames = readJson(SAVED_GAMES_KEY, []);
+    const rawSavedGamesRecord = readStoredJson(SAVED_GAMES_KEY);
+    const rawSavedGames = rawSavedGamesRecord.valid && Array.isArray(rawSavedGamesRecord.value) ? rawSavedGamesRecord.value : null;
+    let migrationGames = rawSavedGames;
     teams = readCollection(TEAMS_KEY, normalizeTeam);
     seasons = readCollection(SEASONS_KEY, normalizeSeason);
     vfgtSettings = readJson(SETTINGS_KEY, {});
@@ -151,42 +165,55 @@
     savedGames = sortedGames(readSavedGames());
     if (migrationVersion < 1) {
       const initialSeason = seasons.find((season) => season.teamId === initialTeam.id) || seasons[0];
-      savedGames = savedGames.map((game) => ({
-        ...game,
-        teamId: game.teamId || initialTeam.id,
-        seasonId: game.seasonId || initialSeason.id,
-        teamSide: game.teamSide === 1 || game.teamSide === 2
-          ? game.teamSide
-          : (String(game.team1 || '').trim().toLowerCase() === HUME_FOGG_TEAM.toLowerCase() ? 1 : 2),
-      }));
-      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      if (Array.isArray(migrationGames)) {
+        migrationGames = migrationGames.map((game) => {
+          if (!game || typeof game !== 'object') return game;
+          return {
+            ...game,
+            teamId: game.teamId || initialTeam.id,
+            seasonId: game.seasonId || initialSeason.id,
+            teamSide: game.teamSide === 1 || game.teamSide === 2
+              ? game.teamSide
+              : (String(game.team1 || '').trim().toLowerCase() === HUME_FOGG_TEAM.toLowerCase() ? 1 : 2),
+          };
+        });
+        localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(migrationGames));
+      }
       const active = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
       if (active) localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({ ...active, teamId: active.teamId || initialTeam.id, seasonId: active.seasonId || initialSeason.id }));
       localStorage.setItem(MIGRATION_KEY, '1');
       changed = true;
     }
     if (migrationVersion < 2) {
-      savedGames = savedGames.map((game) => {
-        const team = teams.find((item) => item.id === game.teamId);
-        if (!team) return game;
-        const team1 = String(game.team1 || '').trim().toLowerCase();
-        const team2 = String(game.team2 || '').trim().toLowerCase();
-        const tracked = team.name.trim().toLowerCase();
-        if (team1 === tracked && team2 !== tracked) return { ...game, teamSide: 1 };
-        if (team2 === tracked && team1 !== tracked) return { ...game, teamSide: 2 };
-        return game;
-      });
-      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      if (Array.isArray(migrationGames)) {
+        migrationGames = migrationGames.map((game) => {
+          if (!game || typeof game !== 'object') return game;
+          const team = teams.find((item) => item.id === game.teamId);
+          if (!team) return game;
+          const team1 = String(game.team1 || '').trim().toLowerCase();
+          const team2 = String(game.team2 || '').trim().toLowerCase();
+          const tracked = team.name.trim().toLowerCase();
+          if (team1 === tracked && team2 !== tracked) return { ...game, teamSide: 1 };
+          if (team2 === tracked && team1 !== tracked) return { ...game, teamSide: 2 };
+          return game;
+        });
+        localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(migrationGames));
+      }
       localStorage.setItem(MIGRATION_KEY, '2');
       changed = true;
     }
     const seasonsNeedDurationMigration = !Array.isArray(rawSeasons)
       || rawSeasons.some((season) => !Number.isInteger(Number(season?.halfDurationMinutes)) || Number(season.halfDurationMinutes) <= 0);
-    const gamesNeedDurationMigration = !Array.isArray(rawSavedGames)
-      || rawSavedGames.some((game) => !Number.isInteger(Number(game?.halfDurationMinutes)) || Number(game.halfDurationMinutes) <= 0);
+    const gamesNeedDurationMigration = Array.isArray(migrationGames)
+      && migrationGames.some((game) => !Number.isInteger(Number(game?.halfDurationMinutes)) || Number(game.halfDurationMinutes) <= 0);
     if (migrationVersion < 3 || seasonsNeedDurationMigration || gamesNeedDurationMigration) {
       seasons = seasons.map((season) => ({ ...season, halfDurationMinutes: normalizeHalfDurationMinutes(season.halfDurationMinutes) }));
-      savedGames = savedGames.map((game) => ({ ...game, halfDurationMinutes: normalizeHalfDurationMinutes(game.halfDurationMinutes) }));
+      if (Array.isArray(migrationGames)) {
+        migrationGames = migrationGames.map((game) => game && typeof game === 'object'
+          ? { ...game, halfDurationMinutes: normalizeHalfDurationMinutes(game.halfDurationMinutes) }
+          : game);
+        localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(migrationGames));
+      }
       const activeGame = normalizeGame(readJson(ACTIVE_GAME_KEY, null));
       if (activeGame) {
         localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({
@@ -194,16 +221,24 @@
           halfDurationMinutes: normalizeHalfDurationMinutes(activeGame.halfDurationMinutes),
         }));
       }
-      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
       localStorage.setItem(MIGRATION_KEY, '3');
       changed = true;
     }
     if (migrationVersion < 4) {
-      savedGames = savedGames.map((game) => ({ ...game, status: game.status || 'completed', phase: 'final' }));
-      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(savedGames));
+      if (Array.isArray(migrationGames)) {
+        migrationGames = migrationGames.map((game) => {
+          if (!game || typeof game !== 'object') return game;
+          if (game.status === 'scheduled' || game.phase === 'pregame') return { ...game, status: 'scheduled', phase: 'pregame' };
+          if (game.status === 'completed' || game.phase === 'final') return { ...game, status: 'completed', phase: 'final' };
+          if (game.status === 'inProgress' || ['first_half', 'halftime', 'second_half'].includes(game.phase)) return game;
+          return game;
+        });
+        localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(migrationGames));
+      }
       localStorage.setItem(MIGRATION_KEY, '4');
       changed = true;
     }
+    savedGames = sortedGames(readSavedGames());
     if (changed) writeContext();
   }
 
@@ -619,6 +654,264 @@
     }
   }
 
+  function isVfgtStorageKey(key) {
+    return /violet-futbol|saved-games|active-game|vfgt/i.test(String(key || ''));
+  }
+
+  function futureCandidateReason(game, sourceKey) {
+    const status = String(game?.status || game?.gameStatus || '').toLowerCase();
+    const phase = String(game?.phase || game?.gamePhase || '').toLowerCase();
+    if (status === 'scheduled' || phase === 'pregame' || game?.isFuture === true || game?.scheduled === true || game?.isScheduled === true || ['future', 'scheduled'].includes(String(game?.kind || game?.recordType || '').toLowerCase())) {
+      return 'Explicit scheduled/future marker';
+    }
+    if (['deleted', 'archived', 'abandoned', 'soft-deleted', 'soft_deleted'].includes(status) || game?.deletedAt || game?.archivedAt || game?.isDeleted === true) {
+      return 'Archived/deleted/abandoned game retained in source; review before restoring';
+    }
+    if (isVfgtStorageKey(sourceKey)
+      && game?.entryType !== 'manual'
+      && status === 'completed'
+      && phase === 'final'
+      && !game.completedAt
+      && !game.finalTeam1Score
+      && !game.finalTeam2Score
+      && !game.firstHalfDurationSeconds
+      && !game.secondHalfDurationSeconds) {
+      return 'Possible VFGT migration-v4 scheduled record: live game marked final without completion data';
+    }
+    if (/future|scheduled/i.test(String(sourceKey || ''))) return 'Future/scheduled storage source';
+    return '';
+  }
+
+  function isGameCandidate(game, sourceKey) {
+    if (!game || typeof game !== 'object') return false;
+    const hasTeams = String(game.team1 || game.homeTeam || '').trim() && String(game.team2 || game.awayTeam || game.opponent || '').trim();
+    const hasDate = String(game.date || game.gameDate || game.startDate || '').trim();
+    return Boolean(hasTeams && hasDate && futureCandidateReason(game, sourceKey));
+  }
+
+  function collectRecoveryCandidates(value, sourceKey, path, candidates, seen = new Set(), depth = 0) {
+    if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
+    seen.add(value);
+    if (isGameCandidate(value, sourceKey)) {
+      candidates.push({ source: 'localStorage', sourceKey, path, raw: value, reason: futureCandidateReason(value, sourceKey) });
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => collectRecoveryCandidates(item, sourceKey, `${path}[${index}]`, candidates, seen, depth + 1));
+      return;
+    }
+    Object.entries(value).forEach(([key, item]) => {
+      if (key !== 'raw' && key !== 'payload' && key !== 'data' && key !== 'games' && key !== 'records' && key !== 'items' && depth > 1) return;
+      collectRecoveryCandidates(item, sourceKey, `${path}.${key}`, candidates, seen, depth + 1);
+    });
+  }
+
+  async function scanIndexedDbRecovery(candidates) {
+    if (!window.indexedDB || typeof window.indexedDB.databases !== 'function') return { supported: false, databases: [], stores: 0 };
+    let databases = [];
+    try {
+      databases = (await window.indexedDB.databases()).filter((item) => item?.name);
+    } catch {
+      return { supported: true, databases: [], stores: 0, error: 'IndexedDB database listing was unavailable.' };
+    }
+    let stores = 0;
+    for (const info of databases) {
+      await new Promise((resolve) => {
+        let request;
+        try {
+          request = window.indexedDB.open(info.name, info.version);
+        } catch {
+          resolve();
+          return;
+        }
+        request.onerror = () => resolve();
+        request.onsuccess = () => {
+          const db = request.result;
+          const storeNames = [...db.objectStoreNames];
+          stores += storeNames.length;
+          Promise.all(storeNames.map((storeName) => new Promise((storeResolve) => {
+            try {
+              const transaction = db.transaction(storeName, 'readonly');
+              const getAll = transaction.objectStore(storeName).getAll();
+              getAll.onsuccess = () => {
+                (getAll.result || []).forEach((record, index) => {
+                  if (isGameCandidate(record, `${info.name}/${storeName}`)) {
+                    candidates.push({ source: 'IndexedDB', sourceKey: `${info.name}/${storeName}`, path: `[${index}]`, raw: record, reason: futureCandidateReason(record, `${info.name}/${storeName}`) });
+                  }
+                });
+                storeResolve();
+              };
+              getAll.onerror = () => storeResolve();
+            } catch {
+              // A read-only diagnostic skips stores that cannot be opened.
+              storeResolve();
+            }
+          }))).finally(() => {
+            db.close();
+            resolve();
+          });
+        };
+      });
+    }
+    return { supported: true, databases: databases.map((item) => item.name), stores };
+  }
+
+  async function scanCacheRecovery(candidates) {
+    if (!window.caches?.keys) return { supported: false, caches: [], entries: [] };
+    const cacheNames = await window.caches.keys();
+    const entries = [];
+    for (const cacheName of cacheNames) {
+      try {
+        const cache = await window.caches.open(cacheName);
+        const requests = await cache.keys();
+        for (const request of requests) {
+          if (!/violet-futbol|saved-games|active-game/i.test(request.url)) continue;
+          entries.push({ cacheName, url: request.url });
+          try {
+            const response = await cache.match(request);
+            const text = await response?.clone().text();
+            if (!text) continue;
+            const parsed = JSON.parse(text);
+            collectRecoveryCandidates(parsed, `${cacheName}:${request.url}`, '$', candidates);
+          } catch {
+            // Matching cached responses are often HTML or JavaScript; inspect JSON only.
+          }
+        }
+      } catch {
+        // Cache diagnostics are best-effort and never modify caches.
+      }
+    }
+    return { supported: true, caches: cacheNames, entries };
+  }
+
+  async function scanVfgtDataLayer() {
+    const candidates = [];
+    const localStorageKeys = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key) continue;
+      localStorageKeys.push(key);
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        collectRecoveryCandidates(parsed, key, '$', candidates);
+      } catch {
+        // Keep malformed source data untouched and report the key as scanned.
+      }
+    }
+    const indexedDb = await scanIndexedDbRecovery(candidates);
+    const cache = await scanCacheRecovery(candidates);
+    const unique = [];
+    const seen = new Set();
+    candidates.forEach((candidate) => {
+      const id = String(candidate.raw?.id || '').trim();
+      const identity = `${candidate.source}:${candidate.sourceKey}:${id || candidate.path}`;
+      if (seen.has(identity)) return;
+      seen.add(identity);
+      unique.push({ ...candidate, index: unique.length });
+    });
+    return { localStorageKeys, indexedDb, cache, candidates: unique, scannedAt: nowIso() };
+  }
+
+  function recoveryField(game, keys, fallback = 'Not available') {
+    const key = keys.find((item) => game?.[item] !== undefined && game?.[item] !== null && String(game[item]).trim() !== '');
+    return key ? String(game[key]) : fallback;
+  }
+
+  function downloadRecoveryJson(filename, payload) {
+    if (!window.Blob || !window.URL?.createObjectURL) return false;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+    return true;
+  }
+
+  function restoreRecoveryCandidates(indices) {
+    const rawCollection = readJson(SAVED_GAMES_KEY, null);
+    if (!Array.isArray(rawCollection)) return { error: 'The current saved-game source is not a readable array. No import was attempted.' };
+    const selected = indices.map((index) => recoveryScan?.candidates?.[index]).filter(Boolean);
+    if (!selected.length) return { error: 'Select at least one candidate before restoring.' };
+    const backup = {
+      kind: 'VFGT non-destructive recovery backup',
+      createdAt: nowIso(),
+      sourceKey: SAVED_GAMES_KEY,
+      originalCollection: rawCollection,
+      selectedCandidates: selected.map((candidate) => ({ ...candidate, raw: candidate.raw })),
+    };
+    const backupKey = `${RECOVERY_BACKUP_KEY_PREFIX}${Date.now()}-${createId()}`;
+    try {
+      localStorage.setItem(backupKey, JSON.stringify(backup));
+    } catch {
+      return { error: 'The recovery backup could not be saved. No records were imported.' };
+    }
+    downloadRecoveryJson(`vfgt-recovery-backup-${Date.now()}.json`, backup);
+    const byId = new Map(rawCollection.map((game) => [String(game?.id || '').trim(), game]));
+    let recovered = 0;
+    let skipped = 0;
+    selected.forEach((candidate) => {
+      const raw = candidate.raw && typeof candidate.raw === 'object' ? candidate.raw : null;
+      if (!raw) return;
+      const id = String(raw.id || '').trim() || createId();
+      const existing = byId.get(id);
+      if (existing && existing.status === 'scheduled' && existing.phase === 'pregame') {
+        skipped += 1;
+        return;
+      }
+      const restored = { ...raw, id, status: 'scheduled', phase: 'pregame' };
+      byId.set(id, existing ? { ...existing, ...restored } : restored);
+      recovered += 1;
+    });
+    if (recovered) localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...byId.values()]));
+    savedGames = sortedGames(readSavedGames());
+    return { recovered, skipped, backupKey };
+  }
+
+  function recoveryCandidateMarkup(candidate) {
+    const game = candidate.raw || {};
+    const rawJson = JSON.stringify(game, null, 2);
+    return `<article class="vfgt_recovery_candidate">
+      <label><input type="checkbox" data-vfgt-recovery-index="${candidate.index}"> <strong>${escapeHtml(recoveryField(game, ['team2', 'opponent', 'awayTeam'], 'Unknown opponent'))}</strong></label>
+      <dl>
+        <dt>Date</dt><dd>${escapeHtml(recoveryField(game, ['date', 'gameDate', 'startDate']))}</dd>
+        <dt>Location</dt><dd>${escapeHtml(recoveryField(game, ['location']))}</dd>
+        <dt>Team</dt><dd>${escapeHtml(recoveryField(game, ['team1', 'homeTeam']))}</dd>
+        <dt>Season</dt><dd>${escapeHtml(recoveryField(game, ['seasonId', 'season', 'seasonName']))}</dd>
+        <dt>Game type</dt><dd>${escapeHtml(recoveryField(game, ['gameType', 'type']))}</dd>
+        <dt>Source</dt><dd>${escapeHtml(candidate.sourceKey)} · ${escapeHtml(candidate.path)}</dd>
+        <dt>Why flagged</dt><dd>${escapeHtml(candidate.reason)}</dd>
+      </dl>
+      <details><summary>All raw fields</summary><pre>${escapeHtml(rawJson)}</pre></details>
+    </article>`;
+  }
+
+  function renderRecoveryDiagnostic() {
+    const result = recoveryScan;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-recovery-title">
+      <header class="vfgt_page_header vfgt_page_header--with-back">
+        <button type="button" class="vfgt_back_button" data-vfgt-action="settings" aria-label="Back to VFGT Settings">←</button>
+        <div><p class="vfgt_kicker">Temporary, non-destructive tool</p><h1 id="vfgt-recovery-title">VFGT Future Game Recovery</h1></div>
+      </header>
+      <section class="vfgt_recovery_notice"><strong>Read-only scan until you select Restore.</strong><p>This diagnostic never clears storage or changes source records while scanning.</p></section>
+      <div class="vfgt_actions vfgt_recovery_actions"><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="recovery-scan">Scan VFGT Data Layer</button>${result?.candidates?.length ? '<button type="button" class="vfgt_button" data-vfgt-action="recovery-export">Export Scan Results</button><button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="recovery-restore">Restore Selected</button>' : ''}</div>
+      ${result?.loading ? '<p class="vfgt_settings_note" aria-live="polite">Scanning localStorage, IndexedDB, and service-worker caches…</p>' : ''}
+      ${result?.error || result?.importMessage ? `<p class="vfgt_recovery_result" role="status">${escapeHtml(result.error || result.importMessage)}</p>` : ''}
+      ${result && !result.loading ? `<section class="vfgt_recovery_summary" aria-label="Recovery scan summary"><strong>${result.candidates.length} candidate game${result.candidates.length === 1 ? '' : 's'} found</strong><span>${result.localStorageKeys.length} localStorage keys scanned · ${result.indexedDb.databases.length} IndexedDB databases · ${result.cache.caches.length} caches</span><details><summary>Scanned data sources</summary><p>VFGT-related localStorage keys: ${escapeHtml(result.localStorageKeys.filter(isVfgtStorageKey).join(', ') || 'None')}</p><p>IndexedDB stores inspected: ${result.indexedDb.stores || 0}</p><p>Cached VFGT entries: ${result.cache.entries.length}</p></details></section>${result.candidates.length ? `<div class="vfgt_recovery_candidates">${result.candidates.map(recoveryCandidateMarkup).join('')}</div>` : '<p class="vfgt_empty vfgt_empty--compact">No future-game candidates were found in the scanned data layer.</p>'}` : ''}
+    </section>`;
+  }
+
+  async function runRecoveryScan() {
+    recoveryScan = { loading: true, candidates: [] };
+    renderRecoveryDiagnostic();
+    try {
+      recoveryScan = await scanVfgtDataLayer();
+    } catch (error) {
+      recoveryScan = { loading: false, candidates: [], localStorageKeys: [], indexedDb: { databases: [] }, cache: { caches: [] }, error: `Recovery scan could not complete: ${error.message || error}` };
+    }
+    renderRecoveryDiagnostic();
+  }
+
   function saveActiveGame() {
     if (!state) {
       localStorage.removeItem(ACTIVE_GAME_KEY);
@@ -816,6 +1109,97 @@
     refreshTimer = null;
   }
 
+  function showPhaseEndConfirmation({ title, message, confirmLabel }) {
+    return new Promise((resolve) => {
+      const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const titleId = `vfgt-confirm-title-${createId()}`;
+      const messageId = `vfgt-confirm-message-${createId()}`;
+      const dialog = document.createElement('div');
+      dialog.className = 'vfgt_confirm';
+      dialog.innerHTML = `
+        <div class="vfgt_confirm__backdrop" aria-hidden="true"></div>
+        <section class="vfgt_confirm__dialog" role="alertdialog" aria-modal="true" aria-labelledby="${titleId}" aria-describedby="${messageId}">
+          <h2 class="vfgt_confirm__title" id="${titleId}">${escapeHtml(title)}</h2>
+          <p class="vfgt_confirm__message" id="${messageId}">${escapeHtml(message)}</p>
+          <div class="vfgt_confirm__actions">
+            <button type="button" class="vfgt_button" data-vfgt-confirm="cancel">Cancel</button>
+            <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-confirm="confirm">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </section>`;
+
+      let settled = false;
+      function close(confirmed) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', handleKeydown);
+        dialog.remove();
+        if (previousFocus?.isConnected) previousFocus.focus();
+        resolve(confirmed);
+      }
+
+      function handleKeydown(event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(false);
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = [...dialog.querySelectorAll('button:not([disabled])')];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      dialog.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-vfgt-confirm]');
+        if (!button) return;
+        close(button.dataset.vfgtConfirm === 'confirm');
+      });
+      document.body.appendChild(dialog);
+      document.addEventListener('keydown', handleKeydown);
+      dialog.querySelector('[data-vfgt-confirm="cancel"]')?.focus();
+    });
+  }
+
+  function confirmPhaseEnd(action) {
+    const details = action === 'end-first'
+      ? { phase: 'first_half', title: 'End First Half?', message: 'This will stop the first-half timer and begin halftime.', confirmLabel: 'End First Half' }
+      : action === 'start-second'
+        ? { phase: 'halftime', title: 'End Halftime?', message: 'This will end halftime and start the second half.', confirmLabel: 'End Halftime' }
+        : { phase: 'second_half', title: 'End Second Half?', message: 'This will stop the second-half timer and finish the game.', confirmLabel: 'End Second Half' };
+    if (state?.phase !== details.phase) return;
+    const gameAtRequest = state;
+    void showPhaseEndConfirmation(details).then((confirmed) => {
+      if (!confirmed || state !== gameAtRequest || state.phase !== details.phase) return;
+      if (action === 'end-first') {
+        endFirstHalf(state);
+        playEndHalfWhistle();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderLive();
+      } else if (action === 'start-second') {
+        startSecondHalf(state);
+        playNormalBeep();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderLive();
+      } else {
+        endSecondHalf(state);
+        playEndHalfWhistle();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderSummary();
+      }
+    });
+  }
+
   function screenWakeLockSupported() {
     return !!window.navigator?.wakeLock?.request;
   }
@@ -930,6 +1314,7 @@
         <button type="button" class="vfgt_settings_row" data-vfgt-action="seasons"><span><strong>Manage Seasons</strong></span><span aria-hidden="true">›</span></button>
       </section>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-game-settings-title"><h2 id="vfgt-game-settings-title">Game Settings</h2><button type="button" class="vfgt_settings_row" data-vfgt-action="half-duration"><span><small>Half Duration</small><strong>${season ? `${season.halfDurationMinutes} minutes` : 'No season selected'}</strong><small>Applies to ${escapeHtml(season?.name || 'the current season')}</small></span><span aria-hidden="true">›</span></button></section>
+      <section class="vfgt_settings_group" aria-labelledby="vfgt-recovery-settings-title"><h2 id="vfgt-recovery-settings-title">Data Recovery</h2><p class="vfgt_settings_note">Temporary, read-only scan for future games affected by an upgrade.</p><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="recovery">Open Future Game Recovery</button></section>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-about-title"><h2 id="vfgt-about-title">About</h2><p>Violet Futbol Game Tracker</p><p class="vfgt_settings_note">Long-term team and season history tracker.</p></section>
     </section>`;
   }
@@ -1269,7 +1654,7 @@
     const action = phase === 'first_half'
       ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-first">End First Half</button>'
       : phase === 'halftime'
-        ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">Start Second Half</button>'
+        ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">End Halftime</button>'
         : '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-second">End Second Half</button>';
     getRoot().innerHTML = `
       <section class="vfgt_app vfgt_live ${halfPhase ? 'vfgt_live--running-half' : ''}" aria-labelledby="vfgt-live-title">
@@ -1592,6 +1977,15 @@
       renderHome();
     }
     if (action === 'settings') { screen = 'settings'; renderSettings(); }
+    if (action === 'recovery') { recoveryScan = null; renderRecoveryDiagnostic(); void runRecoveryScan(); }
+    if (action === 'recovery-scan') void runRecoveryScan();
+    if (action === 'recovery-export' && recoveryScan) downloadRecoveryJson(`vfgt-recovery-scan-${Date.now()}.json`, recoveryScan);
+    if (action === 'recovery-restore' && recoveryScan) {
+      const indices = [...getRoot().querySelectorAll('[data-vfgt-recovery-index]:checked')].map((input) => Number(input.dataset.vfgtRecoveryIndex));
+      const result = restoreRecoveryCandidates(indices);
+      recoveryScan = { ...recoveryScan, importMessage: result.error || `Recovery complete: ${result.recovered} game${result.recovered === 1 ? '' : 's'} restored; ${result.skipped || 0} already present. Backup saved before import.` };
+      renderRecoveryDiagnostic();
+    }
     if (action === 'teams') { screen = 'teams'; renderTeams(); }
     if (action === 'seasons') { screen = 'seasons'; renderSeasons(); }
     if (action === 'add-team') renderTeamForm();
@@ -1621,27 +2015,9 @@
     if (action === 'details') renderDetails(button.dataset.id);
     if (action === 'edit-saved') renderEditForm(button.dataset.id);
     if (action === 'cancel-edit') renderDetails(button.dataset.id);
-    if (action === 'end-first' && state?.phase === 'first_half') {
-      endFirstHalf(state);
-      playEndHalfWhistle();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderLive();
-    }
-    if (action === 'start-second' && state?.phase === 'halftime') {
-      startSecondHalf(state);
-      playNormalBeep();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderLive();
-    }
-    if (action === 'end-second' && state?.phase === 'second_half') {
-      endSecondHalf(state);
-      playEndHalfWhistle();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderSummary();
-    }
+    if (action === 'end-first' && state?.phase === 'first_half') confirmPhaseEnd(action);
+    if (action === 'start-second' && state?.phase === 'halftime') confirmPhaseEnd(action);
+    if (action === 'end-second' && state?.phase === 'second_half') confirmPhaseEnd(action);
     if (action === 'save') saveCompletedGame();
     if (action === 'discard-final' && window.confirm('Abandon this unsaved game?')) {
       clearActiveGame();
@@ -1833,6 +2209,7 @@
     endFirstHalf,
     endSecondHalf,
     finalScores,
+    futureCandidateReason,
     formatClock,
     formatDurationInput,
     gameTypeLabel,
@@ -1841,6 +2218,7 @@
     halftimeRemaining,
     isRunningHalf,
     initializeContext,
+    isGameCandidate,
     maybeMarkRegulation,
     normalizeGame,
     normalizeSeason,
@@ -1850,6 +2228,7 @@
     regulationSecondsForGame,
     reconcileTimerState,
     releaseScreenWakeLock,
+    readStoredJson,
     renderSevenSegmentDigit,
     renderSevenSegmentDisplay,
     requestScreenWakeLock,

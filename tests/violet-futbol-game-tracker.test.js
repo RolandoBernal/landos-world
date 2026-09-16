@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../js/violet-futbol-game-tracker.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const VFGT_KEY_PREFIX = 'lando-world:violet-futbol-game-tracker:';
+const apiKey = (kind) => `${VFGT_KEY_PREFIX}${kind === 'saved' ? 'saved-games:v1' : kind === 'teams' ? 'teams:v1' : kind === 'seasons' ? 'seasons:v1' : kind === 'migration' ? 'migration:v1' : 'settings:v1'}`;
 
 function createRuntime(nowOrOptions = 2_000_000_000_000) {
   const options = typeof nowOrOptions === 'object' ? nowOrOptions : { now: nowOrOptions };
@@ -488,6 +490,58 @@ test('legacy games migrate once into the default Hume-Fogg team and season', () 
   assert.equal(storage.get(api.TEAMS_KEY), firstSnapshot);
 });
 
+test('schema migration preserves scheduled games and unknown fields', () => {
+  const scheduled = {
+    id: 'future-game', status: 'scheduled', phase: 'pregame', entryType: 'live',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20', startTime: '19:00',
+    gameType: 'regularSeason', customImportedField: { source: 'today' },
+  };
+  const storage = new Map([
+    [apiKey('teams'), JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', archived: false }])],
+    [apiKey('seasons'), JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }])],
+    [apiKey('settings'), JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' })],
+    [apiKey('migration'), '3'],
+    [apiKey('saved'), JSON.stringify([scheduled])],
+  ]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  const stored = JSON.parse(storage.get(api.SAVED_GAMES_KEY));
+  assert.equal(stored[0].status, 'scheduled');
+  assert.equal(stored[0].phase, 'pregame');
+  assert.deepEqual(stored[0].customImportedField, { source: 'today' });
+});
+
+test('invalid saved-game storage is retained instead of replaced during migration', () => {
+  const invalid = '{not-json';
+  const storage = new Map([[apiKey('saved'), invalid]]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  assert.equal(storage.get(api.SAVED_GAMES_KEY), invalid);
+});
+
+test('recovery candidate detection recognizes migration-v4 future-game shape without flagging manual finals', () => {
+  const { api } = createRuntime();
+  assert.equal(api.isGameCandidate({
+    id: 'migrated-future', entryType: 'live', status: 'completed', phase: 'final',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20',
+  }, api.SAVED_GAMES_KEY), true);
+  assert.equal(api.isGameCandidate({
+    id: 'manual-final', entryType: 'manual', status: 'completed', phase: 'final',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20', completedAt: '2026-09-20T22:00:00.000Z',
+  }, api.SAVED_GAMES_KEY), false);
+});
+
+test('VFGT exposes non-destructive recovery UI and avoids empty/default game overwrites', () => {
+  assert.match(source, /data-vfgt-action="recovery">Open Future Game Recovery/);
+  assert.match(source, /Scan VFGT Data Layer/);
+  assert.match(source, /originalCollection: rawCollection/);
+  assert.match(source, /localStorage\.setItem\(backupKey/);
+  assert.match(source, /status: 'scheduled', phase: 'pregame'/);
+  assert.doesNotMatch(source, /savedGames = savedGames\.map\(\(game\) => \(\{ \.\.\.game, status: game\.status \|\| 'completed', phase: 'final' \}\)\)/);
+  assert.match(source, /if \(Array\.isArray\(migrationGames\)\)/);
+  assert.match(source, /readStoredJson\(SAVED_GAMES_KEY\)/);
+});
+
 test('season half duration changes the regulation threshold without changing timer progression', () => {
   const { api, now, advance } = createRuntime();
   const game = api.startFirstHalf(api.createGame({ team1: 'Hume-Fogg', team2: 'Opponent', halfDurationMinutes: 45 }), now());
@@ -790,6 +844,20 @@ test('live phase actions support one-tap pointer activation and final discard', 
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
 });
 
+test('live phase-ending actions require phase-specific accessible confirmation', () => {
+  assert.match(source, /showPhaseEndConfirmation/);
+  assert.match(source, /role="alertdialog" aria-modal="true"/);
+  assert.match(source, /End First Half\?/);
+  assert.match(source, /This will stop the first-half timer and begin halftime\./);
+  assert.match(source, /End Halftime\?/);
+  assert.match(source, /This will end halftime and start the second half\./);
+  assert.match(source, /End Second Half\?/);
+  assert.match(source, /This will stop the second-half timer and finish the game\./);
+  assert.match(source, /if \(!confirmed \|\| state !== gameAtRequest \|\| state\.phase !== details\.phase\) return/);
+  assert.match(css, /\.vfgt_confirm__backdrop[\s\S]*background: rgb\(0 0 0 \/ 64%\)/);
+  assert.match(css, /\.vfgt_confirm__actions \.vfgt_button[\s\S]*min-height: 52px/);
+});
+
 test('saved game UI uses edit and delete terminology without entry-type labels', () => {
   assert.match(source, /data-vfgt-action="home">Back<\/button>/);
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>/);
@@ -852,7 +920,8 @@ test('mobile landscape scoreboard mode is CSS-only and scoped to running halves'
   assert.match(css, /@media \(orientation: landscape\) and \(max-width: 950px\) and \(max-height: 520px\)/);
   assert.match(css, /body:has\(\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\) \.vfgt_live--running-half\) \{[\s\S]*overflow: hidden/);
   assert.match(css, /\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\):has\(\.vfgt_live--running-half\)[\s\S]*position: fixed[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
-  assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_actions/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_stoppage/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_actions \{[\s\S]*width: min\(100%, 28rem\)/);
   assert.match(css, /\.vfgt_live--running-half \.vfgt_seven_segment_visual \{[\s\S]*--digit-width: min\(/);
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-right\)/);
