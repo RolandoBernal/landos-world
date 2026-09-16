@@ -68,10 +68,10 @@
     ['foods', 'My Foods'],
     ['meals', 'My Meals'],
   ]);
-  const LLT_STARTER_FOODS_VERSION = 3;
+  const LLT_STARTER_FOODS_VERSION = 4;
   const LLT_STARTER_FOOD_SOURCE = 'reference';
-  const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label']);
-  const LLT_STARTER_FOODS_CREATED_AT = '2026-08-31T00:00:00.000Z';
+  const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label', 'manufacturer']);
+  const LLT_STARTER_FOODS_CREATED_AT = '2026-09-16T00:00:00.000Z';
   const LLT_STARTER_FOODS = Object.freeze([
     {"id":"starter-banana-medium","name":"Banana","emoji":"🍌","servingLabel":"1 medium (118 g)","carbs":27,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/seasonal-produce-guide/bananas","verificationNote":"Generic USDA reference; actual size varies."},
     {"id":"starter-apple-medium","name":"Apple","emoji":"🍎","servingLabel":"1 medium (182 g)","carbs":25,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/resources/nutrition-education-materials/seasonal-produce-guide/apples","verificationNote":"Generic USDA reference; actual size varies."},
@@ -169,6 +169,14 @@
     {"id":"starter3-pbj-sandwich","name":"PB&J Sandwich","emoji":"🥪","servingLabel":"1 sandwich","carbs":45,"category":"meal","sourceType":"reference","sourceName":"USDA","sourceUrl":"https://fdc.nal.usda.gov/fdc-app.html#/food-details/2707555/nutrients","verificationNote":"Generic estimate for a typical peanut butter and jelly sandwich; bread, peanut butter, jelly, brands, and amounts can significantly change total carbs. Verify ingredient labels when available."},
     {"id":"starter3-chocolate-milk-cup","name":"Chocolate Milk","emoji":"🥛","servingLabel":"1 cup (8 fl oz)","carbs":26,"category":"dairy","sourceType":"reference","sourceName":"USDA","sourceUrl":"https://fdc.nal.usda.gov/fdc-app.html#/food-details/170879/nutrients","verificationNote":"Generic commercial chocolate-milk reference; formulations vary by brand. Verify the Nutrition Facts label when available."},
     {"id":"starter3-natures-bakery-fig-bar-twin-pack","name":"Nature's Bakery Fig Bar","emoji":"🧁","servingLabel":"1 package / twin pack (57 g)","carbs":38,"category":"snack","sourceType":"verified-label","sourceName":"Nature's Bakery","sourceUrl":"https://naturesbakery.com/collections/whole-wheat-fig-bars/products/strawberry","verificationNote":"38 g Total Carbohydrate per 57 g twin-pack package (2 bars). Verify the package label if the product formulation changes."},
+    {"id":"starter-mini-powdered-donuts","name":"Mini-Powdered Donuts","emoji":"🍩","servingLabel":"3 donuts (53 g)","carbs":30,"category":"sweet snacks","sourceType":"manufacturer","sourceName":"Hostess Brands","sourceUrl":"https://www.hostesscakes.com/everyday-snacks/donettes-powdered","verificationNote":"Based on Hostess Donettes Powdered retail nutrition facts."},
+    {"id":"starter-strawberries-1lb","name":"Strawberries","emoji":"🍓","servingLabel":"1 lb (454 g)","carbs":35,"category":"fruit","sourceType":"reference","sourceName":"USDA SNAP-Ed","sourceUrl":"https://snaped.fns.usda.gov/resources/nutrition-education-materials/seasonal-produce-guide/strawberries","verificationNote":"Total carbohydrate value for a full pound raw."},
+    {"id":"starter-st-louis-bbq-ribs","name":"St. Louis-style BBQ ribs","emoji":"🍖","servingLabel":"4 pieces (with sauce)","carbs":24,"category":"meat","sourceType":"reference","sourceName":"Carb Manager / Famous Dave's","sourceUrl":"https://www.carbmanager.com/food-detail/md:95fd6f98b2494dfc4f2ea56b0b11e648/award-winning-st-louis-style-ribs-regular-4-bones","verificationNote":"Midpoint estimate (24g) used; actual carbs depend entirely on BBQ sauce brand and coating density."},
+    {"id":"starter-hot-dog-bun","name":"Hot Dog (w/bun)","emoji":"🌭","servingLabel":"1 standard beef hot dog + white bun","carbs":24,"category":"mixed meals","sourceType":"reference","sourceName":"USDA Data via Verywell Fit","sourceUrl":"https://www.verywellfit.com/hot-dog-nutrition-facts-4135155","verificationNote":"Combines a standard retail beef frank and a white commercial hot dog bun."},
+    {"id":"starter-honey-nut-cheerios","name":"Honey Nut Cheerios","emoji":"🥣","servingLabel":"1 cup (36 g)","carbs":30,"category":"cereal","sourceType":"manufacturer","sourceName":"General Mills","sourceUrl":"https://www.cheerios.com/products/honey-nut-cheerios","verificationNote":"Official product labeling for a standard 1-cup dry serving."},
+    {"id":"starter-fairlife-milk","name":"Fairlife Milk","emoji":"🥛","servingLabel":"1 cup (240 ml)","carbs":6,"category":"dairy","sourceType":"manufacturer","sourceName":"Fairlife Official","sourceUrl":"https://fairlife.com/ultra-filtered-milk/whole-milk/","verificationNote":"Applies across whole, 2%, and skim ultra-filtered varieties due to filtration."},
+    {"id":"starter-chobani-vanilla-greek-yogurt","name":"Chobani Vanilla Greek Yogurt","emoji":"🍦","servingLabel":"1 container (5.3 oz / 150 g)","carbs":15,"category":"dairy","sourceType":"manufacturer","sourceName":"Chobani","sourceUrl":"https://origin-ncm.chobani.com/products/yogurt/greek/vanilla-large-size-tub","verificationNote":"Standard single-serve cup retail data."},
+    {"id":"starter-white-steamed-rice","name":"White Steamed Rice","emoji":"🍚","servingLabel":"1 cup cooked (loosely packed)","carbs":45,"category":"grains","sourceType":"reference","sourceName":"Carb Manager","sourceUrl":"https://www.carbmanager.com/food-detail/nl:47cefd78f73b267c9c9deed1a23b1d82/steamed-white-rice","verificationNote":"Average for generic long/short grain white rice cooked with water. Rounded to nearest whole gram."}
   ]);
   const DATE_RANGE_OPTIONS = [
     { value: 'today', label: 'Today', days: 1 },
@@ -725,7 +733,7 @@
 
   function normalizeFoodSourceType(value) {
     const normalized = String(value || '').trim().toLowerCase();
-    if (['reference', 'user', 'verified-label'].includes(normalized)) return normalized;
+    if (['reference', 'user', 'verified-label', 'manufacturer'].includes(normalized)) return normalized;
     return '';
   }
 

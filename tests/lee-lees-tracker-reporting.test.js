@@ -100,13 +100,13 @@ test('starter food seed data is valid and matches runtime seed normalization', (
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const ids = new Set();
 
-  assert.equal(starterFoods.length, 96);
+  assert.equal(starterFoods.length, 104);
   starterFoods.forEach((food) => {
     assert.equal(typeof food.id, 'string');
     assert.match(food.id, /^starter\d*-/);
     assert.ok(food.name);
     assert.ok(food.servingLabel);
-    assert.equal(['reference', 'verified-label'].includes(food.sourceType), true);
+    assert.equal(['reference', 'verified-label', 'manufacturer'].includes(food.sourceType), true);
     assert.ok(food.sourceName);
     assert.ok(food.sourceUrl);
     assert.equal(Number.isFinite(food.carbs), true);
@@ -119,13 +119,45 @@ test('starter food seed data is valid and matches runtime seed normalization', (
   assert.equal(normalized.length, starterFoods.length);
   assert.equal(normalized.every((food) => /^starter\d*-/.test(food.seedKey)), true);
   assert.equal(normalized.every((food) => /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(food.id)), true);
-  assert.equal(normalized.every((food) => ['reference', 'verified-label'].includes(food.sourceType)), true);
+  assert.equal(normalized.every((food) => ['reference', 'verified-label', 'manufacturer'].includes(food.sourceType)), true);
   assert.equal(normalized.every((food) => typeof food.carbs === 'number'), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter2-bagel-quarter' && food.name === 'Bagel'), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter2-submarine-sandwich' && food.carbs === 45), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter3-pbj-sandwich' && food.carbs === 45), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter3-chocolate-milk-cup' && food.carbs === 26), true);
   assert.equal(normalized.some((food) => food.seedKey === 'starter3-natures-bakery-fig-bar-twin-pack' && food.sourceType === 'verified-label'), true);
+  const expectedNewFoods = {
+    'starter-mini-powdered-donuts': ['Mini-Powdered Donuts', '3 donuts (53 g)', 30],
+    'starter-strawberries-1lb': ['Strawberries', '1 lb (454 g)', 35],
+    'starter-st-louis-bbq-ribs': ['St. Louis-style BBQ ribs', '4 pieces (with sauce)', 24],
+    'starter-hot-dog-bun': ['Hot Dog (w/bun)', '1 standard beef hot dog + white bun', 24],
+    'starter-honey-nut-cheerios': ['Honey Nut Cheerios', '1 cup (36 g)', 30],
+    'starter-fairlife-milk': ['Fairlife Milk', '1 cup (240 ml)', 6],
+    'starter-chobani-vanilla-greek-yogurt': ['Chobani Vanilla Greek Yogurt', '1 container (5.3 oz / 150 g)', 15],
+    'starter-white-steamed-rice': ['White Steamed Rice', '1 cup cooked (loosely packed)', 45],
+  };
+  Object.entries(expectedNewFoods).forEach(([seedKey, [name, servingLabel, carbs]]) => {
+    const food = normalized.find((item) => item.seedKey === seedKey);
+    const source = starterFoods.find((item) => item.id === seedKey);
+    assert.deepEqual([food?.name, food?.servingLabel, food?.carbs], [name, servingLabel, carbs]);
+    assert.deepEqual(
+      [food?.emoji, food?.category, food?.sourceType, food?.sourceName, food?.sourceUrl, food?.verificationNote],
+      [source.emoji, source.category, source.sourceType, source.sourceName, source.sourceUrl, source.verificationNote],
+    );
+    assert.equal(helper.searchFoodItems(normalized, name).some((item) => item.seedKey === seedKey), true);
+  });
+});
+
+test('new starter foods preserve stable metadata and quantity carb totals', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const foods = helper.seedStarterFoodsInDocument({ foodLibrary: [], metadata: {} }).data.foodLibrary;
+  const cheerios = foods.find((food) => food.seedKey === 'starter-honey-nut-cheerios');
+  assert.equal(cheerios.sourceType, 'manufacturer');
+  assert.equal(cheerios.sourceName, 'General Mills');
+  assert.equal(cheerios.sourceUrl, 'https://www.cheerios.com/products/honey-nut-cheerios');
+  assert.equal(helper.calculateCarbCalculatorMealTotal([{ sourceType: 'food', foodId: cheerios.id, qty: '0.5', carbs: String(cheerios.carbs) }]), 15);
+  assert.equal(helper.calculateCarbCalculatorMealTotal([{ sourceType: 'food', foodId: cheerios.id, qty: '2', carbs: String(cheerios.carbs) }]), 60);
 });
 
 test('starter food seeding is idempotent and preserves same-name user foods', () => {
