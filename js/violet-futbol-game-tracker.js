@@ -1058,6 +1058,10 @@
     localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...scheduled, ...savedGames]));
   }
 
+  function replaceSavedGamePreservingScheduled(allGames, saved) {
+    return [...allGames.filter((game) => game.id !== saved.id), saved];
+  }
+
   function gameSortTime(game, index = 0) {
     const parsed = Date.parse(`${game?.date || ''}T${game?.startTime || '00:00'}`);
     if (Number.isFinite(parsed)) return parsed;
@@ -1949,9 +1953,9 @@
   function saveCompletedGame() {
     const saved = serializeCompletedGame(state);
     if (!saved) return;
-    const allGames = readAllGames().filter((game) => game.id !== saved.id && game.status !== 'scheduled');
+    const allGames = replaceSavedGamePreservingScheduled(readAllGames(), saved);
     savedGames = sortedGames([saved, ...readSavedGames().filter((game) => game.id !== saved.id)]);
-    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...allGames, saved]));
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(allGames));
     clearActiveGame();
     renderHome();
   }
@@ -1959,9 +1963,9 @@
   function saveManualGame(game) {
     const saved = serializeCompletedGame(game);
     if (!saved) return;
-    const allGames = readAllGames().filter((item) => item.id !== saved.id && item.status !== 'scheduled');
+    const allGames = replaceSavedGamePreservingScheduled(readAllGames(), saved);
     savedGames = sortedGames([saved, ...readSavedGames().filter((item) => item.id !== saved.id)]);
-    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...allGames, saved]));
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(allGames));
     renderHome();
   }
 
@@ -2335,6 +2339,7 @@
     reconcileTimerState,
     releaseScreenWakeLock,
     readStoredJson,
+    replaceSavedGamePreservingScheduled,
     recoveredScheduleCandidates,
     renderSevenSegmentDigit,
     renderSevenSegmentDisplay,
