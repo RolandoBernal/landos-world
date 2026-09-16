@@ -6,6 +6,7 @@
   const SW_PATH = './service-worker.js';
   const STATUS_REQUEST_TIMEOUT_MS = 4000;
   const RESTART_FEEDBACK_TIMEOUT_MS = 10000;
+  const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
   let deferredInstallPrompt = null;
   let waitingWorker = null;
@@ -19,6 +20,7 @@
   let restartFeedbackTimeoutId = null;
   let activeRegistration = null;
   let statusRequestSequence = 0;
+  let updateCheckTimerId = null;
 
   function isLocalPreview() {
     return LOCAL_PREVIEW_HOSTS.has(window.location?.hostname || '');
@@ -394,6 +396,10 @@
         'Service worker registration timed out.',
       );
       activeRegistration = registration;
+      checkForServiceWorkerUpdate(registration);
+      if (updateCheckTimerId === null && typeof window.setInterval === 'function') {
+        updateCheckTimerId = window.setInterval(() => checkForServiceWorkerUpdate(activeRegistration), UPDATE_CHECK_INTERVAL_MS);
+      }
       updateUi();
       withTimeout(
         navigator.serviceWorker.ready,
@@ -425,6 +431,15 @@
       offlineReadiness = 'error';
       console.warn('Service worker registration failed.', error);
       updateUi();
+    }
+  }
+
+  async function checkForServiceWorkerUpdate(registration = activeRegistration) {
+    if (!registration || navigator.onLine === false || document.visibilityState === 'hidden') return;
+    try {
+      await registration.update();
+    } catch (error) {
+      console.warn('Service worker update check failed.', error);
     }
   }
 
@@ -546,11 +561,16 @@
   function initEvents() {
     window.addEventListener('online', () => {
       updateUi();
+      checkForServiceWorkerUpdate();
       window.dispatchEvent(new CustomEvent('lando:online'));
       window.LandosWeatherApp?.loadWeather?.();
       window.DailyChiefBriefing?.loadWeatherForBriefing?.();
     });
     window.addEventListener('offline', updateUi);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForServiceWorkerUpdate();
+    });
+    window.addEventListener('pageshow', () => checkForServiceWorkerUpdate());
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;

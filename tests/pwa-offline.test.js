@@ -188,7 +188,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-15-14'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-16-1'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -199,6 +199,15 @@ test('service worker uses separate versioned caches and strategy-specific runtim
   assert.match(sw, /async function networkFirst/);
   assert.match(sw, /new Request\(url, \{ cache: 'reload' \}\)/);
   assert.match(sw, /WEATHER_HOSTS\.has\(url\.hostname\)/);
+});
+
+test('PWA checks for updates when the app opens, returns to the foreground, reconnects, and periodically while open', () => {
+  assert.match(pwaManager, /const UPDATE_CHECK_INTERVAL_MS = 15 \* 60 \* 1000/);
+  assert.match(pwaManager, /registration\.update\(\)/);
+  assert.match(pwaManager, /document\.addEventListener\('visibilitychange'/);
+  assert.match(pwaManager, /window\.addEventListener\('pageshow'/);
+  assert.match(pwaManager, /window\.setInterval\(\(\) => checkForServiceWorkerUpdate/);
+  assert.match(pwaManager, /checkForServiceWorkerUpdate\(\);/);
 });
 
 test('localhost previews bypass service-worker registration', () => {
@@ -214,7 +223,7 @@ test('app dropdowns use padded custom select arrows', () => {
     [html, /css\/lee-lee-diabetes\.css\?v=20260916-2/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260910-1/],
     [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260916-2/],
-    [html, /js\/pwa-manager\.js\?v=20260915-3/],
+    [html, /js\/pwa-manager\.js\?v=20260916-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [html, /css\/violet-futbol-game-tracker\.css\?v=20260915-14/],
     [html, /js\/violet-futbol-game-tracker\.js\?v=20260915-14/],
