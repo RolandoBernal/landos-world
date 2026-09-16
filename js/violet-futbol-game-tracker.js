@@ -1224,7 +1224,7 @@
     refreshTimer = null;
   }
 
-  function showPhaseEndConfirmation({ title, message, confirmLabel }) {
+  function showVfgtConfirmation({ title, message, confirmLabel }) {
     return new Promise((resolve) => {
       const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const titleId = `vfgt-confirm-title-${createId()}`;
@@ -1291,7 +1291,7 @@
         : { phase: 'second_half', title: 'End Second Half?', message: 'This will stop the second-half timer and finish the game.', confirmLabel: 'End Second Half' };
     if (state?.phase !== details.phase) return;
     const gameAtRequest = state;
-    void showPhaseEndConfirmation(details).then((confirmed) => {
+    void showVfgtConfirmation(details).then((confirmed) => {
       if (!confirmed || state !== gameAtRequest || state.phase !== details.phase) return;
       if (action === 'end-first') {
         endFirstHalf(state);
@@ -1572,12 +1572,65 @@
 
   function quickStartGame(id) {
     const scheduled = readScheduledGames().find((game) => game.id === id);
-    if (!scheduled || !window.confirm(`Start game vs. ${scheduled.team2}?\n\n${formatDateTimeLabel(scheduled.date, scheduled.startTime)}\n\nStart Game`)) return;
+    if (!scheduled) return;
     state = startFirstHalf({ ...scheduled, status: 'inProgress' });
     localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((game) => game.id !== id)));
     saveActiveGame();
     syncScreenWakeLock(state);
     renderLiveAfterActivation(state.id);
+  }
+
+  function requestQuickStart(id) {
+    const scheduled = readScheduledGames().find((game) => game.id === id);
+    if (!scheduled) return;
+    void showVfgtConfirmation({
+      title: `Start game vs. ${scheduled.team2}?`,
+      message: `${formatDateTimeLabel(scheduled.date, scheduled.startTime)}\n\nThe live timer will begin with the first half.`,
+      confirmLabel: 'Start Game',
+    }).then((confirmed) => {
+      if (confirmed) quickStartGame(id);
+    });
+  }
+
+  function requestReturnActiveGameToFuture() {
+    if (!state) return;
+    const gameAtRequest = state;
+    void showVfgtConfirmation({
+      title: 'Return this game to Future Games?',
+      message: 'The live timer and score will be reset. You can start it again or delete it later.',
+      confirmLabel: 'Return to Future Games',
+    }).then((confirmed) => {
+      if (confirmed && state === gameAtRequest) returnActiveGameToFuture();
+    });
+  }
+
+  function requestDeleteSavedGame(id) {
+    const game = readSavedGames().find((item) => item.id === id);
+    if (!game) return;
+    void showVfgtConfirmation({
+      title: 'Delete this game?',
+      message: deleteConfirmationMessage(game),
+      confirmLabel: 'Delete Game',
+    }).then((confirmed) => {
+      if (!confirmed || !readSavedGames().some((item) => item.id === id)) return;
+      savedGames = readSavedGames().filter((item) => item.id !== id);
+      writeSavedGames();
+      renderHome();
+    });
+  }
+
+  function requestDeleteScheduledGame(id) {
+    const game = readScheduledGames().find((item) => item.id === id);
+    if (!game) return;
+    void showVfgtConfirmation({
+      title: 'Delete this scheduled game?',
+      message: `${game.team1} vs. ${game.team2}\n\nThis action cannot be undone.`,
+      confirmLabel: 'Delete Game',
+    }).then((confirmed) => {
+      if (!confirmed || !readScheduledGames().some((item) => item.id === id)) return;
+      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((item) => item.id !== id)));
+      renderHome();
+    });
   }
 
   function renderLiveAfterActivation(gameId) {
@@ -2130,9 +2183,9 @@
     if (action === 'choose-future') renderFutureForm();
     if (action === 'add-future') renderFutureForm();
     if (action === 'edit-scheduled') renderFutureForm(button.dataset.id);
-    if (action === 'quick-start') quickStartGame(button.dataset.id);
+    if (action === 'quick-start') requestQuickStart(button.dataset.id);
     if (action === 'resume') resumeStoredGame();
-    if (action === 'abandon' && window.confirm('Return this game to Future Games?\n\nThe live timer and score will be reset, and you can start it again or delete it later.')) returnActiveGameToFuture();
+    if (action === 'abandon') requestReturnActiveGameToFuture();
     if (action === 'details') renderDetails(button.dataset.id);
     if (action === 'edit-saved') renderEditForm(button.dataset.id);
     if (action === 'cancel-edit') renderDetails(button.dataset.id);
@@ -2140,20 +2193,9 @@
     if (action === 'start-second' && state?.phase === 'halftime') confirmPhaseEnd(action);
     if (action === 'end-second' && state?.phase === 'second_half') confirmPhaseEnd(action);
     if (action === 'save') saveCompletedGame();
-    if (action === 'discard-final' && window.confirm('Return this game to Future Games?\n\nThe live timer and score will be reset, and you can start it again or delete it later.')) returnActiveGameToFuture();
-    if (action === 'delete-saved') {
-      const game = readSavedGames().find((item) => item.id === button.dataset.id);
-      if (!game || !window.confirm(deleteConfirmationMessage(game))) return;
-      savedGames = readSavedGames().filter((game) => game.id !== button.dataset.id);
-      writeSavedGames();
-      renderHome();
-    }
-    if (action === 'delete-scheduled') {
-      const game = readScheduledGames().find((item) => item.id === button.dataset.id);
-      if (!game || !window.confirm(`Delete this scheduled game?\n\n${game.team1} vs ${game.team2}\n\nThis action cannot be undone.`)) return;
-      localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((item) => item.id !== game.id)));
-      renderHome();
-    }
+    if (action === 'discard-final') requestReturnActiveGameToFuture();
+    if (action === 'delete-saved') requestDeleteSavedGame(button.dataset.id);
+    if (action === 'delete-scheduled') requestDeleteScheduledGame(button.dataset.id);
   }
 
   function handleInput(event) {

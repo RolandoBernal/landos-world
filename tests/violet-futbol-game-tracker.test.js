@@ -879,12 +879,13 @@ test('live phase actions support one-tap pointer activation and final discard', 
   assert.match(source, /lastDirectActivationAt/);
   assert.match(source, /event\.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS/);
   assert.match(source, /data-vfgt-action="discard-final">Abandon Game<\/button>/);
-  assert.match(source, /action === 'discard-final'[\s\S]*returnActiveGameToFuture\(\)/);
+  assert.match(source, /action === 'discard-final'[\s\S]*requestReturnActiveGameToFuture\(\)/);
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
 });
 
 test('live phase-ending actions require phase-specific accessible confirmation', () => {
-  assert.match(source, /showPhaseEndConfirmation/);
+  assert.match(source, /showVfgtConfirmation/);
+  assert.doesNotMatch(source, /window\.confirm/);
   assert.match(source, /role="alertdialog" aria-modal="true"/);
   assert.match(source, /End First Half\?/);
   assert.match(source, /This will stop the first-half timer and begin halftime\./);

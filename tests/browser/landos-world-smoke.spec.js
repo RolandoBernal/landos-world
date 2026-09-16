@@ -321,10 +321,10 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   await expect(future).not.toContainText('Brentwood Academy');
 
   await future.locator('summary').click();
-  page.once('dialog', (dialog) => dialog.accept());
   await future.getByRole('button', { name: 'Quick Start' }).click();
+  await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Start game vs. Franklin Road Academy?');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   const active = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
   expect(active.id).toBe(scheduledId);
   expect(active.status).toBe('inProgress');
@@ -379,8 +379,8 @@ async function startVfgtFirstHalf(page) {
   await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByLabel('Opponent').fill('Hume-Fogg');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
   await app.locator('.vfgt_scheduled_card').getByRole('button', { name: 'Quick Start' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
   return app;
 }
