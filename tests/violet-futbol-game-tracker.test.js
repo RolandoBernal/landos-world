@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../js/violet-futbol-game-tracker.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../css/violet-futbol-game-tracker.css', import.meta.url), 'utf8');
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const VFGT_KEY_PREFIX = 'lando-world:violet-futbol-game-tracker:';
+const apiKey = (kind) => `${VFGT_KEY_PREFIX}${kind === 'saved' ? 'saved-games:v1' : kind === 'teams' ? 'teams:v1' : kind === 'seasons' ? 'seasons:v1' : kind === 'migration' ? 'migration:v1' : 'settings:v1'}`;
 
 function createRuntime(nowOrOptions = 2_000_000_000_000) {
   const options = typeof nowOrOptions === 'object' ? nowOrOptions : { now: nowOrOptions };
@@ -486,6 +488,58 @@ test('legacy games migrate once into the default Hume-Fogg team and season', () 
   const firstSnapshot = storage.get(api.TEAMS_KEY);
   api.initializeContext();
   assert.equal(storage.get(api.TEAMS_KEY), firstSnapshot);
+});
+
+test('schema migration preserves scheduled games and unknown fields', () => {
+  const scheduled = {
+    id: 'future-game', status: 'scheduled', phase: 'pregame', entryType: 'live',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20', startTime: '19:00',
+    gameType: 'regularSeason', customImportedField: { source: 'today' },
+  };
+  const storage = new Map([
+    [apiKey('teams'), JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', archived: false }])],
+    [apiKey('seasons'), JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }])],
+    [apiKey('settings'), JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' })],
+    [apiKey('migration'), '3'],
+    [apiKey('saved'), JSON.stringify([scheduled])],
+  ]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  const stored = JSON.parse(storage.get(api.SAVED_GAMES_KEY));
+  assert.equal(stored[0].status, 'scheduled');
+  assert.equal(stored[0].phase, 'pregame');
+  assert.deepEqual(stored[0].customImportedField, { source: 'today' });
+});
+
+test('invalid saved-game storage is retained instead of replaced during migration', () => {
+  const invalid = '{not-json';
+  const storage = new Map([[apiKey('saved'), invalid]]);
+  const { api } = createRuntime({ storage });
+  api.initializeContext();
+  assert.equal(storage.get(api.SAVED_GAMES_KEY), invalid);
+});
+
+test('recovery candidate detection recognizes migration-v4 future-game shape without flagging manual finals', () => {
+  const { api } = createRuntime();
+  assert.equal(api.isGameCandidate({
+    id: 'migrated-future', entryType: 'live', status: 'completed', phase: 'final',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20',
+  }, api.SAVED_GAMES_KEY), true);
+  assert.equal(api.isGameCandidate({
+    id: 'manual-final', entryType: 'manual', status: 'completed', phase: 'final',
+    team1: 'Hume-Fogg', team2: 'Opponent', date: '2026-09-20', completedAt: '2026-09-20T22:00:00.000Z',
+  }, api.SAVED_GAMES_KEY), false);
+});
+
+test('VFGT exposes non-destructive recovery UI and avoids empty/default game overwrites', () => {
+  assert.match(source, /data-vfgt-action="recovery">Open Future Game Recovery/);
+  assert.match(source, /Scan VFGT Data Layer/);
+  assert.match(source, /originalCollection: rawCollection/);
+  assert.match(source, /localStorage\.setItem\(backupKey/);
+  assert.match(source, /status: 'scheduled', phase: 'pregame'/);
+  assert.doesNotMatch(source, /savedGames = savedGames\.map\(\(game\) => \(\{ \.\.\.game, status: game\.status \|\| 'completed', phase: 'final' \}\)\)/);
+  assert.match(source, /if \(Array\.isArray\(migrationGames\)\)/);
+  assert.match(source, /readStoredJson\(SAVED_GAMES_KEY\)/);
 });
 
 test('season half duration changes the regulation threshold without changing timer progression', () => {
