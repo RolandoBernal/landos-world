@@ -790,6 +790,20 @@ test('live phase actions support one-tap pointer activation and final discard', 
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
 });
 
+test('live phase-ending actions require phase-specific accessible confirmation', () => {
+  assert.match(source, /showPhaseEndConfirmation/);
+  assert.match(source, /role="alertdialog" aria-modal="true"/);
+  assert.match(source, /End First Half\?/);
+  assert.match(source, /This will stop the first-half timer and begin halftime\./);
+  assert.match(source, /End Halftime\?/);
+  assert.match(source, /This will end halftime and start the second half\./);
+  assert.match(source, /End Second Half\?/);
+  assert.match(source, /This will stop the second-half timer and finish the game\./);
+  assert.match(source, /if \(!confirmed \|\| state !== gameAtRequest \|\| state\.phase !== details\.phase\) return/);
+  assert.match(css, /\.vfgt_confirm__backdrop[\s\S]*background: rgb\(0 0 0 \/ 64%\)/);
+  assert.match(css, /\.vfgt_confirm__actions \.vfgt_button[\s\S]*min-height: 52px/);
+});
+
 test('saved game UI uses edit and delete terminology without entry-type labels', () => {
   assert.match(source, /data-vfgt-action="home">Back<\/button>/);
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>/);
@@ -852,7 +866,8 @@ test('mobile landscape scoreboard mode is CSS-only and scoped to running halves'
   assert.match(css, /@media \(orientation: landscape\) and \(max-width: 950px\) and \(max-height: 520px\)/);
   assert.match(css, /body:has\(\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\) \.vfgt_live--running-half\) \{[\s\S]*overflow: hidden/);
   assert.match(css, /\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\):has\(\.vfgt_live--running-half\)[\s\S]*position: fixed[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
-  assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_actions/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_stoppage/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_actions \{[\s\S]*width: min\(100%, 28rem\)/);
   assert.match(css, /\.vfgt_live--running-half \.vfgt_seven_segment_visual \{[\s\S]*--digit-width: min\(/);
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-right\)/);

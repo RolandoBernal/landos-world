@@ -328,8 +328,14 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   expect(JSON.parse(await page.evaluate(() => localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1')))).toHaveLength(0);
 
   await app.getByRole('button', { name: 'End First Half' }).click();
-  await app.getByRole('button', { name: 'Start Second Half' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('This will stop the first-half timer and begin halftime.');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'End First Half', exact: true }).click();
+  await app.getByRole('button', { name: 'End Halftime' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('This will end halftime and start the second half.');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'End Halftime', exact: true }).click();
   await app.getByRole('button', { name: 'End Second Half' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('This will stop the second-half timer and finish the game.');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'End Second Half', exact: true }).click();
   await app.getByRole('button', { name: 'Save Game' }).click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1')));
   expect(saved).toHaveLength(1);
@@ -388,7 +394,7 @@ test('VFGT active half becomes a fullscreen phone landscape scoreboard without d
   await expect(app.locator('> .digit_clock_header')).toBeHidden();
   await expect(app.locator('.vfgt_match_header')).toBeHidden();
   await expect(app.locator('.vfgt_scoreboard')).toBeHidden();
-  await expect(app.locator('.vfgt_actions')).toBeHidden();
+  await expect(app.locator('.vfgt_actions')).toBeVisible();
   await expect(app.locator('[data-vfgt-seven-segment-display]')).toHaveCount(1);
 
   const layout = await page.evaluate(() => {

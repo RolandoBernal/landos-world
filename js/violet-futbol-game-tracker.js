@@ -816,6 +816,97 @@
     refreshTimer = null;
   }
 
+  function showPhaseEndConfirmation({ title, message, confirmLabel }) {
+    return new Promise((resolve) => {
+      const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const titleId = `vfgt-confirm-title-${createId()}`;
+      const messageId = `vfgt-confirm-message-${createId()}`;
+      const dialog = document.createElement('div');
+      dialog.className = 'vfgt_confirm';
+      dialog.innerHTML = `
+        <div class="vfgt_confirm__backdrop" aria-hidden="true"></div>
+        <section class="vfgt_confirm__dialog" role="alertdialog" aria-modal="true" aria-labelledby="${titleId}" aria-describedby="${messageId}">
+          <h2 class="vfgt_confirm__title" id="${titleId}">${escapeHtml(title)}</h2>
+          <p class="vfgt_confirm__message" id="${messageId}">${escapeHtml(message)}</p>
+          <div class="vfgt_confirm__actions">
+            <button type="button" class="vfgt_button" data-vfgt-confirm="cancel">Cancel</button>
+            <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-confirm="confirm">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </section>`;
+
+      let settled = false;
+      function close(confirmed) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', handleKeydown);
+        dialog.remove();
+        if (previousFocus?.isConnected) previousFocus.focus();
+        resolve(confirmed);
+      }
+
+      function handleKeydown(event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(false);
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = [...dialog.querySelectorAll('button:not([disabled])')];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      dialog.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-vfgt-confirm]');
+        if (!button) return;
+        close(button.dataset.vfgtConfirm === 'confirm');
+      });
+      document.body.appendChild(dialog);
+      document.addEventListener('keydown', handleKeydown);
+      dialog.querySelector('[data-vfgt-confirm="cancel"]')?.focus();
+    });
+  }
+
+  function confirmPhaseEnd(action) {
+    const details = action === 'end-first'
+      ? { phase: 'first_half', title: 'End First Half?', message: 'This will stop the first-half timer and begin halftime.', confirmLabel: 'End First Half' }
+      : action === 'start-second'
+        ? { phase: 'halftime', title: 'End Halftime?', message: 'This will end halftime and start the second half.', confirmLabel: 'End Halftime' }
+        : { phase: 'second_half', title: 'End Second Half?', message: 'This will stop the second-half timer and finish the game.', confirmLabel: 'End Second Half' };
+    if (state?.phase !== details.phase) return;
+    const gameAtRequest = state;
+    void showPhaseEndConfirmation(details).then((confirmed) => {
+      if (!confirmed || state !== gameAtRequest || state.phase !== details.phase) return;
+      if (action === 'end-first') {
+        endFirstHalf(state);
+        playEndHalfWhistle();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderLive();
+      } else if (action === 'start-second') {
+        startSecondHalf(state);
+        playNormalBeep();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderLive();
+      } else {
+        endSecondHalf(state);
+        playEndHalfWhistle();
+        saveActiveGame();
+        syncScreenWakeLock(state);
+        renderSummary();
+      }
+    });
+  }
+
   function screenWakeLockSupported() {
     return !!window.navigator?.wakeLock?.request;
   }
@@ -1269,7 +1360,7 @@
     const action = phase === 'first_half'
       ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-first">End First Half</button>'
       : phase === 'halftime'
-        ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">Start Second Half</button>'
+        ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">End Halftime</button>'
         : '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-second">End Second Half</button>';
     getRoot().innerHTML = `
       <section class="vfgt_app vfgt_live ${halfPhase ? 'vfgt_live--running-half' : ''}" aria-labelledby="vfgt-live-title">
@@ -1621,27 +1712,9 @@
     if (action === 'details') renderDetails(button.dataset.id);
     if (action === 'edit-saved') renderEditForm(button.dataset.id);
     if (action === 'cancel-edit') renderDetails(button.dataset.id);
-    if (action === 'end-first' && state?.phase === 'first_half') {
-      endFirstHalf(state);
-      playEndHalfWhistle();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderLive();
-    }
-    if (action === 'start-second' && state?.phase === 'halftime') {
-      startSecondHalf(state);
-      playNormalBeep();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderLive();
-    }
-    if (action === 'end-second' && state?.phase === 'second_half') {
-      endSecondHalf(state);
-      playEndHalfWhistle();
-      saveActiveGame();
-      syncScreenWakeLock(state);
-      renderSummary();
-    }
+    if (action === 'end-first' && state?.phase === 'first_half') confirmPhaseEnd(action);
+    if (action === 'start-second' && state?.phase === 'halftime') confirmPhaseEnd(action);
+    if (action === 'end-second' && state?.phase === 'second_half') confirmPhaseEnd(action);
     if (action === 'save') saveCompletedGame();
     if (action === 'discard-final' && window.confirm('Abandon this unsaved game?')) {
       clearActiveGame();
