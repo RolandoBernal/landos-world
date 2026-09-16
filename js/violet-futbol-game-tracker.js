@@ -999,6 +999,44 @@
     stopRefreshTimer();
   }
 
+  function abandonedFutureGame(game) {
+    const normalized = normalizeGame(game);
+    if (!normalized) return null;
+    return {
+      ...normalized,
+      status: 'scheduled',
+      phase: 'pregame',
+      actualStartedAt: null,
+      firstHalfStartedAt: null,
+      secondHalfStartedAt: null,
+      halftimeStartedAt: null,
+      firstHalfDurationSeconds: null,
+      secondHalfDurationSeconds: null,
+      firstHalfGoalsTeam1: 0,
+      firstHalfGoalsTeam2: 0,
+      secondHalfGoalsTeam1: 0,
+      secondHalfGoalsTeam2: 0,
+      firstHalfRegulationWhistlePlayed: false,
+      secondHalfRegulationWhistlePlayed: false,
+      completedAt: null,
+      savedAt: null,
+      updatedAt: nowIso(),
+    };
+  }
+
+  function returnActiveGameToFuture() {
+    const futureGame = abandonedFutureGame(state);
+    if (!futureGame) {
+      clearActiveGame();
+      renderHome();
+      return;
+    }
+    const games = readAllGames().filter((game) => game.id !== futureGame.id);
+    localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify([...games, futureGame]));
+    clearActiveGame();
+    renderHome();
+  }
+
   function readSavedGames() {
     const parsed = readJson(SAVED_GAMES_KEY, []);
     return Array.isArray(parsed)
@@ -2081,10 +2119,7 @@
     if (action === 'edit-scheduled') renderFutureForm(button.dataset.id);
     if (action === 'quick-start') quickStartGame(button.dataset.id);
     if (action === 'resume') resumeStoredGame();
-    if (action === 'abandon' && window.confirm('Abandon the unfinished game?')) {
-      clearActiveGame();
-      renderHome();
-    }
+    if (action === 'abandon' && window.confirm('Return this game to Future Games?\n\nThe live timer and score will be reset, and you can start it again or delete it later.')) returnActiveGameToFuture();
     if (action === 'details') renderDetails(button.dataset.id);
     if (action === 'edit-saved') renderEditForm(button.dataset.id);
     if (action === 'cancel-edit') renderDetails(button.dataset.id);
@@ -2092,10 +2127,7 @@
     if (action === 'start-second' && state?.phase === 'halftime') confirmPhaseEnd(action);
     if (action === 'end-second' && state?.phase === 'second_half') confirmPhaseEnd(action);
     if (action === 'save') saveCompletedGame();
-    if (action === 'discard-final' && window.confirm('Abandon this unsaved game?')) {
-      clearActiveGame();
-      renderHome();
-    }
+    if (action === 'discard-final' && window.confirm('Return this game to Future Games?\n\nThe live timer and score will be reset, and you can start it again or delete it later.')) returnActiveGameToFuture();
     if (action === 'delete-saved') {
       const game = readSavedGames().find((item) => item.id === button.dataset.id);
       if (!game || !window.confirm(deleteConfirmationMessage(game))) return;
@@ -2261,6 +2293,7 @@
 
   window.VioletFutbolGameTracker = {
     ACTIVE_GAME_KEY,
+    abandonedFutureGame,
     DEFAULT_SEASON_NAME,
     DEFAULT_HALF_DURATION_MINUTES,
     HUME_FOGG_TEAM,
@@ -2306,6 +2339,7 @@
     renderSevenSegmentDigit,
     renderSevenSegmentDisplay,
     requestScreenWakeLock,
+    returnActiveGameToFuture,
     scoreForPhase,
     seasonRecordMarkup,
     serializeCompletedGame,

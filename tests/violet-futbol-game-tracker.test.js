@@ -542,6 +542,21 @@ test('recovered calendar schedule starts after Valor and preserves TBD times wit
   assert.equal(candidates.find((candidate) => candidate.raw.team2 === 'District Tournament').raw.sourceCalendarUid, '411a52cfdcc21ad3@hume-fogg-soccer-2026');
 });
 
+test('abandoning an active game returns a clean scheduled record with metadata preserved', () => {
+  const { api } = createRuntime();
+  const abandoned = api.abandonedFutureGame({
+    id: 'abandon-me', team1: 'Hume-Fogg', team2: 'Green Hill', date: '2026-09-17', startTime: '18:00',
+    location: 'Green Hill', gameType: 'regularSeason', phase: 'second_half', status: 'inProgress',
+    firstHalfGoalsTeam1: 1, secondHalfGoalsTeam2: 2, recoveryMarker: 'keep-me',
+  });
+  assert.equal(abandoned.status, 'scheduled');
+  assert.equal(abandoned.phase, 'pregame');
+  assert.equal(abandoned.firstHalfGoalsTeam1, 0);
+  assert.equal(abandoned.secondHalfGoalsTeam2, 0);
+  assert.equal(abandoned.recoveryMarker, 'keep-me');
+  assert.equal(abandoned.team2, 'Green Hill');
+});
+
 test('VFGT exposes non-destructive recovery UI and avoids empty/default game overwrites', () => {
   assert.match(source, /data-vfgt-action="recovery">Open Future Game Recovery/);
   assert.match(source, /Scan VFGT Data Layer/);
@@ -851,7 +866,7 @@ test('live phase actions support one-tap pointer activation and final discard', 
   assert.match(source, /lastDirectActivationAt/);
   assert.match(source, /event\.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS/);
   assert.match(source, /data-vfgt-action="discard-final">Abandon Game<\/button>/);
-  assert.match(source, /action === 'discard-final'[\s\S]*clearActiveGame\(\)/);
+  assert.match(source, /action === 'discard-final'[\s\S]*returnActiveGameToFuture\(\)/);
   assert.doesNotMatch(source, /data-vfgt-action="home">History<\/button>\s*\$\{includeSave \?/);
 });
 
