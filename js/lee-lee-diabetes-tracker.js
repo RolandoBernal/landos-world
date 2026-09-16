@@ -5045,21 +5045,23 @@
           <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator">‹ Carb Calculator</button>
           <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${isEdit ? 'Edit Manual Amount' : 'Add Manual Amount'}</h2>
         </div>
-        <label class="lee_lee_diabetes_field">
-          Quantity
-          <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
-        </label>
-        <label class="lee_lee_diabetes_field">
-          Label
-          <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
-        </label>
-        <label class="lee_lee_diabetes_field">
-          Carbs per serving
-          <span class="lee_lee_diabetes_unit_input">
-            <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs)}">
-            <span>g</span>
-          </span>
-        </label>
+        <div class="lee_lee_diabetes_carb_item_editor_body" data-carb-item-editor-body>
+          <label class="lee_lee_diabetes_field">
+            Quantity
+            <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Label
+            <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
+          </label>
+          <label class="lee_lee_diabetes_field">
+            Carbs per serving
+            <span class="lee_lee_diabetes_unit_input">
+              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs)}">
+              <span>g</span>
+            </span>
+          </label>
+        </div>
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor">${isEdit ? 'Save Item' : 'Add Item'}</button>
@@ -5757,13 +5759,14 @@
   function keepCarbCalculatorInputVisible(input) {
     const calculator = input?.closest?.('[data-carb-calculator]');
     if (!calculator) return;
+    const scrollContainer = input.closest('[data-carb-item-editor-body]') || calculator;
     const inputRect = input.getBoundingClientRect();
-    const calculatorRect = calculator.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
     const breathingRoom = 14;
-    if (inputRect.bottom > calculatorRect.bottom - breathingRoom) {
-      calculator.scrollTop += inputRect.bottom - calculatorRect.bottom + breathingRoom;
-    } else if (inputRect.top < calculatorRect.top + breathingRoom) {
-      calculator.scrollTop -= calculatorRect.top - inputRect.top + breathingRoom;
+    if (inputRect.bottom > containerRect.bottom - breathingRoom) {
+      scrollContainer.scrollTop += inputRect.bottom - containerRect.bottom + breathingRoom;
+    } else if (inputRect.top < containerRect.top + breathingRoom) {
+      scrollContainer.scrollTop -= containerRect.top - inputRect.top + breathingRoom;
     }
   }
 
