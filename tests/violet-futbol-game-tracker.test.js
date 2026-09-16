@@ -557,6 +557,19 @@ test('abandoning an active game returns a clean scheduled record with metadata p
   assert.equal(abandoned.team2, 'Green Hill');
 });
 
+test('saving a played game preserves every other scheduled record', () => {
+  const { api } = createRuntime();
+  const scheduled = api.createGame({ id: 'future-one', team1: 'Hume-Fogg', team2: 'Green Hill', date: '2026-09-17', time: '18:00' });
+  scheduled.id = 'future-one';
+  scheduled.status = 'scheduled';
+  scheduled.phase = 'pregame';
+  const completed = api.serializeCompletedGame(api.createManualGame({ team1: 'Hume-Fogg', team2: 'Valor', date: '2026-09-15', time: '18:00' }));
+  completed.id = 'played-one';
+  const merged = api.replaceSavedGamePreservingScheduled([scheduled, completed], completed);
+  assert.deepEqual(Array.from(merged, (game) => game.id), ['future-one', 'played-one']);
+  assert.equal(merged[0].status, 'scheduled');
+});
+
 test('VFGT exposes non-destructive recovery UI and avoids empty/default game overwrites', () => {
   assert.match(source, /data-vfgt-action="recovery">Open Future Game Recovery/);
   assert.match(source, /Scan VFGT Data Layer/);
