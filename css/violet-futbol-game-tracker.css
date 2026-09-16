@@ -850,6 +850,14 @@
 }
 
 .vfgt_confirm {
+  --vfgt-border: rgb(74 163 255 / 34%);
+  --vfgt-border-strong: rgb(74 163 255 / 58%);
+  --vfgt-panel: rgb(4 20 49 / 98%);
+  --vfgt-panel-alt: rgb(7 42 101 / 96%);
+  --vfgt-text: #f8fbff;
+  --vfgt-muted: #d5e8ff;
+  --vfgt-button-text: #f8fbff;
+  --vfgt-danger-text: #fff7f7;
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -857,6 +865,18 @@
   place-items: center;
   padding: max(1rem, calc(env(safe-area-inset-top) + 1rem)) max(1rem, calc(env(safe-area-inset-right) + 1rem)) max(1rem, calc(env(safe-area-inset-bottom) + 1rem)) max(1rem, calc(env(safe-area-inset-left) + 1rem));
   box-sizing: border-box;
+  color: var(--vfgt-text);
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+:root[data-theme="light"] .vfgt_confirm {
+  --vfgt-border: rgb(9 104 195 / 24%);
+  --vfgt-border-strong: rgb(9 104 195 / 44%);
+  --vfgt-panel: rgb(232 244 255 / 98%);
+  --vfgt-panel-alt: rgb(209 232 252 / 96%);
+  --vfgt-text: #071b38;
+  --vfgt-muted: #214a75;
+  --vfgt-button-text: #0b386a;
 }
 
 .vfgt_confirm__backdrop {
@@ -886,6 +906,8 @@
 .vfgt_confirm__title {
   color: var(--vfgt-text);
   font-size: clamp(1.35rem, 6vw, 1.8rem);
+  font-weight: 900;
+  line-height: 1.15;
 }
 
 .vfgt_confirm__message {
@@ -903,6 +925,10 @@
 
 .vfgt_confirm__actions .vfgt_button {
   min-height: 52px;
+}
+
+.vfgt_confirm__actions .vfgt_button:not(.vfgt_button--danger) {
+  color: var(--vfgt-button-text);
 }
 
 .vfgt_recovery_notice,
