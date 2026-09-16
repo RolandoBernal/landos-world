@@ -589,13 +589,6 @@
   font-weight: 600;
 }
 
-.lee_lee_diabetes_report_tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin: 0;
-}
-
 .lee_lee_diabetes_report_actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2658,7 +2651,6 @@
     width: 100%;
   }
 
-  .lee_lee_diabetes_report_tabs,
   .lee_lee_diabetes_report_actions {
     grid-template-columns: 1fr;
   }
@@ -2700,7 +2692,6 @@
   .lee_lee_diabetes_nav_shell,
   .lee_lee_diabetes_nav,
   .lee_lee_diabetes_report_controls,
-  .lee_lee_diabetes_report_tabs,
   .lee_lee_diabetes_report_actions,
   .lee_lee_diabetes_reports_body,
   .lee_lee_diabetes_help,
