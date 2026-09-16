@@ -4179,24 +4179,21 @@
       <section class="lee_lee_diabetes_editor lee_lee_diabetes_report_controls" aria-label="Report options">
         ${renderFilterControls(reportOptions, 'reports')}
         <p class="lee_lee_diabetes_filter_summary" aria-live="polite">${escapeHtml(formatReportRangeSummary(resolvedRange))}</p>
+        ${renderReportViewSelect()}
       </section>
     `;
   }
 
-  function renderReportViewTabs() {
+  function renderReportViewSelect() {
     return `
-      <div class="lee_lee_diabetes_report_tabs" role="tablist" aria-label="Report views">
-        ${REPORT_VIEW_ITEMS.map(([view, label]) => `
-          <button
-            type="button"
-            class="lee_lee_diabetes_nav_button ${reportOptions.view === view ? 'is-active' : ''}"
-            data-action="report-view"
-            data-view="${escapeHtml(view)}"
-            role="tab"
-            aria-selected="${reportOptions.view === view ? 'true' : 'false'}"
-          >${escapeHtml(label)}</button>
-        `).join('')}
-      </div>
+      <form class="lee_lee_diabetes_filters">
+        <label class="lee_lee_diabetes_field">
+          Report View
+          <select class="lee_lee_diabetes_select" name="view" data-filter-scope="reports">
+            ${REPORT_VIEW_ITEMS.map(([view, label]) => `<option value="${escapeHtml(view)}" ${reportOptions.view === view ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          </select>
+        </label>
+      </form>
     `;
   }
 
@@ -4570,7 +4567,6 @@
       ${renderTrackerNav('reports')}
       <div class="lee_lee_diabetes_report_control_stack">
         ${renderReportRangeControls(resolvedRange)}
-        ${renderReportViewTabs()}
       </div>
       <section class="lee_lee_diabetes_report_actions" aria-label="Report print controls">
         <label class="lee_lee_diabetes_field">
@@ -7765,10 +7761,11 @@
 
   function updateReportOptions(root) {
     const filtersForm = root.querySelector('[data-reports-filters]');
+    const viewInput = root.querySelector('[name="view"][data-filter-scope="reports"]');
     const layoutInput = root.querySelector('[name="layout"][data-filter-scope="reports"]');
     reportOptions = {
       range: filtersForm?.elements.range?.value || 'last7',
-      view: reportOptions.view || 'summary',
+      view: REPORT_VIEW_ITEMS.some(([view]) => view === viewInput?.value) ? viewInput.value : (reportOptions.view || 'summary'),
       layout: layoutInput?.value || reportOptions.layout || 'detailed',
       startDate: filtersForm?.elements.startDate?.value || '',
       endDate: filtersForm?.elements.endDate?.value || '',
@@ -8216,14 +8213,6 @@
         renderHistory();
       }
       if (action === 'reports') {
-        renderReports();
-      }
-      if (action === 'report-view') {
-        selectedTrendPointId = '';
-        reportOptions = {
-          ...reportOptions,
-          view: REPORT_VIEW_ITEMS.some(([view]) => view === target.dataset.view) ? target.dataset.view : 'summary',
-        };
         renderReports();
       }
       if (action === 'foods') {
@@ -8694,7 +8683,8 @@
       if (historyDraftForm) {
         updateHistoryDraftFilters(historyDraftForm);
       }
-      if (event.target.closest('[data-reports-filters]') || event.target.matches('[name="layout"][data-filter-scope="reports"]')) {
+      if (event.target.closest('[data-reports-filters]') || event.target.matches('[name="layout"][data-filter-scope="reports"], [name="view"][data-filter-scope="reports"]')) {
+        if (event.target.matches('[name="view"][data-filter-scope="reports"]')) selectedTrendPointId = '';
         updateReportOptions(root);
       }
     });

@@ -1237,18 +1237,20 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await chooseLeeLeeSection(page, 'Reports');
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   const reportsFilters = page.locator('[data-reports-filters]');
+  const reportView = page.getByLabel('Report View');
   await expect(reportsFilters.getByLabel('Date Range')).toHaveValue('last7');
+  await expect(reportView).toHaveValue('summary');
   await expect(page.getByText('2 records from')).toBeVisible();
   await expect(page.getByLabel('Report options').getByText('7 completed days')).toBeVisible();
   const summarySection = page.getByLabel('Summary');
-  await expect(page.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('option', { name: 'Summary' })).toBeAttached();
   await expect(summarySection.getByText('Total insulin given')).toBeVisible();
   await expect(summarySection.getByText('23 units')).toBeVisible();
   await expect(summarySection.getByText('Long-lasting avg per day')).toBeVisible();
   await expect(summarySection.getByText(/1 administration .* expected bedtime doses recorded/)).toBeVisible();
   await expect(summarySection.getByText('Total carbs')).toBeVisible();
   expect(await summarySection.getByText('42 g carbs').count()).toBeGreaterThan(0);
-  await page.getByRole('tab', { name: 'Trends' }).click();
+  await reportView.selectOption('trends');
   await expect(page.getByRole('img', { name: /Glucose Trend chart/ })).toBeVisible();
   await expect(page.getByText('Carbohydrate Trend')).toBeVisible();
   await expect(page.locator('.lee_lee_diabetes_chart_point')).toHaveCount(5);
@@ -1276,17 +1278,46 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   });
   expect(chartMetrics.tooltipInside).toBe(true);
   expect(chartMetrics.tickFontFamily).toContain('Roboto Mono');
-  expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).display)).toBe('grid');
-  expect(await page.locator('.lee_lee_diabetes_report_control_stack').evaluate((node) => getComputedStyle(node).rowGap)).toBe(
-    await page.locator('.lee_lee_diabetes_report_tabs').evaluate((node) => getComputedStyle(node).rowGap),
-  );
+  const dateSelect = reportsFilters.getByLabel('Date Range');
+  const selectStyles = async () => Promise.all([dateSelect, reportView].map((select) => select.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    return { height: rect.height, width: rect.width, background: style.backgroundColor, border: style.border, radius: style.borderRadius, padding: style.padding, font: style.font, color: style.color, backgroundImage: style.backgroundImage };
+  })));
+  const [dateSelectMetrics, reportViewMetrics] = await selectStyles();
+  expect(reportViewMetrics).toEqual(dateSelectMetrics);
+  const originalTheme = await page.locator('html').getAttribute('data-theme');
+  for (const theme of ['light', 'dark']) {
+    await page.locator('html').evaluate((node, nextTheme) => node.setAttribute('data-theme', nextTheme), theme);
+    const [themedDateMetrics, themedViewMetrics] = await selectStyles();
+    expect(themedViewMetrics).toEqual(themedDateMetrics);
+  }
+  if (originalTheme) await page.locator('html').evaluate((node, theme) => node.setAttribute('data-theme', theme), originalTheme);
+  const summaryTextContrast = async () => page.locator('.lee_lee_diabetes_report_summary_grid div').first().evaluate((cell) => {
+    const luminance = (color) => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const background = luminance(getComputedStyle(cell).backgroundColor);
+    return ['dt', 'dd'].map((selector) => {
+      const foreground = luminance(getComputedStyle(cell.querySelector(selector)).color);
+      return (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05);
+    });
+  });
+  expect((await summaryTextContrast()).every((ratio) => ratio >= 4.5)).toBe(true);
+  await page.emulateMedia({ media: 'print' });
+  expect((await summaryTextContrast()).every((ratio) => ratio >= 4.5)).toBe(true);
+  await page.emulateMedia({ media: 'screen' });
   let previewText = await page.locator('.lee_lee_diabetes_report_preview').evaluate((node) => node.textContent || '');
   expect(previewText).toContain('23 units');
   expect(previewText).not.toContain('27 units');
 
   await reportsFilters.getByLabel('Date Range').selectOption('last14');
   await expect(page.getByText('3 records from')).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Trends' })).toHaveAttribute('aria-selected', 'true');
+  await expect(reportView).toHaveValue('trends');
   previewText = await page.locator('.lee_lee_diabetes_report_preview').evaluate((node) => node.textContent || '');
   expect(previewText).toContain('27 units');
 
@@ -1294,6 +1325,22 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   await reportsFilters.getByLabel('Start Date').fill(recentDateKey);
   await reportsFilters.getByLabel('End Date').fill(recentDateKey);
   await expect(page.getByText('2 records from')).toBeVisible();
+  await expect(reportView).toHaveValue('trends');
+  await reportView.selectOption('averages');
+  await expect(page.getByRole('heading', { name: 'Typical Day Averages' })).toBeVisible();
+  await reportView.selectOption('detailed-log');
+  await expect(page.getByRole('heading', { name: 'Detailed Log' })).toBeVisible();
+  await reportView.selectOption('summary');
+  await page.getByLabel('Print Layout').selectOption('clinical');
+  await expect(page.getByRole('button', { name: 'Print or Save as PDF' })).toBeEnabled();
+  await expect(page.locator('.lee_lee_diabetes_report_preview')).toContainText('Glucose & Insulin Log');
+  await page.evaluate(() => { window.__lltPrintCalls = 0; window.print = () => { window.__lltPrintCalls += 1; }; });
+  await page.getByRole('button', { name: 'Print or Save as PDF' }).click();
+  await expect.poll(() => page.evaluate(() => window.__lltPrintCalls)).toBe(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await reportView.evaluate((node) => node.getBoundingClientRect().width)).toBeGreaterThan(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect(await reportView.evaluate((node) => node.getBoundingClientRect().width)).toBeGreaterThan(0);
 });
 
 test('Lee-Lee editing context updates the same record after confirmation', async ({ page }) => {
