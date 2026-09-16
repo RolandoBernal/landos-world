@@ -1071,25 +1071,30 @@ test('Lee-Lee mobile bottom navigation preserves destinations and light/dark con
     const activeButton = node.querySelector('[data-action="today"]');
     const inactive = getComputedStyle(inactiveButton);
     const active = getComputedStyle(activeButton);
-    const inactiveBackground = parseRgb(inactive.backgroundColor);
+    const inactiveIcon = getComputedStyle(inactiveButton.querySelector('.lee_lee_diabetes_bottom_nav_icon'));
+    const activeIcon = getComputedStyle(activeButton.querySelector('.lee_lee_diabetes_bottom_nav_icon'));
+    const inactiveBackground = inactive.backgroundColor === 'rgba(0, 0, 0, 0)'
+      ? parseRgb(panel.backgroundColor)
+      : parseRgb(inactive.backgroundColor);
     const inactiveColor = parseRgb(inactive.color);
     return {
       panelBackground: panel.backgroundColor,
       inactiveBackground: inactive.backgroundColor,
       inactiveColor: inactive.color,
       activeBackground: active.backgroundColor,
-      activeColor: active.color,
+      activeColor: activeIcon.color,
       inactiveContrast: contrast(inactiveColor, inactiveBackground),
+      inactiveIconColor: inactiveIcon.color,
     };
   });
 
   expect(lightStyles.panelBackground).not.toBe('rgb(5, 9, 19)');
   expect(lightStyles.inactiveContrast).toBeGreaterThanOrEqual(4.5);
-  expect(lightStyles.activeBackground).not.toBe(lightStyles.inactiveBackground);
-  expect(lightStyles.activeColor).not.toBe(lightStyles.inactiveColor);
+  expect(lightStyles.activeBackground).toBe(lightStyles.inactiveBackground);
+  expect(lightStyles.activeColor).not.toBe(lightStyles.inactiveIconColor);
 
   for (const [action, label] of [['history', 'History'], ['reports', 'Reports'], ['foods', 'Foods']]) {
-    await nav.getByRole('button', { name: label }).click();
+    await nav.getByRole('button', { name: label }).dispatchEvent('click');
     await expect(nav.locator(`[data-action="${action}"]`)).toHaveAttribute('aria-current', 'page');
     const stateStyles = await nav.evaluate((node, activeAction) => {
       const parseRgb = (value) => (value.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
@@ -1110,14 +1115,23 @@ test('Lee-Lee mobile bottom navigation preserves destinations and light/dark con
         .find((button) => button.dataset.action !== activeAction);
       const active = getComputedStyle(activeButton);
       const inactive = getComputedStyle(inactiveButton);
+      const activeIcon = getComputedStyle(activeButton.querySelector('.lee_lee_diabetes_bottom_nav_icon'));
+      const inactiveIcon = getComputedStyle(inactiveButton.querySelector('.lee_lee_diabetes_bottom_nav_icon'));
+      const panel = getComputedStyle(node);
+      const inactiveBackground = inactive.backgroundColor === 'rgba(0, 0, 0, 0)'
+        ? parseRgb(panel.backgroundColor)
+        : parseRgb(inactive.backgroundColor);
       return {
         activeBackground: active.backgroundColor,
         inactiveBackground: inactive.backgroundColor,
-        inactiveContrast: contrast(parseRgb(inactive.color), parseRgb(inactive.backgroundColor)),
+        inactiveContrast: contrast(parseRgb(inactive.color), inactiveBackground),
+        activeIconColor: activeIcon.color,
+        inactiveIconColor: inactiveIcon.color,
       };
     }, action);
     expect(stateStyles.inactiveContrast).toBeGreaterThanOrEqual(4.5);
-    expect(stateStyles.activeBackground).not.toBe(stateStyles.inactiveBackground);
+    expect(stateStyles.activeBackground).toBe(stateStyles.inactiveBackground);
+    expect(stateStyles.activeIconColor).not.toBe(stateStyles.inactiveIconColor);
   }
 
   await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
@@ -1129,7 +1143,25 @@ test('Lee-Lee mobile bottom navigation preserves destinations and light/dark con
 test('Lee-Lee mobile bottom plus opens the existing Log Entry flow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProtectedLeeLeeTracker(page);
-  await page.getByLabel("Lee-Lee’s Tracker mobile navigation").getByRole('button', { name: 'Log Entry' }).click();
+  const nav = page.getByLabel("Lee-Lee’s Tracker mobile navigation");
+  const metrics = await nav.evaluate((node) => {
+    const navRect = node.getBoundingClientRect();
+    const plusRect = node.querySelector('[data-action="log-entry"]').getBoundingClientRect();
+    return {
+      buttonCount: node.querySelectorAll('button').length,
+      navBottom: Math.round(navRect.bottom),
+      viewportBottom: window.innerHeight,
+      plusBottom: Math.round(plusRect.bottom),
+      plusHeight: Math.round(plusRect.height),
+      navBackground: getComputedStyle(node).backgroundColor,
+    };
+  });
+  expect(metrics.buttonCount).toBe(5);
+  expect(metrics.navBottom).toBe(metrics.viewportBottom);
+  expect(metrics.plusBottom).toBeLessThanOrEqual(metrics.viewportBottom - 20);
+  expect(metrics.plusHeight).toBeGreaterThanOrEqual(52);
+  expect(metrics.navBackground).not.toBe('rgba(0, 0, 0, 0)');
+  await nav.getByRole('button', { name: 'Log Entry' }).click();
   await expect(page.getByRole('heading', { name: 'Log Entry' })).toBeVisible();
   await expect(page.locator('[data-lee-lee-editor]')).toBeVisible();
 });
@@ -1352,7 +1384,7 @@ test('Lee-Lee repeated edits preserve record identity and count', async ({ page 
 
 test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb data', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await expect(form.getByLabel('Context')).toHaveValue('Breakfast');
@@ -1400,7 +1432,7 @@ test('Lee-Lee Bedtime context removes Meal Carbs and saves without stale carb da
 
 test('Lee-Lee context switching restores Meal Carbs for applicable contexts', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Bedtime');
@@ -1437,7 +1469,7 @@ test('Lee-Lee context switching restores Meal Carbs for applicable contexts', as
 
 test('Lee-Lee Carb Calc applies temporary receipt rows without saving food details', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -1569,7 +1601,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
       }],
     }));
   });
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -2112,7 +2144,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
     }));
   });
 
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
@@ -2240,7 +2272,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
 
 test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on first pointer action', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -2271,6 +2303,9 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       labelGap: qtyBox.top - node.querySelector('label').getBoundingClientRect().top,
       inputGap: labelBox.top - qtyBox.bottom,
       actionsPosition: actionsStyle.position,
+      bodyOverflowY: getComputedStyle(node.querySelector('[data-carb-item-editor-body]')).overflowY,
+      actionsTop: actions.getBoundingClientRect().top,
+      carbsBottom: carbsBox.bottom,
       editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
     };
   });
@@ -2282,7 +2317,9 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.carbsUnitGap).toBeLessThanOrEqual(12);
   expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(24);
   expect(editorMetrics.inputGap).toBeGreaterThanOrEqual(8);
-  expect(editorMetrics.actionsPosition).toBe('sticky');
+  expect(editorMetrics.actionsPosition).toBe('relative');
+  expect(editorMetrics.bodyOverflowY).toBe('auto');
+  expect(editorMetrics.actionsTop).toBeGreaterThanOrEqual(editorMetrics.carbsBottom);
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
   const qtyInput = calculator.locator('[name="carbItemQty"]');
   for (const value of ['0', '0.', '0.5']) {
@@ -2328,7 +2365,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
 test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scroll', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -2421,7 +2458,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     window.__setLeeLeeVisualViewportFrame = (nextFrame) => mockVisualViewport.setFrame(nextFrame);
   });
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -2491,7 +2528,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
 
 test('Lee-Lee entry inputs preserve typed digit order during live updates', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
@@ -2545,7 +2582,7 @@ test('Lee-Lee entry inputs preserve typed digit order during live updates', asyn
 
 test('Lee-Lee Carb Calc edits explicit rows while keeping the main table display-only', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
-  await page.getByRole('button', { name: '+ Log Entry' }).click();
+  await page.getByRole('button', { name: 'Log Entry' }).click();
 
   const form = page.locator('[data-lee-lee-editor]');
   await form.getByLabel('Context').selectOption('Dinner');
