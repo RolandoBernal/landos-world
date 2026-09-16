@@ -5046,18 +5046,10 @@
     return `
       <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor>
         <div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
-          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator">‹ Carb Calculator</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Carb Calculator</span></button>
           <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${isEdit ? 'Edit Manual Amount' : 'Add Manual Amount'}</h2>
         </div>
         <div class="lee_lee_diabetes_carb_item_editor_body" data-carb-item-editor-body>
-          <label class="lee_lee_diabetes_field">
-            Quantity
-            <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
-          </label>
-          <label class="lee_lee_diabetes_field">
-            Label
-            <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
-          </label>
           <label class="lee_lee_diabetes_field">
             Carbs per serving
             <span class="lee_lee_diabetes_unit_input">
@@ -5065,6 +5057,16 @@
               <span>g</span>
             </span>
           </label>
+          <div class="lee_lee_diabetes_carb_item_editor_secondary_fields">
+            <label class="lee_lee_diabetes_field">
+              Quantity
+              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
+            </label>
+            <label class="lee_lee_diabetes_field">
+              Label
+              <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
+            </label>
+          </div>
         </div>
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions">
           <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--muted" data-action="cancel-carb-calculator-item-editor">Cancel</button>

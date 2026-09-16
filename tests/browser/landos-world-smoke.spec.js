@@ -2347,6 +2347,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const qtyBox = qtyInput.getBoundingClientRect();
     const labelBox = labelInput.getBoundingClientRect();
     const carbsBox = carbsInput.getBoundingClientRect();
+    const secondaryBox = node.querySelector('.lee_lee_diabetes_carb_item_editor_secondary_fields').getBoundingClientRect();
     const unitBox = carbsUnit.getBoundingClientRect();
     const qtyStyle = getComputedStyle(qtyInput);
     const labelStyle = getComputedStyle(labelInput);
@@ -2357,6 +2358,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const addItem = node.querySelector('[data-action="save-carb-calculator-item-editor"]');
     const cancelStyle = getComputedStyle(cancel);
     const addItemStyle = getComputedStyle(addItem);
+    const backIcon = node.querySelector('.lee_lee_diabetes_back_icon svg');
     return {
       qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -2364,10 +2366,12 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       carbsWidth: carbsBox.width,
       carbsUnitGap: unitBox.left - carbsBox.right,
       labelGap: qtyBox.top - node.querySelector('label').getBoundingClientRect().top,
-      inputGap: labelBox.top - qtyBox.bottom,
+      inputGap: labelBox.left - qtyBox.right,
+      secondaryTop: secondaryBox.top,
       actionsPosition: actionsStyle.position,
       bodyOverflowY: getComputedStyle(node.querySelector('[data-carb-item-editor-body]')).overflowY,
       actionsTop: actions.getBoundingClientRect().top,
+      actionsHeight: actions.getBoundingClientRect().height,
       carbsBottom: carbsBox.bottom,
       actionsDisplay: actionsStyle.display,
       actionsBackground: actionsStyle.backgroundColor,
@@ -2379,6 +2383,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       cancelColor: cancelStyle.color,
       addItemColor: addItemStyle.color,
       editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
+      backIconVisible: Boolean(backIcon && backIcon.getBoundingClientRect().width > 0),
+      backIconPath: backIcon?.querySelector('path')?.getAttribute('d') || '',
     };
   });
   expect(editorMetrics.qtyHasVisibleBox).toBe(true);
@@ -2387,8 +2393,9 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.carbsWidth).toBeLessThanOrEqual(82);
   expect(editorMetrics.carbsUnitGap).toBeGreaterThanOrEqual(4);
   expect(editorMetrics.carbsUnitGap).toBeLessThanOrEqual(12);
-  expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(24);
+  expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(8);
   expect(editorMetrics.inputGap).toBeGreaterThanOrEqual(8);
+  expect(editorMetrics.secondaryTop).toBeGreaterThan(editorMetrics.carbsBottom);
   expect(editorMetrics.actionsPosition).toBe('relative');
   expect(editorMetrics.bodyOverflowY).toBe('auto');
   expect(editorMetrics.actionsTop).toBeGreaterThanOrEqual(editorMetrics.carbsBottom);
@@ -2401,6 +2408,9 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.addItemBackground).toBe('rgba(0, 0, 0, 0)');
   expect(editorMetrics.cancelColor).not.toBe(editorMetrics.addItemColor);
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
+  expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(64);
+  expect(editorMetrics.backIconVisible).toBe(true);
+  expect(editorMetrics.backIconPath).toBe('m15 18-6-6 6-6');
   const qtyInput = calculator.locator('[name="carbItemQty"]');
   for (const value of ['0', '0.', '0.5']) {
     await qtyInput.fill(value);
