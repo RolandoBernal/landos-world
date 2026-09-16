@@ -2358,6 +2358,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const addItem = node.querySelector('[data-action="save-carb-calculator-item-editor"]');
     const cancelStyle = getComputedStyle(cancel);
     const addItemStyle = getComputedStyle(addItem);
+    const backIcon = node.querySelector('.lee_lee_diabetes_back_icon svg');
     return {
       qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -2382,6 +2383,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       cancelColor: cancelStyle.color,
       addItemColor: addItemStyle.color,
       editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
+      backIconVisible: Boolean(backIcon && backIcon.getBoundingClientRect().width > 0),
+      backIconPath: backIcon?.querySelector('path')?.getAttribute('d') || '',
     };
   });
   expect(editorMetrics.qtyHasVisibleBox).toBe(true);
@@ -2406,6 +2409,8 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.cancelColor).not.toBe(editorMetrics.addItemColor);
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
   expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(64);
+  expect(editorMetrics.backIconVisible).toBe(true);
+  expect(editorMetrics.backIconPath).toBe('m15 18-6-6 6-6');
   const qtyInput = calculator.locator('[name="carbItemQty"]');
   for (const value of ['0', '0.', '0.5']) {
     await qtyInput.fill(value);
