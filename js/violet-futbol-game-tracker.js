@@ -1577,7 +1577,16 @@
     localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(readAllGames().filter((game) => game.id !== id)));
     saveActiveGame();
     syncScreenWakeLock(state);
-    renderLive();
+    renderLiveAfterActivation(state.id);
+  }
+
+  function renderLiveAfterActivation(gameId) {
+    // Let the original pointer/click activation finish before replacing the
+    // scheduled-game button with the live-game controls. Otherwise the same
+    // tap can land on the newly rendered End First Half button.
+    window.setTimeout(() => {
+      if (state?.id === gameId) renderLive();
+    }, 0);
   }
 
   function renderHome() {
@@ -1606,11 +1615,11 @@
           <h2>No saved games yet</h2>
           <p>Start a new match or add a past result.</p>
         </div>`;
-    const futureSection = `<details class="vfgt_accordion" ${futureGames.length ? 'open' : ''}>
+    const futureSection = `<details class="vfgt_accordion">
       <summary>Future Games <span>${futureGames.length}</span></summary>
       <div class="vfgt_accordion_content">${futureGames.length ? `<div class="vfgt_history" role="list">${futureGames.map(scheduledGameMarkup).join('')}</div>` : '<div class="vfgt_empty vfgt_empty--compact"><p>No future games scheduled</p></div>'}</div>
     </details>`;
-    const pastSection = `<details class="vfgt_accordion" ${futureGames.length ? '' : 'open'}>
+    const pastSection = `<details class="vfgt_accordion" open>
       <summary>Past Games <span>${currentGames.length}</span></summary>
       <div class="vfgt_accordion_content">${history}</div>
     </details>`;
@@ -2253,7 +2262,7 @@
     void unlockAudio();
     saveActiveGame();
     syncScreenWakeLock(state);
-    renderLive();
+    renderLiveAfterActivation(state.id);
   }
 
   function handleLifecycleResume() {

@@ -296,7 +296,7 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   const app = page.locator('#violet-futbol-game-tracker-view');
   await app.getByRole('button', { name: 'Add Game', exact: true }).click();
   await expect(app.getByRole('heading', { name: 'What type of game would you like to add?' })).toBeVisible();
-  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByLabel('Opponent').fill('Brentwood Academy');
   await app.getByLabel('Date').fill('2026-09-18');
   await app.getByLabel('Time').fill('19:00');
@@ -306,19 +306,25 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   await app.getByRole('button', { name: 'Save Future Game' }).click();
 
   const future = app.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
+  const past = app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' });
+  await expect(future).not.toHaveAttribute('open');
+  await expect(past).toHaveAttribute('open', '');
   await expect(future).toContainText('Brentwood Academy');
   await expect(future).toContainText('Arrive by 5:45');
   const scheduledId = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1'))[0].id);
 
+  await future.locator('summary').click();
   await future.getByRole('button', { name: 'Edit' }).click();
   await app.getByLabel('Opponent').fill('Franklin Road Academy');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
   await expect(future).toContainText('Franklin Road Academy');
   await expect(future).not.toContainText('Brentwood Academy');
 
+  await future.locator('summary').click();
   page.once('dialog', (dialog) => dialog.accept());
   await future.getByRole('button', { name: 'Quick Start' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   const active = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
   expect(active.id).toBe(scheduledId);
   expect(active.status).toBe('inProgress');
@@ -350,7 +356,7 @@ test('VFGT unified Add Game opens the played-game workflow and cancellation stay
   const app = page.locator('#violet-futbol-game-tracker-view');
   await app.getByRole('button', { name: 'Add Game', exact: true }).click();
   await expect(app.getByRole('heading', { name: 'What type of game would you like to add?' })).toBeVisible();
-  await app.getByRole('button', { name: 'Played Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Played Game' }).click();
   await expect(app.getByRole('heading', { name: 'Add Game', exact: true })).toBeVisible();
   await app.getByLabel('School/Team 2').fill('Ravenwood');
   await app.getByLabel('Date').fill('2026-09-12');
@@ -358,7 +364,7 @@ test('VFGT unified Add Game opens the played-game workflow and cancellation stay
   await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Ravenwood');
 
   await app.getByRole('button', { name: 'Add Game', exact: true }).click();
-  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByRole('button', { name: 'Back', exact: true }).click();
   await app.getByRole('button', { name: 'Cancel', exact: true }).click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1') || '[]'));
@@ -370,7 +376,7 @@ async function startVfgtFirstHalf(page) {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
   await app.getByRole('button', { name: 'Add Game', exact: true }).click();
-  await app.getByRole('button', { name: 'Future Game', exact: true }).click();
+  await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByLabel('Opponent').fill('Hume-Fogg');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
   page.once('dialog', (dialog) => dialog.accept());
