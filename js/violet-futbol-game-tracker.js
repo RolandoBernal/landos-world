@@ -689,6 +689,12 @@
     return Boolean(hasTeams && hasDate && futureCandidateReason(game, sourceKey));
   }
 
+  function looksLikeSavedGameRecord(game) {
+    if (!game || typeof game !== 'object' || Array.isArray(game)) return false;
+    const markers = ['id', 'team1', 'team2', 'homeTeam', 'awayTeam', 'opponent', 'date', 'gameDate', 'startDate', 'status', 'phase', 'entryType', 'gameType', 'location', 'notes'];
+    return markers.filter((key) => game[key] !== undefined && game[key] !== null && String(game[key]).trim() !== '').length >= 2;
+  }
+
   function collectRecoveryCandidates(value, sourceKey, path, candidates, seen = new Set(), depth = 0) {
     if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
     seen.add(value);
@@ -786,14 +792,37 @@
   async function scanVfgtDataLayer() {
     const candidates = [];
     const localStorageKeys = [];
+    let savedGameSource = { present: false, valid: true, recordCount: 0, rawType: 'absent' };
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
       if (!key) continue;
       localStorageKeys.push(key);
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        if (key === SAVED_GAMES_KEY) {
+          savedGameSource = {
+            present: true,
+            valid: true,
+            recordCount: Array.isArray(parsed) ? parsed.length : 0,
+            rawType: Array.isArray(parsed) ? 'array' : typeof parsed,
+          };
+          if (Array.isArray(parsed)) {
+            parsed.forEach((record, recordIndex) => {
+              if (looksLikeSavedGameRecord(record) && !isGameCandidate(record, key)) {
+                candidates.push({
+                  source: 'localStorage',
+                  sourceKey: key,
+                  path: `$[${recordIndex}]`,
+                  raw: record,
+                  reason: 'Unclassified record in the current saved-game collection; review before restoring',
+                });
+              }
+            });
+          }
+        }
         collectRecoveryCandidates(parsed, key, '$', candidates);
       } catch {
+        if (key === SAVED_GAMES_KEY) savedGameSource = { present: true, valid: false, recordCount: 0, rawType: 'malformed JSON' };
         // Keep malformed source data untouched and report the key as scanned.
       }
     }
@@ -808,7 +837,7 @@
       seen.add(identity);
       unique.push({ ...candidate, index: unique.length });
     });
-    return { localStorageKeys, indexedDb, cache, candidates: unique, scannedAt: nowIso() };
+    return { localStorageKeys, savedGameSource, indexedDb, cache, candidates: unique, scannedAt: nowIso() };
   }
 
   function recoveryField(game, keys, fallback = 'Not available') {
@@ -897,7 +926,7 @@
       <div class="vfgt_actions vfgt_recovery_actions"><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="recovery-scan">Scan VFGT Data Layer</button>${result?.candidates?.length ? '<button type="button" class="vfgt_button" data-vfgt-action="recovery-export">Export Scan Results</button><button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="recovery-restore">Restore Selected</button>' : ''}</div>
       ${result?.loading ? '<p class="vfgt_settings_note" aria-live="polite">Scanning localStorage, IndexedDB, and service-worker caches…</p>' : ''}
       ${result?.error || result?.importMessage ? `<p class="vfgt_recovery_result" role="status">${escapeHtml(result.error || result.importMessage)}</p>` : ''}
-      ${result && !result.loading ? `<section class="vfgt_recovery_summary" aria-label="Recovery scan summary"><strong>${result.candidates.length} candidate game${result.candidates.length === 1 ? '' : 's'} found</strong><span>${result.localStorageKeys.length} localStorage keys scanned · ${result.indexedDb.databases.length} IndexedDB databases · ${result.cache.caches.length} caches</span><details><summary>Scanned data sources</summary><p>VFGT-related localStorage keys: ${escapeHtml(result.localStorageKeys.filter(isVfgtStorageKey).join(', ') || 'None')}</p><p>IndexedDB stores inspected: ${result.indexedDb.stores || 0}</p><p>Cached VFGT entries: ${result.cache.entries.length}</p></details></section>${result.candidates.length ? `<div class="vfgt_recovery_candidates">${result.candidates.map(recoveryCandidateMarkup).join('')}</div>` : '<p class="vfgt_empty vfgt_empty--compact">No future-game candidates were found in the scanned data layer.</p>'}` : ''}
+      ${result && !result.loading ? `<section class="vfgt_recovery_summary" aria-label="Recovery scan summary"><strong>${result.candidates.length} candidate game${result.candidates.length === 1 ? '' : 's'} found</strong><span>${result.localStorageKeys.length} localStorage keys scanned · ${result.indexedDb.databases.length} IndexedDB databases · ${result.cache.caches.length} caches</span><details><summary>Scanned data sources</summary><p>VFGT-related localStorage keys: ${escapeHtml(result.localStorageKeys.filter(isVfgtStorageKey).join(', ') || 'None')}</p><p>Current saved-game collection: ${result.savedGameSource.present ? `${result.savedGameSource.recordCount} raw record${result.savedGameSource.recordCount === 1 ? '' : 's'} (${escapeHtml(result.savedGameSource.rawType)})` : 'Not present'}</p><p>IndexedDB stores inspected: ${result.indexedDb.stores || 0}</p><p>Cached VFGT entries: ${result.cache.entries.length}</p></details></section>${result.candidates.length ? `<div class="vfgt_recovery_candidates">${result.candidates.map(recoveryCandidateMarkup).join('')}</div>` : '<p class="vfgt_empty vfgt_empty--compact">No future-game candidates were found in the scanned data layer. The saved-game collection count above is the authoritative next diagnostic.</p>'}` : ''}
     </section>`;
   }
 
@@ -907,7 +936,7 @@
     try {
       recoveryScan = await scanVfgtDataLayer();
     } catch (error) {
-      recoveryScan = { loading: false, candidates: [], localStorageKeys: [], indexedDb: { databases: [] }, cache: { caches: [] }, error: `Recovery scan could not complete: ${error.message || error}` };
+      recoveryScan = { loading: false, candidates: [], localStorageKeys: [], savedGameSource: { present: false, valid: false, recordCount: 0, rawType: 'unavailable' }, indexedDb: { databases: [] }, cache: { caches: [] }, error: `Recovery scan could not complete: ${error.message || error}` };
     }
     renderRecoveryDiagnostic();
   }
