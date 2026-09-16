@@ -5051,20 +5051,22 @@
         </div>
         <div class="lee_lee_diabetes_carb_item_editor_body" data-carb-item-editor-body>
           <label class="lee_lee_diabetes_field">
-            Quantity
-            <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
-          </label>
-          <label class="lee_lee_diabetes_field">
-            Label
-            <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
-          </label>
-          <label class="lee_lee_diabetes_field">
             Carbs per serving
             <span class="lee_lee_diabetes_unit_input">
               <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs)}">
               <span>g</span>
             </span>
           </label>
+          <div class="lee_lee_diabetes_carb_item_editor_secondary_fields">
+            <label class="lee_lee_diabetes_field">
+              Quantity
+              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemQty" type="text" inputmode="decimal" maxlength="5" autocomplete="off" value="${escapeHtml(draft.qty)}">
+            </label>
+            <label class="lee_lee_diabetes_field">
+              Label
+              <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
+            </label>
+          </div>
         </div>
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions">
           <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--muted" data-action="cancel-carb-calculator-item-editor">Cancel</button>
