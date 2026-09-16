@@ -188,7 +188,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-15-5'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-15-6'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -214,6 +214,7 @@ test('app dropdowns use padded custom select arrows', () => {
     [html, /css\/lee-lee-diabetes\.css\?v=20260915-4/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260910-1/],
     [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260915-3/],
+    [html, /js\/pwa-manager\.js\?v=20260915-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [dailyChiefBriefingCss, /\.daily_briefing_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
     [leeLeeDiabetesCss, /\.lee_lee_diabetes_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
@@ -242,6 +243,9 @@ test('offline, install, update, and settings UI hooks are present and accessible
   assert.match(pwaManager, /beforeinstallprompt/);
   assert.match(pwaManager, /Update available/);
   assert.match(pwaManager, /data-pwa-action="restart"/);
+  assert.match(pwaManager, /Updating Lando's World/);
+  assert.match(pwaManager, /The update is taking longer than expected/);
+  assert.match(pwaManager, /data-pwa-action="reload"/);
   assert.match(pwaManager, /navigator\.storage\.persist/);
   assert.match(pwaManager, /navigator\.storage\.estimate/);
   assert.match(digitalClockCss, /\.pwa_network_status/);

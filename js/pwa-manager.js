@@ -5,6 +5,7 @@
   const LOCAL_PREVIEW_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
   const SW_PATH = './service-worker.js';
   const STATUS_REQUEST_TIMEOUT_MS = 4000;
+  const RESTART_FEEDBACK_TIMEOUT_MS = 10000;
 
   let deferredInstallPrompt = null;
   let waitingWorker = null;
@@ -14,6 +15,8 @@
   let storageEstimate = null;
   let isInstalled = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   let restartRequested = false;
+  let restartFeedback = '';
+  let restartFeedbackTimeoutId = null;
   let activeRegistration = null;
   let statusRequestSequence = 0;
 
@@ -128,6 +131,22 @@
   function renderToast() {
     const el = getToastEl();
     if (!el) return;
+    if (restartRequested) {
+      el.hidden = false;
+      el.innerHTML = `
+        <span>Updating Lando's World…</span>
+        <button type="button" data-pwa-action="restart" disabled aria-busy="true">Restarting…</button>
+      `;
+      return;
+    }
+    if (restartFeedback) {
+      el.hidden = false;
+      el.innerHTML = `
+        <span>${restartFeedback}</span>
+        <button type="button" data-pwa-action="reload">Reload</button>
+      `;
+      return;
+    }
     if (waitingWorker) {
       el.hidden = false;
       el.innerHTML = `
@@ -443,12 +462,70 @@
     updateUi();
   }
 
+  function clearRestartFeedbackTimeout() {
+    if (restartFeedbackTimeoutId !== null) {
+      clearTimeout(restartFeedbackTimeoutId);
+      restartFeedbackTimeoutId = null;
+    }
+  }
+
+  function reloadForUpdate() {
+    clearRestartFeedbackTimeout();
+    restartRequested = false;
+    restartFeedback = '';
+    window.location.reload();
+  }
+
+  function finishRestart() {
+    if (!restartRequested) return;
+    clearRestartFeedbackTimeout();
+    restartRequested = false;
+    restartFeedback = '';
+    window.location.reload();
+  }
+
+  function showRestartFailure(message) {
+    clearRestartFeedbackTimeout();
+    restartRequested = false;
+    restartFeedback = message;
+    updateUi();
+  }
+
+  function requestRestart() {
+    const worker = waitingWorker || activeRegistration?.waiting;
+    if (!worker?.postMessage) {
+      showRestartFailure('The update is still preparing.');
+      return;
+    }
+    waitingWorker = worker;
+    restartRequested = true;
+    restartFeedback = '';
+    updateUi();
+    clearRestartFeedbackTimeout();
+    restartFeedbackTimeoutId = setTimeout(() => {
+      if (restartRequested) showRestartFailure('The update is taking longer than expected.');
+    }, RESTART_FEEDBACK_TIMEOUT_MS);
+    worker.addEventListener?.('statechange', () => {
+      if (worker.state === 'activated') finishRestart();
+      if (worker.state === 'redundant') showRestartFailure('The update could not be activated.');
+    }, { once: true });
+    try {
+      worker.postMessage({ type: 'SKIP_WAITING' });
+    } catch (error) {
+      console.warn('Service worker restart request failed.', error);
+      showRestartFailure('The update could not be started.');
+    }
+  }
+
   function handleClick(event) {
     const action = event.target.closest('[data-pwa-action]')?.dataset.pwaAction;
     if (!action) return;
     if (action === 'restart') {
-      restartRequested = true;
-      waitingWorker?.postMessage({ type: 'SKIP_WAITING' });
+      requestRestart();
+      return;
+    }
+    if (action === 'reload') {
+      reloadForUpdate();
       return;
     }
     if (action === 'install') {
@@ -486,7 +563,7 @@
     });
     navigator.serviceWorker?.addEventListener('controllerchange', () => {
       if (restartRequested) {
-        window.location.reload();
+        finishRestart();
         return;
       }
       requestServiceWorkerStatus(activeRegistration);
