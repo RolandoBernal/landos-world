@@ -1356,6 +1356,8 @@ test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
   assert.match(trackerSource, /\+ Add Manual Amount\.\.\./);
   assert.match(trackerSource, /\$\{isEdit \? 'Edit Manual Amount' : 'Add Manual Amount'\}/);
+  assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor"/);
+  assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor"/);
   assert.match(trackerSource, /name="carbItemQty" type="text" inputmode="decimal" maxlength="5"/);
   assert.match(trackerSource, /isValidCarbCalculatorQuantity\(qtyText\)/);
   assert.match(trackerSource, /setCustomValidity\('Enter a quantity greater than 0 with up to two decimal places\.'/);
@@ -1373,6 +1375,11 @@ test('carb calculator uses display rows with a focused item editor', () => {
   assert.doesNotMatch(trackerSource, /Add Carb Amount|manualCarbAmount|manual-amount/);
   assert.match(trackerSource, /shouldSelectValue = \['carbCalcQty', 'carbCalcCarbs', 'carbItemQty', 'carbItemCarbs'\]\.includes/);
   assert.match(trackerSource, /input\.select\(\)/);
+});
+
+test('carb item editor actions reuse LLT buttons and keep the footer compact', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_actions \{[\s\S]*min-height: 0[\s\S]*padding: 0\.55rem 0 0\.25rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_actions \.lee_lee_diabetes_button \{[\s\S]*flex: 1 1 0[\s\S]*min-height: 52px/);
 });
 
 test('carb calculator compact rows keep narrow item controls and icon actions', () => {
