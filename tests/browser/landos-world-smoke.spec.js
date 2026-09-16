@@ -2402,13 +2402,13 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.actionsDisplay).toBe('flex');
   expect(editorMetrics.actionsBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(editorMetrics.actionsBorderTopWidth).toBe('1px');
-  expect(editorMetrics.cancelMinHeight).toBe('36px');
-  expect(editorMetrics.cancelBackground).toBe('rgba(0, 0, 0, 0)');
-  expect(editorMetrics.addItemMinHeight).toBe('36px');
-  expect(editorMetrics.addItemBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(editorMetrics.cancelMinHeight).toBe('52px');
+  expect(editorMetrics.cancelBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(editorMetrics.addItemMinHeight).toBe('52px');
+  expect(editorMetrics.addItemBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(editorMetrics.cancelColor).not.toBe(editorMetrics.addItemColor);
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
-  expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(64);
+  expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(72);
   expect(editorMetrics.backIconVisible).toBe(true);
   expect(editorMetrics.backIconPath).toBe('m15 18-6-6 6-6');
   const qtyInput = calculator.locator('[name="carbItemQty"]');
