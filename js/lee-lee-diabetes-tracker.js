@@ -5062,9 +5062,9 @@
             </span>
           </label>
         </div>
-        <div class="lee_lee_diabetes_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor">${isEdit ? 'Save Item' : 'Add Item'}</button>
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions">
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--muted" data-action="cancel-carb-calculator-item-editor">Cancel</button>
+          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--primary" data-action="save-carb-calculator-item-editor">${isEdit ? 'Save Item' : 'Add Item'}</button>
         </div>
       </div>
     `;

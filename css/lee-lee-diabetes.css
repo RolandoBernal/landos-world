@@ -405,6 +405,14 @@
   color: #fca5a5;
 }
 
+.lee_lee_diabetes_timeline_edit--muted {
+  color: var(--lee-lee-muted);
+}
+
+.lee_lee_diabetes_timeline_edit--primary {
+  color: var(--app-accent);
+}
+
 .lee_lee_diabetes_timeline_edit--danger:hover,
 .lee_lee_diabetes_timeline_edit--danger:focus-visible {
   color: #fecaca;
@@ -1505,6 +1513,14 @@
   background: #06142b;
 }
 
+.lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_carb_item_editor_actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  margin-top: 0;
+}
+
 .lee_lee_diabetes_carb_calc_operator {
   color: var(--lee-lee-muted);
   font-size: 0.95rem;
@@ -2302,6 +2318,14 @@
 :root[data-theme="light"] .lee_lee_diabetes_timeline_edit {
   background: transparent;
   color: var(--lee-lee-soft);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_timeline_edit--muted {
+  color: var(--lee-lee-muted);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_timeline_edit--primary {
+  color: var(--app-accent);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button--danger,

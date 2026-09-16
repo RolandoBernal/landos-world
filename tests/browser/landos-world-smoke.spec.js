@@ -2294,6 +2294,10 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const carbsStyle = getComputedStyle(carbsInput);
     const actions = node.querySelector('.lee_lee_diabetes_actions');
     const actionsStyle = getComputedStyle(actions);
+    const cancel = node.querySelector('[data-action="cancel-carb-calculator-item-editor"]');
+    const addItem = node.querySelector('[data-action="save-carb-calculator-item-editor"]');
+    const cancelStyle = getComputedStyle(cancel);
+    const addItemStyle = getComputedStyle(addItem);
     return {
       qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -2306,6 +2310,15 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       bodyOverflowY: getComputedStyle(node.querySelector('[data-carb-item-editor-body]')).overflowY,
       actionsTop: actions.getBoundingClientRect().top,
       carbsBottom: carbsBox.bottom,
+      actionsDisplay: actionsStyle.display,
+      actionsBackground: actionsStyle.backgroundColor,
+      actionsBorderTopWidth: actionsStyle.borderTopWidth,
+      cancelMinHeight: cancelStyle.minHeight,
+      cancelBackground: cancelStyle.backgroundColor,
+      addItemMinHeight: addItemStyle.minHeight,
+      addItemBackground: addItemStyle.backgroundColor,
+      cancelColor: cancelStyle.color,
+      addItemColor: addItemStyle.color,
       editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
     };
   });
@@ -2320,6 +2333,14 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.actionsPosition).toBe('relative');
   expect(editorMetrics.bodyOverflowY).toBe('auto');
   expect(editorMetrics.actionsTop).toBeGreaterThanOrEqual(editorMetrics.carbsBottom);
+  expect(editorMetrics.actionsDisplay).toBe('flex');
+  expect(editorMetrics.actionsBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(editorMetrics.actionsBorderTopWidth).toBe('1px');
+  expect(editorMetrics.cancelMinHeight).toBe('36px');
+  expect(editorMetrics.cancelBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(editorMetrics.addItemMinHeight).toBe('36px');
+  expect(editorMetrics.addItemBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(editorMetrics.cancelColor).not.toBe(editorMetrics.addItemColor);
   expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
   const qtyInput = calculator.locator('[name="carbItemQty"]');
   for (const value of ['0', '0.', '0.5']) {
