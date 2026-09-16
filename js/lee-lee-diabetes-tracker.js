@@ -68,6 +68,7 @@
     ['foods', 'My Foods'],
     ['meals', 'My Meals'],
   ]);
+  const DEFAULT_FOOD_LIBRARY_TAB = FOOD_LIBRARY_TABS[0][0];
   const LLT_STARTER_FOODS_VERSION = 4;
   const LLT_STARTER_FOOD_SOURCE = 'reference';
   const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label', 'manufacturer']);
@@ -4819,6 +4820,7 @@
     const mealTotal = calculateCarbCalculatorMealTotal(normalizedRows);
     const canUseTotal = hasValidCarbCalculatorTotal(normalizedRows);
     const activePicker = currentEditor?.carbCalculatorPicker || '';
+    const activeFoodLibraryTab = currentEditor?.carbCalculatorTab || DEFAULT_FOOD_LIBRARY_TAB;
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
     return `
@@ -4830,7 +4832,7 @@
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator</h2>
               <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>
             </div>
-            ${renderCarbCalculatorLibrary(activePicker, search, normalizedRows)}
+            ${renderCarbCalculatorLibrary(activePicker, search, normalizedRows, activeFoodLibraryTab)}
             <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
               <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
               <div class="lee_lee_diabetes_carb_calc_heading">Item</div>
@@ -4862,7 +4864,7 @@
     `;
   }
 
-  function renderCarbCalculatorLibrary(activePicker, search, rows = []) {
+  function renderCarbCalculatorLibrary(activePicker, search, rows = [], activeFoodLibraryTab = DEFAULT_FOOD_LIBRARY_TAB) {
     const hasAnyStartedRows = rows.some(isCarbCalculatorRowStarted);
     const normalizedSearch = String(search || '').trim();
     return `
@@ -4873,11 +4875,11 @@
             <span>Search foods...</span>
           </button>
         </div>
-        <div class="lee_lee_diabetes_carb_tabs" aria-label="Carb Calculator food pickers">
-          ${FOOD_LIBRARY_TABS.map(([tab, label]) => `
-            <button type="button" class="lee_lee_diabetes_nav_button ${activePicker === tab ? 'is-active' : ''}" data-action="open-carb-calculator-picker" data-picker="${escapeHtml(tab)}" aria-pressed="${activePicker === tab ? 'true' : 'false'}" aria-expanded="${activePicker === tab ? 'true' : 'false'}" aria-controls="lee-lee-carb-picker-panel">${escapeHtml(label)}</button>
-          `).join('')}
-        </div>
+        <label class="lee_lee_diabetes_field" for="lee-lee-carb-library-view">Food Library
+          <select class="lee_lee_diabetes_select" id="lee-lee-carb-library-view" name="carbLibraryView" data-carb-library-view>
+            ${FOOD_LIBRARY_TABS.map(([tab, label]) => `<option value="${escapeHtml(tab)}"${activeFoodLibraryTab === tab ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          </select>
+        </label>
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount...</button>
         ${!activePicker && !normalizedSearch && !hasAnyStartedRows ? `
           <div class="lee_lee_diabetes_empty lee_lee_diabetes_carb_calc_empty" data-carb-calculator-empty>
@@ -4900,7 +4902,7 @@
       <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" role="dialog" aria-modal="${pickerKey === 'search' ? 'true' : 'false'}" aria-labelledby="lee-lee-carb-picker-title">
         <div class="lee_lee_diabetes_carb_picker_header">
           <h3 id="lee-lee-carb-picker-title">${escapeHtml(title)}</h3>
-          <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">${pickerKey === 'search' ? 'Cancel' : 'Done'}</button>
+          ${pickerKey === 'search' ? '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">Cancel</button>' : ''}
         </div>
         ${pickerKey === 'search' ? `
           <div class="lee_lee_diabetes_carb_search_controls">
@@ -5303,7 +5305,7 @@
       focusTarget(currentEditor.carbCalculatorPickerFocus);
       currentEditor.carbCalculatorPickerFocus = '';
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker) {
-      focusTarget(currentEditor.carbCalculatorPicker === 'search' ? '[name="carbFoodSearch"]' : '[data-action="close-carb-calculator-picker"], [data-carb-picker] [data-action]');
+      focusTarget(currentEditor.carbCalculatorPicker === 'search' ? '[name="carbFoodSearch"]' : '[data-carb-library-view]');
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode) {
       focusTarget('[name="carbItemCarbs"]');
     } else if (currentEditor.carbCalculatorOpen) {
@@ -8099,32 +8101,6 @@
         });
         return;
       }
-      if (action === 'open-carb-calculator-picker') {
-        const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
-        const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === target.dataset.picker) ? target.dataset.picker : 'foods';
-        const currentPicker = currentEditor?.carbCalculatorPicker || '';
-        const nextPicker = currentPicker === requestedPicker ? '' : requestedPicker;
-        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-        currentEditor.carbCalculatorPicker = nextPicker;
-        renderEditor({
-          mode: currentEditor?.mode || 'log-entry',
-          eventType: getEditorEventType(form),
-          type: getEditorType(form),
-          record: buildDraftFromEditor(form),
-          returnTo: currentEditor?.returnTo || null,
-          returnDateKey: currentEditor?.returnDateKey || null,
-          carbCalculatorOpen: true,
-          carbCalculatorRows: currentEditor.carbCalculatorRows,
-          mealComponents: currentEditor?.mealComponents || [],
-          carbCalculatorTab: requestedPicker,
-          carbCalculatorPicker: nextPicker,
-          carbCalculatorSearch: '',
-          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: `[data-action="open-carb-calculator-picker"][data-picker="${requestedPicker}"]`,
-          preventFocusScroll: true,
-        });
-        return;
-      }
       if (action === 'close-carb-calculator-picker') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
         const picker = currentEditor?.carbCalculatorPicker || '';
@@ -8144,7 +8120,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[data-action="open-carb-calculator-search"]',
+          carbCalculatorPickerFocus: picker && picker !== 'search' ? '[data-carb-library-view]' : '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;
@@ -8634,6 +8610,31 @@
       const form = event.target.closest('[data-lee-lee-editor]');
       if (!form) return;
       if (event.target.closest('[data-carb-item-editor]')) return;
+      if (event.target.matches('[data-carb-library-view]')) {
+        const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === event.target.value)
+          ? event.target.value
+          : DEFAULT_FOOD_LIBRARY_TAB;
+        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
+        currentEditor.carbCalculatorTab = requestedPicker;
+        renderEditor({
+          mode: currentEditor?.mode || 'log-entry',
+          eventType: getEditorEventType(form),
+          type: getEditorType(form),
+          record: buildDraftFromEditor(form),
+          returnTo: currentEditor?.returnTo || null,
+          returnDateKey: currentEditor?.returnDateKey || null,
+          carbCalculatorOpen: true,
+          carbCalculatorRows: currentEditor.carbCalculatorRows,
+          mealComponents: currentEditor?.mealComponents || [],
+          carbCalculatorPicker: requestedPicker,
+          carbCalculatorTab: requestedPicker,
+          carbCalculatorSearch: '',
+          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
+          carbCalculatorPickerFocus: '[data-carb-library-view]',
+          preventFocusScroll: true,
+        });
+        return;
+      }
       if (event.target.name === 'eventType') {
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
         renderEditor({
@@ -8722,7 +8723,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker && picker !== 'search' ? `[data-action="open-carb-calculator-picker"][data-picker="${picker}"]` : '[data-action="open-carb-calculator-search"]',
+          carbCalculatorPickerFocus: picker && picker !== 'search' ? '[data-carb-library-view]' : '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;
