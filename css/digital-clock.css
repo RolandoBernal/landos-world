@@ -589,6 +589,11 @@ body {
   background: rgb(var(--app-accent-rgb, 102 255 153) / 24%);
 }
 
+.pwa_toast button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .pwa_toast button:focus-visible,
 .pwa_cache_button:focus-visible {
   outline: 2px solid var(--app-accent, #66ff99);
