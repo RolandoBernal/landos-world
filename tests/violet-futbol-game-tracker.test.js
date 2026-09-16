@@ -531,6 +531,17 @@ test('recovery candidate detection recognizes migration-v4 future-game shape wit
   }, api.SAVED_GAMES_KEY), false);
 });
 
+test('recovered calendar schedule starts after Valor and preserves TBD times without guessing', () => {
+  const { api } = createRuntime();
+  const candidates = api.recoveredScheduleCandidates();
+  assert.equal(candidates.length, 14);
+  assert.equal(candidates.some((candidate) => candidate.raw.team2 === 'Valor'), false);
+  assert.equal(candidates[0].raw.team2, 'Green Hill');
+  assert.equal(candidates[0].raw.date, '2026-09-17');
+  assert.equal(candidates.find((candidate) => candidate.raw.team2 === 'District Tournament').raw.startTime, '');
+  assert.equal(candidates.find((candidate) => candidate.raw.team2 === 'District Tournament').raw.sourceCalendarUid, '411a52cfdcc21ad3@hume-fogg-soccer-2026');
+});
+
 test('VFGT exposes non-destructive recovery UI and avoids empty/default game overwrites', () => {
   assert.match(source, /data-vfgt-action="recovery">Open Future Game Recovery/);
   assert.match(source, /Scan VFGT Data Layer/);

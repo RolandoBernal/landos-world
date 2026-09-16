@@ -6,6 +6,22 @@
   const SETTINGS_KEY = 'lando-world:violet-futbol-game-tracker:settings:v1';
   const MIGRATION_KEY = 'lando-world:violet-futbol-game-tracker:migration:v1';
   const RECOVERY_BACKUP_KEY_PREFIX = 'lando-world:violet-futbol-game-tracker:recovery-backup:';
+  const RECOVERED_ICS_SCHEDULE = [
+    { uid: 'd349b04105cc19e0@hume-fogg-soccer-2026', date: '2026-09-17', startTime: '18:00', team2: 'Green Hill', location: 'Green Hill', gameType: 'regularSeason' },
+    { uid: '1fef8dcd09362c84@hume-fogg-soccer-2026', date: '2026-09-18', startTime: '17:00', team2: 'RePublic (Senior Night)', location: 'Ezell Road Park', gameType: 'regularSeason' },
+    { uid: 'd6f676e263c286ea@hume-fogg-soccer-2026', date: '2026-09-22', startTime: '18:00', team2: 'Portland', location: 'Ezell Road Park', gameType: 'regularSeason' },
+    { uid: 'c108188d4a0f2f11@hume-fogg-soccer-2026', date: '2026-09-25', startTime: '18:00', team2: 'MLK', location: 'MLK', gameType: 'regularSeason' },
+    { uid: '5918d88a658e4479@hume-fogg-soccer-2026', date: '2026-09-29', startTime: '17:00', team2: 'Donelson Christian', location: 'Donelson Christian', gameType: 'regularSeason' },
+    { uid: 'd88b1871dffbdb83@hume-fogg-soccer-2026', date: '2026-10-02', startTime: '18:00', team2: 'USN', location: 'USN', gameType: 'regularSeason' },
+    { uid: '411a52cfdcc21ad3@hume-fogg-soccer-2026', date: '2026-10-05', startTime: '', team2: 'District Tournament', location: '', gameType: 'districtTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: '341bd87e8cf6e1f1@hume-fogg-soccer-2026', date: '2026-10-06', startTime: '', team2: 'District Tournament', location: '', gameType: 'districtTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: 'cd60272eae554ace@hume-fogg-soccer-2026', date: '2026-10-08', startTime: '', team2: 'District Tournament', location: '', gameType: 'districtTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: 'cba6b64eaf71b01c@hume-fogg-soccer-2026', date: '2026-10-20', startTime: '', team2: 'Region Semi-Final', location: '', gameType: 'specialTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: '9f5567b5860d08fe@hume-fogg-soccer-2026', date: '2026-10-22', startTime: '', team2: 'Region Final', location: '', gameType: 'specialTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: '5a1db9fb042a2578@hume-fogg-soccer-2026', date: '2026-10-24', startTime: '', team2: 'Sectional', location: '', gameType: 'specialTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: '0df765cfa740a710@hume-fogg-soccer-2026', date: '2026-10-28', startTime: '', team2: 'State Tournament', location: '', gameType: 'specialTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+    { uid: '0b4f0943e43b219e@hume-fogg-soccer-2026', date: '2026-10-31', startTime: '', team2: 'State Tournament', location: '', gameType: 'specialTournament', notes: 'Kickoff time and location were TBD in the source calendar.' },
+  ];
   const SCHEMA_VERSION = 4;
   const DEFAULT_HALF_DURATION_MINUTES = 40;
   const REGULATION_SECONDS = 40 * 60;
@@ -695,6 +711,33 @@
     return markers.filter((key) => game[key] !== undefined && game[key] !== null && String(game[key]).trim() !== '').length >= 2;
   }
 
+  function recoveredScheduleCandidates() {
+    return RECOVERED_ICS_SCHEDULE.map((event) => ({
+      source: 'Recovered calendar',
+      sourceKey: 'hume-fogg-soccer-2026.ics',
+      path: event.uid,
+      raw: {
+        id: `ics-${event.uid.split('@')[0]}`,
+        schemaVersion: SCHEMA_VERSION,
+        entryType: 'live',
+        status: 'scheduled',
+        phase: 'pregame',
+        team1: HUME_FOGG_TEAM,
+        team2: event.team2,
+        teamId: vfgtSettings.currentTeamId || '',
+        seasonId: vfgtSettings.currentSeasonId || '',
+        teamSide: 1,
+        date: event.date,
+        startTime: event.startTime,
+        location: event.location,
+        gameType: event.gameType,
+        notes: event.notes || 'Recovered from the Hume-Fogg Soccer 2026 calendar file.',
+        sourceCalendarUid: event.uid,
+      },
+      reason: 'Recovered from the authoritative Hume-Fogg Soccer 2026 calendar after Valor; review before restoring',
+    }));
+  }
+
   function collectRecoveryCandidates(value, sourceKey, path, candidates, seen = new Set(), depth = 0) {
     if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
     seen.add(value);
@@ -828,6 +871,7 @@
     }
     const indexedDb = await scanIndexedDbRecovery(candidates);
     const cache = await scanCacheRecovery(candidates);
+    candidates.push(...recoveredScheduleCandidates());
     const unique = [];
     const seen = new Set();
     candidates.forEach((candidate) => {
@@ -2258,6 +2302,7 @@
     reconcileTimerState,
     releaseScreenWakeLock,
     readStoredJson,
+    recoveredScheduleCandidates,
     renderSevenSegmentDigit,
     renderSevenSegmentDisplay,
     requestScreenWakeLock,
