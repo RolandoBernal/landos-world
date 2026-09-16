@@ -2396,7 +2396,7 @@
 }
 
 .lee_lee_diabetes_report_summary_grid dt {
-  color: #59667a;
+  color: #334155;
   font-size: 0.68rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -2722,6 +2722,14 @@
     padding: 0 !important;
     color: #111827 !important;
     background: #ffffff !important;
+  }
+
+  .lee_lee_diabetes_report_summary_grid dt {
+    color: #334155 !important;
+  }
+
+  .lee_lee_diabetes_report_summary_grid dd {
+    color: #10213f !important;
   }
 
   .lee_lee_diabetes_report_header,

@@ -211,9 +211,9 @@ test('localhost previews bypass service-worker registration', () => {
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260825-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260915-5/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260916-1/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260910-1/],
-    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260915-3/],
+    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260916-1/],
     [html, /js\/pwa-manager\.js\?v=20260915-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [html, /css\/violet-futbol-game-tracker\.css\?v=20260915-14/],

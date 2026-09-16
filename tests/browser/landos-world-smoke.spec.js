@@ -1293,6 +1293,24 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
     expect(themedViewMetrics).toEqual(themedDateMetrics);
   }
   if (originalTheme) await page.locator('html').evaluate((node, theme) => node.setAttribute('data-theme', theme), originalTheme);
+  const summaryTextContrast = async () => page.locator('.lee_lee_diabetes_report_summary_grid div').first().evaluate((cell) => {
+    const luminance = (color) => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const background = luminance(getComputedStyle(cell).backgroundColor);
+    return ['dt', 'dd'].map((selector) => {
+      const foreground = luminance(getComputedStyle(cell.querySelector(selector)).color);
+      return (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05);
+    });
+  });
+  expect((await summaryTextContrast()).every((ratio) => ratio >= 4.5)).toBe(true);
+  await page.emulateMedia({ media: 'print' });
+  expect((await summaryTextContrast()).every((ratio) => ratio >= 4.5)).toBe(true);
+  await page.emulateMedia({ media: 'screen' });
   let previewText = await page.locator('.lee_lee_diabetes_report_preview').evaluate((node) => node.textContent || '');
   expect(previewText).toContain('23 units');
   expect(previewText).not.toContain('27 units');
