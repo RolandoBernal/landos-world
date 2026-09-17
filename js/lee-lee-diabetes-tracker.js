@@ -1,5 +1,6 @@
 (() => {
   const TRACKER_STORAGE_KEY = 'lando-world:lee-lees-tracker:v1';
+  const FOOD_LIBRARY_DRAFT_STORAGE_KEY = `${TRACKER_STORAGE_KEY}:food-library-draft:v1`;
   const TRACKER_SCHEMA_VERSION = 1;
   const PRE_IMPORT_BACKUP_PREFIX = `${TRACKER_STORAGE_KEY}:pre-import-backup:`;
   const SHARED_SYNC_MIGRATION_KEY = `${TRACKER_STORAGE_KEY}:shared-sync-migration:v1`;
@@ -219,6 +220,7 @@
     { label: 'Minimum Allowable Dose', key: 'insulinPlans[].minimumAllowableDoseUnits', classification: 'SHARED' },
     { label: 'Target Range', key: 'insulinPlans[].targetGlucoseMin/targetGlucoseMax', classification: 'SHARED' },
     { label: 'Bedtime Base Dose', key: 'insulinPlans[].bedtimeBaseUnits', classification: 'SHARED' },
+    { label: 'Temporary Eating Adjustment', key: 'insulinPlans[].temporaryEatingAdjustment', classification: 'SHARED' },
     { label: 'Correction Table', key: 'insulinPlans[].correctionRanges', classification: 'SHARED' },
     { label: 'Plan Notes', key: 'insulinPlans[].notes', classification: 'SHARED' },
     { label: 'History Initial Window', key: 'settings.historyInitialWindowDays', classification: 'LOCAL' },
@@ -242,6 +244,9 @@
   const DEFAULT_DOSE_ROUNDING_MODE = 'down';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
   const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0.5;
+  const DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS = 0.5;
+  const DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS = 12;
+  const TEMPORARY_EATING_ADJUSTMENT_CONTEXTS = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']);
   const LEGACY_DEFAULT_INSULIN_GUIDANCE = Object.freeze({
     bedtimeBaseUnits: 17,
     insulinCarbRatioGrams: 20,
@@ -267,6 +272,13 @@
     doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
     doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
     minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+    temporaryEatingAdjustment: {
+      enabled: false,
+      units: DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS,
+      startsAt: '',
+      endsAt: '',
+      contexts: [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
+    },
     targetGlucoseMin: DEFAULT_TARGET_GLUCOSE_MIN,
     targetGlucoseMax: DEFAULT_TARGET_GLUCOSE_MAX,
     supportedMealTypes: [...MEAL_TYPES],
@@ -509,6 +521,30 @@
 
   function getMinimumAllowableDoseUnits(plan = {}) {
     return normalizeMinimumAllowableDose(plan.minimumAllowableDoseUnits);
+  }
+
+  function normalizeTemporaryEatingAdjustment(value = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    const units = normalizeNumber(source.units);
+    const contexts = Array.isArray(source.contexts)
+      ? source.contexts.filter((context) => TEMPORARY_EATING_ADJUSTMENT_CONTEXTS.includes(context))
+      : [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS];
+    return {
+      enabled: source.enabled === true,
+      units: units != null && units >= 0 ? roundToPrecision(units) : DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS,
+      startsAt: typeof source.startsAt === 'string' ? source.startsAt : '',
+      endsAt: typeof source.endsAt === 'string' ? source.endsAt : '',
+      contexts: contexts.length ? [...new Set(contexts)] : [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
+    };
+  }
+
+  function isTemporaryEatingAdjustmentActive(plan, entryType, timestamp = Date.now()) {
+    const adjustment = normalizeTemporaryEatingAdjustment(plan?.temporaryEatingAdjustment);
+    if (!adjustment.enabled || adjustment.units <= 0 || !adjustment.contexts.includes(entryType)) return false;
+    const startsAt = adjustment.startsAt ? Date.parse(adjustment.startsAt) : NaN;
+    const endsAt = adjustment.endsAt ? Date.parse(adjustment.endsAt) : NaN;
+    if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt) return false;
+    return timestamp >= startsAt && timestamp < endsAt;
   }
 
   function applyConfiguredDoseRounding(rawDose, roundingMode = DEFAULT_DOSE_ROUNDING_MODE, doseIncrement = DEFAULT_DOSE_INCREMENT_UNITS) {
@@ -1191,7 +1227,7 @@
     };
   }
 
-  function calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan }) {
+  function calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan, entryType = 'Breakfast', recordTimestamp = Date.now() }) {
     const roundingMode = getDoseRoundingMode(insulinPlan);
     const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
     const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
@@ -1212,13 +1248,17 @@
         message: correction.message || carbDose.message,
       };
     }
-    const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits;
+    const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
+      ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
+      : 0;
+    const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits + temporaryEatingAdjustmentUnits;
     const suggestedTotalUnits = applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
     const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: 'calculated',
       ...carbDose,
       correctionUnits: correction.correctionUnits,
+      temporaryEatingAdjustmentUnits,
       rawAggregateDose,
       suggestedTotalUnits,
       doseRoundingMode: roundingMode,
@@ -1230,19 +1270,23 @@
     };
   }
 
-  function calculateSnackSuggestedDose({ totalCarbs, insulinPlan }) {
+  function calculateSnackSuggestedDose({ totalCarbs, insulinPlan, entryType = 'Snack', recordTimestamp = Date.now() }) {
     const carbs = normalizeNumber(totalCarbs) ?? 0;
     const roundingMode = getDoseRoundingMode(insulinPlan);
     const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
     const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
     const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan), { roundingMode, doseIncrementUnits });
-    const rawAggregateDose = carbDose.rawCarbDose ?? null;
+    const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
+      ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
+      : 0;
+    const rawAggregateDose = carbDose.rawCarbDose == null ? null : carbDose.rawCarbDose + temporaryEatingAdjustmentUnits;
     const suggestedTotalUnits = rawAggregateDose == null ? null : applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
     const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: carbDose.status,
       ...carbDose,
       correctionUnits: null,
+      temporaryEatingAdjustmentUnits,
       rawAggregateDose,
       suggestedTotalUnits,
       doseRoundingMode: roundingMode,
@@ -1293,6 +1337,7 @@
       doseRoundingMode: getDoseRoundingMode(sourcePlan),
       doseIncrementUnits: getDoseIncrementUnits(sourcePlan),
       minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(sourcePlan),
+      temporaryEatingAdjustment: normalizeTemporaryEatingAdjustment(sourcePlan.temporaryEatingAdjustment),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
       correctionRanges: normalizedCorrectionRanges.length ? normalizedCorrectionRanges : DEFAULT_INSULIN_PLAN.correctionRanges.map((range) => ({ ...range })),
       notes: sanitizeNotes(sourcePlan.notes),
@@ -1463,6 +1508,30 @@
       console.warn(`Lee-Lee’s Tracker could not parse stored data for key ${key}.`);
       return { exists: true, data: null, raw: localStorage.getItem(key), error };
     }
+  }
+
+  function readFoodLibraryDraft() {
+    const stored = readStoredJson(FOOD_LIBRARY_DRAFT_STORAGE_KEY);
+    const source = stored.data && typeof stored.data === 'object' ? stored.data : null;
+    return source?.version === 1 && source.draft && typeof source.draft === 'object'
+      ? { draft: source.draft, scrollTop: Number(source.scrollTop) || 0 }
+      : null;
+  }
+
+  function writeFoodLibraryDraft(draft, scrollTop = 0) {
+    try {
+      localStorage.setItem(FOOD_LIBRARY_DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, draft, scrollTop: Number(scrollTop) || 0, updatedAt: new Date().toISOString() }));
+    } catch (error) {
+      // Draft recovery is best effort and never blocks normal food entry.
+    }
+  }
+
+  function clearFoodLibraryDraft() {
+    try { localStorage.removeItem(FOOD_LIBRARY_DRAFT_STORAGE_KEY); } catch (error) { /* best effort */ }
+  }
+
+  function foodLibraryDraftHasMeaningfulData(draft) {
+    return Boolean(draft && (String(draft.name || '').trim() || String(draft.emoji || '').trim() || String(draft.carbs || '').trim() || String(draft.servingLabel || '').trim() || String(draft.brand || '').trim() || draft.favorite));
   }
 
   function getSharedSyncMigrationMetadata() {
@@ -2243,11 +2312,17 @@
     const local = conflict.localRecord || {};
     const shared = conflict.sharedRecord || {};
     if (conflict.entityType === 'shared-settings') {
+      const sharedPlan = shared.insulinPlan || {};
+      const localPlan = local.insulinPlan || {};
       return [
+        ['Remote version', shared.version, local.version],
+        ['Remote updated', shared.updatedAt, local.updatedAt],
         ['Patient Name', shared.patientName, local.patientName],
         ['Date of Birth', shared.patientBirthDate, local.patientBirthDate],
         ['Clinic Name', shared.clinicName, local.clinicName],
         ['Clinic Phone', shared.clinicPhone, local.clinicPhone],
+        ['Insulin-to-carb ratio', sharedPlan.insulinCarbRatioGrams, localPlan.insulinCarbRatioGrams],
+        ['Temporary eating adjustment', sharedPlan.temporaryEatingAdjustment?.enabled ? `+${sharedPlan.temporaryEatingAdjustment.units} units` : 'Off', localPlan.temporaryEatingAdjustment?.enabled ? `+${localPlan.temporaryEatingAdjustment.units} units` : 'Off'],
       ];
     }
     return [
@@ -2575,7 +2650,7 @@
             message: 'No insulin plan is configured for this date.',
           };
         }
-        const snack = calculateSnackSuggestedDose({ totalCarbs, insulinPlan });
+        const snack = calculateSnackSuggestedDose({ totalCarbs, insulinPlan, entryType, recordTimestamp });
         return {
           ...snack,
           baseUnits: null,
@@ -2690,7 +2765,7 @@
         message: 'Enter a positive whole-number blood sugar to see a suggested dose.',
       };
     }
-    const calculated = calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan });
+    const calculated = calculateMealSuggestedDose({ bloodSugar, totalCarbs, insulinPlan, entryType, recordTimestamp });
     return {
       ...calculated,
       baseUnits: null,
@@ -2721,6 +2796,8 @@
     calculateCarbDose,
     calculateMealSuggestedDose,
     calculateSnackSuggestedDose,
+    normalizeTemporaryEatingAdjustment,
+    isTemporaryEatingAdjustmentActive,
     getCorrectionDose,
     roundToNearestHalf,
     applyConfiguredDoseRounding,
@@ -3985,12 +4062,15 @@
   function renderFoodLibrary(options = {}) {
     const root = getRoot();
     if (!root) return;
+    const savedDraft = !options.foodLibraryEditorId && !options.foodLibraryEditorDraft ? readFoodLibraryDraft() : null;
     currentEditor = {
       mode: 'foods',
-      foodLibraryEditorOpen: options.foodLibraryEditorOpen === true,
+      foodLibraryEditorOpen: options.foodLibraryEditorOpen === true || Boolean(savedDraft),
       foodLibraryEditorId: options.foodLibraryEditorId || '',
       foodLibraryEditorDraft: options.foodLibraryEditorDraft || null,
+      foodLibraryEditorScrollTop: savedDraft?.scrollTop || 0,
     };
+    if (savedDraft && !currentEditor.foodLibraryEditorDraft) currentEditor.foodLibraryEditorDraft = savedDraft.draft;
     const foods = searchFoodItems(foodLibrary, foodLibrarySearch);
     const meals = searchSavedMealItems(savedMeals, savedMealsSearch);
     const editorFood = currentEditor.foodLibraryEditorDraft || (currentEditor.foodLibraryEditorId
@@ -4022,7 +4102,11 @@
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
     `;
     if (currentEditor.foodLibraryEditorOpen) {
-      requestAnimationFrame(() => root.querySelector('[data-food-library-editor] [name="foodName"]')?.focus({ preventScroll: true }));
+      requestAnimationFrame(() => {
+        const dialog = root.querySelector('[data-food-library-editor-dialog]');
+        if (dialog) dialog.scrollTop = currentEditor.foodLibraryEditorScrollTop || 0;
+        root.querySelector('[data-food-library-editor] [name="foodName"]')?.focus({ preventScroll: true });
+      });
     }
   }
 
@@ -4056,7 +4140,7 @@
     return `
       <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_food_editor_layer" data-food-library-editor-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-food-library-editor"></div>
-        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
+        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" data-food-library-editor-dialog role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
           <div class="lee_lee_diabetes_carb_calculator_header">
             <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-library-editor-title">${escapeHtml(title)}</h2>
             <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="cancel-food-library-editor">Cancel</button>
@@ -5405,6 +5489,9 @@
       const correctionBreakdown = result.correctionUnits == null
         ? ''
         : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${renderInsulin(result.correctionUnits)}</div>`;
+      const temporaryAdjustmentBreakdown = result.temporaryEatingAdjustmentUnits > 0
+        ? `<div class="lee_lee_diabetes_dose_breakdown">Temporary eating adjustment: +${renderInsulin(result.temporaryEatingAdjustmentUnits)}</div>`
+        : '';
       const rawDoseBreakdown = result.rawAggregateDose == null || result.rawAggregateDose === result.suggestedTotalUnits
         ? ''
         : `<div class="lee_lee_diabetes_dose_breakdown">Raw dose: ${renderDoseNumber(result.rawAggregateDose)} units</div>`;
@@ -5430,6 +5517,7 @@
             <div class="lee_lee_diabetes_dose_total">${renderInsulin(result.suggestedTotalUnits)}</div>
             ${carbBreakdown}
             ${correctionBreakdown}
+            ${temporaryAdjustmentBreakdown}
             ${rawDoseBreakdown}
             ${roundingBreakdown}
             ${legacyBreakdown}
@@ -6845,6 +6933,17 @@
             Bedtime Long-Acting Dose
             <input class="lee_lee_diabetes_input" name="bedtimeBaseUnits" type="number" inputmode="decimal" min="0" step="0.5" required value="${escapeHtml(getBedtimeBaseUnits(plan))}">
           </label>
+          <fieldset class="lee_lee_diabetes_ranges">
+            <legend>Temporary eating dose adjustment</legend>
+            <p class="lee_lee_diabetes_help">Use only for a clinician-directed temporary adjustment. It applies after carb coverage and before final rounding for Breakfast, Lunch, Dinner, and Snack/Snacks. It never changes correction, bedtime, or manually entered doses.</p>
+            <label class="lee_lee_diabetes_checkline lee_lee_diabetes_temporary_adjustment_checkline"><span>Enable temporary adjustment</span><input type="checkbox" name="temporaryEatingAdjustmentEnabled" ${normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).enabled ? 'checked' : ''}></label>
+            <label class="lee_lee_diabetes_field">Adjustment<span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentUnits" type="number" inputmode="decimal" min="0" step="0.05" value="${escapeHtml(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).units)}"><span>units</span></span></label>
+            <div class="lee_lee_diabetes_temporary_adjustment_dates">
+              <label class="lee_lee_diabetes_field">Start date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).startsAt))}"></label>
+              <label class="lee_lee_diabetes_field">End date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).endsAt))}"></label>
+            </div>
+            <label class="lee_lee_diabetes_field">Duration shortcut (days)<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentDurationDays" type="number" min="1" step="1" value="${DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS}"></label>
+          </fieldset>
           <div class="lee_lee_diabetes_target_range" role="group" aria-labelledby="lee-lee-target-range-label">
             <span class="lee_lee_diabetes_field_label" id="lee-lee-target-range-label">Target Range</span>
             <div class="lee_lee_diabetes_inline_control">
@@ -7325,6 +7424,19 @@
     return '';
   }
 
+  function toDateTimeLocalValue(value) {
+    const timestamp = Date.parse(String(value || ''));
+    if (!Number.isFinite(timestamp)) return '';
+    const date = new Date(timestamp);
+    const pad = (number) => String(number).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function toIsoDateTime(value) {
+    const timestamp = Date.parse(String(value || ''));
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : '';
+  }
+
   function buildPlanFromSettingsForm(form) {
     const ranges = DEFAULT_INSULIN_PLAN.correctionRanges.map((_, index) => normalizeCorrectionRange({
       minGlucose: form.elements[`rangeMin${index}`]?.value,
@@ -7337,6 +7449,21 @@
     const rangeError = validateCorrectionRanges(ranges);
     if (rangeError) return { error: rangeError };
     const currentPlan = getCurrentPlan() || DEFAULT_INSULIN_PLAN;
+    const currentAdjustment = normalizeTemporaryEatingAdjustment(currentPlan.temporaryEatingAdjustment);
+    const adjustmentEnabled = form.elements.temporaryEatingAdjustmentEnabled?.checked === true;
+    const adjustmentUnits = normalizeNumber(form.elements.temporaryEatingAdjustmentUnits?.value);
+    const adjustmentStartsAt = toIsoDateTime(form.elements.temporaryEatingAdjustmentStartsAt?.value);
+    let adjustmentEndsAt = toIsoDateTime(form.elements.temporaryEatingAdjustmentEndsAt?.value);
+    const durationDays = normalizeNumber(form.elements.temporaryEatingAdjustmentDurationDays?.value) || DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS;
+    if (adjustmentEnabled && adjustmentStartsAt && !adjustmentEndsAt) {
+      adjustmentEndsAt = new Date(Date.parse(adjustmentStartsAt) + durationDays * 86400000).toISOString();
+    }
+    if (adjustmentEnabled && (!adjustmentUnits || adjustmentUnits < 0 || !adjustmentStartsAt || !adjustmentEndsAt)) {
+      return { error: 'Temporary eating dose adjustment needs units, a start, and an end.' };
+    }
+    if (adjustmentEnabled && Date.parse(adjustmentEndsAt) <= Date.parse(adjustmentStartsAt)) {
+      return { error: 'Temporary eating dose adjustment end must be after its start.' };
+    }
     const mealBaseUnitsByType = getMealBaseUnitsByType(currentPlan);
     const insulinCarbRatioGrams = normalizeNumber(form.elements.insulinCarbRatioGrams?.value);
     if (!insulinCarbRatioGrams || insulinCarbRatioGrams <= 0) {
@@ -7389,6 +7516,13 @@
         doseRoundingMode,
         doseIncrementUnits: roundToPrecision(doseIncrementUnits),
         minimumAllowableDoseUnits: roundToPrecision(minimumAllowableDoseUnits),
+        temporaryEatingAdjustment: adjustmentEnabled ? {
+          enabled: true,
+          units: roundToPrecision(adjustmentUnits),
+          startsAt: adjustmentStartsAt,
+          endsAt: adjustmentEndsAt,
+          contexts: [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
+        } : { ...currentAdjustment, enabled: false },
         targetGlucoseMin,
         targetGlucoseMax,
         supportedMealTypes: [...MEAL_TYPES],
@@ -7436,6 +7570,10 @@
           <div>
             <dt>Bedtime long-acting dose</dt>
             <dd>${renderInsulin(getBedtimeBaseUnits(plan))}</dd>
+          </div>
+          <div>
+            <dt>Temporary eating adjustment</dt>
+            <dd>${plan.temporaryEatingAdjustment?.enabled ? `+${renderInsulin(plan.temporaryEatingAdjustment.units)} during the configured window` : 'Off'}</dd>
           </div>
         </dl>
         <label class="lee_lee_diabetes_checkline">
@@ -8304,6 +8442,7 @@
         });
         foodLibraryError = result.error || '';
         foodLibraryMessage = result.food ? 'Food saved.' : '';
+        if (result.food) clearFoodLibraryDraft();
         renderFoodLibrary(result.error
           ? { foodLibraryEditorOpen: true, foodLibraryEditorId: id, foodLibraryEditorDraft: draft }
           : {});
@@ -8311,10 +8450,13 @@
       if (action === 'open-food-library-editor') {
         foodLibraryError = '';
         foodLibraryMessage = '';
-        renderFoodLibrary({ foodLibraryEditorOpen: true });
+        renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorDraft: readFoodLibraryDraft()?.draft || null });
       }
       if (action === 'cancel-food-library-editor') {
         foodLibraryError = '';
+        const draft = currentEditor?.foodLibraryEditorDraft || readFoodLibraryDraft()?.draft;
+        if (!currentEditor?.foodLibraryEditorId && foodLibraryDraftHasMeaningfulData(draft) && !window.confirm('Discard this food draft?')) return;
+        clearFoodLibraryDraft();
         currentEditor.foodLibraryEditorDraft = null;
         renderFoodLibrary();
       }
@@ -8553,10 +8695,18 @@
       }
       handleSave(event.target);
     });
+    root.addEventListener('scroll', (event) => {
+      const dialog = event.target.closest?.('[data-food-library-editor-dialog]');
+      if (dialog && currentEditor?.mode === 'foods' && currentEditor.foodLibraryEditorOpen && !currentEditor.foodLibraryEditorId) {
+        currentEditor.foodLibraryEditorScrollTop = dialog.scrollTop;
+        writeFoodLibraryDraft(currentEditor.foodLibraryEditorDraft || collectFoodLibraryEditorDraft(dialog.querySelector('[data-food-library-editor]')), dialog.scrollTop);
+      }
+    }, true);
     root.addEventListener('input', (event) => {
       const foodLibraryPanel = event.target.closest('[data-food-library-editor]');
       if (foodLibraryPanel) {
         currentEditor.foodLibraryEditorDraft = collectFoodLibraryEditorDraft(foodLibraryPanel);
+        if (!currentEditor.foodLibraryEditorId) writeFoodLibraryDraft(currentEditor.foodLibraryEditorDraft, currentEditor.foodLibraryEditorScrollTop || 0);
         return;
       }
       const carbFoodPanel = event.target.closest('[data-carb-calculator] .lee_lee_diabetes_carb_editor_panel');
@@ -8601,6 +8751,12 @@
     });
     root.addEventListener('change', (event) => {
       if (!shouldShowProtectedApp()) return;
+      const foodLibraryPanel = event.target.closest('[data-food-library-editor]');
+      if (foodLibraryPanel) {
+        currentEditor.foodLibraryEditorDraft = collectFoodLibraryEditorDraft(foodLibraryPanel);
+        if (!currentEditor.foodLibraryEditorId) writeFoodLibraryDraft(currentEditor.foodLibraryEditorDraft, currentEditor.foodLibraryEditorScrollTop || 0);
+        return;
+      }
       const confirmCheck = event.target.closest('[data-plan-confirm-check]');
       if (confirmCheck) {
         const confirmButton = root.querySelector('[data-action="confirm-plan"]');

@@ -788,6 +788,25 @@ test('shared settings serialize and deserialize the complete shared care contrac
   assert.equal(Object.hasOwn(remote.payload, 'migration'), false);
 });
 
+test('shared settings preserve the temporary eating adjustment window', () => {
+  const context = createSyncContext();
+  const settings = sharedSettings({ insulinPlan: sharedInsulinPlan({
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 0.5,
+      startsAt: '2026-08-01T00:00:00.000Z',
+      endsAt: '2026-08-13T00:00:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+    },
+  }) });
+  const restored = context.LeeLeeTrackerSync.sharedSettingsFromRemote(remoteSharedSettingsRow({ settings }));
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.enabled, true);
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.units, 0.5);
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.startsAt, '2026-08-01T00:00:00.000Z');
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.endsAt, '2026-08-13T00:00:00.000Z');
+  assert.deepEqual(Array.from(restored.insulinPlan.temporaryEatingAdjustment.contexts), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']);
+});
+
 test('shared settings write payload includes dose settings and excludes local-only preferences', async () => {
   const supabase = createMockSupabase();
   const context = createSyncContext({
@@ -928,6 +947,28 @@ test('startup pulls established remote shared settings without pushing local def
   assert.equal(repository.getSharedSettings().patientName, 'Lee Bernal');
   assert.equal(supabase.client.sharedSettingsRows.length, 1);
   assert.equal(supabase.client.rpcCalls.some((call) => call.name === 'update_lee_lee_shared_settings_with_version'), false);
+});
+
+test('explicit remote clinical settings replace stale local cache without creating a false conflict', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow({ settings: { insulinPlan: sharedInsulinPlan({ insulinCarbRatioGrams: 12 }) } })],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository({
+    ...createDocumentStore(),
+    getLocalSharedSettings: () => ({
+      patientName: 'Stale local',
+      insulinPlan: context.LeeLeeTrackerSync.normalizeSharedInsulinPlan(sharedInsulinPlan({ insulinCarbRatioGrams: 20 })),
+    }),
+  });
+  await repository.initialize();
+  assert.equal(repository.getConflicts().length, 0);
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 12);
+  assert.equal(supabase.client.rpcCalls.length, 0);
+  assert.equal(supabase.client.sharedSettingsRows.length, 1);
 });
 
 test('cross-device shared settings sync carries patient and dose updates', async () => {

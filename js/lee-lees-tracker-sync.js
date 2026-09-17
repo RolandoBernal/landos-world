@@ -26,6 +26,8 @@
   const DEFAULT_DOSE_ROUNDING_MODE = 'down';
   const DEFAULT_DOSE_INCREMENT_UNITS = 0.5;
   const DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS = 0.5;
+  const DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS = 0.5;
+  const TEMPORARY_EATING_ADJUSTMENT_CONTEXTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'];
   const LEGACY_DEFAULT_INSULIN_GUIDANCE = Object.freeze({
     bedtimeBaseUnits: 17,
     insulinCarbRatioGrams: 20,
@@ -48,6 +50,13 @@
     doseRoundingMode: DEFAULT_DOSE_ROUNDING_MODE,
     doseIncrementUnits: DEFAULT_DOSE_INCREMENT_UNITS,
     minimumAllowableDoseUnits: DEFAULT_MINIMUM_ALLOWABLE_DOSE_UNITS,
+    temporaryEatingAdjustment: {
+      enabled: false,
+      units: DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS,
+      startsAt: '',
+      endsAt: '',
+      contexts: [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
+    },
     supportedMealTypes: [...MEAL_TYPES],
     correctionRanges: [
       { minGlucose: null, maxGlucose: 174, correctionUnits: 0 },
@@ -254,6 +263,21 @@
     ]));
   }
 
+  function normalizeSharedTemporaryEatingAdjustment(value = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    const units = normalizeSharedNumber(source.units);
+    const contexts = Array.isArray(source.contexts)
+      ? source.contexts.filter((context) => TEMPORARY_EATING_ADJUSTMENT_CONTEXTS.includes(context))
+      : [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS];
+    return {
+      enabled: source.enabled === true,
+      units: units != null && units >= 0 ? units : DEFAULT_TEMPORARY_EATING_ADJUSTMENT_UNITS,
+      startsAt: typeof source.startsAt === 'string' ? source.startsAt : '',
+      endsAt: typeof source.endsAt === 'string' ? source.endsAt : '',
+      contexts: contexts.length ? [...new Set(contexts)] : [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
+    };
+  }
+
   function normalizeSharedInsulinPlan(plan) {
     const source = plan && typeof plan === 'object' ? plan : DEFAULT_SHARED_INSULIN_PLAN;
     const isLegacySeededPlan = source.id === DEFAULT_SHARED_INSULIN_PLAN.id
@@ -292,6 +316,7 @@
       doseRoundingMode: normalizeSharedDoseRoundingMode(normalizedSource.doseRoundingMode),
       doseIncrementUnits: normalizeSharedDoseIncrement(normalizedSource.doseIncrementUnits),
       minimumAllowableDoseUnits: normalizeSharedMinimumAllowableDose(normalizedSource.minimumAllowableDoseUnits),
+      temporaryEatingAdjustment: normalizeSharedTemporaryEatingAdjustment(normalizedSource.temporaryEatingAdjustment),
       targetGlucoseMin: normalizeSharedTargetGlucose(normalizedSource.targetGlucoseMin ?? normalizedSource.glucoseTargetMin ?? normalizedSource.targetGlucoseLow, DEFAULT_TARGET_GLUCOSE_MIN),
       targetGlucoseMax: normalizeSharedTargetGlucose(normalizedSource.targetGlucoseMax ?? normalizedSource.glucoseTargetMax ?? normalizedSource.targetGlucoseHigh, DEFAULT_TARGET_GLUCOSE_MAX),
       supportedMealTypes: supportedMealTypes.length ? supportedMealTypes : [...MEAL_TYPES],
@@ -317,6 +342,7 @@
       doseRoundingMode: normalized.doseRoundingMode,
       doseIncrementUnits: normalized.doseIncrementUnits,
       minimumAllowableDoseUnits: normalized.minimumAllowableDoseUnits,
+      temporaryEatingAdjustment: normalized.temporaryEatingAdjustment,
       targetGlucoseMin: normalized.targetGlucoseMin,
       targetGlucoseMax: normalized.targetGlucoseMax,
       supportedMealTypes: normalized.supportedMealTypes,
@@ -1407,10 +1433,6 @@
       if (!force) {
         if (Number(settings.version || 0) < Number(cached.version || 0)) return;
         const local = normalizeSharedSettings(getLocalSharedSettings?.() || cached);
-        if (getLocalSharedSettings && sharedSettingsHaveValues(local) && !sharedSettingsAreSame(local, cached) && !sharedSettingsAreSame(local, settings) && !getSharedSettingsQueue().length) {
-          registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
-          return;
-        }
         if (settings.hasExplicitInsulinPlan === false && !sharedSettingsAreSame({ ...settings, insulinPlan: local.insulinPlan }, settings)) {
           registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
           return;
@@ -1431,7 +1453,7 @@
           const pendingSettings = getSharedSettingsQueue()[0]?.payload;
           const migration = getSharedSettingsMigration();
           const localSettings = normalizeSharedSettings(getLocalSharedSettings?.() || null);
-          if (!pendingSettings && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame(localSettings, remoteSettings) && (!migration.completed || !sharedSettingsAreSame(localSettings, getSharedSettingsCache()))) {
+          if (!pendingSettings && remoteSettings.hasExplicitInsulinPlan === false && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame({ ...remoteSettings, insulinPlan: localSettings.insulinPlan }, remoteSettings)) {
             await registerSharedSettingsConflict(createSharedSettingsOperation({
               ...localSettings,
               version: remoteSettings.version,

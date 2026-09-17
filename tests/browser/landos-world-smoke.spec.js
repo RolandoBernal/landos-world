@@ -2754,7 +2754,7 @@ test('Lee-Lee global sync reports its result and preserves Settings input', asyn
 test('Lee-Lee dose inline controls stay on one line with compact three-digit inputs', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  for (const name of ['insulinCarbRatioGrams', 'doseIncrementUnits', 'minimumAllowableDoseUnits']) {
+  for (const name of ['insulinCarbRatioGrams', 'doseIncrementUnits', 'minimumAllowableDoseUnits', 'temporaryEatingAdjustmentUnits']) {
     const input = page.locator(`[name="${name}"]`);
     const layout = await input.evaluate((inputNode) => {
       const node = inputNode.parentElement;
@@ -2765,6 +2765,20 @@ test('Lee-Lee dose inline controls stay on one line with compact three-digit inp
     expect(layout.inputWidth).toBeLessThanOrEqual(88);
     expect(layout.overflow).toBeLessThanOrEqual(1);
   }
+  const dateLayout = await page.locator('.lee_lee_diabetes_temporary_adjustment_dates').evaluate((group) => {
+    const fields = [...group.querySelectorAll('.lee_lee_diabetes_field')].map((field) => field.getBoundingClientRect());
+    return { viewportWidth: window.innerWidth, firstTop: fields[0]?.top || 0, secondTop: fields[1]?.top || 0, overflow: group.scrollWidth - group.clientWidth };
+  });
+  expect(dateLayout.overflow).toBeLessThanOrEqual(1);
+  if (dateLayout.viewportWidth <= 640) expect(dateLayout.secondTop).toBeGreaterThan(dateLayout.firstTop);
+  else expect(Math.abs(dateLayout.secondTop - dateLayout.firstTop)).toBeLessThanOrEqual(2);
+  const checkboxLayout = await page.locator('.lee_lee_diabetes_temporary_adjustment_checkline').evaluate((label) => {
+    const text = label.querySelector('span')?.getBoundingClientRect();
+    const input = label.querySelector('input')?.getBoundingClientRect();
+    return { gap: text && input ? input.left - text.right : 999, inputRight: input?.right || 0, labelRight: label.getBoundingClientRect().right || 0 };
+  });
+  expect(checkboxLayout.gap).toBeGreaterThanOrEqual(8);
+  expect(checkboxLayout.inputRight).toBeLessThan(checkboxLayout.labelRight - 8);
 });
 
 
