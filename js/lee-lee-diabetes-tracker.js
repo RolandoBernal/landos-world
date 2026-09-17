@@ -2312,11 +2312,17 @@
     const local = conflict.localRecord || {};
     const shared = conflict.sharedRecord || {};
     if (conflict.entityType === 'shared-settings') {
+      const sharedPlan = shared.insulinPlan || {};
+      const localPlan = local.insulinPlan || {};
       return [
+        ['Remote version', shared.version, local.version],
+        ['Remote updated', shared.updatedAt, local.updatedAt],
         ['Patient Name', shared.patientName, local.patientName],
         ['Date of Birth', shared.patientBirthDate, local.patientBirthDate],
         ['Clinic Name', shared.clinicName, local.clinicName],
         ['Clinic Phone', shared.clinicPhone, local.clinicPhone],
+        ['Insulin-to-carb ratio', sharedPlan.insulinCarbRatioGrams, localPlan.insulinCarbRatioGrams],
+        ['Temporary eating adjustment', sharedPlan.temporaryEatingAdjustment?.enabled ? `+${sharedPlan.temporaryEatingAdjustment.units} units` : 'Off', localPlan.temporaryEatingAdjustment?.enabled ? `+${localPlan.temporaryEatingAdjustment.units} units` : 'Off'],
       ];
     }
     return [
@@ -6930,10 +6936,12 @@
           <fieldset class="lee_lee_diabetes_ranges">
             <legend>Temporary eating dose adjustment</legend>
             <p class="lee_lee_diabetes_help">Use only for a clinician-directed temporary adjustment. It applies after carb coverage and before final rounding for Breakfast, Lunch, Dinner, and Snack/Snacks. It never changes correction, bedtime, or manually entered doses.</p>
-            <label class="lee_lee_diabetes_checkline"><span>Enable temporary adjustment</span><input type="checkbox" name="temporaryEatingAdjustmentEnabled" ${normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).enabled ? 'checked' : ''}></label>
-            <label class="lee_lee_diabetes_field">Adjustment<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentUnits" type="number" inputmode="decimal" min="0" step="0.05" value="${escapeHtml(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).units)}"> <span>units</span></label>
-            <label class="lee_lee_diabetes_field">Start date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).startsAt))}"></label>
-            <label class="lee_lee_diabetes_field">End date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).endsAt))}"></label>
+            <label class="lee_lee_diabetes_checkline lee_lee_diabetes_temporary_adjustment_checkline"><span>Enable temporary adjustment</span><input type="checkbox" name="temporaryEatingAdjustmentEnabled" ${normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).enabled ? 'checked' : ''}></label>
+            <label class="lee_lee_diabetes_field">Adjustment<span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentUnits" type="number" inputmode="decimal" min="0" step="0.05" value="${escapeHtml(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).units)}"><span>units</span></span></label>
+            <div class="lee_lee_diabetes_temporary_adjustment_dates">
+              <label class="lee_lee_diabetes_field">Start date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).startsAt))}"></label>
+              <label class="lee_lee_diabetes_field">End date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).endsAt))}"></label>
+            </div>
             <label class="lee_lee_diabetes_field">Duration shortcut (days)<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentDurationDays" type="number" min="1" step="1" value="${DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS}"></label>
           </fieldset>
           <div class="lee_lee_diabetes_target_range" role="group" aria-labelledby="lee-lee-target-range-label">

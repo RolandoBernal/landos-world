@@ -1433,10 +1433,6 @@
       if (!force) {
         if (Number(settings.version || 0) < Number(cached.version || 0)) return;
         const local = normalizeSharedSettings(getLocalSharedSettings?.() || cached);
-        if (getLocalSharedSettings && sharedSettingsHaveValues(local) && !sharedSettingsAreSame(local, cached) && !sharedSettingsAreSame(local, settings) && !getSharedSettingsQueue().length) {
-          registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
-          return;
-        }
         if (settings.hasExplicitInsulinPlan === false && !sharedSettingsAreSame({ ...settings, insulinPlan: local.insulinPlan }, settings)) {
           registerSharedSettingsConflict(createSharedSettingsOperation(local, cached.version), settings).catch(() => {});
           return;
@@ -1457,7 +1453,7 @@
           const pendingSettings = getSharedSettingsQueue()[0]?.payload;
           const migration = getSharedSettingsMigration();
           const localSettings = normalizeSharedSettings(getLocalSharedSettings?.() || null);
-          if (!pendingSettings && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame(localSettings, remoteSettings) && (!migration.completed || !sharedSettingsAreSame(localSettings, getSharedSettingsCache()))) {
+          if (!pendingSettings && remoteSettings.hasExplicitInsulinPlan === false && sharedSettingsHaveValues(localSettings) && !sharedSettingsAreSame({ ...remoteSettings, insulinPlan: localSettings.insulinPlan }, remoteSettings)) {
             await registerSharedSettingsConflict(createSharedSettingsOperation({
               ...localSettings,
               version: remoteSettings.version,

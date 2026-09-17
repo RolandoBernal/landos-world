@@ -1365,6 +1365,16 @@ test('settings UI exposes the clinician-directed temporary eating adjustment con
   assert.match(trackerSource, /Temporary eating adjustment:/);
 });
 
+test('temporary adjustment settings reuse contained numeric controls and responsive date layout', () => {
+  const inlineInputRule = getCssRuleBody('.lee_lee_diabetes_inline_control .lee_lee_diabetes_input');
+  assert.match(inlineInputRule, /width: 5\.5rem/);
+  assert.match(inlineInputRule, /max-width: 5\.5rem/);
+  const datesRule = getCssRuleBody('.lee_lee_diabetes_temporary_adjustment_dates');
+  assert.match(datesRule, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*\.lee_lee_diabetes_temporary_adjustment_dates[\s\S]*grid-template-columns: 1fr/);
+  assert.match(cssSource, /\.lee_lee_diabetes_temporary_adjustment_checkline[\s\S]*justify-content: flex-start/);
+});
+
 test('LLT typography uses bundled DM Sans without affecting sibling apps', () => {
   assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'DM Sans'[\s\S]*font-weight: 400 700[\s\S]*url\('\.\.\/fonts\/dm-sans-latin\.woff2'\)/);
   assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/dm-sans-latin-ext\.woff2'\)/);

@@ -949,6 +949,28 @@ test('startup pulls established remote shared settings without pushing local def
   assert.equal(supabase.client.rpcCalls.some((call) => call.name === 'update_lee_lee_shared_settings_with_version'), false);
 });
 
+test('explicit remote clinical settings replace stale local cache without creating a false conflict', async () => {
+  const supabase = createMockSupabase([], {
+    sharedSettingsRows: [remoteSharedSettingsRow({ settings: { insulinPlan: sharedInsulinPlan({ insulinCarbRatioGrams: 12 }) } })],
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository({
+    ...createDocumentStore(),
+    getLocalSharedSettings: () => ({
+      patientName: 'Stale local',
+      insulinPlan: context.LeeLeeTrackerSync.normalizeSharedInsulinPlan(sharedInsulinPlan({ insulinCarbRatioGrams: 20 })),
+    }),
+  });
+  await repository.initialize();
+  assert.equal(repository.getConflicts().length, 0);
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 12);
+  assert.equal(supabase.client.rpcCalls.length, 0);
+  assert.equal(supabase.client.sharedSettingsRows.length, 1);
+});
+
 test('cross-device shared settings sync carries patient and dose updates', async () => {
   const supabase = createMockSupabase();
   const config = { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' };
