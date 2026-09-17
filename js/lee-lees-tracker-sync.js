@@ -139,10 +139,25 @@
     return 'Browser';
   }
 
+  function getDeviceBrowser() {
+    const ua = String(globalThis.navigator?.userAgent || '').toLowerCase();
+    if (/edg\//.test(ua)) return 'Edge';
+    if (/chrome\//.test(ua) && !/edg\//.test(ua)) return 'Chrome';
+    if (/firefox\//.test(ua)) return 'Firefox';
+    if (/safari\//.test(ua) && !/chrome\//.test(ua)) return 'Safari';
+    return 'Browser';
+  }
+
   function getDeviceLabel() {
     const owner = getDeviceIdentity() || 'Unknown';
     const platform = getDevicePlatform();
-    return `${owner}’s ${platform}`;
+    const browser = getDeviceBrowser();
+    const hostname = String(globalThis.location?.hostname || '').toLowerCase();
+    const localSuffix = ['localhost', '127.0.0.1', '::1'].includes(hostname) ? ' localhost' : '';
+    if (platform === 'Mac') return `${owner}’s MacBook ${browser}${localSuffix}`;
+    if (platform === 'iPhone') return `${owner}’s iPhone${localSuffix}`;
+    if (platform === 'iPad') return `${owner}’s iPad${localSuffix}`;
+    return `${owner}’s ${platform}${localSuffix}`;
   }
 
   function getAppEnvironment() {
