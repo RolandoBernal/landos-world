@@ -248,12 +248,12 @@ function createMockSupabase(remoteRows = [], options = {}) {
         if (existing) return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key' } });
         const row = { ...payload, user_id: userId, version: 1, created_at: '2026-08-01T12:45:00.000Z', updated_at: '2026-08-01T12:45:00.000Z' };
         sharedSettingsRows.push(row);
-        return Promise.resolve({ data: row, error: null });
+        return Promise.resolve({ data: { status: 'accepted', settings: row, versionBefore: null, versionAfter: 1, eventId: args.p_audit_event?.event_id, changedFields: args.p_audit_event?.changed_fields || [], acceptedAt: '2026-08-01T12:45:00.000Z' }, error: null });
       }
       if (name === 'update_lee_lee_shared_settings_with_version' || name === 'update_lee_lee_shared_settings_with_audit') {
         const row = sharedSettingsRows.find((item) => item.user_id === userId);
         if (!row || Number(row.version) !== Number(args.p_expected_version)) {
-          return Promise.resolve({ data: null, error: null });
+          return Promise.resolve({ data: { status: 'conflict', versionBefore: Number(args.p_expected_version), versionAfter: Number(row?.version || 0), settings: row || null, eventId: args.p_audit_event?.event_id }, error: null });
         }
         Object.assign(row, {
           patient_name: args.p_patient_name,
@@ -266,7 +266,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
           version: Number(row.version) + 1,
           updated_at: '2026-08-01T13:15:00.000Z',
         });
-        return Promise.resolve({ data: row, error: null });
+        return Promise.resolve({ data: { status: 'accepted', settings: row, versionBefore: Number(args.p_expected_version), versionAfter: Number(row.version), eventId: args.p_audit_event?.event_id, changedFields: args.p_audit_event?.changed_fields || [], acceptedAt: '2026-08-01T13:15:00.000Z' }, error: null });
       }
       if (name !== 'update_lee_lee_record_with_version') {
         return Promise.resolve({ data: null, error: { message: 'unknown rpc' } });
@@ -1114,6 +1114,25 @@ test('shared settings stale version creates a conflict and preserves local versi
   assert.equal(Boolean(conflict), true);
   assert.equal(conflict.localRecord.patientName, 'Local');
   assert.equal(conflict.sharedRecord.patientName, 'Shared');
+});
+
+test('structured settings RPC conflicts preserve the stable audit event and never accept it', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ version: 4 })] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await repository.initialize();
+  const base = repository.getSharedSettings();
+  context.navigator.onLine = false;
+  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 15 } });
+  const eventId = repository.getSettingsAuditHistory()[0].eventId;
+  context.navigator.onLine = true;
+  supabase.client.sharedSettingsRows[0].version = 5;
+  await repository.processSharedSettingsQueue();
+  const event = repository.getSettingsAuditHistory().find((item) => item.eventId === eventId);
+  assert.equal(event.status, 'Conflict');
+  assert.equal(event.versionAfter, 5);
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
+  assert.equal(repository.getSyncStatus().conflictCount, 1);
 });
 
 test('offline shared settings queue survives reload and syncs exactly once', async () => {
