@@ -577,6 +577,42 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       'https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code&temperature_unit=fahrenheit';
     let clockBindings = [];
     let clockTimerId = null;
+    let weatherLauncherDateTimerId = null;
+
+    function formatWeatherLauncherDate(date = new Date()) {
+      return new Intl.DateTimeFormat(navigator.language || undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).format(date);
+    }
+
+    function getWeatherLauncherDateTimeValue(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function updateWeatherLauncherDate() {
+      const date = new Date();
+      document.querySelectorAll('[data-launcher-weather-date]').forEach((dateElement) => {
+        dateElement.textContent = formatWeatherLauncherDate(date);
+        dateElement.dateTime = getWeatherLauncherDateTimeValue(date);
+      });
+    }
+
+    function scheduleWeatherLauncherDateRefresh() {
+      window.clearTimeout(weatherLauncherDateTimerId);
+      const now = new Date();
+      const nextLocalMidnight = new Date(now);
+      nextLocalMidnight.setHours(24, 0, 0, 0);
+      weatherLauncherDateTimerId = window.setTimeout(() => {
+        updateWeatherLauncherDate();
+        scheduleWeatherLauncherDateRefresh();
+      }, Math.max(1000, nextLocalMidnight.getTime() - now.getTime() + 50));
+    }
+
     function renderLauncherCards() {
       const container = document.getElementById('lando-launcher');
       if (!container) return;
@@ -897,15 +933,25 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       const snapshot = result?.snapshot || null;
       if (!snapshot) {
         el.classList.toggle('is-loading', result?.status !== 'error');
-        el.innerHTML = result?.status === 'error'
-          ? '<div class="clock_utility_weather_unavailable">Weather unavailable</div>'
-          : '<div class="clock_utility_weather_skeleton"><span></span><span></span><span></span></div>';
+        el.innerHTML = `
+          <div class="clock_utility_weather_header">
+            <span class="clock_utility_weather_location">${getWeatherAppLocation()}</span>
+            <time class="clock_utility_weather_date" data-launcher-weather-date datetime=""></time>
+          </div>
+          ${result?.status === 'error'
+            ? '<div class="clock_utility_weather_unavailable">Weather unavailable</div>'
+            : '<div class="clock_utility_weather_skeleton"><span></span><span></span><span></span></div>'}
+        `;
+        updateWeatherLauncherDate();
         return;
       }
       el.classList.remove('is-loading');
       const unit = snapshot.temperatureUnit || (uiState.unit === 'C' ? '°C' : '°F');
       el.innerHTML = `
-        <div class="clock_utility_weather_location">${snapshot.locationName || getWeatherAppLocation()}</div>
+        <div class="clock_utility_weather_header">
+          <div class="clock_utility_weather_location">${snapshot.locationName || getWeatherAppLocation()}</div>
+          <time class="clock_utility_weather_date" data-launcher-weather-date datetime=""></time>
+        </div>
         <div class="clock_utility_weather_now">
           <span class="clock_utility_weather_icon" aria-hidden="true">${snapshot.currentConditionIcon || '🌤️'}</span>
           <span class="clock_utility_weather_temp">${snapshot.currentTemperature}${unit}</span>
@@ -913,6 +959,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         </div>
         <div class="clock_utility_weather_range">H ${snapshot.todayHigh}${unit} · L ${snapshot.todayLow}${unit}${snapshot.isStale ? ' · Updating' : ''}</div>
       `;
+      updateWeatherLauncherDate();
     }
 
     async function loadWeatherLauncherCard(options = {}) {
@@ -1389,6 +1436,8 @@ ${dateLongParts.year}`;
       }
       obtainAllWeather();
       initLauncherNavigation();
+      updateWeatherLauncherDate();
+      scheduleWeatherLauncherDateRefresh();
       loadWeatherLauncherCard();
       window.addEventListener('weather:location-changed', () => {
         loadWeatherLauncherCard({ force: true });
@@ -1398,6 +1447,16 @@ ${dateLongParts.year}`;
       window.addEventListener('online', () => {
         obtainAllWeather();
         loadWeatherLauncherCard({ force: true });
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          updateWeatherLauncherDate();
+          scheduleWeatherLauncherDateRefresh();
+        }
+      });
+      window.addEventListener('pageshow', () => {
+        updateWeatherLauncherDate();
+        scheduleWeatherLauncherDateRefresh();
       });
     });
   </script>

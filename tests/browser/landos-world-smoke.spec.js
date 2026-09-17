@@ -655,6 +655,57 @@ test('launcher opens every local app route from its cards', async ({ page }) => 
   }
 });
 
+test('weather launcher card shows and refreshes the device-local date', async ({ page }) => {
+  await page.addInitScript(() => {
+    const RealDate = Date;
+    let currentDate = new RealDate('2026-09-17T23:59:59');
+    class TestDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [currentDate.getTime()]));
+      }
+
+      static now() {
+        return currentDate.getTime();
+      }
+    }
+    window.Date = TestDate;
+    window.setTestDate = (value) => {
+      currentDate = new RealDate(value);
+    };
+  });
+
+  for (const viewport of [{ width: 393, height: 852 }, { width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/#/');
+    const summary = page.locator('[data-launcher-weather="weather"]');
+    const date = summary.locator('[data-launcher-weather-date]');
+    const expectedDate = await page.evaluate(() => new Intl.DateTimeFormat(navigator.language || undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date()));
+    await expect(date).toHaveText(expectedDate);
+
+    const bounds = await summary.evaluate((element) => {
+      const location = element.querySelector('.clock_utility_weather_location').getBoundingClientRect();
+      const dateElement = element.querySelector('[data-launcher-weather-date]').getBoundingClientRect();
+      const summaryBounds = element.getBoundingClientRect();
+      return {
+        locationRight: location.right,
+        dateLeft: dateElement.left,
+        dateRight: dateElement.right,
+        summaryRight: summaryBounds.right,
+      };
+    });
+    expect(bounds.locationRight).toBeLessThanOrEqual(bounds.dateLeft);
+    expect(bounds.dateRight).toBeLessThanOrEqual(bounds.summaryRight);
+  }
+
+  await page.evaluate(() => window.setTestDate('2026-09-18T00:00:01'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.locator('[data-launcher-weather-date]')).toHaveText('Fri, Sep 18');
+});
+
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
   await page.goto('/#/settings');
 
