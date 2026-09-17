@@ -646,7 +646,7 @@
       version_before: event.versionBefore,
       version_after: versionAfter ?? event.versionAfter,
       authorized_user_id: userId,
-      display_name: event.displayName || 'Unknown',
+      actor_name: event.displayName || 'Unknown',
       device_profile: event.deviceProfile || event.deviceLabel || 'Unknown device',
       device_installation_id: event.deviceInstallationId,
       device_platform: event.devicePlatform || 'Browser',
