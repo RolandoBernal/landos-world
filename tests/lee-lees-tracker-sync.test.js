@@ -788,6 +788,25 @@ test('shared settings serialize and deserialize the complete shared care contrac
   assert.equal(Object.hasOwn(remote.payload, 'migration'), false);
 });
 
+test('shared settings preserve the temporary eating adjustment window', () => {
+  const context = createSyncContext();
+  const settings = sharedSettings({ insulinPlan: sharedInsulinPlan({
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 0.5,
+      startsAt: '2026-08-01T00:00:00.000Z',
+      endsAt: '2026-08-13T00:00:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+    },
+  }) });
+  const restored = context.LeeLeeTrackerSync.sharedSettingsFromRemote(remoteSharedSettingsRow({ settings }));
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.enabled, true);
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.units, 0.5);
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.startsAt, '2026-08-01T00:00:00.000Z');
+  assert.equal(restored.insulinPlan.temporaryEatingAdjustment.endsAt, '2026-08-13T00:00:00.000Z');
+  assert.deepEqual(Array.from(restored.insulinPlan.temporaryEatingAdjustment.contexts), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']);
+});
+
 test('shared settings write payload includes dose settings and excludes local-only preferences', async () => {
   const supabase = createMockSupabase();
   const context = createSyncContext({

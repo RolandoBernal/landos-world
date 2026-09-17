@@ -1207,6 +1207,35 @@ test('snacks use configured carb coverage only with one final rounding pass', ()
   assert.equal(calc(28).suggestedTotalUnits, 2);
 });
 
+test('temporary eating adjustment applies before rounding only inside its active window', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const plan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    insulinCarbRatioGrams: 12,
+    doseRoundingMode: 'down',
+    doseIncrementUnits: 0.5,
+    correctionRanges: [{ minGlucose: null, maxGlucose: 174, correctionUnits: 0 }],
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 0.5,
+      startsAt: '2026-08-01T00:00:00.000Z',
+      endsAt: '2026-08-13T00:00:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+    },
+  };
+  const active = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Dinner', recordTimestamp: Date.parse('2026-08-05T12:00:00.000Z'), insulinPlan: plan, totalCarbs: 12 });
+  const expired = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Dinner', recordTimestamp: Date.parse('2026-08-14T12:00:00.000Z'), insulinPlan: plan, totalCarbs: 12 });
+  const correction = helper.calculateMealInsulinDose({ bloodSugar: 220, entryType: 'Correction', recordTimestamp: Date.parse('2026-08-05T12:00:00.000Z'), insulinPlan: plan });
+  assert.equal(active.temporaryEatingAdjustmentUnits, 0.5);
+  assert.equal(active.rawAggregateDose, 1.5);
+  assert.equal(active.suggestedTotalUnits, 1.5);
+  assert.equal(expired.temporaryEatingAdjustmentUnits, 0);
+  assert.equal(expired.suggestedTotalUnits, 1);
+  assert.equal(correction.temporaryEatingAdjustmentUnits, undefined);
+});
+
 test('meal dose rounds once after aggregating raw components', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
@@ -1325,6 +1354,15 @@ test('settings UI exposes configurable dose rounding controls', () => {
   assert.match(trackerSource, /Dose increment must use 0\.05-unit precision\./);
   assert.match(trackerSource, /Minimum allowable dose must be a nonnegative number\./);
   assert.match(trackerSource, /Minimum allowable dose must use 0\.05-unit precision\./);
+});
+
+test('settings UI exposes the clinician-directed temporary eating adjustment controls', () => {
+  assert.match(trackerSource, /temporaryEatingAdjustmentEnabled/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentUnits/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentStartsAt/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentEndsAt/);
+  assert.match(trackerSource, /DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS/);
+  assert.match(trackerSource, /Temporary eating adjustment:/);
 });
 
 test('LLT typography uses bundled DM Sans without affecting sibling apps', () => {
@@ -1977,6 +2015,10 @@ test('food editors preserve drafts until explicit cancel or successful save', ()
   assert.match(trackerSource, /data-food-library-editor/);
   assert.match(trackerSource, /carb-calculator\] \.lee_lee_diabetes_carb_editor_panel/);
   assert.match(trackerSource, /result\.error \? foodDraft : null/);
+  assert.match(trackerSource, /food-library-draft:v1/);
+  assert.match(trackerSource, /Discard this food draft\?/);
+  assert.match(trackerSource, /data-food-library-editor-dialog/);
+  assert.match(trackerSource, /clearFoodLibraryDraft\(\)/);
 });
 
 test('today screen keeps routine sync queue counts out of primary activity', () => {
