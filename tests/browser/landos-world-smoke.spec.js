@@ -1668,16 +1668,9 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
 
   const calculator = page.locator('[data-carb-calculator]');
+  const foodLibrarySelect = calculator.getByLabel('Food Library');
+  await expect(foodLibrarySelect).toHaveValue('favorites');
   await expect(calculator.getByText('No foods added yet.')).toBeVisible();
-  await expect(calculator.locator('[data-carb-library-list]')).toHaveCount(0);
-  const favoritesToggle = calculator.getByRole('button', { name: 'Favorites' });
-  const recentToggle = calculator.getByRole('button', { name: 'Recent' });
-  const myMealsToggle = calculator.getByRole('button', { name: 'My Meals' });
-  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(favoritesToggle).toHaveAttribute('aria-controls', 'lee-lee-carb-picker-panel');
-  await expect(myMealsToggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(myMealsToggle).toHaveAttribute('aria-expanded', 'false');
   await expect(calculator.getByText('Saved Meals')).toHaveCount(0);
   await expect(calculator.getByRole('button', { name: 'Add New Food' })).toHaveCount(0);
   await expect(calculator.getByRole('button', { name: 'Save as Meal' })).toHaveCount(0);
@@ -1690,11 +1683,9 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByText('Manual Amount')).toBeVisible();
   await expect(calculator.getByText('No foods added yet.')).toHaveCount(0);
 
-  await favoritesToggle.click();
   const picker = calculator.locator('[data-carb-picker]');
+  await foodLibrarySelect.selectOption('favorites');
   await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
-  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(picker.getByRole('button', { name: /Banana 27 g carbs/ })).toBeVisible();
   await expect(picker.getByRole('button', { name: /Pasta 15 g carbs/ })).toBeVisible();
   await expect(picker.getByRole('button', { name: /Mark favorite|Remove favorite/ })).toHaveCount(0);
@@ -1702,40 +1693,28 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('61 g');
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
-  await favoritesToggle.click();
+  await foodLibrarySelect.selectOption('favorites');
   await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Favorites' })).toBeVisible();
   await picker.getByRole('button', { name: /Pasta 15 g carbs/ }).click();
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
-  await expect(favoritesToggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
   await expect(calculator.getByText('Selected Foods')).toHaveCount(0);
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Pasta' })).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Save as My Meal' })).toBeVisible();
 
-  await favoritesToggle.click();
-  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Favorites' })).toBeVisible();
-  await recentToggle.click();
+  await foodLibrarySelect.selectOption('recent');
   await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Recent' })).toBeVisible();
-  await expect(favoritesToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(recentToggle).toHaveAttribute('aria-expanded', 'true');
-  await recentToggle.click();
-  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
-  await expect(recentToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(foodLibrarySelect).toHaveValue('recent');
 
-  await myMealsToggle.click();
+  await foodLibrarySelect.selectOption('meals');
   await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Meals' })).toBeVisible();
   await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: /Lunch Combo/ })).toBeVisible();
-  await myMealsToggle.click();
-  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
 
-  await calculator.getByRole('button', { name: 'My Foods' }).click();
+  await foodLibrarySelect.selectOption('foods');
   await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Foods' })).toBeVisible();
   await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: '+ Add New Food' })).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Search', exact: true })).toHaveCount(0);
-  await calculator.locator('[data-carb-picker]').getByRole('button', { name: 'Done' }).click();
-
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const foodSearch = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
   const setFoodSearchQuery = async (query) => {

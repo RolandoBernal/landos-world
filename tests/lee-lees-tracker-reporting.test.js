@@ -1377,6 +1377,15 @@ test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /input\.select\(\)/);
 });
 
+test('carb calculator food library uses the shared select navigation', () => {
+  assert.match(trackerSource, /<label class="lee_lee_diabetes_field" for="lee-lee-carb-library-view">Food Library/);
+  assert.match(trackerSource, /<select class="lee_lee_diabetes_select" id="lee-lee-carb-library-view" name="carbLibraryView" data-carb-library-view>/);
+  assert.match(trackerSource, /FOOD_LIBRARY_TABS\.map\(\(\[tab, label\]\) => `<option/);
+  assert.match(trackerSource, /event\.target\.matches\('\[data-carb-library-view\]'\)/);
+  assert.doesNotMatch(trackerSource, /class="lee_lee_diabetes_carb_tabs"/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_tabs/);
+});
+
 test('carb item editor actions reuse LLT buttons and keep the footer compact', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_actions \{[\s\S]*min-height: 0[\s\S]*padding: 0\.55rem 0 0\.25rem/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_actions \.lee_lee_diabetes_button \{[\s\S]*flex: 1 1 0[\s\S]*min-height: 52px/);
