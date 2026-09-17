@@ -58,7 +58,7 @@ SQL Editor:
 5. Open `supabase/migrations/202608040001_create_lee_lee_shared_settings.sql`.
 6. Paste the full file.
 7. Run it.
-8. Open `supabase/migrations/202609170001_create_lee_lee_settings_audit.sql`.
+8. Open `supabase/migrations/202609170002_llt_settings_audit_final.sql`.
 9. Paste the full file and run it.
 
 Supabase CLI:
@@ -72,7 +72,7 @@ The first migration creates `public.lee_lee_records`, useful indexes, optimistic
 
 The second migration creates `public.lee_lee_shared_settings` for patient and clinic information only. It uses one row per authenticated shared account, RLS, blocked direct updates/deletes, and a version-aware RPC named `public.update_lee_lee_shared_settings_with_version`.
 
-The audit migration creates the append-only `public.lee_lee_settings_audit` table and the server-side RPCs that atomically accept a Shared Settings update and its audit event. Accepted events cannot be edited or deleted through the client; conflict and failed events are recorded separately when the server can accept them.
+The final audit migration creates the append-only `public.lee_lee_settings_audit` table and the server-side RPCs that atomically accept a Shared Settings update and its audit event. Accepted events cannot be edited or deleted through the client; conflict and failed events are recorded separately when the server can accept them. Use the final migration file; the earlier `202609170001_create_lee_lee_settings_audit.sql` is retained as historical PR #99 context and must not be run instead.
 
 ## 4. Confirm RLS
 
