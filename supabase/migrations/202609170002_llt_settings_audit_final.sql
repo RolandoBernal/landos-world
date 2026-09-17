@@ -41,7 +41,23 @@ end; $$;
 
 create or replace function public.llt_settings_snapshot(p_patient_name text, p_birth date, p_clinic_name text, p_clinic_phone text, p_payload jsonb)
 returns jsonb language sql immutable set search_path = '' as $$
-select jsonb_build_object('patient_name',p_patient_name,'patient_date_of_birth',p_birth,'clinic_name',p_clinic_name,'clinic_phone',p_clinic_phone,'payload',coalesce(p_payload,'{}'::jsonb));
+select jsonb_build_object(
+  'patient_name',p_patient_name,'patient_date_of_birth',p_birth,'clinic_name',p_clinic_name,'clinic_phone',p_clinic_phone,
+  'plan_name',p_payload #>> '{insulinConfiguration,activeInsulinPlan,name}',
+  'effective_from',p_payload #>> '{insulinConfiguration,activeInsulinPlan,effectiveFrom}',
+  'breakfast_dose',p_payload #>> '{insulinConfiguration,activeInsulinPlan,mealBaseUnitsByType,Breakfast}',
+  'lunch_dose',p_payload #>> '{insulinConfiguration,activeInsulinPlan,mealBaseUnitsByType,Lunch}',
+  'dinner_dose',p_payload #>> '{insulinConfiguration,activeInsulinPlan,mealBaseUnitsByType,Dinner}',
+  'bedtime_long_acting_dose',p_payload #>> '{insulinConfiguration,activeInsulinPlan,bedtimeBaseUnits}',
+  'insulin_to_carb_ratio',p_payload #>> '{insulinConfiguration,activeInsulinPlan,insulinCarbRatioGrams}',
+  'rounding_mode',p_payload #>> '{insulinConfiguration,activeInsulinPlan,doseRoundingMode}',
+  'dose_increment',p_payload #>> '{insulinConfiguration,activeInsulinPlan,doseIncrementUnits}',
+  'minimum_allowable_dose',p_payload #>> '{insulinConfiguration,activeInsulinPlan,minimumAllowableDoseUnits}',
+  'target_glucose_min',p_payload #>> '{insulinConfiguration,activeInsulinPlan,targetGlucoseMin}',
+  'target_glucose_max',p_payload #>> '{insulinConfiguration,activeInsulinPlan,targetGlucoseMax}',
+  'temporary_eating_adjustment',coalesce(p_payload #> '{insulinConfiguration,activeInsulinPlan,temporaryEatingAdjustment}','{}'::jsonb),
+  'correction_ranges',coalesce(p_payload #> '{insulinConfiguration,activeInsulinPlan,correctionRanges}','[]'::jsonb)
+);
 $$;
 
 create or replace function public.llt_settings_changes(p_before jsonb, p_after jsonb) returns jsonb language sql immutable set search_path = '' as $$
