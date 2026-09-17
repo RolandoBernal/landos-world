@@ -58,6 +58,8 @@ SQL Editor:
 5. Open `supabase/migrations/202608040001_create_lee_lee_shared_settings.sql`.
 6. Paste the full file.
 7. Run it.
+8. Open `supabase/migrations/202609170001_create_lee_lee_settings_audit.sql`.
+9. Paste the full file and run it.
 
 Supabase CLI:
 
@@ -69,6 +71,8 @@ supabase db push
 The first migration creates `public.lee_lee_records`, useful indexes, optimistic concurrency fields, soft-delete fields, attribution fields, RLS policies, and Realtime publication registration.
 
 The second migration creates `public.lee_lee_shared_settings` for patient and clinic information only. It uses one row per authenticated shared account, RLS, blocked direct updates/deletes, and a version-aware RPC named `public.update_lee_lee_shared_settings_with_version`.
+
+The audit migration creates the append-only `public.lee_lee_settings_audit` table and the server-side RPCs that atomically accept a Shared Settings update and its audit event. Accepted events cannot be edited or deleted through the client; conflict and failed events are recorded separately when the server can accept them.
 
 ## 4. Confirm RLS
 
@@ -82,6 +86,7 @@ In Supabase Table Editor:
 6. Confirm Row Level Security is enabled.
 7. Confirm policies exist for authenticated select and insert only.
 8. Confirm there are no anonymous read/write policies.
+9. Open `lee_lee_settings_audit` and confirm authenticated users can select only their own events. There should be no client insert, update, or delete grants.
 
 The policies restrict every row to `user_id = auth.uid()`. Updates are performed by version-aware security-definer RPCs so stale writes become conflicts instead of last-write-wins overwrites.
 
@@ -107,7 +112,7 @@ Add the same URL to Allowed Redirect URLs. If password reset is used, Supabase s
 
 ## 7. Enable Realtime
 
-The SQL migrations attempt to add `lee_lee_records` and `lee_lee_shared_settings` to `supabase_realtime`. In Supabase, confirm Realtime is enabled for both tables. The app also performs full reconciliation on launch, resume, reconnect, manual sync, and periodic refresh, so Realtime is an enhancement rather than the only sync path.
+The SQL migrations attempt to add `lee_lee_records` and `lee_lee_shared_settings` to `supabase_realtime`. In Supabase, confirm Realtime is enabled for both tables. The app also performs full reconciliation on launch, resume, reconnect, manual sync, and periodic refresh, so Realtime is an enhancement rather than the only sync path. Audit history is fetched during the same shared-settings reconciliation and remains cached for offline viewing.
 
 ## 8. Test With Two Devices
 

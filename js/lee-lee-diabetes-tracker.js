@@ -6847,6 +6847,36 @@
     `;
   }
 
+  function formatSettingsAuditValue(value) {
+    if (value === undefined || value === null || value === '') return '—';
+    if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled';
+    if (Array.isArray(value)) return value.join(', ') || '—';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  }
+
+  function renderSettingsChangeHistory() {
+    const events = syncRepository?.getSettingsAuditHistory?.() || [];
+    const rows = events.slice(0, 50).map((event) => {
+      const status = event.status === 'Conflict' ? 'Conflict — not applied' : event.status === 'Rejected' ? 'Rejected — settings remained unchanged' : event.status === 'Failed' ? 'Failed to sync' : event.status;
+      const timestamp = event.acceptedAt || event.clientCreatedAt;
+      return `<article class="lee_lee_diabetes_audit_event">
+        <header><strong>${escapeHtml(status)}</strong><span>${escapeHtml(timestamp ? new Date(timestamp).toLocaleString() : 'Time unavailable')}</span></header>
+        <p>${escapeHtml(`Changed by ${event.displayName || 'Unknown'} on ${event.deviceLabel || 'Unknown device'}`)}</p>
+        <p class="lee_lee_diabetes_help">${escapeHtml(`${event.devicePlatform || 'Browser'} · ${event.appEnvironment || 'Unknown'} · app ${event.appVersion || 'Unknown'}`)}</p>
+        ${event.versionAfter ? `<p class="lee_lee_diabetes_help">Plan version ${escapeHtml(String(event.versionAfter))}</p>` : ''}
+        <dl>${(event.changes || []).map((change) => `<div><dt>${escapeHtml(change.label || change.key || 'Changed setting')}</dt><dd>${escapeHtml(formatSettingsAuditValue(change.previousValue))} → ${escapeHtml(formatSettingsAuditValue(change.newValue))}</dd></div>`).join('')}</dl>
+      </article>`;
+    }).join('');
+    return `<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+      <summary role="heading" aria-level="2">Settings Change History <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+      <div class="lee_lee_diabetes_settings_accordion_body">
+        <p class="lee_lee_diabetes_help">Immutable history of shared settings changes. Pending and conflict events remain visible until resolved.</p>
+        ${rows || '<p class="lee_lee_diabetes_help">No shared settings changes recorded yet.</p>'}
+      </div>
+    </details>`;
+  }
+
   function renderSettingsAccordion(title, id, content, open = false) {
     return `
       <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion${open ? ' open' : ''}>
@@ -6868,6 +6898,7 @@
         ${renderTrackerNav('settings')}
         ${renderSyncStatusSection()}
         ${renderSyncDiagnostics(syncRepository?.getSyncDiagnostics?.() || null)}
+        ${renderSettingsChangeHistory()}
         ${renderSettingsAccordion('Patient & Clinic Info', 'lee-lee-patient-title', `
           <p class="lee_lee_diabetes_help">Patient and clinic information syncs across signed-in devices.</p>
           <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(sharedSettingsStatus.state)}" aria-live="polite">

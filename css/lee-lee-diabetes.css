@@ -1839,6 +1839,35 @@
   padding-top: 0.85rem;
 }
 
+.lee_lee_diabetes_audit_event {
+  border: 1px solid var(--lee-lee-diabetes-border, #334155);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  margin-top: 0.75rem;
+}
+
+.lee_lee_diabetes_audit_event header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lee_lee_diabetes_audit_event dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+}
+
+.lee_lee_diabetes_audit_event dl > div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(0, 2fr);
+  gap: 0.75rem;
+}
+
+.lee_lee_diabetes_audit_event dt { color: var(--lee-lee-diabetes-muted, #a8b7cc); }
+.lee_lee_diabetes_audit_event dd { margin: 0; font-weight: 600; }
+
 .lee_lee_diabetes_target_range {
   display: grid;
   gap: 0.45rem;

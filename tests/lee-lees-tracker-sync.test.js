@@ -28,6 +28,10 @@ const foodLibraryMigrationSource = readFileSync(
   new URL('../supabase/migrations/202608310001_create_lee_lee_food_library.sql', import.meta.url),
   'utf8',
 );
+const settingsAuditMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202609170001_create_lee_lee_settings_audit.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -238,7 +242,15 @@ function createMockSupabase(remoteRows = [], options = {}) {
     },
     rpc(name, args) {
       rpcCalls.push({ name, args });
-      if (name === 'update_lee_lee_shared_settings_with_version') {
+      if (name === 'insert_lee_lee_shared_settings_with_audit') {
+        const payload = args.p_settings;
+        const existing = sharedSettingsRows.find((item) => item.user_id === userId);
+        if (existing) return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key' } });
+        const row = { ...payload, user_id: userId, version: 1, created_at: '2026-08-01T12:45:00.000Z', updated_at: '2026-08-01T12:45:00.000Z' };
+        sharedSettingsRows.push(row);
+        return Promise.resolve({ data: row, error: null });
+      }
+      if (name === 'update_lee_lee_shared_settings_with_version' || name === 'update_lee_lee_shared_settings_with_audit') {
         const row = sharedSettingsRows.find((item) => item.user_id === userId);
         if (!row || Number(row.version) !== Number(args.p_expected_version)) {
           return Promise.resolve({ data: null, error: null });
@@ -845,6 +857,33 @@ test('shared settings write payload includes dose settings and excludes local-on
   assert.equal(Object.hasOwn(row.payload, 'syncDiagnosticsOpen'), false);
 });
 
+test('shared settings changes create one grouped immutable audit event with stable device metadata', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ version: 7 })] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  context.navigator.userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)';
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await repository.initialize();
+  const before = repository.getSharedSettings();
+  repository.setDeviceIdentity('Rolando');
+  repository.saveSharedSettings({
+    ...before,
+    insulinPlan: { ...before.insulinPlan, insulinCarbRatioGrams: 12, temporaryEatingAdjustment: { ...before.insulinPlan.temporaryEatingAdjustment, enabled: true, units: 0.5 } },
+  });
+  await repository.processSharedSettingsQueue();
+  const history = repository.getSettingsAuditHistory();
+  assert.equal(history.length, 1);
+  assert.equal(history[0].status, 'Accepted');
+  assert.equal(history[0].displayName, 'Rolando');
+  assert.match(history[0].deviceLabel, /Rolando’s iPhone/);
+  assert.ok(history[0].deviceInstallationId);
+  assert.ok(history[0].changes.some((change) => change.key === 'insulinPlan.insulinCarbRatioGrams'));
+  assert.ok(history[0].changes.some((change) => change.key === 'insulinPlan.temporaryEatingAdjustment.enabled'));
+  const firstId = history[0].deviceInstallationId;
+  context.navigator.userAgent = 'Macintosh';
+  assert.equal(repository.getDeviceInstallationId(), firstId);
+  assert.equal(repository.getSettingsAuditHistory()[0].deviceInstallationId, firstId);
+});
+
 test('shared settings read restores patient clinic and dose configuration from remote payload', async () => {
   const supabase = createMockSupabase([], {
     sharedSettingsRows: [remoteSharedSettingsRow()],
@@ -1035,7 +1074,7 @@ test('shared settings saves use the cached remote version instead of inserting d
   await repository.processSharedSettingsQueue();
 
   assert.equal(supabase.client.sharedSettingsRows.length, 1);
-  assert.equal(supabase.client.rpcCalls.at(-1).name, 'update_lee_lee_shared_settings_with_version');
+  assert.equal(supabase.client.rpcCalls.at(-1).name, 'update_lee_lee_shared_settings_with_audit');
   assert.equal(supabase.client.rpcCalls.at(-1).args.p_expected_version, 7);
   assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
 });
@@ -1127,7 +1166,7 @@ test('offline shared settings saves coalesce to one canonical pending operation'
   diagnostics = repository.getSyncDiagnostics();
 
   assert.equal(supabase.client.rpcCalls.length, 1);
-  assert.equal(supabase.client.rpcCalls[0].name, 'update_lee_lee_shared_settings_with_version');
+  assert.equal(supabase.client.rpcCalls[0].name, 'update_lee_lee_shared_settings_with_audit');
   assert.equal(supabase.client.rpcCalls[0].args.p_expected_version, 7);
   assert.equal(supabase.client.rpcCalls[0].args.p_payload.insulinConfiguration.activeInsulinPlan.doseIncrementUnits, 0.05);
   assert.equal(repository.getSharedSettings().patientName, 'Levi R. Bernal');
@@ -1309,6 +1348,18 @@ test('SQL migration blocks direct updates and leaves writes to the versioned RPC
   assert.match(migrationSource, /grant execute on function public\.update_lee_lee_record_with_version[\s\S]*to authenticated/);
   assert.match(migrationSource, /revoke all on function public\.update_lee_lee_record_with_version[\s\S]*from public, anon/);
   assert.match(migrationSource, /-- Intentionally no DELETE policy\./);
+});
+
+test('settings audit migration is append-only and authenticated', () => {
+  assert.match(settingsAuditMigrationSource, /create table if not exists public\.lee_lee_settings_audit/);
+  assert.match(settingsAuditMigrationSource, /status text not null check \(status in \('Requested', 'Accepted', 'Conflict', 'Rejected', 'Failed'\)\)/);
+  assert.match(settingsAuditMigrationSource, /revoke all on public\.lee_lee_settings_audit from anon, public, authenticated/);
+  assert.match(settingsAuditMigrationSource, /grant select on public\.lee_lee_settings_audit to authenticated/);
+  assert.match(settingsAuditMigrationSource, /insert_lee_lee_shared_settings_with_audit/);
+  assert.match(settingsAuditMigrationSource, /update_lee_lee_shared_settings_with_audit/);
+  assert.match(settingsAuditMigrationSource, /on conflict \(event_id\) do nothing/);
+  assert.doesNotMatch(settingsAuditMigrationSource, /delete from public\.lee_lee_settings_audit/);
+  assert.doesNotMatch(settingsAuditMigrationSource, /update public\.lee_lee_settings_audit/);
 });
 
 test('shared settings SQL migration uses RLS and version-aware RPC only', () => {
