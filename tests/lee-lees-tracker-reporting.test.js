@@ -1380,6 +1380,7 @@ test('carb calculator uses display rows with a focused item editor', () => {
 test('carb calculator food library uses the shared select navigation', () => {
   assert.match(trackerSource, /<label class="lee_lee_diabetes_field" for="lee-lee-carb-library-view">Food Library/);
   assert.match(trackerSource, /<select class="lee_lee_diabetes_select" id="lee-lee-carb-library-view" name="carbLibraryView" data-carb-library-view>/);
+  assert.match(trackerSource, /<option value=""\$\{activeFoodLibraryTab \? '' : ' selected'\}>Select a list\.\.\.<\/option>/);
   assert.match(trackerSource, /FOOD_LIBRARY_TABS\.map\(\(\[tab, label\]\) => `<option/);
   assert.match(trackerSource, /event\.target\.matches\('\[data-carb-library-view\]'\)/);
   assert.doesNotMatch(trackerSource, /class="lee_lee_diabetes_carb_tabs"/);

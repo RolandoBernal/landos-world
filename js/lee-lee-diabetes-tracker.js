@@ -68,7 +68,6 @@
     ['foods', 'My Foods'],
     ['meals', 'My Meals'],
   ]);
-  const DEFAULT_FOOD_LIBRARY_TAB = FOOD_LIBRARY_TABS[0][0];
   const LLT_STARTER_FOODS_VERSION = 4;
   const LLT_STARTER_FOOD_SOURCE = 'reference';
   const LLT_STARTER_FOOD_SOURCE_TYPES = Object.freeze(['reference', 'verified-label', 'manufacturer']);
@@ -4820,7 +4819,7 @@
     const mealTotal = calculateCarbCalculatorMealTotal(normalizedRows);
     const canUseTotal = hasValidCarbCalculatorTotal(normalizedRows);
     const activePicker = currentEditor?.carbCalculatorPicker || '';
-    const activeFoodLibraryTab = currentEditor?.carbCalculatorTab || DEFAULT_FOOD_LIBRARY_TAB;
+    const activeFoodLibraryTab = activePicker;
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
     return `
@@ -4864,7 +4863,7 @@
     `;
   }
 
-  function renderCarbCalculatorLibrary(activePicker, search, rows = [], activeFoodLibraryTab = DEFAULT_FOOD_LIBRARY_TAB) {
+  function renderCarbCalculatorLibrary(activePicker, search, rows = [], activeFoodLibraryTab = '') {
     const hasAnyStartedRows = rows.some(isCarbCalculatorRowStarted);
     const normalizedSearch = String(search || '').trim();
     return `
@@ -4877,6 +4876,7 @@
         </div>
         <label class="lee_lee_diabetes_field" for="lee-lee-carb-library-view">Food Library
           <select class="lee_lee_diabetes_select" id="lee-lee-carb-library-view" name="carbLibraryView" data-carb-library-view>
+            <option value=""${activeFoodLibraryTab ? '' : ' selected'}>Select a list...</option>
             ${FOOD_LIBRARY_TABS.map(([tab, label]) => `<option value="${escapeHtml(tab)}"${activeFoodLibraryTab === tab ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
           </select>
         </label>
@@ -8611,9 +8611,7 @@
       if (!form) return;
       if (event.target.closest('[data-carb-item-editor]')) return;
       if (event.target.matches('[data-carb-library-view]')) {
-        const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === event.target.value)
-          ? event.target.value
-          : DEFAULT_FOOD_LIBRARY_TAB;
+        const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === event.target.value) ? event.target.value : '';
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
         currentEditor.carbCalculatorTab = requestedPicker;
         renderEditor({
