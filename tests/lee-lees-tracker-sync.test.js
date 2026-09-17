@@ -32,6 +32,10 @@ const settingsAuditMigrationSource = readFileSync(
   new URL('../supabase/migrations/202609170001_create_lee_lee_settings_audit.sql', import.meta.url),
   'utf8',
 );
+const finalSettingsAuditMigrationSource = readFileSync(
+  new URL('../supabase/migrations/202609170002_llt_settings_audit_final.sql', import.meta.url),
+  'utf8',
+);
 
 function createLocalStorage(seed = {}) {
   const store = new Map(Object.entries(seed));
@@ -1379,6 +1383,16 @@ test('settings audit migration is append-only and authenticated', () => {
   assert.match(settingsAuditMigrationSource, /on conflict \(event_id\) do nothing/);
   assert.doesNotMatch(settingsAuditMigrationSource, /delete from public\.lee_lee_settings_audit/);
   assert.doesNotMatch(settingsAuditMigrationSource, /update public\.lee_lee_settings_audit/);
+});
+
+test('final settings audit migration uses structured outcomes and server-derived diffs', () => {
+  assert.match(finalSettingsAuditMigrationSource, /status in \('Accepted', 'Conflict', 'Rejected', 'Failed'\)/);
+  assert.match(finalSettingsAuditMigrationSource, /returns jsonb/);
+  assert.match(finalSettingsAuditMigrationSource, /'status','conflict'/);
+  assert.match(finalSettingsAuditMigrationSource, /llt_settings_changes\(before_json,after_json\)/);
+  assert.match(finalSettingsAuditMigrationSource, /on conflict\(event_id\) do nothing/);
+  assert.match(finalSettingsAuditMigrationSource, /device_profile/);
+  assert.doesNotMatch(finalSettingsAuditMigrationSource, /Requested/);
 });
 
 test('shared settings SQL migration uses RLS and version-aware RPC only', () => {
