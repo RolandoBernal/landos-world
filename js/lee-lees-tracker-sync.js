@@ -649,7 +649,6 @@
       display_name: event.displayName || 'Unknown',
       device_profile: event.deviceProfile || event.deviceLabel || 'Unknown device',
       device_installation_id: event.deviceInstallationId,
-      device_label: event.deviceLabel || 'Unknown device',
       device_platform: event.devicePlatform || 'Browser',
       app_environment: event.appEnvironment || 'Unknown',
       app_version: event.appVersion || 'Unknown',
@@ -1726,10 +1725,12 @@
     function acknowledgeSharedSettings(operation, remote) {
       const acceptedEvent = {
         ...operation.auditEvent,
-        versionAfter: remote?.version || null,
+        versionBefore: remote?.versionBefore ?? operation.auditEvent?.versionBefore ?? null,
+        versionAfter: remote?.versionAfter ?? remote?.version ?? null,
         status: 'Accepted',
-        acceptedAt: nowIso(),
+        acceptedAt: remote?.acceptedAt || nowIso(),
         authorizedUserId: session?.user?.id || null,
+        changes: remote?.changedFields || operation.auditEvent?.changes || [],
       };
       setSettingsAuditCache([acceptedEvent, ...getSettingsAuditCache().filter((event) => event.eventId !== acceptedEvent.eventId)]);
       const queue = getSharedSettingsQueue().filter((item) => item.id !== operation.id);
@@ -1796,7 +1797,14 @@
       ]);
       const latest = getSharedSettingsQueue().at(-1)?.payload || operation.payload;
       setSharedSettingsCache({ ...latest, syncStatus: 'conflict', syncError: 'Shared care settings changed on another device. Review before replacing local settings.' });
-      appendSettingsAuditEvent(operation.auditEvent, 'Conflict').catch(() => {});
+      if (operation.auditEvent) {
+        setSettingsAuditCache([{
+          ...operation.auditEvent,
+          status: 'Conflict',
+          versionAfter: sharedSettings?.version || null,
+          acceptedAt: null,
+        }, ...getSettingsAuditCache().filter((event) => event.eventId !== operation.auditEvent.eventId)]);
+      }
     }
 
     let processSharedSettingsQueuePromise = null;
@@ -1830,7 +1838,19 @@
               }
               throw error;
             }
-            acknowledgeSharedSettings(attemptedOperation, sharedSettingsFromRemote(data));
+            const result = data || {};
+            if (result.status === 'conflict') {
+              await registerSharedSettingsConflict(attemptedOperation, result.settings ? sharedSettingsFromRemote(result.settings) : null);
+              continue;
+            }
+            if (result.status !== 'accepted' || !result.settings) throw new Error('Invalid Shared Settings insert response.');
+            acknowledgeSharedSettings(attemptedOperation, {
+              ...sharedSettingsFromRemote(result.settings),
+              versionBefore: result.versionBefore,
+              versionAfter: result.versionAfter,
+              acceptedAt: result.acceptedAt,
+              changedFields: result.changedFields,
+            });
             continue;
           }
           const { data, error } = await client
@@ -1846,17 +1866,19 @@
               p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', Number(attemptedOperation.baseVersion) + 1),
             });
           if (error) throw error;
-          const updatedRow = Array.isArray(data) ? data[0] : data;
-          if (!updatedRow) {
-            const latestSharedSettings = await fetchSharedSettings();
-            if (latestSharedSettings && sharedSettingsAreSame(latestSharedSettings, attemptedOperation.payload)) {
-              acknowledgeSharedSettings(attemptedOperation, latestSharedSettings);
-              continue;
-            }
-            await registerSharedSettingsConflict(attemptedOperation);
+          const result = data || {};
+          if (result.status === 'conflict') {
+            await registerSharedSettingsConflict(attemptedOperation, result.settings ? sharedSettingsFromRemote(result.settings) : null);
             continue;
           }
-          acknowledgeSharedSettings(attemptedOperation, sharedSettingsFromRemote(updatedRow));
+          if (result.status !== 'accepted' || !result.settings) throw new Error('Invalid Shared Settings update response.');
+          acknowledgeSharedSettings(attemptedOperation, {
+            ...sharedSettingsFromRemote(result.settings),
+            versionBefore: result.versionBefore,
+            versionAfter: result.versionAfter,
+            acceptedAt: result.acceptedAt,
+            changedFields: result.changedFields,
+          });
         } catch (error) {
           const sanitizedError = sanitizeSupabaseError(error);
           remaining.push({
