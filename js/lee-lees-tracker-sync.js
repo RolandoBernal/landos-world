@@ -2,6 +2,8 @@
   const CONFIG_GLOBAL = 'LEE_LEE_TRACKER_SUPABASE_CONFIG';
   const SUPABASE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
   const DEVICE_IDENTITY_KEY = 'lando-world:lee-lees-tracker:device-identity:v1';
+  const DEVICE_INSTALLATION_ID_KEY = 'lando-world:lee-lees-tracker:device-installation-id:v1';
+  const SETTINGS_AUDIT_CACHE_KEY = 'lando-world:lee-lees-tracker:settings-audit-cache:v1';
   const SYNC_METADATA_KEY = 'lando-world:lee-lees-tracker:sync-metadata:v1';
   const SYNC_QUEUE_KEY = 'lando-world:lee-lees-tracker:sync-queue:v1';
   const SYNC_CONFLICTS_KEY = 'lando-world:lee-lees-tracker:sync-conflicts:v1';
@@ -15,6 +17,7 @@
   const REMOTE_SHARED_SETTINGS_TABLE = 'lee_lee_shared_settings';
   const REMOTE_FOODS_TABLE = 'lee_lee_foods';
   const REMOTE_SAVED_MEALS_TABLE = 'lee_lee_saved_meals';
+  const REMOTE_SETTINGS_AUDIT_TABLE = 'lee_lee_settings_audit';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
   const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict']);
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
@@ -115,6 +118,47 @@
   function getDeviceIdentity() {
     const value = String(localStorage.getItem(DEVICE_IDENTITY_KEY) || '').trim();
     return DEVICE_USERS.includes(value) ? value : '';
+  }
+
+  function getDeviceInstallationId() {
+    let value = String(localStorage.getItem(DEVICE_INSTALLATION_ID_KEY) || '').trim();
+    if (!value) {
+      value = createId();
+      localStorage.setItem(DEVICE_INSTALLATION_ID_KEY, value);
+    }
+    return value;
+  }
+
+  function getDevicePlatform() {
+    const ua = String(globalThis.navigator?.userAgent || '').toLowerCase();
+    if (/iphone/.test(ua)) return 'iPhone';
+    if (/ipad/.test(ua)) return 'iPad';
+    if (/macintosh|mac os/.test(ua)) return 'Mac';
+    if (/android/.test(ua)) return 'Android';
+    if (/windows/.test(ua)) return 'Windows';
+    return 'Browser';
+  }
+
+  function getDeviceLabel() {
+    const owner = getDeviceIdentity() || 'Unknown';
+    const platform = getDevicePlatform();
+    return `${owner}’s ${platform}`;
+  }
+
+  function getAppEnvironment() {
+    return String(globalThis.location?.hostname || 'localhost');
+  }
+
+  function getAppVersion() {
+    return String(globalThis.LEE_LEE_TRACKER_APP_VERSION || '1.0.0');
+  }
+
+  function getSettingsAuditCache() {
+    return readJson(SETTINGS_AUDIT_CACHE_KEY, []).filter((event) => event && event.eventId);
+  }
+
+  function setSettingsAuditCache(events) {
+    writeJson(SETTINGS_AUDIT_CACHE_KEY, events.filter((event) => event && event.eventId).slice(0, 200));
   }
 
   function setDeviceIdentity(value) {
@@ -450,6 +494,91 @@
     return sharedSettingsFingerprint(left) === sharedSettingsFingerprint(right);
   }
 
+  const SETTINGS_AUDIT_FIELDS = [
+    ['patientName', 'Patient name'],
+    ['patientBirthDate', 'Patient date of birth'],
+    ['clinicName', 'Clinic name'],
+    ['clinicPhone', 'Clinic phone'],
+    ['insulinPlan.name', 'Plan name'],
+    ['insulinPlan.effectiveFrom', 'Plan effective date'],
+    ['insulinPlan.mealBaseUnitsByType.Breakfast', 'Breakfast dose'],
+    ['insulinPlan.mealBaseUnitsByType.Lunch', 'Lunch dose'],
+    ['insulinPlan.mealBaseUnitsByType.Dinner', 'Dinner dose'],
+    ['insulinPlan.bedtimeBaseUnits', 'Bedtime long-acting dose'],
+    ['insulinPlan.insulinCarbRatioGrams', 'Insulin-to-carb ratio'],
+    ['insulinPlan.doseRoundingMode', 'Rounding mode'],
+    ['insulinPlan.doseIncrementUnits', 'Dose increment'],
+    ['insulinPlan.minimumAllowableDoseUnits', 'Minimum allowable dose'],
+    ['insulinPlan.targetGlucoseMin', 'Target range minimum'],
+    ['insulinPlan.targetGlucoseMax', 'Target range maximum'],
+    ['insulinPlan.temporaryEatingAdjustment.enabled', 'Temporary adjustment enabled'],
+    ['insulinPlan.temporaryEatingAdjustment.units', 'Temporary adjustment amount'],
+    ['insulinPlan.temporaryEatingAdjustment.startsAt', 'Temporary adjustment start date'],
+    ['insulinPlan.temporaryEatingAdjustment.endsAt', 'Temporary adjustment end date'],
+    ['insulinPlan.temporaryEatingAdjustment.contexts', 'Temporary adjustment contexts'],
+    ['insulinPlan.correctionRanges', 'Correction table'],
+  ];
+
+  function valueAtPath(source, path) {
+    return path.split('.').reduce((value, key) => value == null ? undefined : value[key], source);
+  }
+
+  function sharedSettingsChanges(previous, next) {
+    const before = normalizeSharedSettings(previous || {});
+    const after = normalizeSharedSettings(next || {});
+    return SETTINGS_AUDIT_FIELDS
+      .map(([key, label]) => ({ key, label, previousValue: valueAtPath(before, key), newValue: valueAtPath(after, key) }))
+      .filter((change) => stableJson(change.previousValue) !== stableJson(change.newValue));
+  }
+
+  function createSettingsAuditEvent(previous, next, versionBefore) {
+    return {
+      eventId: createId(),
+      settingsRecordId: 'shared-settings',
+      versionBefore: Number(versionBefore || 0) || null,
+      versionAfter: null,
+      authorizedUserId: null,
+      displayName: getDeviceIdentity() || 'Unknown',
+      deviceInstallationId: getDeviceInstallationId(),
+      deviceLabel: getDeviceLabel(),
+      devicePlatform: getDevicePlatform(),
+      appEnvironment: getAppEnvironment(),
+      appVersion: getAppVersion(),
+      clientCreatedAt: nowIso(),
+      acceptedAt: null,
+      status: 'Requested',
+      changes: sharedSettingsChanges(previous, next),
+      previousSettings: normalizeSharedSettings(previous || {}),
+      changeNote: '',
+    };
+  }
+
+  function auditEventFromRemote(row) {
+    return {
+      eventId: row.event_id,
+      settingsRecordId: row.settings_record_id || 'shared-settings',
+      versionBefore: row.version_before,
+      versionAfter: row.version_after,
+      authorizedUserId: row.authorized_user_id || null,
+      displayName: row.display_name || 'Unknown',
+      deviceInstallationId: row.device_installation_id || '',
+      deviceLabel: row.device_label || 'Unknown device',
+      devicePlatform: row.device_platform || 'Browser',
+      appEnvironment: row.app_environment || 'Unknown',
+      appVersion: row.app_version || 'Unknown',
+      clientCreatedAt: row.client_created_at || null,
+      acceptedAt: row.accepted_at || null,
+      status: row.status || 'Accepted',
+      changes: Array.isArray(row.changed_fields) ? row.changed_fields.map((change, index) => ({
+        ...(change || {}),
+        previousValue: row.previous_values?.[change?.key] ?? change?.previousValue,
+        newValue: row.new_values?.[change?.key] ?? change?.newValue,
+        key: change?.key || `change-${index}`,
+      })) : [],
+      changeNote: row.change_note || '',
+    };
+  }
+
   function sharedSettingsFromRemote(row) {
     if (!row) return null;
     return normalizeSharedSettings({
@@ -488,6 +617,30 @@
         },
       },
       app_schema_version: SHARED_SETTINGS_SCHEMA_VERSION,
+    };
+  }
+
+  function auditEventToRemote(event, userId, status = 'Accepted', versionAfter = null) {
+    if (!event?.eventId) return null;
+    const changes = Array.isArray(event?.changes) ? event.changes : [];
+    return {
+      event_id: event.eventId,
+      settings_record_id: event.settingsRecordId || 'shared-settings',
+      version_before: event.versionBefore,
+      version_after: versionAfter ?? event.versionAfter,
+      authorized_user_id: userId,
+      display_name: event.displayName || 'Unknown',
+      device_installation_id: event.deviceInstallationId,
+      device_label: event.deviceLabel || 'Unknown device',
+      device_platform: event.devicePlatform || 'Browser',
+      app_environment: event.appEnvironment || 'Unknown',
+      app_version: event.appVersion || 'Unknown',
+      client_created_at: event.clientCreatedAt || nowIso(),
+      status,
+      changed_fields: changes,
+      previous_values: Object.fromEntries(changes.map((change) => [change.key, change.previousValue])),
+      new_values: Object.fromEntries(changes.map((change) => [change.key, change.newValue])),
+      change_note: event.changeNote || null,
     };
   }
 
@@ -1114,12 +1267,13 @@
             }
             emit();
           });
-          if (session) {
-            subscribeRealtime();
-            subscribeSharedSettingsRealtime();
-            await reconcile();
-            await reconcileSharedSettings();
-            await reconcileFoodLibrary();
+      if (session) {
+        subscribeRealtime();
+        subscribeSharedSettingsRealtime();
+        await reconcile();
+        await reconcileSharedSettings();
+        await reconcileSettingsAudit().catch(() => {});
+        await reconcileFoodLibrary();
           }
         }
       } catch (error) {
@@ -1495,7 +1649,7 @@
       return getSyncStatus();
     }
 
-    function createSharedSettingsOperation(settings, baseVersion = null) {
+    function createSharedSettingsOperation(settings, baseVersion = null, auditEvent = undefined) {
       return {
         id: createId(),
         recordId: 'shared-settings',
@@ -1503,6 +1657,7 @@
         type: baseVersion ? 'update-shared-settings' : 'insert-shared-settings',
         payload: normalizeSharedSettings(settings),
         baseVersion,
+        auditEvent: auditEvent === null ? null : (auditEvent || createSettingsAuditEvent(getSharedSettingsCache(), settings, baseVersion)),
         createdAt: nowIso(),
         retryCount: 0,
         lastErrorCategory: '',
@@ -1521,11 +1676,18 @@
         type: baseVersion ? 'update-shared-settings' : 'insert-shared-settings',
         retryCount,
         coalescedCount,
+        auditEvent: existingQueue[0]?.auditEvent
+          ? {
+            ...existingQueue[0].auditEvent,
+            changes: sharedSettingsChanges(existingQueue[0].auditEvent.previousSettings || existingQueue[0].payload, operation.payload),
+          }
+          : operation.auditEvent,
       };
     }
 
     function saveSharedSettings(settings) {
-      const cachedVersion = getSharedSettingsCache().version || null;
+      const previousSettings = getSharedSettingsCache();
+      const cachedVersion = previousSettings.version || null;
       const pendingBaseVersion = getSharedSettingsQueue().find((operation) => operation.baseVersion != null)?.baseVersion ?? null;
       const normalized = normalizeSharedSettings({
         ...settings,
@@ -1534,7 +1696,8 @@
       });
       const baseVersion = pendingBaseVersion || normalized.version || cachedVersion;
       setSharedSettingsCache({ ...normalized, version: normalized.version || cachedVersion });
-      const operation = createSharedSettingsOperation(normalized, baseVersion);
+      const changes = sharedSettingsChanges(previousSettings, normalized);
+      const operation = createSharedSettingsOperation(normalized, baseVersion, changes.length ? createSettingsAuditEvent(previousSettings, normalized, baseVersion) : null);
       const queuedOperation = coalesceSharedSettingsOperation(operation);
       setSharedSettingsQueue([queuedOperation]);
       emit();
@@ -1543,6 +1706,14 @@
     }
 
     function acknowledgeSharedSettings(operation, remote) {
+      const acceptedEvent = {
+        ...operation.auditEvent,
+        versionAfter: remote?.version || null,
+        status: 'Accepted',
+        acceptedAt: nowIso(),
+        authorizedUserId: session?.user?.id || null,
+      };
+      setSettingsAuditCache([acceptedEvent, ...getSettingsAuditCache().filter((event) => event.eventId !== acceptedEvent.eventId)]);
       const queue = getSharedSettingsQueue().filter((item) => item.id !== operation.id);
       setSharedSettingsQueue(queue.map((item) => ({ ...item, baseVersion: remote.version, type: 'update-shared-settings' })));
       if (queue.length) {
@@ -1551,6 +1722,39 @@
         mergeSharedSettings(remote);
       }
       setMetadata({ lastError: '' });
+    }
+
+    async function appendSettingsAuditEvent(event, status) {
+      const client = await ensureClient();
+      if (!client || !session?.user?.id || !event?.eventId) return;
+      await client.rpc('append_lee_lee_settings_audit_event', {
+        p_audit_event: auditEventToRemote(event, session.user.id, status, null),
+      });
+      setSettingsAuditCache([{ ...event, status, authorizedUserId: session.user.id }, ...getSettingsAuditCache().filter((item) => item.eventId !== event.eventId)]);
+    }
+
+    async function reconcileSettingsAudit() {
+      const client = await ensureClient();
+      if (!client || !session?.user?.id) return getSettingsAuditHistory();
+      const { data, error } = await client
+        .from(REMOTE_SETTINGS_AUDIT_TABLE)
+        .select('*')
+        .eq('authorized_user_id', session.user.id)
+        .order('accepted_at', { ascending: false });
+      if (error) throw error;
+      const remoteEvents = (data || []).map(auditEventFromRemote);
+      setSettingsAuditCache([...remoteEvents, ...getSettingsAuditCache().filter((event) => !remoteEvents.some((remote) => remote.eventId === event.eventId && remote.status === event.status))]);
+      return getSettingsAuditHistory();
+    }
+
+    function getSettingsAuditHistory() {
+      const pending = getSharedSettingsQueue().map((operation) => ({
+        ...operation.auditEvent,
+        status: operation.state === 'failed' ? 'Failed' : 'Requested',
+      })).filter((event) => event?.eventId);
+      const events = [...pending, ...getSettingsAuditCache()];
+      return events.filter((event, index, list) => list.findIndex((item) => item.eventId === event.eventId) === index)
+        .sort((left, right) => String(right.acceptedAt || right.clientCreatedAt || '').localeCompare(String(left.acceptedAt || left.clientCreatedAt || '')));
     }
 
     async function registerSharedSettingsConflict(operation, knownSharedSettings = null) {
@@ -1574,6 +1778,7 @@
       ]);
       const latest = getSharedSettingsQueue().at(-1)?.payload || operation.payload;
       setSharedSettingsCache({ ...latest, syncStatus: 'conflict', syncError: 'Shared care settings changed on another device. Review before replacing local settings.' });
+      appendSettingsAuditEvent(operation.auditEvent, 'Conflict').catch(() => {});
     }
 
     let processSharedSettingsQueuePromise = null;
@@ -1596,11 +1801,10 @@
         try {
           const remotePayload = sharedSettingsToRemote(attemptedOperation.payload, session.user.id);
           if (!attemptedOperation.baseVersion) {
-            const { data, error } = await client
-              .from(REMOTE_SHARED_SETTINGS_TABLE)
-              .insert(remotePayload)
-              .select()
-              .single();
+            const { data, error } = await client.rpc('insert_lee_lee_shared_settings_with_audit', {
+              p_settings: remotePayload,
+              p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', 1),
+            });
             if (error) {
               if (isDuplicateKeyError(error)) {
                 await registerSharedSettingsConflict(attemptedOperation);
@@ -1612,7 +1816,7 @@
             continue;
           }
           const { data, error } = await client
-            .rpc('update_lee_lee_shared_settings_with_version', {
+            .rpc('update_lee_lee_shared_settings_with_audit', {
               p_expected_version: Number(attemptedOperation.baseVersion),
               p_patient_name: remotePayload.patient_name,
               p_patient_date_of_birth: remotePayload.patient_date_of_birth,
@@ -1621,6 +1825,7 @@
               p_last_edited_by: remotePayload.last_edited_by,
               p_payload: remotePayload.payload,
               p_app_schema_version: remotePayload.app_schema_version,
+              p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', Number(attemptedOperation.baseVersion) + 1),
             });
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
@@ -1974,6 +2179,7 @@
         try {
           await reconcile(options);
           await reconcileSharedSettings();
+          await reconcileSettingsAudit().catch(() => {});
           await reconcileFoodLibrary();
           cleanupIdenticalConflicts();
           const status = getSyncStatus();
@@ -2114,14 +2320,16 @@
     globalThis.addEventListener?.('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         reconcile().catch(() => {});
-        reconcileSharedSettings().catch(() => {});
-        reconcileFoodLibrary().catch(() => {});
+      reconcileSharedSettings().catch(() => {});
+      reconcileSettingsAudit().catch(() => {});
+      reconcileFoodLibrary().catch(() => {});
       }
     });
     globalThis.setInterval?.(() => {
       if (session) {
         reconcile().catch(() => {});
         reconcileSharedSettings().catch(() => {});
+        reconcileSettingsAudit().catch(() => {});
         reconcileFoodLibrary().catch(() => {});
       }
     }, 5 * 60 * 1000);
@@ -2137,6 +2345,9 @@
       getSyncDiagnostics,
       getDeviceIdentity,
       setDeviceIdentity,
+      getDeviceInstallationId,
+      getDeviceLabel,
+      getDevicePlatform,
       queueUpsert,
       queueSoftDelete,
       queueRestore,
@@ -2145,6 +2356,8 @@
       processFoodLibraryQueue,
       syncNow: syncAll,
       syncSharedSettings: reconcileSharedSettings,
+      syncSettingsAudit: reconcileSettingsAudit,
+      getSettingsAuditHistory,
       syncFoodLibrary: reconcileFoodLibrary,
       getConflicts,
       keepSharedVersion,
@@ -2183,9 +2396,13 @@
     getConfig,
     getDeviceIdentity,
     setDeviceIdentity,
+    getDeviceInstallationId,
+    getDeviceLabel,
+    getDevicePlatform,
     DEVICE_USERS,
     REMOTE_RECORDS_TABLE,
     REMOTE_SHARED_SETTINGS_TABLE,
+    REMOTE_SETTINGS_AUDIT_TABLE,
     REMOTE_FOODS_TABLE,
     REMOTE_SAVED_MEALS_TABLE,
     sanitizeRecordForRemote,
@@ -2197,6 +2414,7 @@
     sharedSettingsToRemote,
     sharedSettingsFromRemote,
     sharedSettingsAreSame,
+    sharedSettingsChanges,
     recordMeaningFingerprint,
   };
 })();
