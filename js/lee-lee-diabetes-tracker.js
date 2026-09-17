@@ -6777,6 +6777,11 @@
       ['Last food attempt result', foodAttempt ? `${foodAttempt.succeeded} succeeded / ${foodAttempt.failed} failed` : 'Not yet'],
       ['Last full sync attempt', formatDiagnosticTimestamp(syncStatus.lastFullSyncAttemptAt)],
       ['Last error', syncStatus.lastError || diagnostics?.lastError || 'None'],
+      ['Error category', diagnostics?.lastErrorCategory || 'None'],
+      ['Error code', diagnostics?.lastErrorCode || 'None'],
+      ['Error message', diagnostics?.lastErrorMessage || 'None'],
+      ['Error details', diagnostics?.lastErrorDetails || 'None'],
+      ['Error hint', diagnostics?.lastErrorHint || 'None'],
       ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
     ];
     return `

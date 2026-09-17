@@ -140,6 +140,20 @@
     return metadata;
   }
 
+  function setRefreshError(error, fallbackMessage) {
+    const details = sanitizeSupabaseError(error);
+    const category = categorizeError(error);
+    const suffix = details.code ? ` (${details.code})` : '';
+    setMetadata({
+      lastError: `${fallbackMessage}${suffix}`,
+      lastErrorCategory: category,
+      lastErrorCode: details.code,
+      lastErrorMessage: details.message,
+      lastErrorDetails: details.details,
+      lastErrorHint: details.hint,
+    });
+  }
+
   function getQueue() {
     return readJson(SYNC_QUEUE_KEY, []).filter((operation) => operation && operation.id);
   }
@@ -1040,6 +1054,11 @@
         lastSyncAttempt: metadata.lastSyncAttempt || null,
         lastFoodSyncAttempt: metadata.lastFoodSyncAttempt || null,
         lastError: metadata.lastError || '',
+        lastErrorCategory: metadata.lastErrorCategory || '',
+        lastErrorCode: metadata.lastErrorCode || '',
+        lastErrorMessage: metadata.lastErrorMessage || '',
+        lastErrorDetails: metadata.lastErrorDetails || '',
+        lastErrorHint: metadata.lastErrorHint || '',
       };
     }
 
@@ -1405,7 +1424,7 @@
         .eq('user_id', session.user.id)
         .order('recorded_at', { ascending: false });
       if (error) {
-        setMetadata({ lastError: 'Shared records could not be refreshed.' });
+        setRefreshError(error, 'Shared records could not be refreshed.');
         emit();
         return getSyncStatus();
       }
@@ -1470,7 +1489,7 @@
         }
         await processSharedSettingsQueue();
       } catch (error) {
-        setMetadata({ lastError: 'Patient and clinic information could not be refreshed.' });
+        setRefreshError(error, 'Patient and clinic information could not be refreshed.');
       }
       emit();
       return getSyncStatus();
@@ -1949,7 +1968,7 @@
       if (fullSyncPromise) return fullSyncPromise;
       fullSyncPromise = (async () => {
         setMetadata({ lastFullSyncAttemptAt: nowIso() });
-        setMetadata({ lastError: '' });
+        setMetadata({ lastError: '', lastErrorCategory: '', lastErrorCode: '', lastErrorMessage: '', lastErrorDetails: '', lastErrorHint: '' });
         cleanupIdenticalConflicts();
         emit();
         try {

@@ -205,6 +205,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
           return Promise.resolve({ data: builder.current, error: null });
         },
         maybeSingle() {
+          if (tableName === 'lee_lee_shared_settings' && options.sharedSettingsSelectError) {
+            return Promise.resolve({ data: null, error: options.sharedSettingsSelectError });
+          }
           const row = tableName === 'lee_lee_shared_settings'
             ? tableRows.find((item) => item.user_id === builder.filters?.user_id)
             : tableRows.find((item) => item.id === builder.filters?.id);
@@ -219,6 +222,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
         },
         order() {
           orderCalls.push({ tableName });
+          if (tableName === 'lee_lee_records' && options.recordSelectError) {
+            return Promise.resolve({ data: null, error: options.recordSelectError });
+          }
           if ((tableName === 'lee_lee_foods' || tableName === 'lee_lee_saved_meals') && options.foodLibrarySelectError) {
             return Promise.resolve({ data: null, error: options.foodLibrarySelectError });
           }
@@ -1781,6 +1787,26 @@ test('failed food pull never advances full sync success time even with an empty 
   assert.ok(result.lastError);
   assert.equal(result.lastSuccessfulSyncAt, before);
   assert.notEqual(result.state, 'syncing');
+});
+
+test('refresh failures retain sanitized Supabase diagnostics without changing local settings', async () => {
+  const supabase = createMockSupabase([], {
+    recordSelectError: { code: 'PGRST205', message: 'Could not find the table in the schema cache', details: 'lee_lee_records' },
+  });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const store = createDocumentStore();
+  const repository = context.LeeLeeTrackerSync.createRepository({ ...store });
+  await repository.initialize();
+  const before = repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams;
+  const result = await repository.syncNow();
+  const diagnostics = repository.getSyncDiagnostics();
+  assert.equal(result.lastError, 'Shared records could not be refreshed. (PGRST205)');
+  assert.equal(diagnostics.lastErrorCategory, 'remote');
+  assert.equal(diagnostics.lastErrorCode, 'PGRST205');
+  assert.equal(diagnostics.lastErrorMessage, 'Could not find the table in the schema cache');
+  assert.equal(diagnostics.lastErrorDetails, 'lee_lee_records');
+  assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, before);
+  assert.equal(result.lastSuccessfulSyncAt, null);
 });
 
 
