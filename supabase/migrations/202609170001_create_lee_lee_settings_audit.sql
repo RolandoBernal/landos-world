@@ -8,6 +8,7 @@ create table if not exists public.lee_lee_settings_audit (
   version_after integer,
   authorized_user_id uuid not null references auth.users(id) on delete restrict,
   display_name text not null default 'Unknown',
+  device_profile text not null default 'Unknown device',
   device_installation_id text not null,
   device_label text not null default 'Unknown device',
   device_platform text not null default 'Browser',
@@ -22,6 +23,12 @@ create table if not exists public.lee_lee_settings_audit (
   change_note text,
   created_at timestamptz not null default pg_catalog.now()
 );
+
+create index if not exists lee_lee_settings_audit_user_accepted_idx
+  on public.lee_lee_settings_audit (authorized_user_id, accepted_at desc);
+
+create index if not exists lee_lee_settings_audit_record_accepted_idx
+  on public.lee_lee_settings_audit (settings_record_id, accepted_at desc);
 
 alter table public.lee_lee_settings_audit enable row level security;
 revoke all on public.lee_lee_settings_audit from anon, public, authenticated;
@@ -70,13 +77,13 @@ begin
   if p_audit_event is not null and p_audit_event->>'event_id' is not null then
   insert into public.lee_lee_settings_audit (
     event_id, settings_record_id, version_before, version_after, authorized_user_id,
-    display_name, device_installation_id, device_label, device_platform, app_environment,
+    display_name, device_profile, device_installation_id, device_label, device_platform, app_environment,
     app_version, client_created_at, accepted_at, status, changed_fields,
     previous_values, new_values, change_note
   )
   values (
     (p_audit_event->>'event_id')::uuid, 'shared-settings', null, inserted_settings.version, current_user_id,
-    coalesce(p_audit_event->>'display_name', 'Unknown'), p_audit_event->>'device_installation_id',
+    coalesce(p_audit_event->>'display_name', 'Unknown'), coalesce(p_audit_event->>'device_profile', 'Unknown device'), p_audit_event->>'device_installation_id',
     coalesce(p_audit_event->>'device_label', 'Unknown device'), coalesce(p_audit_event->>'device_platform', 'Browser'),
     coalesce(p_audit_event->>'app_environment', 'Unknown'), coalesce(p_audit_event->>'app_version', 'Unknown'),
     (p_audit_event->>'client_created_at')::timestamptz, pg_catalog.now(), 'Accepted',
@@ -128,13 +135,13 @@ begin
   if updated_settings.user_id is not null and p_audit_event is not null and p_audit_event->>'event_id' is not null then
     insert into public.lee_lee_settings_audit (
       event_id, settings_record_id, version_before, version_after, authorized_user_id,
-      display_name, device_installation_id, device_label, device_platform, app_environment,
+      display_name, device_profile, device_installation_id, device_label, device_platform, app_environment,
       app_version, client_created_at, accepted_at, status, changed_fields,
       previous_values, new_values, change_note
     )
     values (
       (p_audit_event->>'event_id')::uuid, 'shared-settings', p_expected_version, updated_settings.version, current_user_id,
-      coalesce(p_audit_event->>'display_name', 'Unknown'), p_audit_event->>'device_installation_id',
+      coalesce(p_audit_event->>'display_name', 'Unknown'), coalesce(p_audit_event->>'device_profile', 'Unknown device'), p_audit_event->>'device_installation_id',
       coalesce(p_audit_event->>'device_label', 'Unknown device'), coalesce(p_audit_event->>'device_platform', 'Browser'),
       coalesce(p_audit_event->>'app_environment', 'Unknown'), coalesce(p_audit_event->>'app_version', 'Unknown'),
       (p_audit_event->>'client_created_at')::timestamptz, pg_catalog.now(), 'Accepted',
@@ -164,12 +171,12 @@ begin
   end if;
   insert into public.lee_lee_settings_audit (
     event_id, settings_record_id, version_before, version_after, authorized_user_id,
-    display_name, device_installation_id, device_label, device_platform, app_environment,
+    display_name, device_profile, device_installation_id, device_label, device_platform, app_environment,
     app_version, client_created_at, status, changed_fields, previous_values, new_values, change_note
   ) values (
     (p_audit_event->>'event_id')::uuid, 'shared-settings', nullif(p_audit_event->>'version_before', '')::integer,
     nullif(p_audit_event->>'version_after', '')::integer, current_user_id,
-    coalesce(p_audit_event->>'display_name', 'Unknown'), p_audit_event->>'device_installation_id',
+    coalesce(p_audit_event->>'display_name', 'Unknown'), coalesce(p_audit_event->>'device_profile', 'Unknown device'), p_audit_event->>'device_installation_id',
     coalesce(p_audit_event->>'device_label', 'Unknown device'), coalesce(p_audit_event->>'device_platform', 'Browser'),
     coalesce(p_audit_event->>'app_environment', 'Unknown'), coalesce(p_audit_event->>'app_version', 'Unknown'),
     (p_audit_event->>'client_created_at')::timestamptz, event_status,
