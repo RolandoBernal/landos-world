@@ -67,6 +67,21 @@
   color: #ffffff;
 }
 
+#lando-home-view .lando_settings_link.digit_clock_menu_toggle {
+  color: #ffffff;
+}
+
+#lando-settings-view {
+  position: relative;
+}
+
+#lando-settings-view > .digit_clock_header .lando_settings_link.digit_clock_menu_toggle {
+  position: absolute;
+  top: var(--landos-page-top-space);
+  right: var(--landos-page-gutter-right);
+  z-index: 14;
+}
+
 .app_theme--lee-lees-tracker {
   --app-accent: #3aa0ff;
   --app-accent-rgb: 58 160 255;
