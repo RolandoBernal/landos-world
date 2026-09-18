@@ -1471,14 +1471,18 @@
   }
 
   function scheduledGameMarkup(game) {
-    return `<article class="vfgt_history_item vfgt_scheduled_card">
-      <span class="vfgt_scheduled_badge">Scheduled</span>
-      <strong class="vfgt_scheduled_opponent">${escapeHtml(game.team2)}</strong>
-      <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
-      ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
-      ${game.gameType ? `<span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>` : ''}
-      ${game.notes ? `<p class="vfgt_scheduled_notes">${escapeHtml(game.notes)}</p>` : ''}
-      <div class="vfgt_actions vfgt_card_actions">
+    const actionsId = `vfgt-scheduled-actions-${game.id}`;
+    return `<article class="vfgt_history_item vfgt_scheduled_card vfgt_collapsible_card" data-vfgt-card="future" data-id="${escapeHtml(game.id)}">
+      <button type="button" class="vfgt_card_summary" data-vfgt-toggle-card aria-expanded="false" aria-controls="${escapeHtml(actionsId)}" aria-label="Show actions for future game against ${escapeHtml(game.team2)}">
+        <span class="vfgt_scheduled_badge">Scheduled</span>
+        <strong class="vfgt_scheduled_opponent">${escapeHtml(game.team2)}</strong>
+        <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
+        ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
+        ${game.gameType ? `<span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>` : ''}
+        ${game.notes ? `<p class="vfgt_scheduled_notes">${escapeHtml(game.notes)}</p>` : ''}
+        <span class="vfgt_card_chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="vfgt_actions vfgt_card_actions" id="${escapeHtml(actionsId)}" hidden>
         <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="quick-start" data-id="${escapeHtml(game.id)}">Quick Start</button>
         <button type="button" class="vfgt_button" data-vfgt-action="edit-scheduled" data-id="${escapeHtml(game.id)}">Edit</button>
         <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-scheduled" data-id="${escapeHtml(game.id)}">Delete</button>
@@ -1652,16 +1656,27 @@
       ? `<div class="vfgt_history" role="list">
           ${currentGames.map((game) => {
             const score = finalScores(game);
-            return `<button type="button" class="vfgt_history_item" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" role="listitem">
-              <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
-              <span class="vfgt_history_matchup">
-                <strong class="vfgt_history_team vfgt_history_team--home">${escapeHtml(game.team1)}</strong>
-                <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
-                <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
-              </span>
-              ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
-              <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
-            </button>`;
+            const actionsId = `vfgt-past-actions-${game.id}`;
+            return `<article class="vfgt_history_item vfgt_collapsible_card vfgt_past_card" data-vfgt-card="past" data-id="${escapeHtml(game.id)}" role="listitem">
+              <div class="vfgt_past_card_header">
+                <button type="button" class="vfgt_card_summary" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" aria-label="Open summary for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}">
+                  <span class="vfgt_scheduled_badge">Completed</span>
+                  <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
+                  <span class="vfgt_history_matchup">
+                    <strong class="vfgt_history_team vfgt_history_team--home">${escapeHtml(game.team1)}</strong>
+                    <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
+                    <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
+                  </span>
+                  ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
+                  <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
+                </button>
+                <button type="button" class="vfgt_card_expand" data-vfgt-toggle-card aria-expanded="false" aria-controls="${escapeHtml(actionsId)}" aria-label="Show actions for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}"><span class="vfgt_card_chevron" aria-hidden="true">›</span></button>
+              </div>
+              <div class="vfgt_actions vfgt_card_actions" id="${escapeHtml(actionsId)}" hidden>
+                <button type="button" class="vfgt_button" data-vfgt-action="edit-saved" data-id="${escapeHtml(game.id)}">Edit</button>
+                <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved" data-id="${escapeHtml(game.id)}">Delete</button>
+              </div>
+            </article>`;
           }).join('')}
         </div>`
       : `<div class="vfgt_empty">
@@ -1851,7 +1866,7 @@
           ${phase === 'halftime' && remaining === 0 ? '<span class="vfgt_stoppage">Halftime complete</span>' : ''}
         </section>
         ${renderScoreboard(state)}
-        <div class="vfgt_actions">${action}</div>
+        <div class="vfgt_actions vfgt_live_action_rail">${action}</div>
       </section>`;
     startRefreshTimer();
   }
@@ -2121,7 +2136,7 @@
   }
 
   function handleClick(event) {
-    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
+    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score], [data-vfgt-toggle-card]');
     const now = Date.now();
     if (!button) return;
     if (event.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS) {
@@ -2131,6 +2146,20 @@
     if (!guardAction(event, button)) return;
     if (event.type === 'pointerup' || event.type === 'touchend') lastDirectActivationAt = now;
     void unlockAudio();
+    if (button.dataset.vfgtToggleCard !== undefined) {
+      const card = button.closest('[data-vfgt-card]');
+      const actions = card?.querySelector('.vfgt_card_actions');
+      if (!card || !actions) return;
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      card.classList.toggle('is-expanded', !expanded);
+      card.querySelectorAll('[data-vfgt-toggle-card]').forEach((toggle) => {
+        toggle.setAttribute('aria-expanded', String(!expanded));
+        const label = toggle.getAttribute('aria-label') || '';
+        toggle.setAttribute('aria-label', label.replace(/^(Show|Hide)/, !expanded ? 'Hide' : 'Show'));
+      });
+      actions.hidden = expanded;
+      return;
+    }
     const action = button.dataset.vfgtAction;
     if (button.dataset.vfgtManualScore) {
       const form = button.closest('[data-vfgt-manual-form], [data-vfgt-edit-form]');

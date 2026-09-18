@@ -314,6 +314,19 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   const scheduledId = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1'))[0].id);
 
   await future.locator('summary').click();
+  const futureCard = future.locator('.vfgt_scheduled_card');
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
+  await futureCard.locator('.vfgt_card_summary').click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
+  await futureCard.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Delete this scheduled game?');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
+  await page.waitForTimeout(400);
+  await futureCard.locator('.vfgt_card_summary').click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
+  await page.waitForTimeout(400);
+  await futureCard.locator('.vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Edit' }).click();
   await app.getByLabel('Opponent').fill('Franklin Road Academy');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
@@ -321,6 +334,7 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   await expect(future).not.toContainText('Brentwood Academy');
 
   await future.locator('summary').click();
+  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Quick Start' }).click();
   await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Start game vs. Franklin Road Academy?');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
@@ -348,7 +362,10 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   expect(saved[0].id).toBe(scheduledId);
   expect(saved[0].status).toBe('completed');
   expect(saved[0].team2).toBe('Franklin Road Academy');
-  await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Franklin Road Academy');
+  const pastSection = app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' });
+  await expect(pastSection).toContainText('Franklin Road Academy');
+  await pastSection.locator('.vfgt_past_card .vfgt_card_summary').click();
+  await expect(app.getByRole('heading', { name: 'FINAL' })).toBeVisible();
 });
 
 test('VFGT unified Add Game opens the played-game workflow and cancellation stays non-destructive', async ({ page }) => {
@@ -379,7 +396,10 @@ async function startVfgtFirstHalf(page) {
   await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByLabel('Opponent').fill('Hume-Fogg');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
-  await app.locator('.vfgt_scheduled_card').getByRole('button', { name: 'Quick Start' }).click();
+  const future = app.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
+  await future.locator('summary').click();
+  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
+  await future.getByRole('button', { name: 'Quick Start' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
   return app;
@@ -409,8 +429,11 @@ test('VFGT active half becomes a fullscreen phone landscape scoreboard without d
     const clockNode = document.querySelector('.vfgt_clock');
     const display = document.querySelector('[data-vfgt-seven-segment-display]');
     const phase = document.querySelector('.vfgt_phase');
+    const actionRail = document.querySelector('.vfgt_live_action_rail');
+    const actionButton = actionRail.querySelector('.vfgt_button');
     const bodyStyle = getComputedStyle(document.body);
     const liveStyle = getComputedStyle(liveNode);
+    const actionRailStyle = getComputedStyle(actionRail);
     const phaseStyle = getComputedStyle(phase);
     const liveBox = liveNode.getBoundingClientRect();
     const panelBox = panel.getBoundingClientRect();
@@ -425,6 +448,7 @@ test('VFGT active half becomes a fullscreen phone landscape scoreboard without d
         height: liveBox.height,
         left: liveBox.left,
         top: liveBox.top,
+        bottom: liveBox.bottom,
       },
       panelBox: {
         width: panelBox.width,
@@ -445,6 +469,12 @@ test('VFGT active half becomes a fullscreen phone landscape scoreboard without d
       phaseText: phase.textContent.trim(),
       phaseTextTransform: phaseStyle.textTransform,
       phaseHeight: phaseBox.height,
+      actionRail: {
+        bottom: actionRail.getBoundingClientRect().bottom,
+        paddingBottom: actionRailStyle.paddingBottom,
+        buttonBottom: actionButton.getBoundingClientRect().bottom,
+        buttonHeight: actionButton.getBoundingClientRect().height,
+      },
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -458,6 +488,9 @@ test('VFGT active half becomes a fullscreen phone landscape scoreboard without d
   expect(Math.round(layout.liveBox.height)).toBe(layout.viewport.height);
   expect(layout.liveBox.left).toBe(0);
   expect(layout.liveBox.top).toBe(0);
+  expect(layout.actionRail.buttonBottom).toBeLessThanOrEqual(layout.liveBox.bottom);
+  expect(layout.actionRail.buttonHeight).toBeGreaterThanOrEqual(48);
+  expect(layout.actionRail.paddingBottom).toContain('20px');
   expect(layout.phaseText).toBe('First Half');
   expect(layout.phaseTextTransform).toBe('uppercase');
   expect(layout.clockBox.width).toBeGreaterThan(layout.viewport.width * 0.78);
@@ -487,6 +520,13 @@ test('VFGT rotation back to portrait keeps game state, score, and the original s
   await expect(app.locator('.vfgt_scoreboard')).toBeVisible();
   await expect(app.getByRole('button', { name: 'End First Half' })).toBeVisible();
   await expect(app.getByLabel('Violet score')).toHaveValue('1');
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    const actionBounds = await app.getByRole('button', { name: 'End First Half' }).boundingBox();
+    expect(actionBounds).not.toBeNull();
+    expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(viewport.height);
+  }
 
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:active-game:v1')));
   expect(after.phase).toBe('first_half');

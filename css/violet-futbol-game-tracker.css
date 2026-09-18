@@ -507,6 +507,92 @@
   justify-items: center;
 }
 
+.vfgt_collapsible_card {
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+}
+
+.vfgt_card_summary {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  min-height: 72px;
+  padding: 0.85rem 3.2rem 0.85rem 0.85rem;
+  color: var(--vfgt-text);
+  text-align: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vfgt_card_summary:hover,
+.vfgt_card_summary:focus-visible,
+.vfgt_card_expand:hover,
+.vfgt_card_expand:focus-visible {
+  background: rgb(74 163 255 / 8%);
+}
+
+.vfgt_card_summary:focus-visible,
+.vfgt_card_expand:focus-visible {
+  outline: 3px solid #82bdff;
+  outline-offset: -3px;
+}
+
+.vfgt_card_chevron {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  color: var(--vfgt-muted-strong);
+  font-size: 1.65rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition: transform 150ms ease;
+}
+
+.vfgt_collapsible_card.is-expanded .vfgt_card_chevron {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.vfgt_card_actions {
+  padding: 0.75rem 0.85rem max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.vfgt_past_card_header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.vfgt_past_card .vfgt_card_summary {
+  padding-right: 0.85rem;
+}
+
+.vfgt_card_expand {
+  position: relative;
+  width: 52px;
+  min-width: 52px;
+  min-height: 72px;
+  padding: 0;
+  color: var(--vfgt-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vfgt_card_expand .vfgt_card_chevron {
+  right: 0.85rem;
+}
+
+.vfgt_scheduled_card .vfgt_card_summary {
+  justify-items: center;
+  text-align: center;
+}
+
 .vfgt_scheduled_badge {
   color: var(--vfgt-muted-strong);
   font-size: 0.75rem;
@@ -846,7 +932,13 @@
 }
 
 .vfgt_live {
-  padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+  padding-bottom: 0;
+}
+
+.vfgt_live_action_rail {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 1rem calc(env(safe-area-inset-bottom) + 20px);
 }
 
 .vfgt_confirm {
@@ -1490,7 +1582,7 @@
     width: 100vw;
     height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden;
+    overflow: visible;
     background: var(--vfgt-bg);
   }
 
@@ -1503,7 +1595,7 @@
   .app_theme--violet-futbol-game-tracker:not([hidden]):has(.vfgt_live--running-half) #violet-futbol-game-tracker-root {
     width: 100vw;
     height: 100dvh;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .app_theme .vfgt_live--running-half {
@@ -1520,8 +1612,8 @@
     width: 100vw;
     height: 100dvh;
     margin: 0;
-    padding: var(--landscape-safe-top) var(--landscape-safe-right) var(--landscape-safe-bottom) var(--landscape-safe-left);
-    overflow: hidden;
+    padding: var(--landscape-safe-top) var(--landscape-safe-right) 0 var(--landscape-safe-left);
+    overflow: visible;
     background: var(--vfgt-bg);
     grid-template-rows: minmax(0, 1fr) auto;
   }
@@ -1535,7 +1627,12 @@
   .vfgt_live--running-half .vfgt_actions {
     width: min(100%, 28rem);
     margin-top: 0;
-    padding-bottom: 0;
+  }
+
+  .vfgt_live--running-half .vfgt_live_action_rail {
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: calc(env(safe-area-inset-bottom) + 20px);
+    padding-left: max(0.5rem, env(safe-area-inset-left));
   }
 
   .vfgt_live--running-half .vfgt_clock_panel {
@@ -1563,7 +1660,7 @@
 
   .vfgt_live--running-half .vfgt_clock {
     width: min(100%, calc((100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 2.65rem) * 2.6));
-    max-height: calc(100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 6.2rem);
+    max-height: calc(100dvh - var(--landscape-safe-top) - var(--landscape-safe-bottom) - 7.45rem);
     padding: clamp(0.28rem, 1.5dvh, 0.58rem);
     overflow: hidden;
     border-color: rgb(74 163 255 / 34%);
