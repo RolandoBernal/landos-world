@@ -424,7 +424,7 @@
 }
 
 .vfgt_settings_note {
-  margin: 0;
+  margin: 20px 0;
   color: var(--vfgt-muted);
   font-size: 0.9rem;
 }
@@ -748,6 +748,68 @@
 .vfgt_history_game_type {
   color: var(--vfgt-muted);
   font-size: 0.92rem;
+}
+
+.vfgt_map_link {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.35rem 0.45rem;
+  color: var(--vfgt-accent-strong);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+  overflow-wrap: anywhere;
+  border-radius: 0.35rem;
+  touch-action: manipulation;
+}
+
+.vfgt_map_link:hover,
+.vfgt_map_link:focus-visible {
+  color: var(--vfgt-text);
+  background: rgb(74 163 255 / 10%);
+}
+
+.vfgt_map_link:focus-visible {
+  outline: 3px solid #82bdff;
+  outline-offset: 1px;
+}
+
+.vfgt_map_link_icon {
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.vfgt_map_link_venue,
+.vfgt_map_link_address {
+  display: block;
+}
+
+.vfgt_map_link--card {
+  width: fit-content;
+}
+
+.vfgt_scheduled_card .vfgt_map_link--card {
+  justify-self: center;
+  text-align: center;
+}
+
+.vfgt_past_card_header .vfgt_map_link--card {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0 0.85rem 0.45rem;
+}
+
+.vfgt_map_link--detail,
+.vfgt_map_link--live {
+  width: fit-content;
+  margin-inline: auto;
 }
 
 .vfgt_history_game_type {

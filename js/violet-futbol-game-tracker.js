@@ -902,8 +902,11 @@
   }
 
   function restoreRecoveryCandidates(indices) {
-    const rawCollection = readJson(SAVED_GAMES_KEY, null);
-    if (!Array.isArray(rawCollection)) return { error: 'The current saved-game source is not a readable array. No import was attempted.' };
+    const storedSource = readStoredJson(SAVED_GAMES_KEY);
+    if (storedSource.present && (!storedSource.valid || !Array.isArray(storedSource.value))) {
+      return { error: 'The current saved-game source is not a readable array. No import was attempted.' };
+    }
+    const rawCollection = storedSource.present ? storedSource.value : [];
     const selected = indices.map((index) => recoveryScan?.candidates?.[index]).filter(Boolean);
     if (!selected.length) return { error: 'Select at least one candidate before restoring.' };
     const backup = {
@@ -1084,6 +1087,39 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function gameLocationParts(game = {}) {
+    const location = String(game.location || '').trim();
+    const venue = String(game.venue || game.venueName || game.locationName || '').trim();
+    const address = String(game.address || game.fullAddress || game.streetAddress || '').trim();
+    const resolvedAddress = address || (venue ? location : '');
+    const resolvedVenue = venue || (!address ? location : '');
+    const display = resolvedVenue && resolvedAddress && resolvedVenue !== resolvedAddress
+      ? `<span class="vfgt_map_link_venue">${escapeHtml(resolvedVenue)}</span><span class="vfgt_map_link_address">${escapeHtml(resolvedAddress)}</span>`
+      : escapeHtml(resolvedVenue || resolvedAddress || location);
+    return {
+      venue: resolvedVenue,
+      address: resolvedAddress,
+      display,
+      label: resolvedVenue || resolvedAddress || location,
+    };
+  }
+
+  function buildAppleMapsUrl(game = {}) {
+    const parts = gameLocationParts(game);
+    if (!parts.label) return '';
+    const params = [];
+    if (parts.address) params.push(`address=${encodeURIComponent(parts.address)}`);
+    params.push(`q=${encodeURIComponent(parts.venue || parts.address)}`);
+    return `https://maps.apple.com/?${params.join('&')}`;
+  }
+
+  function mapLinkMarkup(game, className = 'vfgt_map_link') {
+    const parts = gameLocationParts(game);
+    const url = buildAppleMapsUrl(game);
+    if (!url) return '';
+    return `<a class="${className}" data-vfgt-map-link href="${escapeHtml(url)}" aria-label="Open ${escapeHtml(parts.label)} in Apple Maps"><span class="vfgt_map_link_icon" aria-hidden="true">⌖</span>${parts.display}</a>`;
   }
 
   function accessibleClockLabel(phase, totalSeconds) {
@@ -1486,7 +1522,7 @@
         <span class="vfgt_scheduled_badge">Scheduled</span>
         <strong class="vfgt_scheduled_opponent">${escapeHtml(game.team2)}</strong>
         <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
-        ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
+        ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--card')}
         ${game.gameType ? `<span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>` : ''}
         ${game.notes ? `<p class="vfgt_scheduled_notes">${escapeHtml(game.notes)}</p>` : ''}
         <span class="vfgt_card_chevron" aria-hidden="true">›</span>
@@ -1676,10 +1712,10 @@
                     <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
                     <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
                   </span>
-                  ${game.location ? `<span class="vfgt_history_location">${escapeHtml(game.location)}</span>` : ''}
                   <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
                 </button>
                 <button type="button" class="vfgt_card_expand" data-vfgt-toggle-card aria-expanded="false" aria-controls="${escapeHtml(actionsId)}" aria-label="Show actions for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}"><span class="vfgt_card_chevron" aria-hidden="true">›</span></button>
+                ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--card')}
               </div>
               <div class="vfgt_actions vfgt_card_actions" id="${escapeHtml(actionsId)}" hidden>
                 <button type="button" class="vfgt_button" data-vfgt-action="edit-saved" data-id="${escapeHtml(game.id)}">Edit</button>
@@ -1866,7 +1902,7 @@
             <span class="vfgt_matchup_vs">VS</span>
             <span class="vfgt_matchup_team">${escapeHtml(state.team2)}</span>
           </h1>
-          ${state.location ? `<p>${escapeHtml(state.location)}</p>` : ''}
+          ${mapLinkMarkup(state, 'vfgt_map_link vfgt_map_link--live') ? `<p>${mapLinkMarkup(state, 'vfgt_map_link vfgt_map_link--live')}</p>` : ''}
         </header>
         <section class="vfgt_clock_panel" aria-live="polite">
           <span class="vfgt_phase">${escapeHtml(phaseLabel(phase))}</span>
@@ -1890,7 +1926,7 @@
       <header class="vfgt_page_header">
         <p class="vfgt_kicker">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</p>
         <h1 id="vfgt-summary-title">FINAL</h1>
-        ${game.location ? `<p>${escapeHtml(game.location)}</p>` : ''}
+        ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--detail') ? `<p>${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--detail')}</p>` : ''}
         <p>Half Duration: ${normalizeHalfDurationMinutes(game.halfDurationMinutes)} minutes</p>
       </header>
       <section class="vfgt_final_score">
@@ -2145,6 +2181,28 @@
   }
 
   function handleClick(event) {
+    const mapLink = event.target.closest('[data-vfgt-map-link]');
+    if (mapLink) {
+      const now = Date.now();
+      if (event.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS) {
+        event.preventDefault();
+        return;
+      }
+      const capacitor = window.Capacitor;
+      const nativeShell = Boolean(capacitor?.isNativePlatform?.() || capacitor?.getPlatform?.() === 'ios' || capacitor?.getPlatform?.() === 'android');
+      const appPlugin = capacitor?.Plugins?.App;
+      if (nativeShell) {
+        event.preventDefault();
+        if (event.type === 'pointerup' || event.type === 'touchend') lastDirectActivationAt = now;
+        if (typeof appPlugin?.openUrl === 'function') {
+          Promise.resolve(appPlugin.openUrl({ url: mapLink.href })).catch(() => { window.location.href = mapLink.href; });
+        } else {
+          const externalWindow = window.open(mapLink.href, '_system');
+          if (!externalWindow) window.location.href = mapLink.href;
+        }
+      }
+      return;
+    }
     const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score], [data-vfgt-toggle-card]');
     const now = Date.now();
     if (!button) return;
@@ -2462,6 +2520,8 @@
     startFirstHalf,
     startSecondHalf,
     updateSavedGame,
+    buildAppleMapsUrl,
+    gameLocationParts,
   };
 
   document.addEventListener('DOMContentLoaded', init);

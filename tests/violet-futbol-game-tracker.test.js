@@ -396,6 +396,19 @@ test('completed games serialize with final scores that equal half totals', () =>
   assert.equal(saved.savedAt, '2026-08-22T12:00:00.000Z');
 });
 
+test('Apple Maps links use the complete stored location and encode special characters', () => {
+  const { api } = createRuntime();
+  const fullAddress = api.buildAppleMapsUrl({
+    venue: 'East Nashville Magnet High School',
+    address: '110 Gallatin Ave, Nashville, TN 37206, United States',
+  });
+  assert.equal(fullAddress, 'https://maps.apple.com/?address=110%20Gallatin%20Ave%2C%20Nashville%2C%20TN%2037206%2C%20United%20States&q=East%20Nashville%20Magnet%20High%20School');
+
+  const venueOnly = api.buildAppleMapsUrl({ location: 'St. Mary\'s Field, Unit #2' });
+  assert.equal(venueOnly, "https://maps.apple.com/?q=St.%20Mary's%20Field%2C%20Unit%20%232");
+  assert.equal(api.buildAppleMapsUrl({}), '');
+});
+
 test('manual past games preserve half scores and optional durations', () => {
   const { api } = createRuntime();
   const game = api.createManualGame({
@@ -579,6 +592,8 @@ test('VFGT exposes non-destructive recovery UI and avoids empty/default game ove
   assert.doesNotMatch(source, /savedGames = savedGames\.map\(\(game\) => \(\{ \.\.\.game, status: game\.status \|\| 'completed', phase: 'final' \}\)\)/);
   assert.match(source, /if \(Array\.isArray\(migrationGames\)\)/);
   assert.match(source, /readStoredJson\(SAVED_GAMES_KEY\)/);
+  assert.match(source, /const storedSource = readStoredJson\(SAVED_GAMES_KEY\)/);
+  assert.match(source, /const rawCollection = storedSource\.present \? storedSource\.value : \[\]/);
 });
 
 test('season half duration changes the regulation threshold without changing timer progression', () => {
