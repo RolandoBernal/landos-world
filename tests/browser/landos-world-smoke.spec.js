@@ -776,7 +776,10 @@ test('Weather Settings owns location and refresh controls without losing weather
   await expect(page.getByRole('heading', { name: 'Weather' })).toBeVisible();
   await expect(page.locator('.weather_current_temp')).toContainText('78°F');
 
-  await page.getByRole('button', { name: 'Weather Settings' }).click();
+  const settingsToggle = page.getByRole('button', { name: 'Weather Settings' });
+  await expect(settingsToggle).toHaveAttribute('aria-expanded', 'false');
+  await settingsToggle.click();
+  await expect(page.getByRole('button', { name: 'Close Weather Settings' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('heading', { name: 'Weather Settings' })).toBeVisible();
   await expect(page.locator('.weather_hero')).toHaveCount(0);
   for (const preference of ['light', 'dark']) {
@@ -805,7 +808,8 @@ test('Weather Settings owns location and refresh controls without losing weather
   await page.route(WEATHER_API_PATTERN, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'not-json' }));
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.locator('.weather_settings_status')).toContainText('Weather unavailable right now.');
-  await page.getByRole('button', { name: 'Back to Weather' }).click();
+  await page.getByRole('button', { name: 'Close Weather Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Weather Settings' })).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.weather_location')).toContainText('Austin, Texas');
   await expect(page.locator('.weather_current_temp')).toContainText('78°F');
   await expect(page.locator('.weather_location_form')).toHaveCount(0);
@@ -813,6 +817,7 @@ test('Weather Settings owns location and refresh controls without losing weather
 
   await page.reload();
   await page.getByRole('button', { name: 'Weather Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Close Weather Settings' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#weather-location')).toHaveValue('Austin, Texas');
 
   for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 900 }]) {

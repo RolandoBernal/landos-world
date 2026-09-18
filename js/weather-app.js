@@ -104,6 +104,7 @@
   function render() {
     const root = getRoot();
     if (!root) return;
+    syncSettingsToggle();
     const content = state.view === 'settings'
       ? renderSettings()
       : `${renderHero()}${renderMainContent()}`;
@@ -112,6 +113,15 @@
         ${content}
       </section>
     `;
+  }
+
+  function syncSettingsToggle() {
+    const toggle = document.querySelector('[data-weather-action="settings"]');
+    if (!toggle) return;
+    const isOpen = state.view === 'settings';
+    toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Close Weather Settings' : 'Weather Settings');
+    toggle.setAttribute('title', isOpen ? 'Close Settings' : 'Settings');
   }
 
   function renderHero() {
@@ -158,7 +168,6 @@
     return `
       <section class="weather_settings" aria-labelledby="weather-settings-title">
         <header class="weather_settings_header">
-          <button type="button" class="weather_settings_back" data-weather-action="home" aria-label="Back to Weather">←</button>
           <div>
             <p class="weather_settings_kicker">Weather</p>
             <h1 id="weather-settings-title">Weather Settings</h1>
@@ -344,12 +353,7 @@
     const button = event.target.closest('[data-weather-action]');
     if (!button) return;
     if (button.dataset.weatherAction === 'settings') {
-      state = { ...state, view: 'settings' };
-      render();
-      return;
-    }
-    if (button.dataset.weatherAction === 'home') {
-      state = { ...state, view: 'home' };
+      state = { ...state, view: state.view === 'settings' ? 'home' : 'settings' };
       render();
       return;
     }
