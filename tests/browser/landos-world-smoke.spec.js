@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const WEATHER_API_PATTERN = /api\.open-meteo\.com\/v1\/forecast/;
+const GEOCODING_API_PATTERN = /geocoding-api\.open-meteo\.com\/v1\/search/;
 
 const WEATHER_FIXTURE = {
   current: {
@@ -142,11 +143,33 @@ function relativeLocalDateKey(deltaDays) {
 
 test.beforeEach(async ({ page }) => {
   const consoleErrors = [];
+  const weatherRequests = [];
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('pageerror', (error) => {
     consoleErrors.push(error.message);
+  });
+  page.on('request', (request) => {
+    if (WEATHER_API_PATTERN.test(request.url())) weatherRequests.push(request.url());
+  });
+  await page.route(GEOCODING_API_PATTERN, async (route) => {
+    const location = new URL(route.request().url()).searchParams.get('name') || 'Nashville, Tennessee';
+    const isAustin = location.toLowerCase().includes('austin');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [{
+          name: isAustin ? 'Austin' : 'Nashville',
+          admin1: isAustin ? 'Texas' : 'Tennessee',
+          country_code: 'US',
+          latitude: isAustin ? 30.2672 : 36.1627,
+          longitude: isAustin ? -97.7431 : -86.7816,
+          timezone: 'America/Chicago',
+        }],
+      }),
+    });
   });
   await page.route(WEATHER_API_PATTERN, async (route) => {
     await route.fulfill({
@@ -164,6 +187,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   page.consoleErrors = consoleErrors;
+  page.weatherRequests = weatherRequests;
 });
 
 test.afterEach(async ({ page }) => {
@@ -744,6 +768,60 @@ test('weather launcher card shows and refreshes the device-local date', async ({
   await page.evaluate(() => window.setTestDate('2026-09-18T00:00:01'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.locator('[data-launcher-weather-date]')).toHaveText('Fri, Sep 18');
+});
+
+test('Weather Settings owns location and refresh controls without losing weather data', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto('/#/weather');
+  await expect(page.getByRole('heading', { name: 'Weather' })).toBeVisible();
+  await expect(page.locator('.weather_current_temp')).toContainText('78°F');
+
+  await page.getByRole('button', { name: 'Weather Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Weather Settings' })).toBeVisible();
+  await expect(page.locator('.weather_hero')).toHaveCount(0);
+  for (const preference of ['light', 'dark']) {
+    await page.evaluate((value) => window.LandosTheme?.setPreference?.(value), preference);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', preference);
+    await expect(page.locator('.weather_settings_panel').first()).toBeVisible();
+  }
+
+  const location = page.locator('#weather-location');
+  await location.fill('Austin, Texas');
+  await page.getByRole('button', { name: 'Set', exact: true }).click();
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather loaded for Austin, Texas.');
+  await expect(page.locator('.weather_last_updated')).toContainText('Last updated');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('weather_app_preferences_v1')).location)).toBe('Austin, Texas');
+
+  const beforeRefresh = page.weatherRequests.length;
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.locator('[data-weather-action="refresh"]').evaluate((button) => {
+    button.disabled = false;
+    button.click();
+  });
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather refreshed.');
+  expect(page.weatherRequests.length).toBe(beforeRefresh + 1);
+
+  await page.unroute(WEATHER_API_PATTERN);
+  await page.route(WEATHER_API_PATTERN, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'not-json' }));
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather unavailable right now.');
+  await page.getByRole('button', { name: 'Back to Weather' }).click();
+  await expect(page.locator('.weather_location')).toContainText('Austin, Texas');
+  await expect(page.locator('.weather_current_temp')).toContainText('78°F');
+  await expect(page.locator('.weather_location_form')).toHaveCount(0);
+  await expect(page.locator('.weather_hero .weather_refresh_button')).toHaveCount(0);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Weather Settings' }).click();
+  await expect(page.locator('#weather-location')).toHaveValue('Austin, Texas');
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    const panel = page.locator('.weather_settings_panel').first();
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox.width).toBeLessThanOrEqual(viewport.width);
+  }
 });
 
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
