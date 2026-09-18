@@ -77,7 +77,6 @@ test('legacy Digital Clock URL redirects to the root hash router', () => {
 
 test('active local apps expose the shared sticky ecosystem navigation', () => {
   [
-    ["id=\"lando-settings-view\"", "Lando's World Settings"],
     ["id=\"daily-chief-briefing-view\"", 'Daily Chief Briefing'],
     ["id=\"weather-view\"", 'Weather'],
     ["id=\"lee-lees-tracker-view\"", 'Lee-Lee’s Tracker'],

@@ -1125,7 +1125,7 @@ test('Lee-Lee print media hides app shell chrome around the report body', async 
   });
 
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.ecosystem_nav')).toHaveCount(7);
+  await expect(page.locator('.ecosystem_nav')).toHaveCount(6);
   expect(await page.locator('.ecosystem_nav').evaluateAll((nodes) => (
     nodes.every((node) => getComputedStyle(node).display === 'none')
   ))).toBe(true);
