@@ -40,6 +40,7 @@
 .maintenance_total_view .lando_settings_link.digit_clock_menu_toggle svg { transition: transform 0.3s ease; }
 .maintenance_total_view .lando_settings_link.digit_clock_menu_toggle[aria-expanded="true"] { border-color: var(--app-accent); background-color: var(--app-accent-bg); }
 .maintenance_total_view .lando_settings_link.digit_clock_menu_toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.maintenance_total_view .maintenance_total_shell .digit_clock_menu_toggle { display: none; }
 .imt_back { padding-left: 0; border: 0; }
 .imt_icon_button svg { width: 1.5rem; height: 1.5rem; display: block; }
 .imt_grid { display: grid; gap: 1rem; }
