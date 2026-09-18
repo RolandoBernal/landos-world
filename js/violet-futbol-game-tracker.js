@@ -1866,7 +1866,7 @@
           ${phase === 'halftime' && remaining === 0 ? '<span class="vfgt_stoppage">Halftime complete</span>' : ''}
         </section>
         ${renderScoreboard(state)}
-        <div class="vfgt_actions">${action}</div>
+        <div class="vfgt_actions vfgt_live_action_rail">${action}</div>
       </section>`;
     startRefreshTimer();
   }

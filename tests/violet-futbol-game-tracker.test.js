@@ -962,6 +962,11 @@ test('mobile landscape scoreboard mode is CSS-only and scoped to running halves'
   assert.match(css, /\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\):has\(\.vfgt_live--running-half\)[\s\S]*position: fixed[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
   assert.match(css, /\.vfgt_live--running-half \.vfgt_match_header,[\s\S]*\.vfgt_live--running-half \.vfgt_scoreboard,[\s\S]*\.vfgt_live--running-half \.vfgt_stoppage/);
   assert.match(css, /\.vfgt_live--running-half \.vfgt_actions \{[\s\S]*width: min\(100%, 28rem\)/);
+  assert.match(source, /class="vfgt_actions vfgt_live_action_rail"/);
+  assert.match(css, /\.vfgt_live_action_rail \{[\s\S]*padding: 0 1rem calc\(env\(safe-area-inset-bottom\) \+ 20px\)/);
+  assert.match(css, /\.vfgt_live--running-half \.vfgt_live_action_rail \{[\s\S]*padding-bottom: calc\(env\(safe-area-inset-bottom\) \+ 20px\)/);
+  assert.match(css, /\.app_theme--violet-futbol-game-tracker:not\(\[hidden\]\):has\(\.vfgt_live--running-half\)[\s\S]*overflow: visible/);
+  assert.match(css, /#violet-futbol-game-tracker-root \{[\s\S]*overflow: visible/);
   assert.match(css, /\.vfgt_live--running-half \.vfgt_seven_segment_visual \{[\s\S]*--digit-width: min\(/);
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-right\)/);
