@@ -314,6 +314,19 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   const scheduledId = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:violet-futbol-game-tracker:saved-games:v1'))[0].id);
 
   await future.locator('summary').click();
+  const futureCard = future.locator('.vfgt_scheduled_card');
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
+  await futureCard.locator('.vfgt_card_summary').click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
+  await futureCard.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Delete this scheduled game?');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
+  await page.waitForTimeout(400);
+  await futureCard.locator('.vfgt_card_summary').click();
+  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
+  await page.waitForTimeout(400);
+  await futureCard.locator('.vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Edit' }).click();
   await app.getByLabel('Opponent').fill('Franklin Road Academy');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
@@ -321,6 +334,7 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   await expect(future).not.toContainText('Brentwood Academy');
 
   await future.locator('summary').click();
+  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Quick Start' }).click();
   await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Start game vs. Franklin Road Academy?');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
@@ -348,7 +362,10 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
   expect(saved[0].id).toBe(scheduledId);
   expect(saved[0].status).toBe('completed');
   expect(saved[0].team2).toBe('Franklin Road Academy');
-  await expect(app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' })).toContainText('Franklin Road Academy');
+  const pastSection = app.locator('.vfgt_accordion').filter({ hasText: 'Past Games' });
+  await expect(pastSection).toContainText('Franklin Road Academy');
+  await pastSection.locator('.vfgt_past_card .vfgt_card_summary').click();
+  await expect(app.getByRole('heading', { name: 'FINAL' })).toBeVisible();
 });
 
 test('VFGT unified Add Game opens the played-game workflow and cancellation stays non-destructive', async ({ page }) => {
@@ -379,7 +396,10 @@ async function startVfgtFirstHalf(page) {
   await app.getByRole('button', { name: 'Future Game' }).click();
   await app.getByLabel('Opponent').fill('Hume-Fogg');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
-  await app.locator('.vfgt_scheduled_card').getByRole('button', { name: 'Quick Start' }).click();
+  const future = app.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
+  await future.locator('summary').click();
+  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
+  await future.getByRole('button', { name: 'Quick Start' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();
   return app;

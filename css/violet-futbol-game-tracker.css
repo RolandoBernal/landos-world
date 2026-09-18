@@ -507,6 +507,92 @@
   justify-items: center;
 }
 
+.vfgt_collapsible_card {
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+}
+
+.vfgt_card_summary {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  min-height: 72px;
+  padding: 0.85rem 3.2rem 0.85rem 0.85rem;
+  color: var(--vfgt-text);
+  text-align: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vfgt_card_summary:hover,
+.vfgt_card_summary:focus-visible,
+.vfgt_card_expand:hover,
+.vfgt_card_expand:focus-visible {
+  background: rgb(74 163 255 / 8%);
+}
+
+.vfgt_card_summary:focus-visible,
+.vfgt_card_expand:focus-visible {
+  outline: 3px solid #82bdff;
+  outline-offset: -3px;
+}
+
+.vfgt_card_chevron {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  color: var(--vfgt-muted-strong);
+  font-size: 1.65rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition: transform 150ms ease;
+}
+
+.vfgt_collapsible_card.is-expanded .vfgt_card_chevron {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.vfgt_card_actions {
+  padding: 0.75rem 0.85rem max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.vfgt_past_card_header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.vfgt_past_card .vfgt_card_summary {
+  padding-right: 0.85rem;
+}
+
+.vfgt_card_expand {
+  position: relative;
+  width: 52px;
+  min-width: 52px;
+  min-height: 72px;
+  padding: 0;
+  color: var(--vfgt-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vfgt_card_expand .vfgt_card_chevron {
+  right: 0.85rem;
+}
+
+.vfgt_scheduled_card .vfgt_card_summary {
+  justify-items: center;
+  text-align: center;
+}
+
 .vfgt_scheduled_badge {
   color: var(--vfgt-muted-strong);
   font-size: 0.75rem;
