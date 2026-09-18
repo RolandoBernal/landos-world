@@ -1248,7 +1248,9 @@
         message: correction.message || carbDose.message,
       };
     }
-    const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
+    const hasPositiveCarbs = (normalizeNumber(totalCarbs) ?? 0) > 0;
+    const temporaryEatingAdjustmentApplied = hasPositiveCarbs && isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp);
+    const temporaryEatingAdjustmentUnits = temporaryEatingAdjustmentApplied
       ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
       : 0;
     const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits;
@@ -1259,7 +1261,9 @@
       status: 'calculated',
       ...carbDose,
       correctionUnits: correction.correctionUnits,
+      temporaryEatingAdjustmentApplied,
       temporaryEatingAdjustmentUnits,
+      temporaryEatingAdjustmentMessage: hasPositiveCarbs ? '' : 'Temp adjustment: Not applied — no carbs entered',
       rawAggregateDose,
       roundedBaseDose,
       suggestedTotalUnits,
@@ -1278,7 +1282,9 @@
     const doseIncrementUnits = getDoseIncrementUnits(insulinPlan);
     const minimumAllowableDoseUnits = getMinimumAllowableDoseUnits(insulinPlan);
     const carbDose = calculateCarbDose(carbs, getInsulinCarbRatioGrams(insulinPlan), { roundingMode, doseIncrementUnits });
-    const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
+    const hasPositiveCarbs = carbs > 0;
+    const temporaryEatingAdjustmentApplied = hasPositiveCarbs && isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp);
+    const temporaryEatingAdjustmentUnits = temporaryEatingAdjustmentApplied
       ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
       : 0;
     const rawAggregateDose = carbDose.rawCarbDose;
@@ -1289,7 +1295,9 @@
       status: carbDose.status,
       ...carbDose,
       correctionUnits: null,
+      temporaryEatingAdjustmentApplied,
       temporaryEatingAdjustmentUnits,
+      temporaryEatingAdjustmentMessage: hasPositiveCarbs ? '' : 'Temp adjustment: Not applied — no carbs entered',
       rawAggregateDose,
       roundedBaseDose,
       suggestedTotalUnits,
@@ -1460,7 +1468,9 @@
       rawCarbDose: normalizeNumber(record.rawCarbDose),
       rawAggregateDose: normalizeNumber(record.rawAggregateDose),
       roundedBaseDose: normalizeNumber(record.roundedBaseDose),
+      temporaryEatingAdjustmentApplied: record.temporaryEatingAdjustmentApplied === true,
       temporaryEatingAdjustmentUnits: normalizeNumber(record.temporaryEatingAdjustmentUnits),
+      temporaryEatingAdjustmentMessage: sanitizeShortText(record.temporaryEatingAdjustmentMessage, 100),
       doseRoundingMode: record.doseRoundingMode ? normalizeDoseRoundingMode(record.doseRoundingMode) : '',
       doseIncrementUnits: record.doseIncrementUnits == null ? null : normalizeDoseIncrement(record.doseIncrementUnits),
       minimumAllowableDoseUnits: record.minimumAllowableDoseUnits == null ? null : normalizeMinimumAllowableDose(record.minimumAllowableDoseUnits),
@@ -5505,13 +5515,16 @@
       const roundingBreakdown = result.carbDoseUnits == null || result.roundedBaseDose == null
         ? ''
         : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${renderDoseNumber(result.doseIncrementUnits)}-unit increment: ${renderInsulin(result.roundedBaseDose)}</div>`;
-      const adjustmentIncludedNotice = result.temporaryEatingAdjustmentUnits > 0
+      const adjustmentIncludedNotice = result.temporaryEatingAdjustmentApplied === true
         ? `<div class="lee_lee_diabetes_dose_adjustment_note">Includes ${renderInsulin(result.temporaryEatingAdjustmentUnits)} temporary adjustment units</div>`
         : '';
-      const temporaryAdjustmentBreakdown = result.temporaryEatingAdjustmentUnits > 0
+      const temporaryAdjustmentBreakdown = result.temporaryEatingAdjustmentApplied === true
         ? `<div class="lee_lee_diabetes_dose_breakdown lee_lee_diabetes_dose_breakdown--adjustment">Temporary eating adjustment: +${renderInsulin(result.temporaryEatingAdjustmentUnits)}</div>`
         : '';
-      const finalDoseBreakdown = result.temporaryEatingAdjustmentUnits > 0
+      const temporaryAdjustmentNotApplied = result.temporaryEatingAdjustmentMessage
+        ? `<div class="lee_lee_diabetes_dose_breakdown">${escapeHtml(result.temporaryEatingAdjustmentMessage)}</div>`
+        : '';
+      const finalDoseBreakdown = result.carbDoseUnits != null
         ? `<div class="lee_lee_diabetes_dose_breakdown">Final suggested dose: ${renderInsulin(result.suggestedTotalUnits)} total</div>`
         : '';
       const minimumWarning = result.minimumDoseWarning
@@ -5536,6 +5549,7 @@
             ${correctionBreakdown}
             ${roundingBreakdown}
             ${temporaryAdjustmentBreakdown}
+            ${temporaryAdjustmentNotApplied}
             ${finalDoseBreakdown}
             ${legacyBreakdown}
             ${range}
@@ -6361,7 +6375,9 @@
       rawCarbDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawCarbDose : null,
       rawAggregateDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawAggregateDose : null,
       roundedBaseDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.roundedBaseDose : null,
+      temporaryEatingAdjustmentApplied: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentApplied === true : false,
       temporaryEatingAdjustmentUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentUnits : null,
+      temporaryEatingAdjustmentMessage: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentMessage : '',
       doseRoundingMode: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseRoundingMode : null,
       doseIncrementUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseIncrementUnits : null,
       minimumAllowableDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumAllowableDoseUnits : null,
