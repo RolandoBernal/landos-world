@@ -28,6 +28,18 @@
 .lando_settings_link:hover { background: rgb(var(--color-bg-rgb) / 10%); border-color: var(--color-border-strong); }
 .lando_settings_link:focus-visible { outline: 2px solid var(--color-text); outline-offset: 3px; }
 .lando_settings_link svg { display: block; width: 22px; height: 22px; }
+.maintenance_total_view .lando_settings_link.digit_clock_menu_toggle {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0.5rem;
+  color: var(--app-accent);
+  background-color: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+}
+.maintenance_total_view .lando_settings_link.digit_clock_menu_toggle svg { transition: transform 0.3s ease; }
+.maintenance_total_view .lando_settings_link.digit_clock_menu_toggle[aria-expanded="true"] { border-color: var(--app-accent); background-color: var(--app-accent-bg); }
+.maintenance_total_view .lando_settings_link.digit_clock_menu_toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .imt_back { padding-left: 0; border: 0; }
 .imt_icon_button svg { width: 1.5rem; height: 1.5rem; display: block; }
 .imt_grid { display: grid; gap: 1rem; }

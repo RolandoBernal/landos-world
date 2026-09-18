@@ -3813,10 +3813,10 @@
           </div>
           <button
             type="button"
-            class="lando_settings_link lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
+            class="lando_settings_link digit_clock_menu_toggle lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
             data-action="settings"
             aria-label="${settingsActive ? 'Close Settings' : 'Settings'}"
-            aria-pressed="${settingsActive ? 'true' : 'false'}"
+            aria-expanded="${settingsActive ? 'true' : 'false'}"
             aria-current="${settingsActive ? 'page' : 'false'}"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"

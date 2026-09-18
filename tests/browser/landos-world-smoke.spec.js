@@ -252,12 +252,12 @@ test('VFGT settings edits the current season half duration', async ({ page }) =>
   await expect(page.getByRole('button', { name: /Half Duration/ })).toContainText('Applies to 2026 Fall');
 });
 
-test('VFGT settings uses a compact top-right back button', async ({ page }) => {
+test('VFGT settings uses the shared top-right toggle cog', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#/violet-futbol-game-tracker');
   await page.getByRole('button', { name: 'VFGT Settings' }).click();
   const header = page.locator('.vfgt_page_header--with-back');
-  const backButton = page.getByRole('button', { name: 'Back to tracker' });
+  const backButton = page.getByRole('button', { name: 'Close VFGT Settings' });
   const [headerBox, buttonBox] = await Promise.all([header.boundingBox(), backButton.boundingBox()]);
   expect(headerBox).not.toBeNull();
   expect(buttonBox).not.toBeNull();
@@ -265,6 +265,7 @@ test('VFGT settings uses a compact top-right back button', async ({ page }) => {
   expect(buttonBox.x).toBeGreaterThan(headerBox.x + headerBox.width - 70);
   expect(buttonBox.y).toBeGreaterThan(headerBox.y);
   expect(buttonBox.y + buttonBox.height).toBeLessThan(headerBox.y + headerBox.height);
+  await expect(backButton).toHaveAttribute('aria-expanded', 'true');
   await backButton.click();
   await expect(page.getByRole('button', { name: 'VFGT Settings' })).toBeVisible();
 });
@@ -1197,15 +1198,15 @@ async function openSeededLeeLeeHistoryDay(page, dateKey = '2026-08-25') {
 test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   const app = page.locator('#lee-lees-tracker-view');
-  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(app.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-expanded', 'false');
 
-  await app.getByRole('button', { name: 'Settings' }).click();
-  await expect(app.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await expect(app.getByRole('button', { name: 'Close Settings' })).toHaveAttribute('aria-pressed', 'true');
+  await app.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Close Settings' })).toHaveAttribute('aria-expanded', 'true');
 
-  await app.getByRole('button', { name: 'Close Settings' }).click();
+  await app.getByRole('button', { name: 'Close Settings', exact: true }).click();
   await expect(app.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
-  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(app.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('Lee-Lee Settings shows one global sync status action', async ({ page }) => {

@@ -145,6 +145,30 @@
   transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.daily_briefing_icon_button.digit_clock_menu_toggle {
+  width: 44px;
+  min-width: 44px;
+  padding: 0.5rem;
+  color: var(--app-accent);
+  background-color: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+}
+
+.daily_briefing_icon_button.digit_clock_menu_toggle svg {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.3s ease;
+}
+
+.daily_briefing_icon_button.digit_clock_menu_toggle[aria-expanded="true"] {
+  border-color: var(--app-accent);
+  background-color: var(--app-accent-bg);
+}
+
+.daily_briefing_icon_button.digit_clock_menu_toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
 .daily_briefing_button {
   display: inline-flex;
   align-items: center;

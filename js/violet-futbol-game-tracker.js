@@ -1399,8 +1399,8 @@
     return season ? savedGames.filter((game) => game.seasonId === season.id && game.status === 'completed') : [];
   }
 
-  function settingsButtonMarkup() {
-    return `<button type="button" class="lando_settings_link vfgt_icon_button" data-vfgt-action="settings" aria-label="VFGT Settings" title="Settings">
+  function settingsButtonMarkup(settingsOpen = false) {
+    return `<button type="button" class="digit_clock_menu_toggle vfgt_icon_button" data-vfgt-action="settings" data-vfgt-settings-toggle aria-expanded="${settingsOpen ? 'true' : 'false'}" aria-label="${settingsOpen ? 'Close VFGT Settings' : 'VFGT Settings'}" title="${settingsOpen ? 'Close Settings' : 'Settings'}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
       </svg>
@@ -1418,8 +1418,8 @@
     const season = currentSeason();
     getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-settings-title">
       <header class="vfgt_page_header vfgt_page_header--with-back">
-        <button type="button" class="vfgt_back_button" data-vfgt-action="home" aria-label="Back to tracker">←</button>
         <div><p class="vfgt_kicker">VFGT</p><h1 id="vfgt-settings-title">Settings</h1></div>
+        ${settingsButtonMarkup(true)}
       </header>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-team-season-settings-title">
         <h2 id="vfgt-team-season-settings-title">Team &amp; Season</h2>
@@ -2182,7 +2182,15 @@
       screen = 'home';
       renderHome();
     }
-    if (action === 'settings') { screen = 'settings'; renderSettings(); }
+    if (action === 'settings') {
+      if (button.dataset.vfgtSettingsToggle !== undefined) {
+        if (screen === 'settings') { screen = 'home'; renderHome(); }
+        else { screen = 'settings'; renderSettings(); }
+      } else {
+        screen = 'settings';
+        renderSettings();
+      }
+    }
     if (action === 'recovery') { recoveryScan = null; renderRecoveryDiagnostic(); void runRecoveryScan(); }
     if (action === 'recovery-scan') void runRecoveryScan();
     if (action === 'recovery-export' && recoveryScan) downloadRecoveryJson(`vfgt-recovery-scan-${Date.now()}.json`, recoveryScan);
