@@ -1407,6 +1407,15 @@
     </button>`;
   }
 
+  function syncSettingsHeaderToggle() {
+    const button = document.getElementById('vfgt_settings_toggle');
+    if (!button) return;
+    const expanded = screen === 'settings';
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', expanded ? 'Close VFGT Settings' : 'VFGT Settings');
+    button.setAttribute('title', expanded ? 'Close Settings' : 'Settings');
+  }
+
   function contextMarkup() {
     const team = currentTeam();
     const season = currentSeason();
@@ -1419,7 +1428,6 @@
     getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-settings-title">
       <header class="vfgt_page_header vfgt_page_header--with-back">
         <div><p class="vfgt_kicker">VFGT</p><h1 id="vfgt-settings-title">Settings</h1></div>
-        ${settingsButtonMarkup(true)}
       </header>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-team-season-settings-title">
         <h2 id="vfgt-team-season-settings-title">Team &amp; Season</h2>
@@ -1432,6 +1440,7 @@
       <section class="vfgt_settings_group" aria-labelledby="vfgt-recovery-settings-title"><h2 id="vfgt-recovery-settings-title">Data Recovery</h2><p class="vfgt_settings_note">Temporary, read-only scan for future games affected by an upgrade.</p><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="recovery">Open Future Game Recovery</button></section>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-about-title"><h2 id="vfgt-about-title">About</h2><p>Violet Futbol Game Tracker</p><p class="vfgt_settings_note">Long-term team and season history tracker.</p></section>
     </section>`;
+    syncSettingsHeaderToggle();
   }
 
   function renderHalfDurationForm() {
@@ -1702,7 +1711,6 @@
           <div class="vfgt_home_actions">
             <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="choose-game-type">Add Game</button>
           </div>
-          ${settingsButtonMarkup()}
         </header>
         ${unfinished ? `<section class="vfgt_resume" aria-label="Unfinished game">
           <div>
@@ -1720,6 +1728,7 @@
           ${pastSection}
         </section>
       </section>`;
+    syncSettingsHeaderToggle();
   }
 
   function renderSetup() {
@@ -2354,6 +2363,15 @@
     if (!root) return;
     initializeContext();
     savedGames = sortedGames(readSavedGames());
+    document.getElementById('vfgt_settings_toggle')?.addEventListener('click', () => {
+      if (screen === 'settings') {
+        screen = 'home';
+        renderHome();
+      } else {
+        screen = 'settings';
+        renderSettings();
+      }
+    });
     if (window.PointerEvent) {
       root.addEventListener('pointerup', handleClick);
     } else {

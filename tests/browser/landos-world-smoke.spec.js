@@ -256,31 +256,36 @@ test('VFGT settings uses the shared top-right toggle cog', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#/violet-futbol-game-tracker');
   await page.getByRole('button', { name: 'VFGT Settings' }).click();
-  const header = page.locator('.vfgt_page_header--with-back');
+  const header = page.locator('#violet-futbol-game-tracker-view > .digit_clock_header');
   const backButton = page.getByRole('button', { name: 'Close VFGT Settings' });
   const [headerBox, buttonBox] = await Promise.all([header.boundingBox(), backButton.boundingBox()]);
   expect(headerBox).not.toBeNull();
   expect(buttonBox).not.toBeNull();
   expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
   expect(buttonBox.x).toBeGreaterThan(headerBox.x + headerBox.width - 70);
-  expect(buttonBox.y).toBeGreaterThan(headerBox.y);
-  expect(buttonBox.y + buttonBox.height).toBeLessThan(headerBox.y + headerBox.height);
+  expect(buttonBox.y).toBeGreaterThanOrEqual(headerBox.y);
+  expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height);
   await expect(backButton).toHaveAttribute('aria-expanded', 'true');
   await backButton.click();
   await expect(page.getByRole('button', { name: 'VFGT Settings' })).toBeVisible();
 });
 
-test('VFGT mobile settings cog stays in the hero top-right corner', async ({ page }) => {
+test('VFGT shared header keeps its logo, title, and settings cog on one row', async ({ page }) => {
   await page.goto('/#/violet-futbol-game-tracker');
-  const hero = page.locator('.vfgt_hero');
+  const header = page.locator('#violet-futbol-game-tracker-view > .digit_clock_header');
+  const brand = header.locator('.digit_clock_brand');
+  const logo = header.locator('.digit_clock_logo');
+  const title = header.locator('.digit_clock_title');
   const cog = page.getByRole('button', { name: 'VFGT Settings' });
-  const actions = page.locator('.vfgt_home_actions');
-  const [heroBox, cogBox, actionsBox] = await Promise.all([hero.boundingBox(), cog.boundingBox(), actions.boundingBox()]);
-  expect(heroBox).not.toBeNull();
+  const [headerBox, brandBox, logoBox, titleBox, cogBox] = await Promise.all([header.boundingBox(), brand.boundingBox(), logo.boundingBox(), title.boundingBox(), cog.boundingBox()]);
+  expect(headerBox).not.toBeNull();
+  expect(brandBox).not.toBeNull();
+  expect(logoBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
   expect(cogBox).not.toBeNull();
-  expect(actionsBox).not.toBeNull();
-  expect(cogBox.x + cogBox.width).toBeGreaterThan(heroBox.x + heroBox.width - 20);
-  if (page.viewportSize().width <= 680) expect(cogBox.y).toBeLessThan(actionsBox.y);
+  expect(cogBox.x + cogBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
+  expect(Math.abs(logoBox.y - titleBox.y)).toBeLessThan(8);
+  expect(Math.abs((cogBox.y + cogBox.height / 2) - (titleBox.y + titleBox.height / 2))).toBeLessThan(2);
 });
 
 test('VFGT displays the record from the visible saved scores', async ({ page }) => {
@@ -832,7 +837,9 @@ test('Weather Settings owns location and refresh controls without losing weather
 
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
   await page.goto('/#/settings');
-  await expect(page.getByRole('link', { name: 'Close Lando\'s World Settings' })).toBeVisible();
+  const settingsToggle = page.getByRole('link', { name: 'Close Lando\'s World Settings' });
+  await expect(settingsToggle).toBeVisible();
+  await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
 
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-appearance-preference', 'system');

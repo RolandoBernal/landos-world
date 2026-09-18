@@ -63,6 +63,10 @@
   --app-accent-contrast: #050505;
 }
 
+.app_theme--landos-world-settings .digit_clock_menu_toggle.lando_settings_link {
+  color: #ffffff;
+}
+
 .app_theme--lee-lees-tracker {
   --app-accent: #3aa0ff;
   --app-accent-rgb: 58 160 255;
