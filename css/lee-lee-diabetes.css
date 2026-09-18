@@ -931,6 +931,21 @@
   font-weight: 500;
 }
 
+.lee_lee_diabetes_dose_adjustment_note,
+.lee_lee_diabetes_dose_breakdown--adjustment {
+  margin-top: 0.4rem;
+  padding: 0.42rem 0.6rem;
+  border-left: 3px solid #e7b84b;
+  border-radius: 4px;
+  background: rgb(231 184 75 / 13%);
+  color: #f3cc70;
+  font-weight: 650;
+}
+
+.lee_lee_diabetes_dose_breakdown--adjustment {
+  margin-top: 0.18rem;
+}
+
 .lee_lee_diabetes_dose_warning {
   margin: 0;
   padding: 0.65rem 0.75rem;
@@ -2206,6 +2221,13 @@
   border-color: rgb(178 116 0 / 32%);
   background: rgb(255 202 87 / 24%);
   color: #6d4a00;
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_dose_adjustment_note,
+:root[data-theme="light"] .lee_lee_diabetes_dose_breakdown--adjustment {
+  border-left-color: #a66b00;
+  background: rgb(231 184 75 / 22%);
+  color: #704900;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card_title,

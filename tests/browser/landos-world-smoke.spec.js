@@ -2980,6 +2980,44 @@ test('Lee-Lee dose inline controls stay on one line with compact three-digit inp
   expect(checkboxLayout.inputRight).toBeLessThan(checkboxLayout.labelRight - 8);
 });
 
+test('Lee-Lee temporary adjustment survives settings review, confirmation, reload, and disable', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.locator('[data-plan-editor]');
+  await settings.getByRole('checkbox', { name: 'Enable temporary adjustment' }).check();
+  await settings.locator('[name="temporaryEatingAdjustmentStartsDate"]').fill('2026-09-18');
+  await settings.locator('[name="temporaryEatingAdjustmentStartsTime"]').fill('08:00');
+  await settings.locator('[name="temporaryEatingAdjustmentEndsDate"]').fill('2026-09-25');
+  await settings.locator('[name="temporaryEatingAdjustmentEndsTime"]').fill('08:00');
+  await settings.getByRole('button', { name: 'Review Plan Change', exact: true }).click();
+
+  const confirmation = page.getByRole('heading', { name: 'Confirm insulin plan change' }).locator('..');
+  await expect(confirmation).toContainText('Status: Enabled');
+  await expect(confirmation).toContainText('+0.5 units');
+  await expect(confirmation).toContainText('September 18, 2026');
+  await expect(confirmation).toContainText('September 25, 2026');
+  await confirmation.getByRole('button', { name: 'Go Back' }).click();
+  await expect(page.locator('[data-plan-editor] [name="temporaryEatingAdjustmentEnabled"]')).toBeChecked();
+
+  await page.getByRole('button', { name: 'Review Plan Change', exact: true }).click();
+  await page.locator('[data-plan-confirm-check]').check();
+  await page.getByRole('button', { name: 'Activate Plan', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('[name="temporaryEatingAdjustmentEnabled"]')).toBeChecked();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.locator('[name="temporaryEatingAdjustmentEnabled"]')).toBeChecked();
+
+  await page.locator('[name="temporaryEatingAdjustmentEnabled"]').uncheck();
+  await page.getByRole('button', { name: 'Review Plan Change', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm insulin plan change' }).locator('..')).toContainText('Status: Disabled');
+  await page.locator('[data-plan-confirm-check]').check();
+  await page.getByRole('button', { name: 'Activate Plan', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('[name="temporaryEatingAdjustmentEnabled"]')).not.toBeChecked();
+});
+
 
 test('Lee-Lee food upload failures appear beside Sync Now and in food attempt diagnostics', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);

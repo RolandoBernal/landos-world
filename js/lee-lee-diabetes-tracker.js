@@ -1251,8 +1251,9 @@
     const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
       ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
       : 0;
-    const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits + temporaryEatingAdjustmentUnits;
-    const suggestedTotalUnits = applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const rawAggregateDose = carbDose.rawCarbDose + correction.correctionUnits;
+    const roundedBaseDose = applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const suggestedTotalUnits = roundedBaseDose + temporaryEatingAdjustmentUnits;
     const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: 'calculated',
@@ -1260,6 +1261,7 @@
       correctionUnits: correction.correctionUnits,
       temporaryEatingAdjustmentUnits,
       rawAggregateDose,
+      roundedBaseDose,
       suggestedTotalUnits,
       doseRoundingMode: roundingMode,
       doseIncrementUnits,
@@ -1279,8 +1281,9 @@
     const temporaryEatingAdjustmentUnits = isTemporaryEatingAdjustmentActive(insulinPlan, entryType, recordTimestamp)
       ? normalizeTemporaryEatingAdjustment(insulinPlan.temporaryEatingAdjustment).units
       : 0;
-    const rawAggregateDose = carbDose.rawCarbDose == null ? null : carbDose.rawCarbDose + temporaryEatingAdjustmentUnits;
-    const suggestedTotalUnits = rawAggregateDose == null ? null : applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const rawAggregateDose = carbDose.rawCarbDose;
+    const roundedBaseDose = rawAggregateDose == null ? null : applyConfiguredDoseRounding(rawAggregateDose, roundingMode, doseIncrementUnits);
+    const suggestedTotalUnits = roundedBaseDose == null ? null : roundedBaseDose + temporaryEatingAdjustmentUnits;
     const minimumDoseWarning = getMinimumDoseWarning(suggestedTotalUnits, minimumAllowableDoseUnits);
     return {
       status: carbDose.status,
@@ -1288,6 +1291,7 @@
       correctionUnits: null,
       temporaryEatingAdjustmentUnits,
       rawAggregateDose,
+      roundedBaseDose,
       suggestedTotalUnits,
       doseRoundingMode: roundingMode,
       doseIncrementUnits,
@@ -1455,6 +1459,8 @@
       suggestedCarbDoseUnits: normalizeNumber(record.suggestedCarbDoseUnits ?? record.carbDoseUnits ?? record.roundedCarbDose),
       rawCarbDose: normalizeNumber(record.rawCarbDose),
       rawAggregateDose: normalizeNumber(record.rawAggregateDose),
+      roundedBaseDose: normalizeNumber(record.roundedBaseDose),
+      temporaryEatingAdjustmentUnits: normalizeNumber(record.temporaryEatingAdjustmentUnits),
       doseRoundingMode: record.doseRoundingMode ? normalizeDoseRoundingMode(record.doseRoundingMode) : '',
       doseIncrementUnits: record.doseIncrementUnits == null ? null : normalizeDoseIncrement(record.doseIncrementUnits),
       minimumAllowableDoseUnits: record.minimumAllowableDoseUnits == null ? null : normalizeMinimumAllowableDose(record.minimumAllowableDoseUnits),
@@ -5496,15 +5502,18 @@
       const correctionBreakdown = result.correctionUnits == null
         ? ''
         : `<div class="lee_lee_diabetes_dose_breakdown">Correction: +${renderInsulin(result.correctionUnits)}</div>`;
-      const temporaryAdjustmentBreakdown = result.temporaryEatingAdjustmentUnits > 0
-        ? `<div class="lee_lee_diabetes_dose_breakdown">Temporary eating adjustment: +${renderInsulin(result.temporaryEatingAdjustmentUnits)}</div>`
+      const roundingBreakdown = result.carbDoseUnits == null || result.roundedBaseDose == null
+        ? ''
+        : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${renderDoseNumber(result.doseIncrementUnits)}-unit increment: ${renderInsulin(result.roundedBaseDose)}</div>`;
+      const adjustmentIncludedNotice = result.temporaryEatingAdjustmentUnits > 0
+        ? `<div class="lee_lee_diabetes_dose_adjustment_note">Includes ${renderInsulin(result.temporaryEatingAdjustmentUnits)} temporary adjustment units</div>`
         : '';
-      const rawDoseBreakdown = result.rawAggregateDose == null || result.rawAggregateDose === result.suggestedTotalUnits
-        ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Raw dose: ${renderDoseNumber(result.rawAggregateDose)} units</div>`;
-      const roundingBreakdown = result.carbDoseUnits == null || result.rawAggregateDose == null
-        ? ''
-        : `<div class="lee_lee_diabetes_dose_breakdown">Rounded ${escapeHtml(getDoseRoundingLabel(result.doseRoundingMode))} ${renderDoseNumber(result.doseIncrementUnits)}-unit increment: ${renderInsulin(result.suggestedTotalUnits)}</div>`;
+      const temporaryAdjustmentBreakdown = result.temporaryEatingAdjustmentUnits > 0
+        ? `<div class="lee_lee_diabetes_dose_breakdown lee_lee_diabetes_dose_breakdown--adjustment">Temporary eating adjustment: +${renderInsulin(result.temporaryEatingAdjustmentUnits)}</div>`
+        : '';
+      const finalDoseBreakdown = result.temporaryEatingAdjustmentUnits > 0
+        ? `<div class="lee_lee_diabetes_dose_breakdown">Final suggested dose: ${renderInsulin(result.suggestedTotalUnits)} total</div>`
+        : '';
       const minimumWarning = result.minimumDoseWarning
         ? `<p class="lee_lee_diabetes_dose_warning">${escapeHtml(result.minimumDoseWarning)}</p>`
         : '';
@@ -5521,12 +5530,13 @@
         <section class="lee_lee_diabetes_dose_card" aria-label="Suggested insulin">
           <div>
             <div class="lee_lee_diabetes_dose_label">Suggested dose</div>
-            <div class="lee_lee_diabetes_dose_total">${renderInsulin(result.suggestedTotalUnits)}</div>
+            <div class="lee_lee_diabetes_dose_total">${renderInsulin(result.suggestedTotalUnits)} total</div>
+            ${adjustmentIncludedNotice}
             ${carbBreakdown}
             ${correctionBreakdown}
-            ${temporaryAdjustmentBreakdown}
-            ${rawDoseBreakdown}
             ${roundingBreakdown}
+            ${temporaryAdjustmentBreakdown}
+            ${finalDoseBreakdown}
             ${legacyBreakdown}
             ${range}
           </div>
@@ -6350,6 +6360,8 @@
       suggestedCarbDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.carbDoseUnits : null,
       rawCarbDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawCarbDose : null,
       rawAggregateDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawAggregateDose : null,
+      roundedBaseDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.roundedBaseDose : null,
+      temporaryEatingAdjustmentUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentUnits : null,
       doseRoundingMode: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseRoundingMode : null,
       doseIncrementUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseIncrementUnits : null,
       minimumAllowableDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumAllowableDoseUnits : null,
@@ -6893,11 +6905,21 @@
     `;
   }
 
-  function renderSettings(errorMessage = '') {
+  function renderSettings(errorMessage = '', draftPlan = null) {
     const root = getRoot();
     if (!root) return;
-    currentEditor = { mode: 'settings' };
-    const plan = getCurrentPlan() || clonePlanSnapshot(DEFAULT_INSULIN_PLAN);
+    const retainedDraft = draftPlan
+      || (currentEditor?.mode === 'settings' ? currentEditor.planDraft : null);
+    const plan = retainedDraft
+      ? normalizeInsulinPlan(retainedDraft)
+      : (getCurrentPlan() || clonePlanSnapshot(DEFAULT_INSULIN_PLAN));
+    currentEditor = {
+      mode: 'settings',
+      planDraft: retainedDraft ? clonePlanSnapshot(plan) : null,
+    };
+    const temporaryAdjustment = normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment);
+    const temporaryStarts = splitDateTimeLocalValue(temporaryAdjustment.startsAt);
+    const temporaryEnds = splitDateTimeLocalValue(temporaryAdjustment.endsAt);
     const sharedSettingsStatus = getSharedSettingsStatus();
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-plan-editor novalidate>
@@ -6978,12 +7000,14 @@
           </label>
           <fieldset class="lee_lee_diabetes_ranges">
             <legend>Temporary eating dose adjustment</legend>
-            <p class="lee_lee_diabetes_help">Use only for a clinician-directed temporary adjustment. It applies after carb coverage and before final rounding for Breakfast, Lunch, Dinner, and Snack/Snacks. It never changes correction, bedtime, or manually entered doses.</p>
-            <label class="lee_lee_diabetes_checkline lee_lee_diabetes_temporary_adjustment_checkline"><span>Enable temporary adjustment</span><input type="checkbox" name="temporaryEatingAdjustmentEnabled" ${normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).enabled ? 'checked' : ''}></label>
-            <label class="lee_lee_diabetes_field">Adjustment<span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentUnits" type="number" inputmode="decimal" min="0" step="0.05" value="${escapeHtml(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).units)}"><span>units</span></span></label>
+            <p class="lee_lee_diabetes_help">Use only for a clinician-directed temporary adjustment. It applies after normal dose rounding for Breakfast, Lunch, Dinner, and Snack/Snacks. It never changes correction, bedtime, or manually entered doses.</p>
+            <label class="lee_lee_diabetes_checkline lee_lee_diabetes_temporary_adjustment_checkline"><span>Enable temporary adjustment</span><input type="checkbox" name="temporaryEatingAdjustmentEnabled" ${temporaryAdjustment.enabled ? 'checked' : ''}></label>
+            <label class="lee_lee_diabetes_field">Adjustment<span class="lee_lee_diabetes_inline_control"><input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentUnits" type="number" inputmode="decimal" min="0" step="0.05" value="${escapeHtml(temporaryAdjustment.units)}"><span>units</span></span></label>
             <div class="lee_lee_diabetes_temporary_adjustment_dates">
-              <label class="lee_lee_diabetes_field">Start date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).startsAt))}"></label>
-              <label class="lee_lee_diabetes_field">End date and time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsAt" type="datetime-local" value="${escapeHtml(toDateTimeLocalValue(normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment).endsAt))}"></label>
+              <label class="lee_lee_diabetes_field">Start date<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsDate" type="date" value="${escapeHtml(temporaryStarts.date)}"></label>
+              <label class="lee_lee_diabetes_field">Start time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentStartsTime" type="time" value="${escapeHtml(temporaryStarts.time)}"></label>
+              <label class="lee_lee_diabetes_field">End date<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsDate" type="date" value="${escapeHtml(temporaryEnds.date)}"></label>
+              <label class="lee_lee_diabetes_field">End time<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentEndsTime" type="time" value="${escapeHtml(temporaryEnds.time)}"></label>
             </div>
             <label class="lee_lee_diabetes_field">Duration shortcut (days)<input class="lee_lee_diabetes_input" name="temporaryEatingAdjustmentDurationDays" type="number" min="1" step="1" value="${DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS}"></label>
           </fieldset>
@@ -7023,7 +7047,7 @@
         ${renderRecentlyDeletedSettings()}
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel">Cancel</button>
-          <button type="submit" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary">Review Plan Change</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="review-plan">Review Plan Change</button>
         </div>
       </form>
     `;
@@ -7475,9 +7499,24 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  function toIsoDateTime(value) {
-    const timestamp = Date.parse(String(value || ''));
+  function splitDateTimeLocalValue(value) {
+    const localValue = toDateTimeLocalValue(value);
+    return {
+      date: localValue.slice(0, 10),
+      time: localValue.slice(11, 16),
+    };
+  }
+
+  function toIsoDateTimeParts(dateValue, timeValue) {
+    const timestamp = createLocalTimestamp(dateValue, timeValue);
     return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : '';
+  }
+
+  function formatTemporaryAdjustmentDateTime(value, fallbackLabel) {
+    const timestamp = Date.parse(String(value || ''));
+    return Number.isFinite(timestamp)
+      ? `${formatDate(new Date(timestamp))} at ${formatTime(timestamp)}`
+      : fallbackLabel;
   }
 
   function buildPlanFromSettingsForm(form) {
@@ -7495,10 +7534,20 @@
     const currentAdjustment = normalizeTemporaryEatingAdjustment(currentPlan.temporaryEatingAdjustment);
     const adjustmentEnabled = form.elements.temporaryEatingAdjustmentEnabled?.checked === true;
     const adjustmentUnits = normalizeNumber(form.elements.temporaryEatingAdjustmentUnits?.value);
-    const adjustmentStartsAt = toIsoDateTime(form.elements.temporaryEatingAdjustmentStartsAt?.value);
-    let adjustmentEndsAt = toIsoDateTime(form.elements.temporaryEatingAdjustmentEndsAt?.value);
+    const adjustmentStartsAt = toIsoDateTimeParts(
+      form.elements.temporaryEatingAdjustmentStartsDate?.value,
+      form.elements.temporaryEatingAdjustmentStartsTime?.value,
+    );
+    let adjustmentEndsAt = toIsoDateTimeParts(
+      form.elements.temporaryEatingAdjustmentEndsDate?.value,
+      form.elements.temporaryEatingAdjustmentEndsTime?.value,
+    );
     const durationDays = normalizeNumber(form.elements.temporaryEatingAdjustmentDurationDays?.value) || DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS;
-    if (adjustmentEnabled && adjustmentStartsAt && !adjustmentEndsAt) {
+    const hasEndDateOrTime = Boolean(
+      form.elements.temporaryEatingAdjustmentEndsDate?.value
+      || form.elements.temporaryEatingAdjustmentEndsTime?.value,
+    );
+    if (adjustmentEnabled && adjustmentStartsAt && !adjustmentEndsAt && !hasEndDateOrTime) {
       adjustmentEndsAt = new Date(Date.parse(adjustmentStartsAt) + durationDays * 86400000).toISOString();
     }
     if (adjustmentEnabled && (!adjustmentUnits || adjustmentUnits < 0 || !adjustmentStartsAt || !adjustmentEndsAt)) {
@@ -7559,13 +7608,13 @@
         doseRoundingMode,
         doseIncrementUnits: roundToPrecision(doseIncrementUnits),
         minimumAllowableDoseUnits: roundToPrecision(minimumAllowableDoseUnits),
-        temporaryEatingAdjustment: adjustmentEnabled ? {
-          enabled: true,
-          units: roundToPrecision(adjustmentUnits),
-          startsAt: adjustmentStartsAt,
-          endsAt: adjustmentEndsAt,
+        temporaryEatingAdjustment: {
+          enabled: adjustmentEnabled,
+          units: adjustmentUnits == null ? currentAdjustment.units : roundToPrecision(adjustmentUnits),
+          startsAt: adjustmentStartsAt || currentAdjustment.startsAt,
+          endsAt: adjustmentEndsAt || currentAdjustment.endsAt,
           contexts: [...TEMPORARY_EATING_ADJUSTMENT_CONTEXTS],
-        } : { ...currentAdjustment, enabled: false },
+        },
         targetGlucoseMin,
         targetGlucoseMax,
         supportedMealTypes: [...MEAL_TYPES],
@@ -7575,6 +7624,49 @@
         updatedAt: now,
       },
     };
+  }
+
+  function rememberPlanDraftFromSettingsForm(form) {
+    if (!form || currentEditor?.mode !== 'settings') return;
+    const result = buildPlanFromSettingsForm(form);
+    if (!result.error) {
+      currentEditor.planDraft = clonePlanSnapshot(result.plan);
+      return;
+    }
+    const existingPlan = currentEditor.planDraft
+      || getCurrentPlan()
+      || DEFAULT_INSULIN_PLAN;
+    const existingAdjustment = normalizeTemporaryEatingAdjustment(existingPlan.temporaryEatingAdjustment);
+    const adjustmentUnits = normalizeNumber(form.elements.temporaryEatingAdjustmentUnits?.value);
+    const startsAt = toIsoDateTimeParts(
+      form.elements.temporaryEatingAdjustmentStartsDate?.value,
+      form.elements.temporaryEatingAdjustmentStartsTime?.value,
+    );
+    const endsAt = toIsoDateTimeParts(
+      form.elements.temporaryEatingAdjustmentEndsDate?.value,
+      form.elements.temporaryEatingAdjustmentEndsTime?.value,
+    );
+    currentEditor.planDraft = clonePlanSnapshot({
+      ...existingPlan,
+      temporaryEatingAdjustment: {
+        ...existingAdjustment,
+        enabled: form.elements.temporaryEatingAdjustmentEnabled?.checked === true,
+        units: adjustmentUnits == null ? existingAdjustment.units : roundToPrecision(adjustmentUnits),
+        startsAt: startsAt || existingAdjustment.startsAt,
+        endsAt: endsAt || existingAdjustment.endsAt,
+      },
+    });
+  }
+
+  function reviewPlanChange(form) {
+    rememberPlanDraftFromSettingsForm(form);
+    const result = buildPlanFromSettingsForm(form);
+    if (result.error) {
+      renderSettings(result.error, currentEditor?.planDraft || null);
+      return;
+    }
+    currentEditor.planDraft = clonePlanSnapshot(result.plan);
+    renderPlanConfirmation(result.plan);
   }
 
   function renderPlanConfirmation(plan) {
@@ -7616,7 +7708,11 @@
           </div>
           <div>
             <dt>Temporary eating adjustment</dt>
-            <dd>${plan.temporaryEatingAdjustment?.enabled ? `+${renderInsulin(plan.temporaryEatingAdjustment.units)} during the configured window` : 'Off'}</dd>
+            <dd>
+              ${plan.temporaryEatingAdjustment?.enabled
+                ? `Status: Enabled · +${renderInsulin(plan.temporaryEatingAdjustment.units)} · ${escapeHtml(formatTemporaryAdjustmentDateTime(plan.temporaryEatingAdjustment.startsAt, 'Start not set'))} through ${escapeHtml(formatTemporaryAdjustmentDateTime(plan.temporaryEatingAdjustment.endsAt, 'End not set'))} · Breakfast, Lunch, Dinner, and Snack/Snacks only`
+                : 'Status: Disabled · This adjustment will no longer be added to eligible eating doses.'}
+            </dd>
           </div>
         </dl>
         <label class="lee_lee_diabetes_checkline">
@@ -8397,10 +8493,14 @@
           handleCancel();
           return;
         }
-        renderSettings();
+        renderSettings('', currentEditor?.mode === 'plan-confirmation' ? currentEditor.pendingPlan : null);
       }
       if (action === 'cancel') {
         handleCancel();
+      }
+      if (action === 'review-plan') {
+        reviewPlanChange(target.closest('[data-plan-editor]'));
+        return;
       }
       if (action === 'back-to-editor') {
         renderEditor({
@@ -8733,12 +8833,7 @@
         return;
       }
       if (event.target.matches('[data-plan-editor]')) {
-        const result = buildPlanFromSettingsForm(event.target);
-        if (result.error) {
-          renderSettings(result.error);
-          return;
-        }
-        renderPlanConfirmation(result.plan);
+        reviewPlanChange(event.target);
         return;
       }
       handleSave(event.target);
@@ -8776,6 +8871,11 @@
         refreshSavedMealSearchResults();
         return;
       }
+      const planForm = event.target.closest('[data-plan-editor]');
+      if (planForm) {
+        rememberPlanDraftFromSettingsForm(planForm);
+        return;
+      }
       const form = event.target.closest('[data-lee-lee-editor]');
       if (!form) return;
       if (event.target.closest('[data-carb-item-editor]')) return;
@@ -8809,6 +8909,11 @@
       if (confirmCheck) {
         const confirmButton = root.querySelector('[data-action="confirm-plan"]');
         if (confirmButton) confirmButton.disabled = !confirmCheck.checked;
+        return;
+      }
+      const planForm = event.target.closest('[data-plan-editor]');
+      if (planForm) {
+        rememberPlanDraftFromSettingsForm(planForm);
         return;
       }
       const form = event.target.closest('[data-lee-lee-editor]');
