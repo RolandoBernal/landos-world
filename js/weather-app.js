@@ -6,9 +6,12 @@
 
   let state = {
     location: loadLocationPreference(),
+    view: 'home',
     status: 'idle',
     snapshot: null,
     error: '',
+    notice: '',
+    noticeTone: 'status',
     isRefreshing: false,
     lastVisibleRefreshAt: 0,
   };
@@ -71,6 +74,14 @@
     return value == null ? '—' : `${value}${suffix}`;
   }
 
+  function friendlyWeatherError(error) {
+    const message = String(error || '');
+    if (/location could not be resolved|set your weather location/i.test(message)) {
+      return 'That location could not be found. Try a city and state.';
+    }
+    return 'Weather unavailable right now.';
+  }
+
   function dayparts(snapshot) {
     return [
       snapshot?.morningForecast,
@@ -93,12 +104,24 @@
   function render() {
     const root = getRoot();
     if (!root) return;
+    syncSettingsToggle();
+    const content = state.view === 'settings'
+      ? renderSettings()
+      : `${renderHero()}${renderMainContent()}`;
     root.innerHTML = `
-      <section class="weather_app" aria-labelledby="weather-title">
-        ${renderHero()}
-        ${renderMainContent()}
+      <section class="weather_app" aria-labelledby="${state.view === 'settings' ? 'weather-settings-title' : 'weather-title'}">
+        ${content}
       </section>
     `;
+  }
+
+  function syncSettingsToggle() {
+    const toggle = document.querySelector('[data-weather-action="settings"]');
+    if (!toggle) return;
+    const isOpen = state.view === 'settings';
+    toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Close Weather Settings' : 'Weather Settings');
+    toggle.setAttribute('title', isOpen ? 'Close Settings' : 'Settings');
   }
 
   function renderHero() {
@@ -109,14 +132,6 @@
       : '';
     return `
       <header class="weather_hero">
-        <div class="weather_hero_topline">
-          <form class="weather_location_form" data-weather-form="location">
-            <label class="weather_visually_hidden" for="weather-location">Location</label>
-            <input id="weather-location" name="location" value="${escapeHtml(state.location)}" maxlength="90" autocomplete="address-level2" aria-label="Weather location">
-            <button type="submit" aria-label="Update weather location">Set</button>
-          </form>
-          <button type="button" class="weather_refresh_button" data-weather-action="refresh" ${state.isRefreshing ? 'disabled' : ''} aria-label="Refresh weather">${state.isRefreshing ? 'Refreshing' : 'Refresh'}</button>
-        </div>
         ${state.status === 'loading' && !snapshot ? renderHeroSkeleton() : ''}
         ${state.status === 'error' && !snapshot ? renderErrorState() : ''}
         ${snapshot ? `
@@ -137,8 +152,49 @@
             </dl>
           </div>
           ${offlineNote}
+          ${state.error ? `<p class="weather_error_note" role="status">${escapeHtml(state.error)} Showing the last successfully loaded weather data.</p>` : ''}
         ` : ''}
       </header>
+    `;
+  }
+
+  function renderSettings() {
+    const updated = state.snapshot?.fetchedAt ? `Last updated ${formatTime(state.snapshot.fetchedAt)}` : 'No weather has been loaded yet.';
+    const notice = state.isRefreshing
+      ? 'Refreshing weather…'
+      : state.error
+        ? `${state.error} Showing the last successfully loaded weather data.`
+        : state.notice;
+    return `
+      <section class="weather_settings" aria-labelledby="weather-settings-title">
+        <header class="weather_settings_header">
+          <div>
+            <p class="weather_settings_kicker">Weather</p>
+            <h1 id="weather-settings-title">Weather Settings</h1>
+          </div>
+        </header>
+        <section class="weather_settings_panel" aria-labelledby="weather-location-title">
+          <h2 id="weather-location-title">Location</h2>
+          <form class="weather_settings_form" data-weather-form="location">
+            <label for="weather-location">Weather location</label>
+            <div class="weather_settings_location_row">
+              <input id="weather-location" name="location" value="${escapeHtml(state.location)}" maxlength="90" autocomplete="address-level2" required>
+              <button type="submit" class="weather_settings_button weather_settings_button--primary" ${state.isRefreshing ? 'disabled' : ''}>Set</button>
+            </div>
+            <p class="weather_settings_help">Enter a city and state, such as Nashville, Tennessee.</p>
+          </form>
+        </section>
+        <section class="weather_settings_panel" aria-labelledby="weather-refresh-title">
+          <div class="weather_settings_panel_header">
+            <div>
+              <h2 id="weather-refresh-title">Weather data</h2>
+              <p class="weather_last_updated">${escapeHtml(updated)}</p>
+            </div>
+            <button type="button" class="weather_settings_button weather_settings_button--primary" data-weather-action="refresh" ${state.isRefreshing ? 'disabled' : ''}>${state.isRefreshing ? 'Refreshing…' : 'Refresh'}</button>
+          </div>
+          <div class="weather_settings_status weather_settings_status--${escapeHtml(state.noticeTone)}" role="status" aria-live="polite" ${notice ? '' : 'hidden'}>${escapeHtml(notice)}</div>
+        </section>
+      </section>
     `;
   }
 
@@ -227,14 +283,13 @@
       <div class="weather_error" role="status">
         <h1 id="weather-title">Weather</h1>
         <p>Weather cannot be loaded right now.</p>
-        <button type="button" class="weather_refresh_button" data-weather-action="refresh">Retry</button>
       </div>
     `;
   }
 
   async function loadWeather(options = {}) {
     const service = window.LandosWeatherService;
-    if (!service) return;
+    if (!service || state.isRefreshing) return;
     const cached = service.getCachedWeather(state.location);
     if (cached && !options.force) {
       state = { ...state, status: cached.isStale ? 'stale' : 'ready', snapshot: cached, error: '' };
@@ -244,20 +299,36 @@
       state = { ...state, status: 'loading', error: '' };
       render();
     }
-    state = { ...state, isRefreshing: true };
+    state = { ...state, isRefreshing: true, error: '' };
     render();
-    const result = await service.getWeather(state.location, {
-      force: Boolean(options.force),
-      unitSystem: getUnitSystem(),
-      ttlMs: CACHE_RECHECK_MS,
-    });
+    let result;
+    try {
+      result = await service.getWeather(state.location, {
+        force: Boolean(options.force),
+        unitSystem: getUnitSystem(),
+        ttlMs: CACHE_RECHECK_MS,
+      });
+    } catch (error) {
+      result = {
+        status: state.snapshot ? 'stale' : 'error',
+        snapshot: state.snapshot,
+        error: friendlyWeatherError(error?.message),
+      };
+    }
+    const failed = Boolean(result.error);
+    const errorMessage = failed ? friendlyWeatherError(result.error) : '';
+    const successNotice = options.reason === 'location'
+      ? `Weather loaded for ${state.location}.`
+      : options.reason === 'refresh' ? 'Weather refreshed.' : '';
     state = {
       ...state,
       status: result.status,
-      snapshot: result.snapshot,
-      error: result.error || '',
+      snapshot: result.snapshot || state.snapshot,
+      error: errorMessage,
       isRefreshing: false,
       lastVisibleRefreshAt: Date.now(),
+      notice: failed ? '' : successNotice,
+      noticeTone: failed ? 'error' : 'success',
     };
     render();
   }
@@ -271,15 +342,25 @@
     if (nextLocation !== state.location) {
       window.LandosWeatherService?.clearLocation(state.location);
       saveLocationPreference(nextLocation);
-      state = { ...state, status: 'loading', snapshot: null, error: '' };
+      state = { ...state, location: nextLocation, status: 'loading', snapshot: null, error: '', notice: `Loading weather for ${nextLocation}…`, noticeTone: 'status' };
+    } else {
+      state = { ...state, notice: 'Refreshing weather…', noticeTone: 'status', error: '' };
     }
-    loadWeather({ force: true });
+    loadWeather({ force: true, reason: 'location' });
   }
 
   function handleClick(event) {
     const button = event.target.closest('[data-weather-action]');
     if (!button) return;
-    if (button.dataset.weatherAction === 'refresh') loadWeather({ force: true });
+    if (button.dataset.weatherAction === 'settings') {
+      state = { ...state, view: state.view === 'settings' ? 'home' : 'settings' };
+      render();
+      return;
+    }
+    if (button.dataset.weatherAction === 'refresh') {
+      state = { ...state, notice: 'Refreshing weather…', noticeTone: 'status', error: '' };
+      loadWeather({ force: true, reason: 'refresh' });
+    }
   }
 
   function handleVisibilityChange() {

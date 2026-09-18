@@ -223,6 +223,13 @@
   border-color: var(--vfgt-border);
 }
 
+.vfgt_page_header--with-back .digit_clock_menu_toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  margin: 0;
+}
+
 .vfgt_page_header--with-back > div {
   padding-right: 3.25rem;
 }
@@ -921,6 +928,39 @@
   grid-column: 2;
   grid-row: 1;
   justify-self: end;
+}
+
+.vfgt_hero .digit_clock_menu_toggle {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.vfgt_app .digit_clock_menu_toggle.vfgt_icon_button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0.5rem;
+  color: var(--app-accent);
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+}
+
+.vfgt_app .digit_clock_menu_toggle.vfgt_icon_button svg {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.3s ease;
+}
+
+.vfgt_app .digit_clock_menu_toggle.vfgt_icon_button[aria-expanded="true"] {
+  border-color: var(--app-accent);
+  background-color: var(--app-accent-bg);
+}
+
+.vfgt_app .digit_clock_menu_toggle.vfgt_icon_button[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+  animation: digit-clock-settings-spin 0.3s ease;
 }
 
 .vfgt_actions--sticky {

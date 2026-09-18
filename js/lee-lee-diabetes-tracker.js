@@ -3803,6 +3803,12 @@
 
   function renderTrackerTop({ active = 'today', kicker = formatDate(), title = 'Lee-Lee’s Tracker' } = {}) {
     const settingsActive = active === 'settings';
+    const headerToggle = document.getElementById('lee_lee_settings_toggle');
+    if (headerToggle) {
+      headerToggle.setAttribute('aria-expanded', String(settingsActive));
+      headerToggle.setAttribute('aria-label', settingsActive ? 'Close Settings' : 'Settings');
+      headerToggle.setAttribute('title', settingsActive ? 'Close Settings' : 'Settings');
+    }
     return `
       <section class="lee_lee_diabetes_top">
         <div class="lee_lee_diabetes_top_row">
@@ -3813,10 +3819,11 @@
           </div>
           <button
             type="button"
-            class="lando_settings_link lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
+            class="lando_settings_link digit_clock_menu_toggle lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
+            hidden
             data-action="settings"
             aria-label="${settingsActive ? 'Close Settings' : 'Settings'}"
-            aria-pressed="${settingsActive ? 'true' : 'false'}"
+            aria-expanded="${settingsActive ? 'true' : 'false'}"
             aria-current="${settingsActive ? 'page' : 'false'}"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -8121,6 +8128,11 @@
   async function init() {
     const root = getRoot();
     if (!root) return;
+    const headerToggle = document.getElementById('lee_lee_settings_toggle');
+    headerToggle?.addEventListener('click', () => {
+      if (currentEditor?.mode === 'settings') handleCancel();
+      else renderSettings();
+    });
     syncRepository = createSyncRepository();
     if (syncRepository) {
       syncRepository.subscribe((nextStatus) => {

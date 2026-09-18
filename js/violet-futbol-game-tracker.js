@@ -1399,12 +1399,21 @@
     return season ? savedGames.filter((game) => game.seasonId === season.id && game.status === 'completed') : [];
   }
 
-  function settingsButtonMarkup() {
-    return `<button type="button" class="lando_settings_link vfgt_icon_button" data-vfgt-action="settings" aria-label="VFGT Settings" title="Settings">
+  function settingsButtonMarkup(settingsOpen = false) {
+    return `<button type="button" class="digit_clock_menu_toggle vfgt_icon_button" data-vfgt-action="settings" data-vfgt-settings-toggle aria-expanded="${settingsOpen ? 'true' : 'false'}" aria-label="${settingsOpen ? 'Close VFGT Settings' : 'VFGT Settings'}" title="${settingsOpen ? 'Close Settings' : 'Settings'}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
       </svg>
     </button>`;
+  }
+
+  function syncSettingsHeaderToggle() {
+    const button = document.getElementById('vfgt_settings_toggle');
+    if (!button) return;
+    const expanded = screen === 'settings';
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', expanded ? 'Close VFGT Settings' : 'VFGT Settings');
+    button.setAttribute('title', expanded ? 'Close Settings' : 'Settings');
   }
 
   function contextMarkup() {
@@ -1418,7 +1427,6 @@
     const season = currentSeason();
     getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-settings-title">
       <header class="vfgt_page_header vfgt_page_header--with-back">
-        <button type="button" class="vfgt_back_button" data-vfgt-action="home" aria-label="Back to tracker">←</button>
         <div><p class="vfgt_kicker">VFGT</p><h1 id="vfgt-settings-title">Settings</h1></div>
       </header>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-team-season-settings-title">
@@ -1432,6 +1440,7 @@
       <section class="vfgt_settings_group" aria-labelledby="vfgt-recovery-settings-title"><h2 id="vfgt-recovery-settings-title">Data Recovery</h2><p class="vfgt_settings_note">Temporary, read-only scan for future games affected by an upgrade.</p><button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="recovery">Open Future Game Recovery</button></section>
       <section class="vfgt_settings_group" aria-labelledby="vfgt-about-title"><h2 id="vfgt-about-title">About</h2><p>Violet Futbol Game Tracker</p><p class="vfgt_settings_note">Long-term team and season history tracker.</p></section>
     </section>`;
+    syncSettingsHeaderToggle();
   }
 
   function renderHalfDurationForm() {
@@ -1702,7 +1711,6 @@
           <div class="vfgt_home_actions">
             <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="choose-game-type">Add Game</button>
           </div>
-          ${settingsButtonMarkup()}
         </header>
         ${unfinished ? `<section class="vfgt_resume" aria-label="Unfinished game">
           <div>
@@ -1720,6 +1728,7 @@
           ${pastSection}
         </section>
       </section>`;
+    syncSettingsHeaderToggle();
   }
 
   function renderSetup() {
@@ -2182,7 +2191,15 @@
       screen = 'home';
       renderHome();
     }
-    if (action === 'settings') { screen = 'settings'; renderSettings(); }
+    if (action === 'settings') {
+      if (button.dataset.vfgtSettingsToggle !== undefined) {
+        if (screen === 'settings') { screen = 'home'; renderHome(); }
+        else { screen = 'settings'; renderSettings(); }
+      } else {
+        screen = 'settings';
+        renderSettings();
+      }
+    }
     if (action === 'recovery') { recoveryScan = null; renderRecoveryDiagnostic(); void runRecoveryScan(); }
     if (action === 'recovery-scan') void runRecoveryScan();
     if (action === 'recovery-export' && recoveryScan) downloadRecoveryJson(`vfgt-recovery-scan-${Date.now()}.json`, recoveryScan);
@@ -2346,6 +2363,15 @@
     if (!root) return;
     initializeContext();
     savedGames = sortedGames(readSavedGames());
+    document.getElementById('vfgt_settings_toggle')?.addEventListener('click', () => {
+      if (screen === 'settings') {
+        screen = 'home';
+        renderHome();
+      } else {
+        screen = 'settings';
+        renderSettings();
+      }
+    });
     if (window.PointerEvent) {
       root.addEventListener('pointerup', handleClick);
     } else {

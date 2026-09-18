@@ -26,15 +26,15 @@ Weather: Open-Meteo (no API key). Optional future provider:
 <script>window.__WEATHER_API_KEY__ = 'your-key';</script>
 const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
 -->
-  <link rel="stylesheet" href="css/digital-clock.css?v=20260831-1">
+  <link rel="stylesheet" href="css/digital-clock.css?v=20260918-1">
   <link rel="stylesheet" href="css/app-themes.css?v=20260822-3">
-  <link rel="stylesheet" href="css/weather-app.css?v=20260822-4">
-  <link rel="stylesheet" href="css/daily-chief-briefing.css?v=20260825-1">
-  <link rel="stylesheet" href="css/lee-lee-diabetes.css?v=20260917-1">
+  <link rel="stylesheet" href="css/weather-app.css?v=20260917-1">
+  <link rel="stylesheet" href="css/daily-chief-briefing.css?v=20260917-1">
+  <link rel="stylesheet" href="css/lee-lee-diabetes.css?v=20260918-1">
   <link rel="stylesheet" href="css/sprints.css?v=20260825-1">
-  <link rel="stylesheet" href="css/violet-futbol-game-tracker.css?v=20260915-14">
+  <link rel="stylesheet" href="css/violet-futbol-game-tracker.css?v=20260918-1">
   <link rel="stylesheet" href="css/road-bike-checklist.css?v=20260822-4">
-  <link rel="stylesheet" href="css/maintenance-total.css?v=20260915-1">
+  <link rel="stylesheet" href="css/maintenance-total.css?v=20260918-1">
 </head>
 
 <body>
@@ -53,7 +53,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           </svg>
           <span class="digit_clock_title">Lando's World</span>
         </div>
-        <a class="lando_settings_link" href="#/settings" aria-label="Lando's World Settings">
+        <button type="button" class="lando_settings_link digit_clock_menu_toggle" data-lando-settings-toggle aria-label="Lando's World Settings" title="Settings" aria-expanded="false">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"></circle>
@@ -61,7 +61,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
               d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z">
             </path>
           </svg>
-        </a>
+        </button>
       </div>
     </div>
     <main class="digit_clocks_row" aria-label="Lando's World apps">
@@ -73,12 +73,6 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
   </div>
 
   <div class="digit_clock_app app_theme app_theme--landos-world-settings" id="lando-settings-view" hidden>
-    <nav class="ecosystem_nav" aria-label="Lando's World app navigation" data-ecosystem-nav>
-      <a class="ecosystem_nav_back" href="#/" aria-label="Return to Lando's World home">
-        <span class="ecosystem_nav_arrow" aria-hidden="true">←</span>
-        <span>Lando's World</span>
-      </a>
-    </nav>
     <div class="digit_clock_header">
       <div class="digit_clock_header_row">
         <div class="digit_clock_brand lando_world_brand">
@@ -93,6 +87,9 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           </svg>
           <span class="digit_clock_title">Lando's World Settings</span>
         </div>
+        <button type="button" class="lando_settings_link digit_clock_menu_toggle" data-lando-settings-toggle aria-label="Close Lando's World Settings" title="Close Settings" aria-expanded="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0-.73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path></svg>
+        </button>
       </div>
     </div>
     <main class="lando_settings_shell" aria-labelledby="lando-settings-title">
@@ -147,6 +144,11 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           <img class="digit_clock_logo" src="icons/weather.png" alt="" aria-hidden="true">
           <span class="digit_clock_title">Weather</span>
         </div>
+        <button type="button" class="digit_clock_menu_toggle weather_settings_toggle" data-weather-action="settings" aria-label="Weather Settings" title="Settings" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+          </svg>
+        </button>
       </div>
     </div>
     <main class="weather_app_shell" id="weather-root" aria-labelledby="weather-title">
@@ -167,6 +169,9 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           <img class="digit_clock_logo lee_lee_diabetes_header_icon" src="icons/lee-lees-tracker.png" alt="" aria-hidden="true">
           <span class="digit_clock_title">Lee-Lee’s Tracker</span>
         </div>
+        <button type="button" class="digit_clock_menu_toggle" id="lee_lee_settings_toggle" data-action="settings" aria-label="Settings" title="Settings" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 1 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0-.73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1 1.73V4a2 2 0 0 0-2-2z"></path></svg>
+        </button>
       </div>
     </div>
     <main class="lee_lee_diabetes_shell" id="lee-lee-diabetes-root" aria-labelledby="lee-lee-diabetes-title">
@@ -289,8 +294,14 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     <div class="digit_clock_header">
       <div class="digit_clock_header_row">
         <div class="digit_clock_brand lando_world_brand">
+          <img class="digit_clock_logo" src="icons/violet-futbol-game-tracker.png" alt="" aria-hidden="true">
           <span class="digit_clock_title">Violet Futbol Game Tracker</span>
         </div>
+        <button type="button" class="digit_clock_menu_toggle vfgt_header_settings_toggle" id="vfgt_settings_toggle" data-vfgt-action="settings" aria-label="VFGT Settings" title="Settings" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+          </svg>
+        </button>
       </div>
     </div>
     <main id="violet-futbol-game-tracker-root" aria-labelledby="vfgt-title">
@@ -320,7 +331,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     <nav class="ecosystem_nav" aria-label="Lando’s World app navigation" data-ecosystem-nav>
       <a class="ecosystem_nav_back" href="#/" aria-label="Return to Lando’s World home"><span class="ecosystem_nav_arrow" aria-hidden="true">←</span><span>Lando’s World</span></a>
     </nav>
-    <div class="digit_clock_header"><div class="digit_clock_header_row"><div class="digit_clock_brand lando_world_brand"><img class="digit_clock_logo" src="icons/imaintenancetotal-pearl-white.png" alt="" aria-hidden="true"><span class="digit_clock_title">iMaintenanceTotal</span></div></div></div>
+    <div class="digit_clock_header"><div class="digit_clock_header_row"><div class="digit_clock_brand lando_world_brand"><img class="digit_clock_logo" src="icons/imaintenancetotal-pearl-white.png" alt="" aria-hidden="true"><span class="digit_clock_title">iMaintenanceTotal</span></div><button type="button" class="digit_clock_menu_toggle" id="imt_settings_toggle" aria-label="Settings" title="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 1-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 1 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-2.73-.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 1 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path></svg></button></div></div>
     <main class="maintenance_total_app" id="maintenance-total-root" aria-label="iMaintenanceTotal"><p>Loading maintenance manager...</p></main>
   </div>
   <div class="pwa_network_status" id="pwa-network-status" role="status" aria-live="polite" hidden></div>
@@ -842,6 +853,12 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       document.addEventListener('click', (event) => {
         const backLink = event.target.closest('[data-ecosystem-nav] a[href="#/"]');
         if (backLink) pendingEcosystemScrollReset = true;
+      });
+      document.addEventListener('click', (event) => {
+        const toggle = event.target.closest('[data-lando-settings-toggle]');
+        if (!toggle) return;
+        pendingEcosystemScrollReset = true;
+        navigateToRoute(normalizeRouteFromHash() === 'settings' ? 'home' : 'settings');
       });
       window.addEventListener('hashchange', handleRouteChange);
       window.addEventListener('scroll', updateEcosystemNavState, { passive: true });
@@ -1461,13 +1478,13 @@ ${dateLongParts.year}`;
     });
   </script>
   <script src="js/pwa-manager.js?v=20260916-3"></script>
-  <script src="js/weather-app.js?v=20260803-1"></script>
-  <script src="js/daily-chief-briefing.js?v=20260804-1"></script>
-  <script src="js/lee-lee-diabetes-tracker.js?v=20260917-1"></script>
+  <script src="js/weather-app.js?v=20260917-1"></script>
+  <script src="js/daily-chief-briefing.js?v=20260917-1"></script>
+  <script src="js/lee-lee-diabetes-tracker.js?v=20260918-1"></script>
   <script src="js/sprints-app.js?v=20260814-1"></script>
-  <script src="js/violet-futbol-game-tracker.js?v=20260915-14"></script>
+  <script src="js/violet-futbol-game-tracker.js?v=20260917-1"></script>
   <script src="js/road-bike-checklist.js?v=20260812-1"></script>
-  <script src="js/maintenance-total-v2.js"></script>
+  <script src="js/maintenance-total-v2.js?v=20260917-1"></script>
 </body>
 
 </html>

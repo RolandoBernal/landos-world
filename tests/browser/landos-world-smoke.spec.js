@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const WEATHER_API_PATTERN = /api\.open-meteo\.com\/v1\/forecast/;
+const GEOCODING_API_PATTERN = /geocoding-api\.open-meteo\.com\/v1\/search/;
 
 const WEATHER_FIXTURE = {
   current: {
@@ -142,11 +143,33 @@ function relativeLocalDateKey(deltaDays) {
 
 test.beforeEach(async ({ page }) => {
   const consoleErrors = [];
+  const weatherRequests = [];
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('pageerror', (error) => {
     consoleErrors.push(error.message);
+  });
+  page.on('request', (request) => {
+    if (WEATHER_API_PATTERN.test(request.url())) weatherRequests.push(request.url());
+  });
+  await page.route(GEOCODING_API_PATTERN, async (route) => {
+    const location = new URL(route.request().url()).searchParams.get('name') || 'Nashville, Tennessee';
+    const isAustin = location.toLowerCase().includes('austin');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [{
+          name: isAustin ? 'Austin' : 'Nashville',
+          admin1: isAustin ? 'Texas' : 'Tennessee',
+          country_code: 'US',
+          latitude: isAustin ? 30.2672 : 36.1627,
+          longitude: isAustin ? -97.7431 : -86.7816,
+          timezone: 'America/Chicago',
+        }],
+      }),
+    });
   });
   await page.route(WEATHER_API_PATTERN, async (route) => {
     await route.fulfill({
@@ -164,6 +187,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   page.consoleErrors = consoleErrors;
+  page.weatherRequests = weatherRequests;
 });
 
 test.afterEach(async ({ page }) => {
@@ -228,34 +252,40 @@ test('VFGT settings edits the current season half duration', async ({ page }) =>
   await expect(page.getByRole('button', { name: /Half Duration/ })).toContainText('Applies to 2026 Fall');
 });
 
-test('VFGT settings uses a compact top-right back button', async ({ page }) => {
+test('VFGT settings uses the shared top-right toggle cog', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#/violet-futbol-game-tracker');
   await page.getByRole('button', { name: 'VFGT Settings' }).click();
-  const header = page.locator('.vfgt_page_header--with-back');
-  const backButton = page.getByRole('button', { name: 'Back to tracker' });
+  const header = page.locator('#violet-futbol-game-tracker-view > .digit_clock_header');
+  const backButton = page.getByRole('button', { name: 'Close VFGT Settings' });
   const [headerBox, buttonBox] = await Promise.all([header.boundingBox(), backButton.boundingBox()]);
   expect(headerBox).not.toBeNull();
   expect(buttonBox).not.toBeNull();
   expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
   expect(buttonBox.x).toBeGreaterThan(headerBox.x + headerBox.width - 70);
-  expect(buttonBox.y).toBeGreaterThan(headerBox.y);
-  expect(buttonBox.y + buttonBox.height).toBeLessThan(headerBox.y + headerBox.height);
+  expect(buttonBox.y).toBeGreaterThanOrEqual(headerBox.y);
+  expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height);
+  await expect(backButton).toHaveAttribute('aria-expanded', 'true');
   await backButton.click();
   await expect(page.getByRole('button', { name: 'VFGT Settings' })).toBeVisible();
 });
 
-test('VFGT mobile settings cog stays in the hero top-right corner', async ({ page }) => {
+test('VFGT shared header keeps its logo, title, and settings cog on one row', async ({ page }) => {
   await page.goto('/#/violet-futbol-game-tracker');
-  const hero = page.locator('.vfgt_hero');
+  const header = page.locator('#violet-futbol-game-tracker-view > .digit_clock_header');
+  const brand = header.locator('.digit_clock_brand');
+  const logo = header.locator('.digit_clock_logo');
+  const title = header.locator('.digit_clock_title');
   const cog = page.getByRole('button', { name: 'VFGT Settings' });
-  const actions = page.locator('.vfgt_home_actions');
-  const [heroBox, cogBox, actionsBox] = await Promise.all([hero.boundingBox(), cog.boundingBox(), actions.boundingBox()]);
-  expect(heroBox).not.toBeNull();
+  const [headerBox, brandBox, logoBox, titleBox, cogBox] = await Promise.all([header.boundingBox(), brand.boundingBox(), logo.boundingBox(), title.boundingBox(), cog.boundingBox()]);
+  expect(headerBox).not.toBeNull();
+  expect(brandBox).not.toBeNull();
+  expect(logoBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
   expect(cogBox).not.toBeNull();
-  expect(actionsBox).not.toBeNull();
-  expect(cogBox.x + cogBox.width).toBeGreaterThan(heroBox.x + heroBox.width - 20);
-  if (page.viewportSize().width <= 680) expect(cogBox.y).toBeLessThan(actionsBox.y);
+  expect(cogBox.x + cogBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
+  expect(Math.abs(logoBox.y - titleBox.y)).toBeLessThan(8);
+  expect(Math.abs((cogBox.y + cogBox.height / 2) - (titleBox.y + titleBox.height / 2))).toBeLessThan(2);
 });
 
 test('VFGT displays the record from the visible saved scores', async ({ page }) => {
@@ -746,8 +776,70 @@ test('weather launcher card shows and refreshes the device-local date', async ({
   await expect(page.locator('[data-launcher-weather-date]')).toHaveText('Fri, Sep 18');
 });
 
+test('Weather Settings owns location and refresh controls without losing weather data', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto('/#/weather');
+  await expect(page.getByRole('heading', { name: 'Weather' })).toBeVisible();
+  await expect(page.locator('.weather_current_temp')).toContainText('78°F');
+
+  const settingsToggle = page.getByRole('button', { name: 'Weather Settings' });
+  await expect(settingsToggle).toHaveAttribute('aria-expanded', 'false');
+  await settingsToggle.click();
+  await expect(page.getByRole('button', { name: 'Close Weather Settings' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: 'Weather Settings' })).toBeVisible();
+  await expect(page.locator('.weather_hero')).toHaveCount(0);
+  for (const preference of ['light', 'dark']) {
+    await page.evaluate((value) => window.LandosTheme?.setPreference?.(value), preference);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', preference);
+    await expect(page.locator('.weather_settings_panel').first()).toBeVisible();
+  }
+
+  const location = page.locator('#weather-location');
+  await location.fill('Austin, Texas');
+  await page.getByRole('button', { name: 'Set', exact: true }).click();
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather loaded for Austin, Texas.');
+  await expect(page.locator('.weather_last_updated')).toContainText('Last updated');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('weather_app_preferences_v1')).location)).toBe('Austin, Texas');
+
+  const beforeRefresh = page.weatherRequests.length;
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.locator('[data-weather-action="refresh"]').evaluate((button) => {
+    button.disabled = false;
+    button.click();
+  });
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather refreshed.');
+  expect(page.weatherRequests.length).toBe(beforeRefresh + 1);
+
+  await page.unroute(WEATHER_API_PATTERN);
+  await page.route(WEATHER_API_PATTERN, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'not-json' }));
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('.weather_settings_status')).toContainText('Weather unavailable right now.');
+  await page.getByRole('button', { name: 'Close Weather Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Weather Settings' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.weather_location')).toContainText('Austin, Texas');
+  await expect(page.locator('.weather_current_temp')).toContainText('78°F');
+  await expect(page.locator('.weather_location_form')).toHaveCount(0);
+  await expect(page.locator('.weather_hero .weather_refresh_button')).toHaveCount(0);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Weather Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Close Weather Settings' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#weather-location')).toHaveValue('Austin, Texas');
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    const panel = page.locator('.weather_settings_panel').first();
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox.width).toBeLessThanOrEqual(viewport.width);
+  }
+});
+
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
   await page.goto('/#/settings');
+  const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
+  await expect(settingsToggle).toBeVisible();
+  await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
 
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-appearance-preference', 'system');
@@ -768,6 +860,22 @@ test('appearance setting reflects the preference and applies immediately', async
   await expect(light).toHaveAttribute('aria-checked', 'true');
   await expect(root).toHaveAttribute('data-theme', 'light');
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f8fb');
+});
+
+test('LsW settings cog stays white and keeps its top-right position', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('#/');
+  const homeToggle = page.getByRole('button', { name: 'Lando\'s World Settings' });
+  await expect(homeToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+  const homeBox = await homeToggle.boundingBox();
+  await homeToggle.click();
+  const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
+  await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+  const settingsBox = await settingsToggle.boundingBox();
+  expect(homeBox).not.toBeNull();
+  expect(settingsBox).not.toBeNull();
+  expect(Math.abs((homeBox?.x || 0) - (settingsBox?.x || 0))).toBeLessThan(2);
+  expect(Math.abs((homeBox?.y || 0) - (settingsBox?.y || 0))).toBeLessThan(2);
 });
 
 test('light appearance reaches child app surfaces with readable foregrounds', async ({ page }) => {
@@ -1017,7 +1125,7 @@ test('Lee-Lee print media hides app shell chrome around the report body', async 
   });
 
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.ecosystem_nav')).toHaveCount(7);
+  await expect(page.locator('.ecosystem_nav')).toHaveCount(6);
   expect(await page.locator('.ecosystem_nav').evaluateAll((nodes) => (
     nodes.every((node) => getComputedStyle(node).display === 'none')
   ))).toBe(true);
@@ -1114,15 +1222,15 @@ async function openSeededLeeLeeHistoryDay(page, dateKey = '2026-08-25') {
 test('Lee-Lee settings gear toggles the settings page', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   const app = page.locator('#lee-lees-tracker-view');
-  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(app.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-expanded', 'false');
 
-  await app.getByRole('button', { name: 'Settings' }).click();
-  await expect(app.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await expect(app.getByRole('button', { name: 'Close Settings' })).toHaveAttribute('aria-pressed', 'true');
+  await app.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Close Settings' })).toHaveAttribute('aria-expanded', 'true');
 
-  await app.getByRole('button', { name: 'Close Settings' }).click();
+  await app.getByRole('button', { name: 'Close Settings', exact: true }).click();
   await expect(app.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
-  await expect(app.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(app.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('Lee-Lee Settings shows one global sync status action', async ({ page }) => {

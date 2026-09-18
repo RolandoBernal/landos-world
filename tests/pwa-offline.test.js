@@ -188,7 +188,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-16-2'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-18-4'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -219,14 +219,14 @@ test('localhost previews bypass service-worker registration', () => {
 
 test('app dropdowns use padded custom select arrows', () => {
   [
-    [html, /css\/daily-chief-briefing\.css\?v=20260825-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260917-1/],
+    [html, /css\/daily-chief-briefing\.css\?v=20260917-1/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260918-1/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260917-1/],
-    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260917-1/],
+    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260918-1/],
     [html, /js\/pwa-manager\.js\?v=20260916-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
-    [html, /css\/violet-futbol-game-tracker\.css\?v=20260915-14/],
-    [html, /js\/violet-futbol-game-tracker\.js\?v=20260915-14/],
+    [html, /css\/violet-futbol-game-tracker\.css\?v=20260918-1/],
+    [html, /js\/violet-futbol-game-tracker\.js\?v=20260917-1/],
     [dailyChiefBriefingCss, /\.daily_briefing_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
     [leeLeeDiabetesCss, /\.lee_lee_diabetes_select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
     [sprintsCss, /\.sprints-select \{[\s\S]*-webkit-appearance: none[\s\S]*appearance: none[\s\S]*background-image: linear-gradient[\s\S]*background-position: calc\(100% - 1\.45rem\) 50%, calc\(100% - 1\.05rem\) 50%[\s\S]*padding-inline-end: 3rem/],
@@ -247,7 +247,7 @@ test('application cache cleanup is separated from localStorage user data', () =>
 test('offline, install, update, and settings UI hooks are present and accessible', () => {
   assert.match(html, /id="pwa-network-status" role="status" aria-live="polite"/);
   assert.match(html, /id="pwa-toast" role="status" aria-live="polite"/);
-  assert.match(html, /href="#\/settings" aria-label="Lando's World Settings"/);
+  assert.match(html, /<button type="button" class="lando_settings_link digit_clock_menu_toggle" data-lando-settings-toggle aria-label="Lando's World Settings"/);
   assert.match(html, /id="lando-settings-view" hidden/);
   assert.match(html, /id="pwa-offline-settings" aria-live="polite"/);
   assert.match(pwaManager, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);

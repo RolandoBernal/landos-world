@@ -255,6 +255,12 @@ body {
 
 .digit_clock_menu_toggle[aria-expanded="true"] svg {
   transform: rotate(90deg);
+  animation: digit-clock-settings-spin 0.3s ease;
+}
+
+@keyframes digit-clock-settings-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
 }
 
 .lando_settings_link {
@@ -286,6 +292,17 @@ body {
   width: 22px;
   height: 22px;
   display: block;
+}
+
+.digit_clock_menu_toggle.lando_settings_link {
+  color: var(--app-accent, #66ff99);
+  background-color: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+}
+
+.digit_clock_menu_toggle.lando_settings_link[aria-expanded="true"] {
+  border-color: var(--app-accent, #66ff99);
+  background-color: var(--app-accent-bg, #1a3d2a);
 }
 
 .digit_clock_toolbar {
@@ -1045,7 +1062,7 @@ body {
   }
 
   .digit_clock_menu_toggle {
-    display: none;
+    display: flex;
   }
 
   .digit_clock_toolbar {
