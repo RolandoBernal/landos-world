@@ -935,10 +935,10 @@
 .lee_lee_diabetes_dose_breakdown--adjustment {
   margin-top: 0.4rem;
   padding: 0.42rem 0.6rem;
-  border-left: 3px solid #e7b84b;
+  border-left: 3px solid #63c879;
   border-radius: 4px;
-  background: rgb(231 184 75 / 13%);
-  color: #f3cc70;
+  background: rgb(99 200 121 / 14%);
+  color: #8be39b;
   font-weight: 650;
 }
 
@@ -2225,9 +2225,9 @@
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_adjustment_note,
 :root[data-theme="light"] .lee_lee_diabetes_dose_breakdown--adjustment {
-  border-left-color: #a66b00;
-  background: rgb(231 184 75 / 22%);
-  color: #704900;
+  border-left-color: #2f8f4e;
+  background: rgb(47 143 78 / 16%);
+  color: #236b37;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card_title,

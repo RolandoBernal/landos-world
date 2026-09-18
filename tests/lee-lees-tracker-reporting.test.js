@@ -1464,7 +1464,7 @@ test('suggested dose presentation makes included temporary adjustment explicit',
   assert.match(trackerSource, /Includes \$\{renderInsulin\(result\.temporaryEatingAdjustmentUnits\)\} temporary adjustment units/);
   assert.match(trackerSource, /Final suggested dose: \$\{renderInsulin\(result\.suggestedTotalUnits\)\} total/);
   assert.match(trackerSource, /lee_lee_diabetes_dose_breakdown--adjustment/);
-  assert.match(cssSource, /\.lee_lee_diabetes_dose_adjustment_note[\s\S]*background: rgb\(231 184 75/);
+  assert.match(cssSource, /\.lee_lee_diabetes_dose_adjustment_note[\s\S]*background: rgb\(99 200 121/);
   assert.match(cssSource, /\.lee_lee_diabetes_dose_breakdown--adjustment[\s\S]*border-left/);
 });
 
