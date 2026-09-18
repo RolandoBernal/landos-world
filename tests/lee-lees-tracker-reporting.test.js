@@ -1207,7 +1207,7 @@ test('snacks use configured carb coverage only with one final rounding pass', ()
   assert.equal(calc(28).suggestedTotalUnits, 2);
 });
 
-test('temporary eating adjustment applies before rounding only inside its active window', () => {
+test('temporary eating adjustment applies after rounding only inside its active window', () => {
   const runtime = createTrackerRuntime();
   const helper = runtime.LeeLeeTrackerDoseHelper;
   const plan = {
@@ -1229,11 +1229,117 @@ test('temporary eating adjustment applies before rounding only inside its active
   const expired = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Dinner', recordTimestamp: Date.parse('2026-08-14T12:00:00.000Z'), insulinPlan: plan, totalCarbs: 12 });
   const correction = helper.calculateMealInsulinDose({ bloodSugar: 220, entryType: 'Correction', recordTimestamp: Date.parse('2026-08-05T12:00:00.000Z'), insulinPlan: plan });
   assert.equal(active.temporaryEatingAdjustmentUnits, 0.5);
-  assert.equal(active.rawAggregateDose, 1.5);
+  assert.equal(active.rawAggregateDose, 1);
+  assert.equal(active.roundedBaseDose, 1);
   assert.equal(active.suggestedTotalUnits, 1.5);
   assert.equal(expired.temporaryEatingAdjustmentUnits, 0);
   assert.equal(expired.suggestedTotalUnits, 1);
   assert.equal(correction.temporaryEatingAdjustmentUnits, undefined);
+});
+
+test('temporary eating adjustment follows the rounded normal dose for all supported states', () => {
+  const runtime = createTrackerRuntime();
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const activeWindow = {
+    enabled: true,
+    units: 0.5,
+    startsAt: '2026-08-01T00:00:00.000Z',
+    endsAt: '2026-08-13T00:00:00.000Z',
+    contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+  };
+  const plan = {
+    id: 'plan',
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner'],
+    insulinCarbRatioGrams: 12,
+    doseIncrementUnits: 0.5,
+    doseRoundingMode: 'down',
+    correctionRanges: [{ minGlucose: 175, maxGlucose: 249, correctionUnits: 2 }],
+    temporaryEatingAdjustment: activeWindow,
+  };
+  const timestamp = Date.parse('2026-08-05T12:00:00.000Z');
+
+  const example = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Dinner', recordTimestamp: timestamp, insulinPlan: { ...plan, correctionRanges: [{ minGlucose: null, maxGlucose: 174, correctionUnits: 0 }] }, totalCarbs: 45 });
+  assert.equal(example.rawCarbDose, 3.75);
+  assert.equal(example.correctionUnits, 0);
+  assert.equal(example.roundedBaseDose, 3.5);
+  assert.equal(example.temporaryEatingAdjustmentUnits, 0.5);
+  assert.equal(example.suggestedTotalUnits, 4);
+
+  const zeroCarbs = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Lunch', recordTimestamp: timestamp, insulinPlan: { ...plan, correctionRanges: [{ minGlucose: null, maxGlucose: 174, correctionUnits: 0 }] }, totalCarbs: 0 });
+  assert.equal(zeroCarbs.suggestedTotalUnits, 0);
+  assert.equal(zeroCarbs.temporaryEatingAdjustmentApplied, false);
+  assert.equal(zeroCarbs.temporaryEatingAdjustmentUnits, 0);
+  assert.equal(zeroCarbs.temporaryEatingAdjustmentMessage, 'Temp adjustment: Not applied — no carbs entered');
+
+  const blankCarbs = helper.calculateMealInsulinDose({ bloodSugar: 120, entryType: 'Lunch', recordTimestamp: timestamp, insulinPlan: { ...plan, correctionRanges: [{ minGlucose: null, maxGlucose: 174, correctionUnits: 0 }] }, totalCarbs: '' });
+  assert.equal(blankCarbs.suggestedTotalUnits, 0);
+  assert.equal(blankCarbs.temporaryEatingAdjustmentApplied, false);
+  assert.equal(blankCarbs.temporaryEatingAdjustmentMessage, 'Temp adjustment: Not applied — no carbs entered');
+
+  const zeroWithCorrection = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Lunch', recordTimestamp: timestamp, insulinPlan: plan, totalCarbs: 0 });
+  assert.equal(zeroWithCorrection.correctionUnits, 2);
+  assert.equal(zeroWithCorrection.suggestedTotalUnits, 2);
+  assert.equal(zeroWithCorrection.temporaryEatingAdjustmentApplied, false);
+
+  const down = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Dinner', recordTimestamp: timestamp, insulinPlan: plan, totalCarbs: 28 });
+  assert.equal(down.rawCarbDose, 28 / 12);
+  assert.equal(down.correctionUnits, 2);
+  assert.equal(down.rawAggregateDose, 28 / 12 + 2);
+  assert.equal(down.roundedBaseDose, 4);
+  assert.equal(down.temporaryEatingAdjustmentUnits, 0.5);
+  assert.equal(down.temporaryEatingAdjustmentApplied, true);
+  assert.equal(down.temporaryEatingAdjustmentMessage, '');
+  assert.equal(down.suggestedTotalUnits, 4.5);
+
+  const orderSensitive = helper.calculateSnackSuggestedDose({
+    totalCarbs: 6,
+    entryType: 'Snacks',
+    recordTimestamp: timestamp,
+    insulinPlan: { ...plan, insulinCarbRatioGrams: 10, doseIncrementUnits: 1 },
+  });
+  assert.equal(orderSensitive.roundedBaseDose, 0);
+  assert.equal(orderSensitive.suggestedTotalUnits, 0.5);
+
+  const nearest = helper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Lunch',
+    recordTimestamp: timestamp,
+    insulinPlan: { ...plan, doseRoundingMode: 'nearest' },
+    totalCarbs: 28,
+  });
+  assert.equal(nearest.roundedBaseDose, 4.5);
+  assert.equal(nearest.suggestedTotalUnits, 5);
+
+  const disabled = helper.calculateMealInsulinDose({
+    bloodSugar: 198,
+    entryType: 'Breakfast',
+    recordTimestamp: timestamp,
+    insulinPlan: { ...plan, temporaryEatingAdjustment: { ...activeWindow, enabled: false } },
+    totalCarbs: 28,
+  });
+  assert.equal(disabled.temporaryEatingAdjustmentUnits, 0);
+  assert.equal(disabled.suggestedTotalUnits, 4);
+
+  const expired = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Dinner', recordTimestamp: Date.parse('2026-08-14T12:00:00.000Z'), insulinPlan: plan, totalCarbs: 28 });
+  assert.equal(expired.temporaryEatingAdjustmentUnits, 0);
+  assert.equal(expired.suggestedTotalUnits, 4);
+
+  const correction = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Correction', recordTimestamp: timestamp, insulinPlan: plan });
+  assert.equal(correction.suggestedTotalUnits, 2);
+  assert.equal(correction.temporaryEatingAdjustmentUnits, undefined);
+
+  const bedtime = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Bedtime', recordTimestamp: timestamp, insulinPlan: { ...plan, bedtimeBaseUnits: 17 } });
+  assert.equal(bedtime.suggestedTotalUnits, 17);
+  assert.equal(bedtime.temporaryEatingAdjustmentUnits, undefined);
+
+  const manual = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Other', recordTimestamp: timestamp, insulinPlan: plan });
+  assert.notEqual(manual.status, 'calculated');
+  assert.equal(manual.temporaryEatingAdjustmentUnits, undefined);
+
+  const unconfigured = helper.calculateMealInsulinDose({ bloodSugar: 198, entryType: 'Dinner', recordTimestamp: timestamp, insulinPlan: { ...plan, temporaryEatingAdjustment: null }, totalCarbs: 28 });
+  assert.equal(unconfigured.temporaryEatingAdjustmentUnits, 0);
+  assert.equal(unconfigured.suggestedTotalUnits, 4);
+  assert.equal(down.suggestedTotalUnits - down.roundedBaseDose, down.temporaryEatingAdjustmentUnits);
 });
 
 test('meal dose rounds once after aggregating raw components', () => {
@@ -1359,10 +1465,27 @@ test('settings UI exposes configurable dose rounding controls', () => {
 test('settings UI exposes the clinician-directed temporary eating adjustment controls', () => {
   assert.match(trackerSource, /temporaryEatingAdjustmentEnabled/);
   assert.match(trackerSource, /temporaryEatingAdjustmentUnits/);
-  assert.match(trackerSource, /temporaryEatingAdjustmentStartsAt/);
-  assert.match(trackerSource, /temporaryEatingAdjustmentEndsAt/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentStartsDate/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentStartsTime/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentEndsDate/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentEndsTime/);
+  assert.doesNotMatch(trackerSource, /name="temporaryEatingAdjustmentStartsAt"/);
+  assert.doesNotMatch(trackerSource, /name="temporaryEatingAdjustmentEndsAt"/);
   assert.match(trackerSource, /DEFAULT_TEMPORARY_EATING_ADJUSTMENT_DURATION_DAYS/);
+  assert.match(trackerSource, /applies after normal dose rounding/);
+  assert.match(trackerSource, /Final suggested dose:/);
+  assert.doesNotMatch(trackerSource, /applies after carb coverage and before final rounding/);
   assert.match(trackerSource, /Temporary eating adjustment:/);
+});
+
+test('suggested dose presentation makes included temporary adjustment explicit', () => {
+  assert.match(trackerSource, /Includes \$\{renderInsulin\(result\.temporaryEatingAdjustmentUnits\)\} temporary adjustment units/);
+  assert.match(trackerSource, /Final suggested dose: \$\{renderInsulin\(result\.suggestedTotalUnits\)\} total/);
+  assert.match(trackerSource, /Temp adjustment: Not applied — no carbs entered/);
+  assert.match(trackerSource, /temporaryEatingAdjustmentApplied === true/);
+  assert.match(trackerSource, /lee_lee_diabetes_dose_breakdown--adjustment/);
+  assert.match(cssSource, /\.lee_lee_diabetes_dose_adjustment_note[\s\S]*background: rgb\(99 200 121/);
+  assert.match(cssSource, /\.lee_lee_diabetes_dose_breakdown--adjustment[\s\S]*border-left/);
 });
 
 test('temporary adjustment settings reuse contained numeric controls and responsive date layout', () => {
