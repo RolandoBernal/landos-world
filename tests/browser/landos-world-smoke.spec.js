@@ -321,6 +321,56 @@ test('VFGT displays the record from the visible saved scores', async ({ page }) 
   await expect(page.locator('.vfgt_season_summary')).toContainText('2 Wins · 1 Loss · 1 Draw');
 });
 
+test('VFGT venue links encode complete locations without changing card controls', async ({ page }) => {
+  await page.addInitScript(() => {
+    const base = {
+      schemaVersion: 4,
+      team1: 'Hume-Fogg',
+      teamId: 'team-1',
+      seasonId: 'season-1',
+      teamSide: 1,
+      gameType: 'regularSeason',
+      date: '2026-09-18',
+      startTime: '18:00',
+    };
+    const future = {
+      ...base,
+      id: 'future-map',
+      team2: 'Map Opponent',
+      status: 'scheduled',
+      phase: 'pregame',
+      venue: 'East Nashville Magnet High School',
+      address: '110 Gallatin Ave, Nashville, TN 37206, United States',
+    };
+    const venueOnly = { ...base, id: 'venue-only', team2: 'Venue Only', status: 'scheduled', phase: 'pregame', location: "St. Mary's Field, Unit #2" };
+    const noLocation = { ...base, id: 'no-location', team2: 'No Location', status: 'scheduled', phase: 'pregame', location: '' };
+    const past = { ...base, id: 'past-map', team2: 'Past Opponent', status: 'completed', phase: 'final', date: '2026-09-17', venue: 'Past Stadium', address: '1 Main St., Apt. 4B, Nashville, TN 37201', firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 0, secondHalfGoalsTeam1: 0, secondHalfGoalsTeam2: 0 };
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:teams:v1', JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', shortName: 'HF', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:seasons:v1', JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:settings:v1', JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' }));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:migration:v1', '4');
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:saved-games:v1', JSON.stringify([future, venueOnly, noLocation, past]));
+  });
+  await page.goto('/#/violet-futbol-game-tracker');
+  const future = page.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
+  await future.locator('summary').click();
+  const fullLink = future.locator('[data-vfgt-map-link]').filter({ hasText: 'East Nashville Magnet' });
+  await expect(fullLink).toHaveAttribute('href', 'https://maps.apple.com/?address=110%20Gallatin%20Ave%2C%20Nashville%2C%20TN%2037206%2C%20United%20States&q=East%20Nashville%20Magnet%20High%20School');
+  await expect(fullLink).toHaveAccessibleName('Open East Nashville Magnet High School in Apple Maps');
+  await expect(future.locator('[data-vfgt-map-link]').filter({ hasText: "St. Mary's Field" })).toHaveAttribute('href', "https://maps.apple.com/?q=St.%20Mary's%20Field%2C%20Unit%20%232");
+  await expect(future.locator('.vfgt_scheduled_card').filter({ hasText: 'No Location' }).locator('[data-vfgt-map-link]')).toHaveCount(0);
+  const fullCard = future.locator('.vfgt_scheduled_card').filter({ hasText: 'Map Opponent' });
+  await expect(fullLink.locator('xpath=ancestor::button')).toHaveCount(0);
+  await expect(fullCard.locator('.vfgt_card_actions')).toBeHidden();
+  await fullCard.locator('.vfgt_card_summary').click();
+  await expect(fullCard.locator('.vfgt_card_actions')).toBeVisible();
+  const past = page.locator('.vfgt_accordion').filter({ hasText: 'Past Games' });
+  const pastLink = past.locator('[data-vfgt-map-link]');
+  await expect(pastLink).toHaveAccessibleName('Open Past Stadium in Apple Maps');
+  await past.locator('.vfgt_past_card .vfgt_card_summary').click();
+  await expect(page.locator('.vfgt_map_link--detail')).toHaveAccessibleName('Open Past Stadium in Apple Maps');
+});
+
 test('VFGT schedules, edits, quick-starts, and completes one future game without duplication', async ({ page }) => {
   await page.goto('/#/violet-futbol-game-tracker');
   const app = page.locator('#violet-futbol-game-tracker-view');
