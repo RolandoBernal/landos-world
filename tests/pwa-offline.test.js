@@ -247,7 +247,7 @@ test('application cache cleanup is separated from localStorage user data', () =>
 test('offline, install, update, and settings UI hooks are present and accessible', () => {
   assert.match(html, /id="pwa-network-status" role="status" aria-live="polite"/);
   assert.match(html, /id="pwa-toast" role="status" aria-live="polite"/);
-  assert.match(html, /href="#\/settings" aria-label="Lando's World Settings"/);
+  assert.match(html, /<button type="button" class="lando_settings_link digit_clock_menu_toggle" data-lando-settings-toggle aria-label="Lando's World Settings"/);
   assert.match(html, /id="lando-settings-view" hidden/);
   assert.match(html, /id="pwa-offline-settings" aria-live="polite"/);
   assert.match(pwaManager, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);

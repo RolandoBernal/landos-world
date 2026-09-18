@@ -837,7 +837,7 @@ test('Weather Settings owns location and refresh controls without losing weather
 
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
   await page.goto('/#/settings');
-  const settingsToggle = page.getByRole('link', { name: 'Close Lando\'s World Settings' });
+  const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
   await expect(settingsToggle).toBeVisible();
   await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
 
@@ -865,11 +865,11 @@ test('appearance setting reflects the preference and applies immediately', async
 test('LsW settings cog stays white and keeps its top-right position', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('#/');
-  const homeToggle = page.getByRole('link', { name: 'Lando\'s World Settings' });
+  const homeToggle = page.getByRole('button', { name: 'Lando\'s World Settings' });
   await expect(homeToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
   const homeBox = await homeToggle.boundingBox();
   await homeToggle.click();
-  const settingsToggle = page.getByRole('link', { name: 'Close Lando\'s World Settings' });
+  const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
   await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
   const settingsBox = await settingsToggle.boundingBox();
   expect(homeBox).not.toBeNull();
