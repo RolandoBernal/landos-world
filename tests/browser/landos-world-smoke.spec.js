@@ -832,6 +832,7 @@ test('Weather Settings owns location and refresh controls without losing weather
 
 test('appearance setting reflects the preference and applies immediately', async ({ page }) => {
   await page.goto('/#/settings');
+  await expect(page.getByRole('link', { name: 'Close Lando\'s World Settings' })).toBeVisible();
 
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-appearance-preference', 'system');

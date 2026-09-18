@@ -960,6 +960,7 @@
 
 .vfgt_app .digit_clock_menu_toggle.vfgt_icon_button[aria-expanded="true"] svg {
   transform: rotate(90deg);
+  animation: digit-clock-settings-spin 0.3s ease;
 }
 
 .vfgt_actions--sticky {
