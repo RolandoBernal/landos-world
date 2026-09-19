@@ -361,14 +361,81 @@ test('VFGT venue links encode complete locations without changing card controls'
   await expect(future.locator('.vfgt_scheduled_card').filter({ hasText: 'No Location' }).locator('[data-vfgt-map-link]')).toHaveCount(0);
   const fullCard = future.locator('.vfgt_scheduled_card').filter({ hasText: 'Map Opponent' });
   await expect(fullLink.locator('xpath=ancestor::button')).toHaveCount(0);
-  await expect(fullCard.locator('.vfgt_card_actions')).toBeHidden();
-  await fullCard.locator('.vfgt_card_summary').click();
   await expect(fullCard.locator('.vfgt_card_actions')).toBeVisible();
   const past = page.locator('.vfgt_accordion').filter({ hasText: 'Past Games' });
   const pastLink = past.locator('[data-vfgt-map-link]');
   await expect(pastLink).toHaveAccessibleName('Open Past Stadium in Apple Maps');
   await past.locator('.vfgt_past_card .vfgt_card_summary').click();
   await expect(page.locator('.vfgt_map_link--detail')).toHaveAccessibleName('Open Past Stadium in Apple Maps');
+  await expect(page.getByRole('button', { name: 'Edit Game' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete Game' })).toBeVisible();
+});
+
+test('VFGT Past and Future cards use DM Sans with normal metadata weights across widths', async ({ page }) => {
+  await page.addInitScript(() => {
+    const base = {
+      team1: 'Hume-Fogg',
+      teamId: 'team-1',
+      seasonId: 'season-1',
+      teamSide: 1,
+      gameType: 'regularSeason',
+      startTime: '18:00',
+    };
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:teams:v1', JSON.stringify([{ id: 'team-1', name: 'Hume-Fogg', shortName: 'HF', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:seasons:v1', JSON.stringify([{ id: 'season-1', teamId: 'team-1', name: '2026 Fall', archived: false }]));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:settings:v1', JSON.stringify({ currentTeamId: 'team-1', currentSeasonId: 'season-1' }));
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:migration:v1', '4');
+    localStorage.setItem('lando-world:violet-futbol-game-tracker:saved-games:v1', JSON.stringify([
+      { ...base, id: 'future-typography', team2: 'Future Opponent', status: 'scheduled', phase: 'pregame', date: '2026-09-22', location: 'Future Field', notes: 'Supporting future note.' },
+      { ...base, id: 'past-typography', team2: 'Past Opponent', status: 'completed', phase: 'final', date: '2026-09-17', location: 'Past Stadium', firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 0, secondHalfGoalsTeam1: 0, secondHalfGoalsTeam2: 0 },
+    ]));
+  });
+  await page.goto('/#/violet-futbol-game-tracker');
+
+  const measurements = await page.evaluate(() => {
+    const style = (selector) => {
+      const node = document.querySelector(selector);
+      const computed = getComputedStyle(node);
+      return { family: computed.fontFamily, weight: computed.fontWeight };
+    };
+    return {
+      future: {
+        card: style('.vfgt_scheduled_card'),
+        opponent: style('.vfgt_scheduled_opponent'),
+        status: style('.vfgt_scheduled_badge'),
+        date: style('.vfgt_scheduled_card .vfgt_history_date'),
+        location: style('.vfgt_scheduled_card .vfgt_map_link'),
+        type: style('.vfgt_scheduled_card .vfgt_history_game_type'),
+        notes: style('.vfgt_scheduled_notes'),
+      },
+      past: {
+        card: style('.vfgt_past_card'),
+        status: style('.vfgt_past_card .vfgt_scheduled_badge'),
+        date: style('.vfgt_past_card .vfgt_history_date'),
+        team: style('.vfgt_history_team'),
+        score: style('.vfgt_history_score'),
+        location: style('.vfgt_past_card .vfgt_map_link'),
+        type: style('.vfgt_past_card .vfgt_history_game_type'),
+      },
+    };
+  });
+
+  for (const viewport of [{ width: 393, height: 852 }, { width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    const layout = await page.evaluate(() => [...document.querySelectorAll('.vfgt_history_item')].map((card) => ({
+      right: card.getBoundingClientRect().right,
+      viewport: window.innerWidth,
+      chevron: Boolean(card.querySelector('.vfgt_card_chevron')),
+    })));
+    expect(layout.every(({ right, viewport: width, chevron }) => right <= width && !chevron)).toBe(true);
+  }
+
+  const normal = [measurements.future.card, measurements.future.date, measurements.future.location, measurements.future.type, measurements.future.notes, measurements.past.card, measurements.past.date, measurements.past.location, measurements.past.type];
+  expect(normal.every(({ family, weight }) => family.startsWith('"DM Sans"') && weight === '400')).toBe(true);
+  expect(measurements.future.opponent.family.startsWith('"DM Sans"')).toBe(true);
+  expect(measurements.future.status.weight).toBe('500');
+  expect(measurements.past.team.weight).toBe('500');
+  expect(measurements.past.score.weight).toBe('500');
 });
 
 test('VFGT schedules, edits, quick-starts, and completes one future game without duplication', async ({ page }) => {
@@ -395,26 +462,17 @@ test('VFGT schedules, edits, quick-starts, and completes one future game without
 
   await future.locator('summary').click();
   const futureCard = future.locator('.vfgt_scheduled_card');
-  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
-  await futureCard.locator('.vfgt_card_summary').click();
   await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
   await futureCard.getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Delete this scheduled game?');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
   await expect(futureCard.locator('.vfgt_card_actions')).toBeVisible();
-  await page.waitForTimeout(400);
-  await futureCard.locator('.vfgt_card_summary').click();
-  await expect(futureCard.locator('.vfgt_card_actions')).toBeHidden();
-  await page.waitForTimeout(400);
-  await futureCard.locator('.vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Edit' }).click();
   await app.getByLabel('Opponent').fill('Franklin Road Academy');
   await app.getByRole('button', { name: 'Save Future Game' }).click();
   await expect(future).toContainText('Franklin Road Academy');
   await expect(future).not.toContainText('Brentwood Academy');
 
-  await future.locator('summary').click();
-  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Quick Start' }).click();
   await expect(page.getByRole('alertdialog')).toHaveAccessibleName('Start game vs. Franklin Road Academy?');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
@@ -478,7 +536,6 @@ async function startVfgtFirstHalf(page) {
   await app.getByRole('button', { name: 'Save Future Game' }).click();
   const future = app.locator('.vfgt_accordion').filter({ hasText: 'Future Games' });
   await future.locator('summary').click();
-  await future.locator('.vfgt_scheduled_card .vfgt_card_summary').click();
   await future.getByRole('button', { name: 'Quick Start' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Start Game' }).click();
   await expect(app.locator('.vfgt_live--running-half')).toBeVisible();

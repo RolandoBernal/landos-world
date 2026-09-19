@@ -845,6 +845,7 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_team--home[\s\S]*text-align: left/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.vfgt_history_team--away[\s\S]*text-align: right/);
   assert.match(css, /\.vfgt_history_score[\s\S]*font-variant-numeric: tabular-nums/);
+  assert.match(css, /\.vfgt_history_score[\s\S]*min-width: 4\.5rem[\s\S]*font-size: clamp\(1\.15rem, 3vw, 1\.55rem\)/);
   assert.match(css, /\.vfgt_scoreboard \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*align-self: end/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*justify-self: center/);
@@ -860,6 +861,8 @@ test('mobile keeps saved history in a row while stacking live score controls', (
   assert.match(css, /\.vfgt_history_item[\s\S]*text-align: center/);
   assert.match(css, /\.vfgt_history_item[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
   assert.match(css, /\.vfgt_card_actions[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.vfgt_scheduled_actions \.vfgt_button[\s\S]*font-size: 0\.85rem[\s\S]*font-weight: 500/);
+  assert.doesNotMatch(source, /data-vfgt-toggle-card/);
   assert.match(css, /\.vfgt_history \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
   assert.match(css, /\.vfgt_accordion_content \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*box-sizing: border-box/);
   assert.match(css, /\.vfgt_button \{[\s\S]*box-sizing: border-box/);
@@ -957,7 +960,14 @@ test('game type is captured on new, manual, and edit game forms and shown in his
   assert.doesNotMatch(source, /<h2 id="vfgt-history-title">Saved Games<\/h2>/);
   assert.match(css, /\.vfgt_season_summary h3[\s\S]*font-size: 1\.5rem/);
   assert.match(css, /\.vfgt_form select[\s\S]*height: 50px[\s\S]*min-height: 50px[\s\S]*line-height: 1\.2/);
-  assert.match(css, /\.vfgt_history_game_type[\s\S]*font-weight: 800/);
+  assert.match(css, /\.vfgt_history_item[\s\S]*font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif[\s\S]*font-weight: 400/);
+  assert.match(css, /\.vfgt_history_date,[\s\S]*\.vfgt_history_game_type[\s\S]*font-weight: 400/);
+  assert.match(css, /\.vfgt_history_game_type[\s\S]*font-weight: 400/);
+  assert.match(css, /\.vfgt_history_team[\s\S]*font-weight: 500/);
+  assert.doesNotMatch(css, /font-weight: 850/);
+  assert.doesNotMatch(source, /vfgt_card_chevron/);
+  assert.doesNotMatch(source, /vfgt_card_expand/);
+  assert.doesNotMatch(source, /vfgt-past-actions-/);
   assert.match(css, /\.vfgt_game_type_select--placeholder[\s\S]*color: var\(--vfgt-placeholder\)[\s\S]*opacity: 0\.78/);
 });
 
