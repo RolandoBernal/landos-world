@@ -1516,18 +1516,16 @@
   }
 
   function scheduledGameMarkup(game) {
-    const actionsId = `vfgt-scheduled-actions-${game.id}`;
-    return `<article class="vfgt_history_item vfgt_scheduled_card vfgt_collapsible_card" data-vfgt-card="future" data-id="${escapeHtml(game.id)}">
-      <button type="button" class="vfgt_card_summary" data-vfgt-toggle-card aria-expanded="false" aria-controls="${escapeHtml(actionsId)}" aria-label="Show actions for future game against ${escapeHtml(game.team2)}">
+    return `<article class="vfgt_history_item vfgt_scheduled_card" data-id="${escapeHtml(game.id)}">
+      <div class="vfgt_card_summary">
         <span class="vfgt_scheduled_badge">Scheduled</span>
         <strong class="vfgt_scheduled_opponent">${escapeHtml(game.team2)}</strong>
         <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
         ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--card')}
         ${game.gameType ? `<span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>` : ''}
         ${game.notes ? `<p class="vfgt_scheduled_notes">${escapeHtml(game.notes)}</p>` : ''}
-        <span class="vfgt_card_chevron" aria-hidden="true">›</span>
-      </button>
-      <div class="vfgt_actions vfgt_card_actions" id="${escapeHtml(actionsId)}" hidden>
+      </div>
+      <div class="vfgt_actions vfgt_card_actions vfgt_scheduled_actions">
         <button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="quick-start" data-id="${escapeHtml(game.id)}">Quick Start</button>
         <button type="button" class="vfgt_button" data-vfgt-action="edit-scheduled" data-id="${escapeHtml(game.id)}">Edit</button>
         <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-scheduled" data-id="${escapeHtml(game.id)}">Delete</button>
@@ -1701,8 +1699,7 @@
       ? `<div class="vfgt_history" role="list">
           ${currentGames.map((game) => {
             const score = finalScores(game);
-            const actionsId = `vfgt-past-actions-${game.id}`;
-            return `<article class="vfgt_history_item vfgt_collapsible_card vfgt_past_card" data-vfgt-card="past" data-id="${escapeHtml(game.id)}" role="listitem">
+            return `<article class="vfgt_history_item vfgt_past_card" data-id="${escapeHtml(game.id)}" role="listitem">
               <div class="vfgt_past_card_header">
                 <button type="button" class="vfgt_card_summary" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" aria-label="Open summary for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}">
                   <span class="vfgt_scheduled_badge">Completed</span>
@@ -1714,12 +1711,7 @@
                   </span>
                   <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
                 </button>
-                <button type="button" class="vfgt_card_expand" data-vfgt-toggle-card aria-expanded="false" aria-controls="${escapeHtml(actionsId)}" aria-label="Show actions for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}"><span class="vfgt_card_chevron" aria-hidden="true">›</span></button>
                 ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--card')}
-              </div>
-              <div class="vfgt_actions vfgt_card_actions" id="${escapeHtml(actionsId)}" hidden>
-                <button type="button" class="vfgt_button" data-vfgt-action="edit-saved" data-id="${escapeHtml(game.id)}">Edit</button>
-                <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-action="delete-saved" data-id="${escapeHtml(game.id)}">Delete</button>
               </div>
             </article>`;
           }).join('')}
@@ -2203,7 +2195,7 @@
       }
       return;
     }
-    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score], [data-vfgt-toggle-card]');
+    const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
     const now = Date.now();
     if (!button) return;
     if (event.type === 'click' && now - lastDirectActivationAt < ACTION_GUARD_MS) {
@@ -2213,20 +2205,6 @@
     if (!guardAction(event, button)) return;
     if (event.type === 'pointerup' || event.type === 'touchend') lastDirectActivationAt = now;
     void unlockAudio();
-    if (button.dataset.vfgtToggleCard !== undefined) {
-      const card = button.closest('[data-vfgt-card]');
-      const actions = card?.querySelector('.vfgt_card_actions');
-      if (!card || !actions) return;
-      const expanded = button.getAttribute('aria-expanded') === 'true';
-      card.classList.toggle('is-expanded', !expanded);
-      card.querySelectorAll('[data-vfgt-toggle-card]').forEach((toggle) => {
-        toggle.setAttribute('aria-expanded', String(!expanded));
-        const label = toggle.getAttribute('aria-label') || '';
-        toggle.setAttribute('aria-label', label.replace(/^(Show|Hide)/, !expanded ? 'Hide' : 'Show'));
-      });
-      actions.hidden = expanded;
-      return;
-    }
     const action = button.dataset.vfgtAction;
     if (button.dataset.vfgtManualScore) {
       const form = button.closest('[data-vfgt-manual-form], [data-vfgt-edit-form]');
