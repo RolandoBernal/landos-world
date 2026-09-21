@@ -815,6 +815,20 @@ test('Digital Clock desktop cards stay square while containing Orbitron clock co
   expect(layout.every((item) => item.square), 'desktop clock cards should remain square').toBe(true);
 });
 
+test('Digital Clock keeps its settings cog on mobile but hides it on tablet and desktop', async ({ page }) => {
+  const toggle = page.locator('#digit_clock_menu_toggle');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/digital-clock');
+  await expect(toggle).toBeVisible();
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(toggle).toBeHidden();
+
+  await page.setViewportSize({ width: 1472, height: 1684 });
+  await expect(toggle).toBeHidden();
+});
+
 test('launcher opens every local app route from its cards', async ({ page }) => {
   const launcherTargets = [
     ['Open Weather', /#\/weather$/],

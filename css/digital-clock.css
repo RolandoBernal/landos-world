@@ -1038,6 +1038,10 @@ body {
 }
 
 @media only screen and (min-width: 768px) {
+  #clock-view .digit_clock_menu_toggle {
+    display: none;
+  }
+
   .digit_clock_title {
     font-size: 18px;
   }
