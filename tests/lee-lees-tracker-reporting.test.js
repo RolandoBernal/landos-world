@@ -2180,7 +2180,7 @@ test('Pre-Meal Timer presentation states use generic accessible LLT styling with
   assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_ring/);
   assert.match(trackerSource, /remaining/);
   assert.match(trackerSource, /Timer continues while the app is backgrounded/);
-  assert.match(trackerSource, /source\.recordTimestamp \? ` <span/);
+  assert.match(trackerSource, /source\.recordTimestamp \? renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)/);
   assert.match(trackerSource, /Timer Already Running/);
   assert.match(trackerSource, /Keep Current Timer/);
   assert.match(trackerSource, /Restart Timer/);
@@ -2214,8 +2214,12 @@ test('Pre-Meal Timer stop uses an LLT confirmation instead of native browser con
 });
 
 test('Pre-Meal Timer source summaries cannot expose escaped generated markup', () => {
-  assert.match(trackerSource, /source\.recordTimestamp \? ` <span class="lee_lee_diabetes_pre_meal_timer_source_time">\$\{renderRecordDateTime\(source\.recordTimestamp\)\}<\/span>`/);
-  assert.doesNotMatch(trackerSource, /escapeHtml\(renderRecordDateTime\(source\.recordTimestamp\)\)/);
+  assert.match(trackerSource, /function renderPreMealTimerSourceTimestamp\(timestamp\)/);
+  assert.match(trackerSource, /source\.recordTimestamp \? renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)/);
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_source_context/);
+  assert.match(trackerSource, /<dt>Started<\/dt>/);
+  assert.doesNotMatch(trackerSource, /Started from/);
+  assert.doesNotMatch(trackerSource, /escapeHtml\(renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)\)/);
   assert.match(trackerSource, /Entry Saved!/);
   assert.match(trackerSource, /data-action="close-pre-meal-timer">OK/);
   assert.match(trackerSource, /data-action="close-pre-meal-timer" aria-label="Back to Today"/);

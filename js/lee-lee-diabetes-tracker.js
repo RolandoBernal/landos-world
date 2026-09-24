@@ -3869,6 +3869,16 @@
     return `${renderNumeric(formatDate(date))} at ${renderNumeric(formatTime(timestamp))}`;
   }
 
+  function renderPreMealTimerSourceTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return '';
+    const shortDate = new Intl.DateTimeFormat(navigator.language || undefined, {
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+    return `${renderNumeric(shortDate)} <span aria-hidden="true">·</span> ${renderNumeric(formatTime(timestamp))}`;
+  }
+
   function getMealDoseSummary(record) {
     if (!record || record.doseCalculationStatus !== 'calculated' || record.suggestedTotalUnits == null) return '';
     const given = formatInsulin(record.administeredInsulinUnits ?? record.insulinUnits) || 'No insulin';
@@ -6715,7 +6725,7 @@
     const startedFromSave = options.startedFromSave === true && timer.status === 'active';
     const source = timer.sourceEntry;
     const remaining = formatPreMealRemaining(timer);
-    const sourceSummaryMarkup = source && !stopped ? `<dl class="lee_lee_diabetes_pre_meal_timer_source"><div><dt>Started from</dt><dd>${escapeHtml(source.type || 'Entry')}${source.recordTimestamp ? ` <span class="lee_lee_diabetes_pre_meal_timer_source_time">${renderRecordDateTime(source.recordTimestamp)}</span>` : ''}</dd></div><div><dt>Carbs</dt><dd>${source.mealCarbs == null ? '—' : escapeHtml(formatCarbs(source.mealCarbs))}</dd></div><div><dt>Insulin given</dt><dd>${source.administeredInsulinUnits == null ? '—' : escapeHtml(formatInsulin(source.administeredInsulinUnits))}</dd></div></dl>` : '';
+    const sourceSummaryMarkup = source && !stopped ? `<dl class="lee_lee_diabetes_pre_meal_timer_source"><p class="lee_lee_diabetes_pre_meal_timer_source_context">${escapeHtml(source.type || 'Entry')}</p><div><dt>Started</dt><dd class="lee_lee_diabetes_pre_meal_timer_source_time">${source.recordTimestamp ? renderPreMealTimerSourceTimestamp(source.recordTimestamp) : '—'}</dd></div><div><dt>Carbs</dt><dd>${source.mealCarbs == null ? '—' : escapeHtml(formatCarbs(source.mealCarbs))}</dd></div><div><dt>Insulin given</dt><dd>${source.administeredInsulinUnits == null ? '—' : escapeHtml(formatInsulin(source.administeredInsulinUnits))}</dd></div></dl>` : '';
     const detailContent = `
       <div class="lee_lee_diabetes_pre_meal_timer_detail_inner">
         <div class="lee_lee_diabetes_pre_meal_timer_header"><button type="button" class="lee_lee_diabetes_pre_meal_timer_back" data-action="close-pre-meal-timer" aria-label="Back to Today">‹</button><span>Pre-Meal Timer</span><span aria-hidden="true"></span></div>
