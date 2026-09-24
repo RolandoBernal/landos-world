@@ -57,7 +57,7 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-function createSyncContext({ localStorage = createLocalStorage(), supabase = null, config = null } = {}) {
+function createSyncContext({ localStorage = createLocalStorage(), supabase = null, config = null, location = { hostname: 'localhost', protocol: 'http:' } } = {}) {
   const context = {
     Date,
     JSON,
@@ -78,6 +78,7 @@ function createSyncContext({ localStorage = createLocalStorage(), supabase = nul
     navigator: {
       onLine: true,
     },
+    location,
     window: null,
     globalThis: null,
   };
@@ -133,6 +134,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
   const sharedSettingsRows = [...(options.sharedSettingsRows || [])];
   const foodRows = [...(options.foodRows || [])];
   const savedMealRows = [...(options.savedMealRows || [])];
+  const auditRows = [...(options.auditRows || [])];
   const rpcCalls = [];
   const orderCalls = [];
   const userId = options.userId || 'user-1';
@@ -147,7 +149,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
     from(tableName) {
       const tableRows = tableName === 'lee_lee_shared_settings'
         ? sharedSettingsRows
-        : (tableName === 'lee_lee_foods' ? foodRows : (tableName === 'lee_lee_saved_meals' ? savedMealRows : rows));
+        : (tableName === 'lee_lee_foods' ? foodRows : (tableName === 'lee_lee_saved_meals' ? savedMealRows : (tableName === 'lee_lee_settings_audit' ? auditRows : rows)));
       const builder = {
         insert(payload) {
           if (tableName === 'lee_lee_records' && options.recordInsertError) {
@@ -218,7 +220,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
           }
           const row = tableName === 'lee_lee_shared_settings'
             ? tableRows.find((item) => item.user_id === builder.filters?.user_id)
-            : tableRows.find((item) => item.id === builder.filters?.id);
+            : tableName === 'lee_lee_settings_audit'
+              ? tableRows.find((item) => item.authorized_user_id === builder.filters?.authorized_user_id && item.event_id === builder.filters?.event_id)
+              : tableRows.find((item) => item.id === builder.filters?.id);
           if (!row) {
             return Promise.resolve({ data: null, error: null });
           }
@@ -255,6 +259,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
         return Promise.resolve({ data: { status: 'accepted', settings: row, versionBefore: null, versionAfter: 1, eventId: args.p_audit_event?.event_id, changedFields: args.p_audit_event?.changed_fields || [], acceptedAt: '2026-08-01T12:45:00.000Z' }, error: null });
       }
       if (name === 'update_lee_lee_shared_settings_with_version' || name === 'update_lee_lee_shared_settings_with_audit') {
+        if (options.updateSharedSettingsRpcError) return Promise.resolve({ data: null, error: options.updateSharedSettingsRpcError });
         const row = sharedSettingsRows.find((item) => item.user_id === userId);
         if (!row || Number(row.version) !== Number(args.p_expected_version)) {
           return Promise.resolve({ data: { status: 'conflict', versionBefore: Number(args.p_expected_version), versionAfter: Number(row?.version || 0), settings: row || null, eventId: args.p_audit_event?.event_id }, error: null });
@@ -270,6 +275,14 @@ function createMockSupabase(remoteRows = [], options = {}) {
           version: Number(row.version) + 1,
           updated_at: '2026-08-01T13:15:00.000Z',
         });
+        if (args.p_audit_event?.event_id) {
+          auditRows.push({
+            ...args.p_audit_event,
+            status: 'Accepted',
+            version_before: Number(args.p_expected_version),
+            version_after: Number(row.version),
+          });
+        }
         return Promise.resolve({ data: { status: 'accepted', settings: row, versionBefore: Number(args.p_expected_version), versionAfter: Number(row.version), eventId: args.p_audit_event?.event_id, changedFields: args.p_audit_event?.changed_fields || [], acceptedAt: '2026-08-01T13:15:00.000Z' }, error: null });
       }
       if (name !== 'update_lee_lee_record_with_version') {
@@ -323,6 +336,7 @@ function createMockSupabase(remoteRows = [], options = {}) {
     sharedSettingsRows,
     foodRows,
     savedMealRows,
+    auditRows,
     rpcCalls,
     orderCalls,
   };
@@ -396,6 +410,7 @@ function remoteSharedSettingsRow(overrides = {}) {
     app_schema_version: overrides.app_schema_version || 2,
   };
 }
+
 
 test('reports missing Supabase config without throwing', () => {
   const context = createSyncContext();
@@ -886,6 +901,60 @@ test('shared settings changes create one grouped immutable audit event with stab
   context.navigator.userAgent = 'Macintosh';
   assert.equal(repository.getDeviceInstallationId(), firstId);
   assert.equal(repository.getSettingsAuditHistory()[0].deviceInstallationId, firstId);
+});
+
+test('settings audit reader supports the current actor and device schema', async () => {
+  const supabase = createMockSupabase([], {
+    auditRows: [{
+      event_id: 'current-audit-event',
+      authorized_user_id: 'user-1',
+      actor_name: 'Levi',
+      device_profile: 'Levi’s MacBook Safari localhost',
+      device_installation_id: 'installation-current',
+      device_platform: 'Mac',
+      app_environment: '127.0.0.1',
+      app_version: '1.0.0',
+      status: 'Accepted',
+      changed_fields: [{ key: 'insulinPlan.bedtimeBaseUnits', label: 'Bedtime long-acting' }],
+      previous_values: { 'insulinPlan.bedtimeBaseUnits': 16 },
+      new_values: { 'insulinPlan.bedtimeBaseUnits': 17 },
+    }],
+  });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+
+  const event = repository.getSettingsAuditHistory()[0];
+  assert.equal(event.displayName, 'Levi');
+  assert.equal(event.deviceLabel, 'Levi’s MacBook Safari localhost');
+  assert.equal(event.deviceInstallationId, 'installation-current');
+  assert.equal(event.devicePlatform, 'Mac');
+  assert.equal(event.changes[0].previousValue, 16);
+  assert.equal(event.changes[0].newValue, 17);
+});
+
+test('settings audit reader retains legacy display-name fallback', async () => {
+  const supabase = createMockSupabase([], {
+    auditRows: [{
+      event_id: 'legacy-audit-event',
+      authorized_user_id: 'user-1',
+      display_name: 'Rolando',
+      device_profile: 'Rolando’s MacBook Chrome',
+      device_installation_id: 'installation-legacy',
+      device_platform: 'Mac',
+      status: 'Accepted',
+      changed_fields: [],
+    }],
+  });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+
+  const event = repository.getSettingsAuditHistory()[0];
+  assert.equal(event.displayName, 'Rolando');
+  assert.equal(event.deviceInstallationId, 'installation-legacy');
 });
 
 test('shared settings read restores patient clinic and dose configuration from remote payload', async () => {

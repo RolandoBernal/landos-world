@@ -38,17 +38,29 @@ Full setup steps are in `docs/SUPABASE_SETUP.md`.
 ## Commands
 
 ```sh
+pnpm install
+pnpm dev
 pnpm test
 pnpm run check:js
 ```
 
-The browser app is static. For local smoke testing:
+The supported local-development command is `pnpm dev`. It verifies the repository root, generates ignored local source metadata, starts the static server from this working tree, and prints the branch, commit, source state, URL, and port. Open the exact URL printed by the command, normally:
 
-```sh
-python3 -m http.server 8000
+```text
+http://127.0.0.1:8000/
 ```
 
-Then open `http://localhost:8000/`.
+Stop the server with `Ctrl-C`. `Source: Modified` means the served files include uncommitted working-tree changes based on the displayed commit; `Source: Clean` means Git reports no non-ignored changes.
+
+Do not use `localhost:5500`, VS Code Live Server, or an arbitrary manually started server as the supported workflow. Those servers may serve another checkout, branch, or directory and do not generate the source identity used by the app’s Settings diagnostics.
+
+The browser app remains static. `pnpm dev` is a small repository-owned static server, not a bundler or build system. It sends `Cache-Control: no-store` for local responses so a normal reload requests current working-tree files. Localhost service workers are intentionally disabled; local development does not clear LLT records, settings, pending sync state, foods, or timer state.
+
+For a source-identity fallback check, request the generated metadata directly:
+
+```sh
+curl -s http://127.0.0.1:8000/.local/landos-world-build-metadata.js
+```
 
 The production GitHub Pages shell is intended to live at:
 

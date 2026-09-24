@@ -5,6 +5,7 @@ obj/
 .DS_Store
 node_modules/
 .pnpm-store/
+.local/
 test-results/
 playwright-report/
 .env

@@ -297,6 +297,7 @@
   };
 
   const storageAvailability = checkStorageAvailability();
+  const insulinPlanCompleteness = new WeakMap();
   let persistenceStatus = storageAvailability.available ? 'saved' : 'unavailable';
   let persistenceMessage = storageAvailability.available
     ? 'Saved on this device'
@@ -328,6 +329,7 @@
   let savedMealsSearch = '';
   let foodLibraryMessage = '';
   let foodLibraryError = '';
+  let preMealTimerRefresh = null;
   let currentEditor = null;
   let pendingCarbCalculatorFocusRowId = '';
   let pendingCarbCalculatorFocusFieldName = '';
@@ -336,6 +338,10 @@
   let carbCalculatorScrollLock = null;
   let carbCalculatorViewportListenerCleanup = null;
   let syncRepository = null;
+  let insulinPlanDiagnosticsMessage = '';
+  let settingsDiagnosticsMessage = '';
+  let lastVerifiedPlanSignature = '';
+  let lastSuccessfulInsulinPlanVerificationAt = null;
   let syncStatus = {
     configured: false,
     signedIn: false,
@@ -366,6 +372,57 @@
     error: '',
   };
   let migrationRetryTimer = null;
+
+  const INSULIN_PLAN_VERIFICATION_STATUSES = Object.freeze({
+    VERIFIED: 'VERIFIED',
+    MISMATCH: 'MISMATCH',
+    NOT_VERIFIED: 'NOT_VERIFIED',
+  });
+  const SETTINGS_UI_STATE_KEY = 'lando-world:lee-lees-tracker:settings-ui:v1';
+
+  function getSettingsUiState() {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(SETTINGS_UI_STATE_KEY) || '{}');
+      return {
+        open: stored && typeof stored.open === 'object' ? stored.open : {},
+        scrollTop: Number.isFinite(Number(stored?.scrollTop)) ? Math.max(0, Number(stored.scrollTop)) : 0,
+      };
+    } catch (error) {
+      return { open: {}, scrollTop: 0 };
+    }
+  }
+
+  function saveSettingsUiState() {
+    if (currentEditor?.mode !== 'settings') return;
+    try {
+      const open = {};
+      getRoot()?.querySelectorAll('details[data-settings-accordion][data-settings-key]').forEach((section) => {
+        open[section.dataset.settingsKey] = section.open;
+      });
+      sessionStorage.setItem(SETTINGS_UI_STATE_KEY, JSON.stringify({
+        open,
+        scrollTop: Math.max(0, Number(window.scrollY || document.documentElement?.scrollTop || 0)),
+      }));
+    } catch (error) {
+      // Transient UI state is best effort and must never affect tracker behavior.
+    }
+  }
+
+  function isSettingsAccordionOpen(key, defaultOpen = false) {
+    const stored = getSettingsUiState().open;
+    return typeof stored[key] === 'boolean' ? stored[key] : defaultOpen;
+  }
+
+  function restoreSettingsUiState() {
+    if (currentEditor?.mode !== 'settings') return;
+    const scrollTop = getSettingsUiState().scrollTop;
+    const restore = () => {
+      if (currentEditor?.mode !== 'settings') return;
+      window.scrollTo?.(0, scrollTop);
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
+    else window.setTimeout(restore, 0);
+  }
 
   function createId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -440,6 +497,7 @@
       doseRoundingMode: getDoseRoundingMode(plan),
       doseIncrementUnits: getDoseIncrementUnits(plan),
       minimumAllowableDoseUnits: getMinimumAllowableDoseUnits(plan),
+      temporaryEatingAdjustment: normalizeTemporaryEatingAdjustment(plan.temporaryEatingAdjustment),
       targetGlucoseMin: normalizeBloodSugar(plan.targetGlucoseMin ?? plan.glucoseTargetMin ?? plan.targetGlucoseLow) ?? DEFAULT_TARGET_GLUCOSE_MIN,
       targetGlucoseMax: normalizeBloodSugar(plan.targetGlucoseMax ?? plan.glucoseTargetMax ?? plan.targetGlucoseHigh) ?? DEFAULT_TARGET_GLUCOSE_MAX,
       supportedMealTypes: [...plan.supportedMealTypes],
@@ -1310,8 +1368,58 @@
     };
   }
 
+  function getMissingInsulinPlanFields(plan) {
+    const source = plan && typeof plan === 'object' ? plan : {};
+    const missing = [];
+    const required = [
+      ['id', 'Plan ID'],
+      ['name', 'Plan name'],
+      ['effectiveFrom', 'Effective from'],
+      ['effectiveTo', 'Effective to'],
+      ['bedtimeBaseUnits', 'Bedtime long-acting'],
+      ['bedtimeBaseUnitsMigratedTo17', 'Migrated-to-17 flag'],
+      ['insulinCarbRatioGrams', 'I:C ratio'],
+      ['doseRoundingMode', 'Rounding'],
+      ['doseIncrementUnits', 'Dose increment'],
+      ['minimumAllowableDoseUnits', 'Minimum allowable dose'],
+      ['targetGlucoseMin', 'Target minimum'],
+      ['targetGlucoseMax', 'Target maximum'],
+      ['supportedMealTypes', 'Supported meal types'],
+      ['correctionRanges', 'Correction table'],
+      ['temporaryEatingAdjustment', 'Temporary adjustment'],
+    ];
+    required.forEach(([key, label]) => {
+      if (!Object.hasOwn(source, key)) missing.push(label);
+    });
+    if (!source.mealBaseUnitsByType || typeof source.mealBaseUnitsByType !== 'object') {
+      missing.push('Meal base doses');
+    } else {
+      MEAL_TYPES.forEach((type) => {
+        if (!Object.hasOwn(source.mealBaseUnitsByType, type)) missing.push(`${type} base dose`);
+      });
+    }
+    const adjustment = source.temporaryEatingAdjustment;
+    if (!adjustment || typeof adjustment !== 'object') {
+      missing.push('Temporary adjustment');
+    } else {
+      ['enabled', 'units', 'startsAt', 'endsAt', 'contexts'].forEach((key) => {
+        if (!Object.hasOwn(adjustment, key)) missing.push(`Temporary adjustment ${key}`);
+      });
+    }
+    return [...new Set(missing)];
+  }
+
+  function getInsulinPlanCompleteness(plan) {
+    const known = plan && typeof plan === 'object' ? insulinPlanCompleteness.get(plan) : null;
+    if (known) return known;
+    const missing = getMissingInsulinPlanFields(plan);
+    return { complete: missing.length === 0, missing };
+  }
+
   function normalizeInsulinPlan(plan) {
     if (!plan || typeof plan !== 'object') return null;
+    const inheritedCompleteness = insulinPlanCompleteness.get(plan);
+    const missingFields = inheritedCompleteness?.missing || getMissingInsulinPlanFields(plan);
     const isLegacySeededPlan = plan.id === DEFAULT_INSULIN_PLAN.id
       && normalizeNumber(plan.bedtimeBaseUnits) === LEGACY_DEFAULT_INSULIN_GUIDANCE.bedtimeBaseUnits
       && normalizeNumber(plan.insulinCarbRatioGrams) === LEGACY_DEFAULT_INSULIN_GUIDANCE.insulinCarbRatioGrams
@@ -1335,7 +1443,7 @@
       : [...MEAL_TYPES];
     const mealBaseUnitsByType = getMealBaseUnitsByType(sourcePlan);
     const nowTimestamp = new Date().toISOString();
-    return {
+    const normalized = {
       ...sourcePlan,
       id: typeof sourcePlan.id === 'string' ? sourcePlan.id : createId(),
       name: String(sourcePlan.name || DEFAULT_INSULIN_PLAN.name).trim().slice(0, 80),
@@ -1356,6 +1464,11 @@
       createdAt: toIsoTimestamp(sourcePlan.createdAt, nowTimestamp),
       updatedAt: toIsoTimestamp(sourcePlan.updatedAt, nowTimestamp),
     };
+    insulinPlanCompleteness.set(normalized, {
+      complete: missingFields.length === 0,
+      missing: [...missingFields],
+    });
+    return normalized;
   }
 
   function createSharedInsulinPlanSnapshot(plan = getCurrentPlan()) {
@@ -1371,6 +1484,186 @@
       clinicPhone: String(settings.clinicPhone || '').trim().slice(0, 40),
       insulinPlan: createSharedInsulinPlanSnapshot(plan),
       version,
+    };
+  }
+
+  function getDoseAffectingInsulinPlanSnapshot(plan) {
+    const snapshot = createSharedInsulinPlanSnapshot(plan);
+    if (!snapshot) return null;
+    return {
+      id: snapshot.id,
+      effectiveFrom: snapshot.effectiveFrom,
+      effectiveTo: snapshot.effectiveTo,
+      mealBaseUnitsByType: snapshot.mealBaseUnitsByType,
+      mealBaseUnits: snapshot.mealBaseUnits,
+      bedtimeBaseUnits: snapshot.bedtimeBaseUnits,
+      bedtimeBaseUnitsMigratedTo17: snapshot.bedtimeBaseUnitsMigratedTo17,
+      insulinCarbRatioGrams: snapshot.insulinCarbRatioGrams,
+      doseRoundingMode: snapshot.doseRoundingMode,
+      doseIncrementUnits: snapshot.doseIncrementUnits,
+      minimumAllowableDoseUnits: snapshot.minimumAllowableDoseUnits,
+      targetGlucoseMin: snapshot.targetGlucoseMin,
+      targetGlucoseMax: snapshot.targetGlucoseMax,
+      supportedMealTypes: snapshot.supportedMealTypes,
+      correctionRanges: snapshot.correctionRanges,
+      temporaryEatingAdjustment: snapshot.temporaryEatingAdjustment,
+    };
+  }
+
+  function stableJson(value) {
+    if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+  }
+
+  const INSULIN_PLAN_COMPARISON_FIELDS = [
+    ['id', 'Plan ID'],
+    ['effectiveFrom', 'Effective from'],
+    ['effectiveTo', 'Effective to'],
+    ['mealBaseUnitsByType', 'Meal base doses'],
+    ['mealBaseUnits', 'Breakfast base dose'],
+    ['bedtimeBaseUnits', 'Bedtime long-acting'],
+    ['bedtimeBaseUnitsMigratedTo17', 'Migrated-to-17'],
+    ['insulinCarbRatioGrams', 'I:C ratio'],
+    ['doseRoundingMode', 'Rounding'],
+    ['doseIncrementUnits', 'Increment'],
+    ['minimumAllowableDoseUnits', 'Minimum allowable dose'],
+    ['targetGlucoseMin', 'Target minimum'],
+    ['targetGlucoseMax', 'Target maximum'],
+    ['supportedMealTypes', 'Supported meal types'],
+    ['correctionRanges', 'Correction table'],
+    ['temporaryEatingAdjustment.enabled', 'Temporary adjustment'],
+    ['temporaryEatingAdjustment.units', 'Adjustment amount'],
+    ['temporaryEatingAdjustment.startsAt', 'Adjustment start'],
+    ['temporaryEatingAdjustment.endsAt', 'Adjustment end'],
+    ['temporaryEatingAdjustment.contexts', 'Adjustment contexts'],
+  ];
+
+  function getNestedValue(source, path) {
+    return path.split('.').reduce((value, key) => value?.[key], source);
+  }
+
+  function compareInsulinPlansForVerification(localPlan, serverPlan) {
+    const localCompleteness = getInsulinPlanCompleteness(localPlan);
+    const serverCompleteness = getInsulinPlanCompleteness(serverPlan);
+    const localSnapshot = getDoseAffectingInsulinPlanSnapshot(localPlan);
+    const serverSnapshot = getDoseAffectingInsulinPlanSnapshot(serverPlan);
+    const mismatchedEntries = INSULIN_PLAN_COMPARISON_FIELDS
+      .filter(([path]) => stableJson(getNestedValue(localSnapshot, path)) !== stableJson(getNestedValue(serverSnapshot, path)));
+    const mismatchedPaths = mismatchedEntries.map(([path]) => path);
+    const mismatchedFields = mismatchedEntries.map(([, label]) => label);
+    if (!localCompleteness.complete || !serverCompleteness.complete) {
+      return {
+        complete: false,
+        mismatchedPaths,
+        mismatchedFields,
+        missingLocalFields: localCompleteness.missing,
+        missingServerFields: serverCompleteness.missing,
+        localPlan: localSnapshot,
+        serverPlan: serverSnapshot,
+      };
+    }
+    return {
+      complete: true,
+      matched: mismatchedFields.length === 0,
+      mismatchedPaths,
+      mismatchedFields,
+      missingLocalFields: [],
+      missingServerFields: [],
+      localPlan: localSnapshot,
+      serverPlan: serverSnapshot,
+    };
+  }
+
+  function evaluateInsulinPlanVerification({ localPlan, authoritative, syncState = {}, sharedSettingsStatus = {} } = {}) {
+    const checkedAt = new Date().toISOString();
+    const base = {
+      status: INSULIN_PLAN_VERIFICATION_STATUSES.NOT_VERIFIED,
+      checkedAt,
+      serverVersion: authoritative?.settings?.version || null,
+      serverUpdatedAt: authoritative?.settings?.updatedAt || null,
+      fetchedAt: authoritative?.fetchedAt || null,
+      localPlan: getDoseAffectingInsulinPlanSnapshot(localPlan),
+      serverPlan: authoritative?.settings?.insulinPlan ? getDoseAffectingInsulinPlanSnapshot(authoritative.settings.insulinPlan) : null,
+      mismatchedPaths: [],
+      mismatchedFields: [],
+      reasons: [],
+    };
+    if (!syncState.configured || !syncState.signedIn) {
+      base.reasons.push('An authenticated shared-settings session is required.');
+      return base;
+    }
+    if (sharedSettingsStatus.pendingCount || syncState.sharedSettingsPendingCount) {
+      base.reasons.push('A shared-settings write is still pending.');
+      return base;
+    }
+    if (sharedSettingsStatus.conflictCount || syncState.conflictCount) {
+      base.reasons.push('A shared-settings conflict needs review.');
+      return base;
+    }
+    if (sharedSettingsStatus.lastFetchError) {
+      base.reasons.push(sharedSettingsStatus.lastFetchError);
+      return base;
+    }
+    if (!authoritative?.settings || !authoritative.settings.version) {
+      base.reasons.push('No authoritative shared-settings revision has been successfully fetched.');
+      return base;
+    }
+    const comparison = compareInsulinPlansForVerification(localPlan, authoritative.sourcePlan || authoritative.settings.insulinPlan);
+    base.localPlan = comparison.localPlan;
+    base.serverPlan = comparison.serverPlan;
+    base.mismatchedPaths = comparison.mismatchedPaths;
+    base.mismatchedFields = comparison.mismatchedFields;
+    if (!comparison.complete) {
+      base.reasons.push('Required dose-affecting insulin-plan data is incomplete.');
+      if (comparison.missingLocalFields.length) base.reasons.push(`Missing on this device: ${comparison.missingLocalFields.join(', ')}.`);
+      if (comparison.missingServerFields.length) base.reasons.push(`Missing from Supabase: ${comparison.missingServerFields.join(', ')}.`);
+      return base;
+    }
+    if (!comparison.matched) {
+      base.status = INSULIN_PLAN_VERIFICATION_STATUSES.MISMATCH;
+      base.reasons.push(`Dose-affecting fields differ: ${comparison.mismatchedFields.join(', ')}.`);
+      return base;
+    }
+    base.status = INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED;
+    base.reasons.push('The active dose-affecting plan matches the fetched authoritative revision.');
+    return base;
+  }
+
+  function getInsulinPlanVerification({ localPlan = getActiveInsulinPlan(), refresh = true } = {}) {
+    const authoritative = syncRepository?.getLatestFetchedSharedSettings?.() || null;
+    const sharedSettingsStatus = getSharedSettingsStatus();
+    const result = evaluateInsulinPlanVerification({
+      localPlan,
+      authoritative,
+      syncState: syncStatus,
+      sharedSettingsStatus,
+    });
+    const signature = stableJson({
+      status: result.status,
+      serverVersion: result.serverVersion,
+      localPlan: result.localPlan,
+      serverPlan: result.serverPlan,
+      reasons: result.reasons,
+    });
+    if (refresh && result.status === INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED && signature !== lastVerifiedPlanSignature) {
+      lastSuccessfulInsulinPlanVerificationAt = result.checkedAt;
+      lastVerifiedPlanSignature = signature;
+    }
+    return {
+      ...result,
+      lastSuccessfulVerificationAt: lastSuccessfulInsulinPlanVerificationAt,
+      sharedSettingsStatus,
+      syncStatus: { ...syncStatus },
+      deviceIdentity: syncRepository?.getDeviceIdentity?.() || syncStatus.deviceIdentity || '',
+      installationId: syncRepository?.getDeviceInstallationId?.() || '',
+      platform: syncRepository?.getDevicePlatform?.() || '',
+      deviceLabel: syncRepository?.getDeviceLabel?.() || '',
+      environment: syncRepository?.getAppEnvironment?.() || window.location?.hostname || 'Unknown',
+      appVersion: syncRepository?.getAppVersion?.() || '1.0.0',
+      refresh,
     };
   }
 
@@ -2605,7 +2898,12 @@
     };
   }
 
-  function getActiveInsulinPlan(recordTimestamp = Date.now()) {
+  function getActiveInsulinPlan(recordTimestamp = null) {
+    if (recordTimestamp === null) {
+      const pointedPlan = insulinPlans.find((plan) => plan.id === trackerData.activeInsulinPlanId);
+      if (pointedPlan) return pointedPlan;
+      recordTimestamp = Date.now();
+    }
     return insulinPlans
       .map((plan) => ({ plan, range: getPlanTimestampRange(plan) }))
       .filter(({ range }) => recordTimestamp >= range.start && recordTimestamp < range.end)
@@ -2822,6 +3120,7 @@
     normalizeMinimumAllowableDose,
     getMinimumDoseWarning,
     calculateMealInsulinDose,
+    getEditorInsulinPlan,
   };
 
   window.LeeLeeTrackerEntryTypes = {
@@ -3859,15 +4158,29 @@
     currentEditor = null;
     const root = getRoot();
     if (!root) return;
+    const initialTimer = window.LeeLeePreMealTimer?.normalize();
+    window.clearInterval(preMealTimerRefresh);
+    preMealTimerRefresh = window.setInterval(() => {
+      const timer = window.LeeLeePreMealTimer?.normalize();
+      const value = root.querySelector('[data-pre-meal-timer-value]');
+      if (value && timer?.status === 'active') value.textContent = formatPreMealRemaining(timer);
+      if (timer?.status === 'completed') {
+        window.clearInterval(preMealTimerRefresh);
+        renderHome();
+        renderPreMealTimerModal(timer);
+      }
+    }, 1000);
     const timeline = todaysRecords();
     root.innerHTML = `
       ${renderTrackerTop({ active: 'today' })}
       ${renderTrackerNav('today')}
+      ${renderPreMealTimerCard()}
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
         ${timeline.length ? `<div class="lee_lee_diabetes_timeline">${timeline.map(renderTimelineItem).join('')}</div>` : '<p class="lee_lee_diabetes_empty">No entries today.</p>'}
       </section>
     `;
+    if (initialTimer?.status === 'completed') renderPreMealTimerModal(initialTimer);
   }
 
   function renderPrimaryCard(type) {
@@ -5462,6 +5775,13 @@
     return createLocalTimestamp(form.elements.date?.value, form.elements.time?.value);
   }
 
+  function getEditorInsulinPlan(form, recordTimestamp) {
+    const entryDateKey = String(form?.elements?.date?.value || '');
+    const isCurrentCalendarDateEntry = entryDateKey === getLocalDateKey();
+    if (isCurrentCalendarDateEntry) return getActiveInsulinPlan();
+    return recordTimestamp ? getActiveInsulinPlan(recordTimestamp) : null;
+  }
+
   function getEditorDoseResult(form) {
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
@@ -5478,7 +5798,7 @@
         message: '',
       };
     }
-    const insulinPlan = recordTimestamp ? getActiveInsulinPlan(recordTimestamp) : null;
+    const insulinPlan = getEditorInsulinPlan(form, recordTimestamp);
     if (!insulinPlan) {
       return {
         status: 'unavailable',
@@ -5489,6 +5809,21 @@
         insulinPlanId: null,
         insulinPlanSnapshot: null,
         message: 'No insulin plan is configured for this date.',
+      };
+    }
+    const verification = getInsulinPlanVerification({ localPlan: insulinPlan });
+    if (verification.status !== INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) {
+      return {
+        status: 'insulin-plan-unverified',
+        baseUnits: null,
+        correctionUnits: null,
+        suggestedTotalUnits: null,
+        matchedRange: null,
+        insulinPlanId: insulinPlan.id || null,
+        insulinPlanSnapshot: null,
+        verificationStatus: verification.status,
+        verificationReasons: verification.reasons,
+        message: 'Insulin plan needs to be verified before calculating a suggested dose.',
       };
     }
     const result = calculateMealInsulinDose({
@@ -5570,6 +5905,15 @@
     if (result.status === 'unsupported-entry-type') {
       return `<p class="lee_lee_diabetes_help">${escapeHtml(result.message)}</p>`;
     }
+    if (result.status === 'insulin-plan-unverified') {
+      return `
+        <section class="lee_lee_diabetes_dose_card lee_lee_diabetes_dose_card--notice lee_lee_diabetes_dose_card--verification-warning" aria-label="Suggested dose unavailable">
+          <div class="lee_lee_diabetes_dose_label">⚠ Insulin plan needs to be verified before calculating a suggested dose.</div>
+          <p>Open Settings → Sync Diagnostics → Insulin Plan Verification.</p>
+          ${result.verificationReasons?.length ? `<p class="lee_lee_diabetes_help">${escapeHtml(result.verificationReasons[0])}</p>` : ''}
+        </section>
+      `;
+    }
     return result.message ? `<p class="lee_lee_diabetes_help">${escapeHtml(result.message)}</p>` : '';
   }
 
@@ -5619,6 +5963,14 @@
       if (currentEditor) currentEditor.autofilledInsulinUnits = null;
     }
     return result;
+  }
+
+  function invalidateOpenDoseGuidance() {
+    if (currentEditor?.mode !== 'log-entry') return;
+    const form = getRoot()?.querySelector('[data-lee-lee-editor]');
+    if (!form) return;
+    currentEditor.doseGuidanceInvalidatedAt = new Date().toISOString();
+    updateDoseHelper(form);
   }
 
   function refreshCarbCalculator(form, preserveRowId = '') {
@@ -6318,7 +6670,7 @@
   function upsertRecord(record) {
     setPersistenceStatus('saving');
     const existingRecord = records.find((item) => item.id === record.id) || null;
-    updateTrackerData((current) => {
+    const saved = updateTrackerData((current) => {
       const nextRecords = [...current.records];
       const index = nextRecords.findIndex((item) => item.id === record.id);
       if (index >= 0) {
@@ -6333,6 +6685,132 @@
     });
     syncRepository?.queueUpsert(record, existingRecord);
     updateRecentFoodsFromComponents(record.mealComponents || []);
+    return { ...saved, existingRecord };
+  }
+
+  function isNewCarbEntry(record, existingRecord) {
+    return !existingRecord && record?.eventType !== 'activity' && normalizeNumber(record?.mealCarbs) > 0;
+  }
+
+  function formatPreMealRemaining(timer) {
+    const seconds = Math.max(0, Math.ceil((window.LeeLeePreMealTimer?.remainingMs(timer) || 0) / 1000));
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function renderPreMealTimerCard() {
+    const timer = window.LeeLeePreMealTimer?.normalize();
+    if (!timer || timer.status !== 'active') return '';
+    return `<button type="button" class="lee_lee_diabetes_pre_meal_timer_card" data-action="open-pre-meal-timer" aria-label="Open active Pre-Meal Timer">
+      <span class="lee_lee_diabetes_pre_meal_timer_icon" aria-hidden="true">⏱</span>
+      <span><strong>Pre-meal timer</strong><small>Ready to eat in about ${timer.durationMinutes} minutes</small></span>
+      <strong class="lee_lee_diabetes_pre_meal_timer_value" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</strong><span aria-hidden="true">›</span>
+    </button>`;
+  }
+
+  function renderPreMealTimerModal(timer = window.LeeLeePreMealTimer?.normalize(), options = {}) {
+    const root = getRoot();
+    if (!root || !timer) return;
+    const completed = timer.status === 'completed';
+    const stopped = timer.status === 'stopped';
+    const startedFromSave = options.startedFromSave === true && timer.status === 'active';
+    const source = timer.sourceEntry;
+    const remaining = formatPreMealRemaining(timer);
+    const sourceSummaryMarkup = source && !stopped ? `<dl class="lee_lee_diabetes_pre_meal_timer_source"><div><dt>Started from</dt><dd>${escapeHtml(source.type || 'Entry')}${source.recordTimestamp ? ` <span class="lee_lee_diabetes_pre_meal_timer_source_time">${renderRecordDateTime(source.recordTimestamp)}</span>` : ''}</dd></div><div><dt>Carbs</dt><dd>${source.mealCarbs == null ? '—' : escapeHtml(formatCarbs(source.mealCarbs))}</dd></div><div><dt>Insulin given</dt><dd>${source.administeredInsulinUnits == null ? '—' : escapeHtml(formatInsulin(source.administeredInsulinUnits))}</dd></div></dl>` : '';
+    const detailContent = `
+      <div class="lee_lee_diabetes_pre_meal_timer_detail_inner">
+        <div class="lee_lee_diabetes_pre_meal_timer_header"><button type="button" class="lee_lee_diabetes_pre_meal_timer_back" data-action="close-pre-meal-timer" aria-label="Back to Today">‹</button><span>Pre-Meal Timer</span><span aria-hidden="true"></span></div>
+        <div class="lee_lee_diabetes_pre_meal_timer_ring" style="--timer-progress: ${completed ? 100 : 0}%"><div class="lee_lee_diabetes_pre_meal_timer_ring_inner"><div class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${completed ? '00:00' : remaining}</div><span>remaining</span></div></div>
+        <h1 id="pre-meal-timer-title">${completed ? 'Pre-meal timer complete!' : 'Pre-Meal Timer'}</h1>
+        <p class="lee_lee_diabetes_pre_meal_timer_message">${completed ? 'Ready to eat.' : stopped ? 'Timer stopped.' : 'Ready to eat when the timer reaches 0.'}</p>
+        ${sourceSummaryMarkup}
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_actions">
+          ${completed || stopped ? '' : '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-timer" data-delta="-1">-1 min</button>'}
+          ${completed || stopped ? '' : '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="stop-pre-meal-timer">Stop</button>'}
+          ${completed || stopped ? '' : '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-timer" data-delta="1">+1 min</button>'}
+          ${completed || stopped ? '' : '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="close-pre-meal-timer">Back</button>'}
+        </div>
+        <p class="lee_lee_diabetes_pre_meal_timer_background_note">ⓘ Timer continues while the app is backgrounded; completion will be shown when you return.</p>
+        ${completed ? '<div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="close-pre-meal-timer">OK</button></div>' : ''}
+      </div>`;
+    const successContent = `
+        <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-success" aria-hidden="true">✓</div>
+        <h1 id="pre-meal-timer-title">Entry Saved!</h1>
+        <p class="lee_lee_diabetes_pre_meal_timer_message">Pre-meal timer started.</p>
+        <div class="lee_lee_diabetes_pre_meal_timer_success_countdown"><span class="lee_lee_diabetes_pre_meal_timer_success_icon" aria-hidden="true">⏱</span><strong class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${remaining}</strong></div>
+        <p class="lee_lee_diabetes_pre_meal_timer_success_hint">Ready to eat when the timer reaches 0.</p>
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_success_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="close-pre-meal-timer">OK</button></div>`;
+    currentEditor = { mode: completed ? 'pre-meal-complete' : 'pre-meal-timer', timer };
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal ${startedFromSave ? '' : 'lee_lee_diabetes_pre_meal_timer_modal--detail'}" role="dialog" aria-modal="true" aria-labelledby="pre-meal-timer-title">
+      <div class="lee_lee_diabetes_pre_meal_timer_backdrop" data-action="close-pre-meal-timer"></div>
+      <section class="lee_lee_diabetes_pre_meal_timer_panel ${startedFromSave ? 'lee_lee_diabetes_pre_meal_timer_panel--saved' : 'lee_lee_diabetes_pre_meal_timer_panel--detail'}">${startedFromSave ? successContent : detailContent}
+      </section>
+    </div>`);
+    root.querySelector('.lee_lee_diabetes_pre_meal_timer_panel button:last-child')?.focus();
+    window.clearInterval(preMealTimerRefresh);
+    if (!completed && !stopped) {
+      preMealTimerRefresh = window.setInterval(() => {
+        const current = window.LeeLeePreMealTimer?.normalize();
+        const values = root.querySelectorAll('.lee_lee_diabetes_pre_meal_timer_panel [data-pre-meal-timer-value]');
+        if (current?.status === 'active') values.forEach((value) => { value.textContent = formatPreMealRemaining(current); });
+        if (current?.status === 'completed') {
+          window.clearInterval(preMealTimerRefresh);
+          root.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+          renderHome();
+          renderPreMealTimerModal(current);
+        }
+      }, 1000);
+    }
+  }
+
+  function maybeStartPreMealTimer(record, existingRecord, saved) {
+    const service = window.LeeLeePreMealTimer;
+    const settings = service?.getSettings() || null;
+    const normalizedCarbs = normalizeNumber(record?.mealCarbs);
+    const newCarbEntry = isNewCarbEntry(record, existingRecord);
+    if (saved?.ok !== true || !newCarbEntry || !service || !settings?.enabled) return;
+    const current = service.normalize();
+    if (current?.status === 'active') {
+      currentEditor = { mode: 'pre-meal-conflict', timer: current, pendingTimerRecord: record };
+      renderPreMealTimerConflict(current);
+      return;
+    }
+    const timer = service.start({ durationMinutes: settings.durationMinutes, sourceEntryId: record.id, sourceEntry: record });
+    if (timer) renderPreMealTimerModal(timer, { startedFromSave: true });
+  }
+
+  function renderPreMealTimerStopConfirmation(timer) {
+    const root = getRoot();
+    if (!root || !timer) return;
+    currentEditor = { mode: 'pre-meal-stop-confirm', timer };
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" role="alertdialog" aria-modal="true" aria-labelledby="pre-meal-stop-title" aria-describedby="pre-meal-stop-message">
+      <div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div>
+      <section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--stop-confirm">
+        <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-conflict" aria-hidden="true">⏱</div>
+        <h1 id="pre-meal-stop-title">Stop Pre-Meal Timer?</h1>
+        <p class="lee_lee_diabetes_pre_meal_timer_message" id="pre-meal-stop-message">Stopping ends the currently active timer.</p>
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_stop_actions lee_lee_diabetes_actions--single">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="cancel-stop-pre-meal-timer">Keep Timer Running</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="confirm-stop-pre-meal-timer">Stop Timer</button>
+        </div>
+      </section>
+    </div>`);
+    root.querySelector('[data-action="cancel-stop-pre-meal-timer"]')?.focus();
+  }
+
+  function renderPreMealTimerConflict(timer) {
+    const root = getRoot();
+    if (!root) return;
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" role="dialog" aria-modal="true" aria-labelledby="pre-meal-conflict-title">
+      <div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div>
+      <section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--conflict">
+        <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-conflict" aria-hidden="true">⏱</div>
+        <h1 id="pre-meal-conflict-title">Timer Already Running</h1>
+        <div class="lee_lee_diabetes_pre_meal_timer_conflict_time">${formatPreMealRemaining(timer)} <span>remaining</span></div>
+        <p class="lee_lee_diabetes_pre_meal_timer_message">A pre-meal timer is already active. Keep it or restart it with the configured duration?</p>
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_conflict_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="keep-pre-meal-timer">Keep Current Timer</button><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="restart-pre-meal-timer">Restart Timer</button><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--text" data-action="dismiss-pre-meal-timer">Cancel</button></div>
+      </section>
+    </div>`);
+    root.querySelector('[data-action="keep-pre-meal-timer"]')?.focus();
   }
 
   function buildRecordFromForm(form) {
@@ -6503,8 +6981,9 @@
       renderRecordConfirmation(record);
       return;
     }
-    upsertRecord(record);
+    const saved = upsertRecord(record);
     renderAfterRecordChange(record);
+    maybeStartPreMealTimer(record, saved.existingRecord, saved);
   }
 
   function renderAfterRecordChange(record) {
@@ -6516,7 +6995,7 @@
   }
 
   function getCurrentPlan() {
-    return getActiveInsulinPlan(Date.now()) || insulinPlans
+    return getActiveInsulinPlan() || insulinPlans
       .slice()
       .sort((a, b) => (getPlanTimestampRange(b).start - getPlanTimestampRange(a).start))[0];
   }
@@ -6787,6 +7266,346 @@
     return null;
   }
 
+  function formatVerificationValue(value) {
+    if (value == null || value === '') return 'Not available';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (Array.isArray(value) || typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  }
+
+  function getVerificationStatusLabel(status) {
+    if (status === INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) return '✓ VERIFIED';
+    if (status === INSULIN_PLAN_VERIFICATION_STATUSES.MISMATCH) return '⚠ DOES NOT MATCH';
+    return '○ NOT VERIFIED';
+  }
+
+  function buildInsulinPlanDiagnosticsPackage() {
+    const verification = getInsulinPlanVerification({ refresh: false });
+    return {
+      generatedAt: new Date().toISOString(),
+      verificationStatus: verification.status,
+      verificationReasons: verification.reasons,
+      checkedAt: verification.checkedAt,
+      lastSuccessfulVerificationAt: verification.lastSuccessfulVerificationAt,
+      authoritativeRevision: verification.serverVersion,
+      authoritativeUpdatedAt: verification.serverUpdatedAt,
+      authoritativeFetchedAt: verification.fetchedAt,
+      deviceIdentity: verification.deviceIdentity,
+      deviceInstallationId: verification.installationId,
+      deviceLabel: verification.deviceLabel,
+      platform: verification.platform,
+      environment: verification.environment,
+      appVersion: verification.appVersion,
+      source: getBuildMetadata(),
+      localActiveInsulinPlan: verification.localPlan,
+      fetchedAuthoritativeInsulinPlan: verification.serverPlan,
+      mismatchedPaths: verification.mismatchedPaths,
+      mismatchedFields: verification.mismatchedFields,
+      sharedSettingsStatus: verification.sharedSettingsStatus,
+      pendingSharedSettings: syncStatus.sharedSettingsPendingCount || 0,
+      conflicts: syncStatus.conflictCount || 0,
+      realtimeStatus: syncStatus.realtimeStatus || 'idle',
+      lastErrorCategory: syncStatus.lastErrorCategory || verification.sharedSettingsStatus?.lastFetchErrorCategory || '',
+      lastErrorCode: syncStatus.lastErrorCode || verification.sharedSettingsStatus?.lastFetchErrorCode || '',
+      lastErrorMessage: syncStatus.lastErrorMessage || verification.sharedSettingsStatus?.lastFetchErrorMessage || verification.sharedSettingsStatus?.lastFetchError || '',
+    };
+  }
+
+  function diagnosticDeviceSnapshot() {
+    const verification = getInsulinPlanVerification({ refresh: false });
+    return {
+      identity: verification.deviceIdentity || '',
+      label: verification.deviceLabel || '',
+      installationId: verification.installationId || '',
+      platform: verification.platform || '',
+      environment: verification.environment || '',
+      appVersion: verification.appVersion || '',
+      source: getBuildMetadataSnapshot(),
+    };
+  }
+
+  function getBuildMetadataSnapshot() {
+    const metadata = getBuildMetadata();
+    return {
+      environment: metadata.environment || '',
+      appVersion: metadata.appVersion || '',
+      branch: metadata.branch || '',
+      commit: metadata.commit || '',
+      commitFull: metadata.commitFull || '',
+      sourceState: metadata.dirty === true ? 'Modified' : metadata.dirty === false ? 'Clean' : 'Unknown',
+      sourceId: metadata.sourceId || '',
+      generatedAt: metadata.generatedAt || '',
+    };
+  }
+
+  function sanitizeDiagnosticError(source = {}) {
+    return {
+      category: source.lastErrorCategory || source.errorCategory || '',
+      code: source.lastErrorCode || source.errorCode || '',
+      message: source.lastErrorMessage || source.lastError || source.errorMessage || '',
+      hint: source.lastErrorHint || '',
+    };
+  }
+
+  function buildSyncStatusDiagnostics() {
+    const status = syncStatus || {};
+    return {
+      configured: Boolean(status.configured),
+      signedIn: Boolean(status.signedIn),
+      deviceIdentity: status.deviceIdentity || '',
+      deviceInstallationId: syncRepository?.getDeviceInstallationId?.() || '',
+      deviceLabel: syncRepository?.getDeviceLabel?.() || '',
+      platform: syncRepository?.getDevicePlatform?.() || '',
+      environment: syncRepository?.getAppEnvironment?.() || '',
+      pending: {
+        total: Number(status.pendingCount || 0),
+        records: Number(status.recordPendingCount || 0),
+        settings: Number(status.sharedSettingsPendingCount || 0),
+        foods: Number(status.foodLibraryPendingCount || 0),
+      },
+      retrying: Number(status.retryingCount || 0),
+      conflicts: Number(status.conflictCount || 0),
+      realtime: status.realtimeStatus || 'idle',
+      online: Boolean(navigator.onLine),
+      lastSuccessfulSyncAt: status.lastSuccessfulSyncAt || '',
+      lastFullSyncAttemptAt: status.lastFullSyncAttemptAt || '',
+      error: sanitizeDiagnosticError(status),
+      sharedSettings: getSharedSettingsStatus(),
+    };
+  }
+
+  function buildSyncDiagnosticsPackage() {
+    const diagnostics = syncRepository?.getSyncDiagnostics?.() || {};
+    const summary = diagnostics.summary || {};
+    const lastAttempt = diagnostics.lastSyncAttempt || null;
+    const foodAttempt = diagnostics.lastFoodSyncAttempt || null;
+    return {
+      queue: {
+        total: Number(summary.total || 0),
+        oldestCreatedAt: summary.oldestCreatedAt || '',
+        retryingCount: Number(summary.retryingCount || 0),
+        byState: { ...(summary.byState || {}) },
+      },
+      lastRecordAttempt: lastAttempt ? {
+        startedAt: lastAttempt.startedAt || '',
+        finishedAt: lastAttempt.finishedAt || '',
+        attempted: Number(lastAttempt.attempted || 0),
+        succeeded: Number(lastAttempt.succeeded || 0),
+        failed: Number(lastAttempt.failed || 0),
+      } : null,
+      lastFoodAttempt: foodAttempt ? {
+        startedAt: foodAttempt.startedAt || '',
+        finishedAt: foodAttempt.finishedAt || '',
+        attempted: Number(foodAttempt.attempted || 0),
+        succeeded: Number(foodAttempt.succeeded || 0),
+        failed: Number(foodAttempt.failed || 0),
+      } : null,
+      error: sanitizeDiagnosticError(diagnostics),
+      conflictCount: Array.isArray(diagnostics.conflicts) ? diagnostics.conflicts.length : 0,
+      sharedSettings: getSharedSettingsStatus(),
+    };
+  }
+
+  function buildSettingsChangeHistoryDiagnostics() {
+    return (syncRepository?.getSettingsAuditHistory?.() || []).slice(0, 50).map((event) => ({
+      status: event.status || '',
+      timestamp: event.acceptedAt || event.clientCreatedAt || '',
+      actor: event.displayName || '',
+      deviceLabel: event.deviceLabel || '',
+      deviceProfile: event.deviceProfile || '',
+      platform: event.devicePlatform || '',
+      environment: event.appEnvironment || '',
+      appVersion: event.appVersion || '',
+      versionBefore: event.versionBefore ?? null,
+      versionAfter: event.versionAfter ?? null,
+      changedFields: (event.changes || []).map((change) => change.label || change.key || 'Changed setting'),
+    }));
+  }
+
+  function buildSettingsSectionDiagnostics({ includePatientValues = false } = {}) {
+    const plan = getActiveInsulinPlan() || clonePlanSnapshot(DEFAULT_INSULIN_PLAN);
+    const timerSettings = window.LeeLeePreMealTimer?.getSettings?.() || { enabled: true, durationMinutes: 15 };
+    const patientSettings = trackerData.settings || {};
+    const deleted = deletedRecords();
+    let lastBackupAt = '';
+    try {
+      lastBackupAt = localStorage.getItem(`${TRACKER_STORAGE_KEY}:last-full-backup-at`) || '';
+    } catch (error) {
+      lastBackupAt = '';
+    }
+    return {
+      syncStatus: buildSyncStatusDiagnostics(),
+      syncDiagnostics: buildSyncDiagnosticsPackage(),
+      insulinPlanVerification: buildInsulinPlanDiagnosticsPackage(),
+      appInformation: getBuildMetadataSnapshot(),
+      settingsChangeHistory: buildSettingsChangeHistoryDiagnostics(),
+      patientAndClinicInfo: includePatientValues ? {
+        patientName: patientSettings.patientName || '',
+        patientBirthDate: patientSettings.patientBirthDate || '',
+        clinicName: patientSettings.clinicName || '',
+        clinicPhone: patientSettings.clinicPhone || '',
+      } : {
+        patientNameConfigured: Boolean(patientSettings.patientName),
+        patientBirthDateConfigured: Boolean(patientSettings.patientBirthDate),
+        clinicInfoConfigured: Boolean(patientSettings.clinicName || patientSettings.clinicPhone),
+      },
+      historyPreferences: {
+        initialWindowDays: patientSettings.historyInitialWindowDays || String(DEFAULT_HISTORY_WINDOW_DAYS),
+      },
+      preMealTimer: {
+        enabled: Boolean(timerSettings.enabled),
+        durationMinutes: Number(timerSettings.durationMinutes || 15),
+      },
+      insulinDoseGuidance: {
+        persistedActivePlan: clonePlanSnapshot(plan),
+        unsavedFormValues: currentEditor?.mode === 'settings' && currentEditor.planDraft ? clonePlanSnapshot(currentEditor.planDraft) : null,
+        unsavedFormValuesPresent: Boolean(currentEditor?.mode === 'settings' && currentEditor.planDraft),
+      },
+      correctionTable: { ranges: (plan.correctionRanges || []).map((range) => ({ ...range })) },
+      localBackup: {
+        storageAvailable: Boolean(storageAvailability.available),
+        activeRecordCount: activeRecords().length,
+        lastFullBackupAt: lastBackupAt,
+        fullPayloadIncluded: false,
+      },
+      recentlyDeleted: {
+        count: deleted.length,
+        items: deleted.map((record) => ({
+          id: record.id || '',
+          type: record.type || '',
+          recordTimestamp: record.recordTimestamp || '',
+          deletedAt: record.deletedAt || '',
+        })),
+        fullRecordsIncluded: false,
+      },
+    };
+  }
+
+  function buildSettingsDiagnosticsPackage() {
+    const sections = buildSettingsSectionDiagnostics();
+    return {
+      generatedAt: new Date().toISOString(),
+      diagnosticType: 'LLT Settings Diagnostics',
+      device: diagnosticDeviceSnapshot(),
+      sections,
+    };
+  }
+
+  function getSettingsSectionDiagnostic(section) {
+    const sections = buildSettingsSectionDiagnostics({ includePatientValues: section === 'patientAndClinicInfo' });
+    return {
+      generatedAt: new Date().toISOString(),
+      section,
+      device: diagnosticDeviceSnapshot(),
+      data: sections[section] || {},
+    };
+  }
+
+  async function copyDiagnosticPayload(payload, successMessage, failureMessage, messageTarget = 'settings') {
+    const text = JSON.stringify(payload, null, 2);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('Clipboard copy was not available.');
+      }
+      if (messageTarget === 'insulin') insulinPlanDiagnosticsMessage = successMessage;
+      else settingsDiagnosticsMessage = successMessage;
+    } catch (error) {
+      if (messageTarget === 'insulin') insulinPlanDiagnosticsMessage = failureMessage;
+      else settingsDiagnosticsMessage = failureMessage;
+    }
+    renderSettings();
+  }
+
+  async function copyInsulinPlanDiagnostics() {
+    await copyDiagnosticPayload(
+      buildInsulinPlanDiagnosticsPackage(),
+      'Diagnostics copied. No credentials or tokens are included.',
+      'Diagnostics could not be copied on this device.',
+      'insulin',
+    );
+  }
+
+  async function copySettingsSectionInfo(section) {
+    await copyDiagnosticPayload(
+      getSettingsSectionDiagnostic(section),
+      'Section info copied. No credentials or tokens are included.',
+      'Section info could not be copied on this device.',
+    );
+  }
+
+  async function copyAllSettingsDiagnostics() {
+    await copyDiagnosticPayload(
+      buildSettingsDiagnosticsPackage(),
+      'Settings diagnostics copied. No credentials or tokens are included.',
+      'Settings diagnostics could not be copied on this device.',
+    );
+  }
+
+  function renderInsulinPlanVerification() {
+    const verification = getInsulinPlanVerification();
+    const local = verification.localPlan || {};
+    const server = verification.serverPlan || {};
+    const mismatches = new Set(verification.mismatchedPaths || []);
+    const rows = [
+      ['Plan ID', 'id'],
+      ['I:C', 'insulinCarbRatioGrams'],
+      ['Bedtime long-acting', 'bedtimeBaseUnits'],
+      ['Migrated-to-17', 'bedtimeBaseUnitsMigratedTo17'],
+      ['Rounding', 'doseRoundingMode'],
+      ['Increment', 'doseIncrementUnits'],
+      ['Minimum', 'minimumAllowableDoseUnits'],
+      ['Target', 'targetGlucoseMin', 'targetGlucoseMax'],
+      ['Temporary adjustment', 'temporaryEatingAdjustment.enabled'],
+      ['Adjustment amount', 'temporaryEatingAdjustment.units'],
+      ['Adjustment start', 'temporaryEatingAdjustment.startsAt'],
+      ['Adjustment end', 'temporaryEatingAdjustment.endsAt'],
+      ['Adjustment contexts', 'temporaryEatingAdjustment.contexts'],
+      ['Correction table', 'correctionRanges'],
+    ];
+    const rowHtml = rows.map(([label, path, secondPath]) => {
+      const localValue = secondPath ? `${formatVerificationValue(getNestedValue(local, path))}–${formatVerificationValue(getNestedValue(local, secondPath))}` : formatVerificationValue(getNestedValue(local, path));
+      const serverValue = secondPath ? `${formatVerificationValue(getNestedValue(server, path))}–${formatVerificationValue(getNestedValue(server, secondPath))}` : formatVerificationValue(getNestedValue(server, path));
+      const mismatchLabel = [path, secondPath].some((fieldPath) => mismatches.has(fieldPath));
+      return `<div class="lee_lee_diabetes_plan_verification_row${mismatchLabel ? ' is-mismatch' : ''}"><dt>${escapeHtml(label)}</dt><dd><span>This device</span><strong>${escapeHtml(localValue)}${mismatchLabel ? ' <em class="lee_lee_diabetes_plan_verification_difference">⚠ DIFFERENT</em>' : ''}</strong><span>Supabase</span><strong>${escapeHtml(serverValue)}</strong></dd></div>`;
+    }).join('');
+    const status = getVerificationStatusLabel(verification.status);
+    return `<section class="lee_lee_diabetes_plan_verification" aria-labelledby="lee-lee-plan-verification-title">
+      <div class="lee_lee_diabetes_plan_verification_header">
+        <div><h3 id="lee-lee-plan-verification-title">INSULIN PLAN VERIFICATION</h3><p class="lee_lee_diabetes_plan_verification_status lee_lee_diabetes_plan_verification_status--${verification.status.toLowerCase()}">${escapeHtml(status)}</p></div>
+        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-insulin-plan-diagnostics">Copy Diagnostics</button>
+      </div>
+      <p class="lee_lee_diabetes_help">${escapeHtml(verification.reasons?.join(' ') || 'Verification has not run yet.')}</p>
+      ${insulinPlanDiagnosticsMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--synced" role="status">${escapeHtml(insulinPlanDiagnosticsMessage)}</p>` : ''}
+      ${renderStatusGrid([
+        ['Checked', verification.checkedAt ? new Date(verification.checkedAt).toLocaleString() : 'Not yet'],
+        ['Server revision', verification.serverVersion ? `v${verification.serverVersion}` : 'Not available'],
+        ['Device', verification.deviceLabel || verification.deviceIdentity || 'Unknown'],
+        ['Platform', verification.platform || 'Unknown'],
+        ['Installation', verification.installationId ? `${verification.installationId.slice(0, 8)}…${verification.installationId.slice(-4)}` : 'Not available'],
+        ['Environment', verification.environment || 'Unknown'],
+        ['App', verification.appVersion || 'Unknown'],
+        ['Last successful verification', verification.lastSuccessfulVerificationAt ? new Date(verification.lastSuccessfulVerificationAt).toLocaleString() : 'Not yet'],
+        ['Shared settings status', verification.sharedSettingsStatus?.message || 'Not available'],
+        ['Realtime', formatRealtimeStatus(syncStatus.realtimeStatus)],
+        ['Pending settings', String(syncStatus.sharedSettingsPendingCount || 0)],
+        ['Conflicts', String(syncStatus.conflictCount || 0)],
+        ['Last settings/auth error', verification.sharedSettingsStatus?.lastFetchError || syncStatus.lastError || 'None'],
+      ])}
+      <dl class="lee_lee_diabetes_plan_verification_compare">${rowHtml}</dl>
+    </section>`;
+  }
+
   function renderSyncDiagnostics(diagnostics) {
     const summary = diagnostics?.summary || {};
     const states = summary.byState || {};
@@ -6820,10 +7639,12 @@
       ['Conflict domain', conflict ? `${conflict.entityType || 'record'} / ${conflict.recordId || 'unknown'}` : 'None'],
     ];
     return `
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="sync-diagnostics"${isSettingsAccordionOpen('sync-diagnostics') ? ' open' : ''}>
         <summary role="heading" aria-level="2">Sync Diagnostics <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
         <div class="lee_lee_diabetes_settings_accordion_body">
+        ${renderSettingsDiagnosticAction('syncDiagnostics')}
         ${renderStatusGrid(rows)}
+        ${renderInsulinPlanVerification()}
         ${(diagnostics?.foodLibraryQueue || []).map((item) => `<section><h3>Pending ${escapeHtml(item.entityType || 'food')}</h3>${renderStatusGrid([
           ['Item ID', item.recordId], ['Operation ID', item.id], ['Table', item.targetTable],
           ['Operation', item.operationType], ['State', item.state], ['Attempts', String(item.retryCount)],
@@ -6854,9 +7675,10 @@
     ];
     return `
       <h2 class="lee_lee_diabetes_visually_hidden">Sync Status</h2>
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion open aria-labelledby="lee-lee-sync-title">
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="sync-status"${isSettingsAccordionOpen('sync-status', true) ? ' open' : ''} aria-labelledby="lee-lee-sync-title">
         <summary id="lee-lee-sync-title">Sync Status <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
         <div class="lee_lee_diabetes_settings_accordion_body">
+        ${renderSettingsDiagnosticAction('syncStatus')}
         <p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--${escapeHtml(friendlySyncStatus.state)}" aria-live="polite">
           ${escapeHtml(friendlySyncStatus.message)}
         </p>
@@ -6903,27 +7725,82 @@
         <dl>${(event.changes || []).map((change) => `<div><dt>${escapeHtml(change.label || change.key || 'Changed setting')}</dt><dd>${escapeHtml(formatSettingsAuditValue(change.previousValue))} → ${escapeHtml(formatSettingsAuditValue(change.newValue))}</dd></div>`).join('')}</dl>
       </article>`;
     }).join('');
-    return `<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+    return `<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="settings-change-history"${isSettingsAccordionOpen('settings-change-history') ? ' open' : ''}>
       <summary role="heading" aria-level="2">Settings Change History <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
       <div class="lee_lee_diabetes_settings_accordion_body">
+        ${renderSettingsDiagnosticAction('settingsChangeHistory')}
         <p class="lee_lee_diabetes_help">Immutable history of shared settings changes. Pending and conflict events remain visible until resolved.</p>
         ${rows || '<p class="lee_lee_diabetes_help">No shared settings changes recorded yet.</p>'}
       </div>
     </details>`;
   }
 
+  const SETTINGS_DIAGNOSTIC_SECTION_BY_KEY = Object.freeze({
+    'lee-lee-app-information': 'appInformation',
+    'lee-lee-patient': 'patientAndClinicInfo',
+    'lee-lee-history-preferences': 'historyPreferences',
+    'lee-lee-pre-meal-timer': 'preMealTimer',
+    'lee-lee-insulin-plan': 'insulinDoseGuidance',
+    'lee-lee-correction-table': 'correctionTable',
+    'lee-lee-backup': 'localBackup',
+  });
+
+  function renderSettingsDiagnosticAction(section) {
+    return `<div class="lee_lee_diabetes_diagnostic_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-settings-section-info" data-diagnostic-section="${escapeHtml(section)}">Copy Section Info</button></div>`;
+  }
+
+  function renderAllSettingsDiagnosticsAction() {
+    return `<div class="lee_lee_diabetes_diagnostic_banner"><p class="lee_lee_diabetes_help">Copy a sanitized, read-only snapshot of the current Settings and runtime diagnostics for troubleshooting.</p><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-all-settings-diagnostics">Copy All Settings Diagnostics</button>${settingsDiagnosticsMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--synced" role="status">${escapeHtml(settingsDiagnosticsMessage)}</p>` : ''}</div>`;
+  }
+
   function renderSettingsAccordion(title, id, content, open = false) {
+    const settingsKey = id.replace(/-title$/, '');
+    const diagnosticSection = SETTINGS_DIAGNOSTIC_SECTION_BY_KEY[settingsKey];
     return `
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion${open ? ' open' : ''}>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="${escapeHtml(settingsKey)}"${isSettingsAccordionOpen(settingsKey, open) ? ' open' : ''}>
         <summary id="${escapeHtml(id)}" role="heading" aria-level="2">${escapeHtml(title)} <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
-        <div class="lee_lee_diabetes_settings_accordion_body">${content}</div>
+        <div class="lee_lee_diabetes_settings_accordion_body">${diagnosticSection ? renderSettingsDiagnosticAction(diagnosticSection) : ''}${content}</div>
       </details>
     `;
+  }
+
+  function getBuildMetadata() {
+    const metadata = window.LandoWorldBuildMetadata;
+    return metadata && typeof metadata === 'object' ? metadata : {};
+  }
+
+  function formatBuildMetadataDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function renderAppInformation() {
+    const metadata = getBuildMetadata();
+    const isLocal = metadata.environment === 'local';
+    const hasSourceIdentity = Boolean(metadata.commit || metadata.sourceId || metadata.branch);
+    const environment = isLocal ? 'Local Development' : 'Build information unavailable';
+    const sourceState = metadata.dirty === true ? 'Modified' : metadata.dirty === false ? 'Clean' : '';
+    return renderSettingsAccordion('App Information', 'lee-lee-app-information-title', `
+      <p class="lee_lee_diabetes_help">Read-only source and runtime information. This section is not part of tracker settings, sync, or the Settings Change Log.</p>
+      <dl class="lee_lee_diabetes_app_information">
+        <div><dt>Environment</dt><dd>${escapeHtml(environment)}</dd></div>
+        ${metadata.appVersion ? `<div><dt>Version</dt><dd><code>${escapeHtml(metadata.appVersion)}</code></dd></div>` : ''}
+        ${metadata.branch ? `<div><dt>Branch</dt><dd><code>${escapeHtml(metadata.branch)}</code></dd></div>` : ''}
+        ${metadata.commit ? `<div><dt>Commit</dt><dd><code>${escapeHtml(metadata.commit)}</code></dd></div>` : ''}
+        ${metadata.commitFull ? `<div><dt>Full Commit</dt><dd><code>${escapeHtml(metadata.commitFull)}</code></dd></div>` : ''}
+        ${sourceState ? `<div><dt>Source</dt><dd><code>${escapeHtml(sourceState)}</code></dd></div>` : ''}
+        ${metadata.sourceId ? `<div><dt>Source ID</dt><dd><code>${escapeHtml(metadata.sourceId)}</code></dd></div>` : ''}
+        ${metadata.generatedAt ? `<div><dt>Generated</dt><dd>${escapeHtml(formatBuildMetadataDate(metadata.generatedAt) || 'Unavailable')}</dd></div>` : ''}
+      </dl>
+      ${isLocal && hasSourceIdentity ? `<p class="lee_lee_diabetes_app_information_marker" aria-label="Local source identity">LOCAL · ${escapeHtml(metadata.commit || 'unknown')} · ${escapeHtml(sourceState.toUpperCase() || 'UNKNOWN')}</p>` : '<p class="lee_lee_diabetes_help">Build information is unavailable in this runtime.</p>'}
+    `, false);
   }
 
   function renderSettings(errorMessage = '', draftPlan = null) {
     const root = getRoot();
     if (!root) return;
+    if (currentEditor?.mode === 'settings') saveSettingsUiState();
     const retainedDraft = draftPlan
       || (currentEditor?.mode === 'settings' ? currentEditor.planDraft : null);
     const plan = retainedDraft
@@ -6941,8 +7818,10 @@
       <form class="lee_lee_diabetes_editor" data-plan-editor novalidate>
         ${renderTrackerTop({ active: 'settings', kicker: 'Lee-Lee’s Tracker', title: 'Settings' })}
         ${renderTrackerNav('settings')}
+        ${renderAllSettingsDiagnosticsAction()}
         ${renderSyncStatusSection()}
         ${renderSyncDiagnostics(syncRepository?.getSyncDiagnostics?.() || null)}
+        ${renderAppInformation()}
         ${renderSettingsChangeHistory()}
         ${renderSettingsAccordion('Patient & Clinic Info', 'lee-lee-patient-title', `
           <p class="lee_lee_diabetes_help">Patient and clinic information syncs across signed-in devices.</p>
@@ -6979,6 +7858,14 @@
           </label>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-history-preference">Save History Preference</button>
         `, false)}
+        ${renderSettingsAccordion('Pre-Meal Timer', 'lee-lee-pre-meal-timer-title', (() => {
+          const timerSettings = window.LeeLeePreMealTimer?.getSettings() || { enabled: true, durationMinutes: 15 };
+          return `<p class="lee_lee_diabetes_help">A device-local convenience timer starts after a new entry with more than 0 g of carbs is saved. It does not change insulin calculations or sync between devices.</p>
+            <label class="lee_lee_diabetes_checkline"><span>Enable Pre-Meal Timer</span><input type="checkbox" name="preMealTimerEnabled" ${timerSettings.enabled ? 'checked' : ''}></label>
+            <label class="lee_lee_diabetes_field">Timer Duration<span class="lee_lee_diabetes_inline_control"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-duration" data-delta="-1" aria-label="Decrease timer duration">−</button><input class="lee_lee_diabetes_input" name="preMealTimerDuration" type="number" min="1" max="60" step="1" value="${escapeHtml(timerSettings.durationMinutes)}" aria-describedby="pre-meal-timer-range"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-duration" data-delta="1" aria-label="Increase timer duration">+</button><span>minutes</span></span></label>
+            <p class="lee_lee_diabetes_help" id="pre-meal-timer-range">Choose 1–60 minutes. This is a user preference, not medical guidance.</p>
+            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-pre-meal-settings">Save Pre-Meal Timer Settings</button>`;
+        })(), false)}
         ${renderMigrationSettings()}
         ${renderMigrationDiagnostics()}
         ${renderSettingsAccordion('Insulin Dose Guidance', 'lee-lee-insulin-plan-title', `
@@ -7067,13 +7954,15 @@
         </div>
       </form>
     `;
+    restoreSettingsUiState();
   }
 
   function renderRecentlyDeletedSettings() {
     const deleted = deletedRecords();
     return `
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="recently-deleted"${isSettingsAccordionOpen('recently-deleted') ? ' open' : ''}>
           <summary id="lee-lee-deleted-title" role="heading" aria-level="2">Recently Deleted${deleted.length ? ` (${deleted.length})` : ''} <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+          <div class="lee_lee_diabetes_settings_accordion_body">${renderSettingsDiagnosticAction('recentlyDeleted')}
           ${deleted.length
             ? `<div class="lee_lee_diabetes_timeline">${deleted.map((record) => `
             <article class="lee_lee_diabetes_timeline_item lee_lee_diabetes_history_record">
@@ -7091,6 +7980,7 @@
             </article>
             `).join('')}</div>`
             : '<p class="lee_lee_diabetes_empty">No deleted records.</p>'}
+          </div>
       </details>
     `;
   }
@@ -7104,7 +7994,7 @@
       ? `Retry ${Number(session.retryCount || 0)}`
       : (session.status || 'idle');
     return `
-      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion aria-labelledby="lee-lee-migration-diagnostics-title">
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="migration-diagnostics"${isSettingsAccordionOpen('migration-diagnostics') ? ' open' : ''} aria-labelledby="lee-lee-migration-diagnostics-title">
           <summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
           <div class="lee_lee_diabetes_settings_accordion_body">
         <dl class="lee_lee_diabetes_status_grid">
@@ -7839,7 +8729,18 @@
     renderSettings();
   }
 
+  function savePreMealTimerSettings(form) {
+    const service = window.LeeLeePreMealTimer;
+    if (!service || !form) return;
+    const settings = service.saveSettings({
+      enabled: form.elements.preMealTimerEnabled?.checked === true,
+      durationMinutes: form.elements.preMealTimerDuration?.value,
+    });
+    if (settings) renderSettings();
+  }
+
   function handleCancel() {
+    if (currentEditor?.mode === 'settings') saveSettingsUiState();
     if (currentEditor?.returnTo === 'history-day' && currentEditor.returnDateKey) {
       renderHistoryDay(currentEditor.returnDateKey);
       return;
@@ -8107,6 +9008,7 @@
       },
       onSharedSettingsChange: (settings) => {
         applySharedSettingsToLocal(settings);
+        invalidateOpenDoseGuidance();
         patientSettingsMessage = '';
         patientSettingsError = '';
         if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
@@ -8240,6 +9142,8 @@
   async function init() {
     const root = getRoot();
     if (!root) return;
+    window.addEventListener?.('scroll', saveSettingsUiState, { passive: true });
+    document.addEventListener?.('visibilitychange', saveSettingsUiState);
     const headerToggle = document.getElementById('lee_lee_settings_toggle');
     headerToggle?.addEventListener('click', () => {
       if (currentEditor?.mode === 'settings') handleCancel();
@@ -8302,6 +9206,7 @@
       }
       const target = eventTarget?.closest?.('[data-action]');
       if (!target) return;
+      if (currentEditor?.mode === 'settings') saveSettingsUiState();
       const action = target.dataset.action;
       if (action === 'reset-password') {
         const form = target.closest('[data-auth-form]');
@@ -8511,6 +9416,57 @@
         }
         renderSettings('', currentEditor?.mode === 'plan-confirmation' ? currentEditor.pendingPlan : null);
       }
+      if (action === 'save-pre-meal-settings') {
+        savePreMealTimerSettings(target.closest('[data-plan-editor]'));
+      }
+      if (action === 'adjust-pre-meal-duration') {
+        const form = target.closest('[data-plan-editor]');
+        const input = form?.elements.preMealTimerDuration;
+        if (input) input.value = Math.min(60, Math.max(1, Number(input.value || 15) + Number(target.dataset.delta || 0)));
+      }
+      if (action === 'open-pre-meal-timer') {
+        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+      }
+      if (action === 'close-pre-meal-timer' || action === 'dismiss-pre-meal-timer') {
+        if (window.LeeLeePreMealTimer?.getTimer()?.status === 'completed') window.LeeLeePreMealTimer.dismiss();
+        if (target.closest('.lee_lee_diabetes_pre_meal_timer_modal')) target.closest('.lee_lee_diabetes_pre_meal_timer_modal').remove();
+        renderHome();
+      }
+      if (action === 'stop-pre-meal-timer') {
+        const timer = window.LeeLeePreMealTimer?.normalize();
+        if (timer?.status === 'active') renderPreMealTimerStopConfirmation(timer);
+        return;
+      }
+      if (action === 'cancel-stop-pre-meal-timer') {
+        target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+        return;
+      }
+      if (action === 'confirm-stop-pre-meal-timer') {
+        window.LeeLeePreMealTimer?.stop();
+        target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+        renderHome();
+        return;
+      }
+      if (action === 'adjust-pre-meal-timer') {
+        const timer = window.LeeLeePreMealTimer?.adjustMinutes(Number(target.dataset.delta || 0));
+        if (timer) {
+          target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+          renderPreMealTimerModal(timer);
+        }
+      }
+      if (action === 'keep-pre-meal-timer') {
+        target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+      }
+      if (action === 'restart-pre-meal-timer') {
+        const service = window.LeeLeePreMealTimer;
+        const record = currentEditor?.pendingTimerRecord;
+        const settings = service?.getSettings();
+        const timer = service?.start({ durationMinutes: settings?.durationMinutes, sourceEntryId: record?.id, sourceEntry: record });
+        target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+        if (timer) renderPreMealTimerModal(timer);
+      }
       if (action === 'cancel') {
         handleCancel();
       }
@@ -8531,13 +9487,14 @@
         });
       }
       if (action === 'confirm-save' && currentEditor?.pendingRecord) {
-        const duplicateMessage = getDuplicateScheduledContextMessage(currentEditor.pendingRecord);
+        const pendingRecord = currentEditor.pendingRecord;
+        const duplicateMessage = getDuplicateScheduledContextMessage(pendingRecord);
         if (duplicateMessage) {
           renderEditor({
             mode: currentEditor?.mode || 'log-entry',
-            eventType: currentEditor.pendingRecord.eventType,
-            type: currentEditor.pendingRecord.type,
-            record: currentEditor.pendingRecord,
+            eventType: pendingRecord.eventType,
+            type: pendingRecord.type,
+            record: pendingRecord,
             returnTo: currentEditor?.returnTo || null,
             returnDateKey: currentEditor?.returnDateKey || null,
             error: duplicateMessage,
@@ -8546,8 +9503,9 @@
           });
           return;
         }
-        upsertRecord(currentEditor.pendingRecord);
-        renderAfterRecordChange(currentEditor.pendingRecord);
+        const saved = upsertRecord(pendingRecord);
+        renderAfterRecordChange(pendingRecord);
+        maybeStartPreMealTimer(pendingRecord, saved.existingRecord, saved);
       }
       if (action === 'confirm-plan') {
         activatePendingPlan();
@@ -8686,6 +9644,15 @@
       if (action === 'sync-now') {
         runManualSyncNow();
       }
+      if (action === 'copy-insulin-plan-diagnostics') {
+        copyInsulinPlanDiagnostics();
+      }
+      if (action === 'copy-settings-section-info') {
+        copySettingsSectionInfo(target.dataset.diagnosticSection || '');
+      }
+      if (action === 'copy-all-settings-diagnostics') {
+        copyAllSettingsDiagnostics();
+      }
       if (action === 'begin-local-migration') {
         beginLocalMigration(target.dataset.startedFrom || currentEditor?.mode || 'settings');
       }
@@ -8802,11 +9769,8 @@
       }
     });
     root.addEventListener('toggle', (event) => {
-      const opened = event.target;
-      if (!opened.matches?.('details[data-settings-accordion][open]')) return;
-      root.querySelectorAll('details[data-settings-accordion][open]').forEach((section) => {
-        if (section !== opened) section.removeAttribute('open');
-      });
+      if (!event.target.matches?.('details[data-settings-accordion][data-settings-key]')) return;
+      saveSettingsUiState();
     });
     root.addEventListener('submit', (event) => {
       if (!event.target.matches('[data-auth-form], [data-device-identity-form], [data-lee-lee-editor], [data-plan-editor]')) return;
@@ -9023,6 +9987,26 @@
       }
     });
     root.addEventListener('keydown', (event) => {
+      if (currentEditor?.mode === 'pre-meal-stop-confirm') {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          root.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+          renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+          return;
+        }
+        if (event.key === 'Tab') {
+          const focusable = [...root.querySelectorAll('.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm button:not([disabled])')];
+          if (focusable.length) {
+            const currentIndex = focusable.indexOf(document.activeElement);
+            const nextIndex = event.shiftKey
+              ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+              : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+            event.preventDefault();
+            focusable[nextIndex]?.focus();
+          }
+          return;
+        }
+      }
       if (historyFilterSheetOpen && event.key === 'Escape') {
         event.preventDefault();
         closeHistoryFilters();
@@ -9108,6 +10092,7 @@
     loadTrackerData,
     saveTrackerData,
     updateTrackerData,
+    getActiveInsulinPlan,
     mergeTrackerDocuments,
     validateBackupPayload,
     createBackupDocument,
@@ -9124,6 +10109,17 @@
     }),
     applySharedSettingsToDocument,
     createSharedInsulinPlanSnapshot,
+  };
+
+  window.LeeLeeTrackerVerification = {
+    statuses: { ...INSULIN_PLAN_VERIFICATION_STATUSES },
+    getDoseAffectingInsulinPlanSnapshot,
+    compareInsulinPlansForVerification,
+    evaluateInsulinPlanVerification,
+    getInsulinPlanVerification,
+    buildInsulinPlanDiagnosticsPackage,
+    buildSettingsDiagnosticsPackage,
+    getSettingsSectionDiagnostic,
   };
 
   window.LeeLeeTrackerDebug = {

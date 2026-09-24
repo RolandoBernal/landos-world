@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-09-21-1';
+const SW_VERSION = '2026-09-21-2';
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -35,6 +35,7 @@ const PRECACHE_URLS = [
   './js/daily-chief-briefing.js',
   './js/lee-lees-tracker-config.js',
   './js/lee-lees-tracker-sync.js',
+  './js/lee-lee-pre-meal-timer.js',
   './js/lee-lee-diabetes-tracker.js',
   './js/sprints-app.js',
   './js/violet-futbol-game-tracker.js',

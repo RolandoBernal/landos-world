@@ -146,6 +146,95 @@
   margin-top: 1.35rem;
 }
 
+.lee_lee_diabetes_pre_meal_timer_card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: .75rem;
+  align-items: center;
+  margin: 0 0 1.1rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--lee-lee-border-strong);
+  border-radius: 1.1rem;
+  background: linear-gradient(135deg, rgb(var(--app-accent-rgb, 58 160 255) / 18%), var(--lee-lee-panel));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 .5rem 1.25rem rgb(0 0 0 / 10%);
+  transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.lee_lee_diabetes_pre_meal_timer_card:hover { border-color: var(--lee-lee-accent); box-shadow: 0 .7rem 1.5rem rgb(0 0 0 / 16%); transform: translateY(-1px); }
+.lee_lee_diabetes_pre_meal_timer_card:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 3px; }
+.lee_lee_diabetes_pre_meal_timer_card strong,
+.lee_lee_diabetes_pre_meal_timer_card small { display: block; }
+.lee_lee_diabetes_pre_meal_timer_card small { margin-top: .2rem; opacity: .72; }
+.lee_lee_diabetes_pre_meal_timer_icon { display: grid; place-items: center; inline-size: 2.35rem; block-size: 2.35rem; border-radius: .8rem; background: rgb(var(--app-accent-rgb, 58 160 255) / 22%); color: var(--lee-lee-soft); font-size: 1.25rem; }
+.lee_lee_diabetes_pre_meal_timer_value,
+.lee_lee_diabetes_pre_meal_timer_large,
+.lee_lee_diabetes_pre_meal_timer_conflict_time { font-family: var(--llt-numeric-font); font-variant-numeric: tabular-nums; }
+.lee_lee_diabetes_pre_meal_timer_value { font-size: 1.2rem; letter-spacing: .02em; }
+.lee_lee_diabetes_pre_meal_timer_modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; box-sizing: border-box; overflow-y: auto; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, calc(1rem + env(safe-area-inset-bottom))) max(1rem, env(safe-area-inset-left)); }
+.lee_lee_diabetes_pre_meal_timer_modal--detail { position: fixed !important; inset: 0 !important; display: block; width: 100vw; height: 100dvh; min-height: 100vh; overflow: hidden; padding: 0; background: var(--lee-lee-bg); isolation: isolate; }
+.lee_lee_diabetes_pre_meal_timer_backdrop { position: absolute; inset: 0; background: rgb(0 0 0 / 68%); }
+.lee_lee_diabetes_pre_meal_timer_panel { position: relative; width: min(100%, 31rem); max-height: calc(100dvh - 2rem); box-sizing: border-box; overflow-y: auto; padding: 1rem 1.25rem max(1.25rem, env(safe-area-inset-bottom)); border: 1px solid var(--lee-lee-border-strong); border-radius: 1.5rem; background: var(--lee-lee-panel-strong); color: var(--lee-lee-text); box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%); text-align: center; }
+.lee_lee_diabetes_pre_meal_timer_panel--detail { width: 100vw; min-width: 100vw; height: 100dvh; min-height: 100vh; max-height: none; box-sizing: border-box; overflow-y: auto; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); border: 0; border-radius: 0; background: var(--lee-lee-bg); box-shadow: none; }
+.lee_lee_diabetes_pre_meal_timer_detail_inner { width: min(100%, 34rem); min-height: 100%; margin-inline: auto; }
+.lee_lee_diabetes_pre_meal_timer_panel--saved { width: min(100%, 22rem); max-width: 100%; max-height: none; overflow: visible; padding: 1.5rem 1.25rem max(1.35rem, env(safe-area-inset-bottom)); border-color: var(--lee-lee-border-strong); border-radius: 1.35rem; background: var(--lee-lee-bg); box-shadow: 0 1rem 3rem rgb(0 0 0 / 38%); }
+.lee_lee_diabetes_pre_meal_timer_panel h1 { margin: .65rem 0 .25rem; font-size: clamp(1.35rem, 5vw, 1.8rem); }
+.lee_lee_diabetes_pre_meal_timer_header { display: grid; grid-template-columns: 2.5rem 1fr 2.5rem; align-items: center; min-height: 2.5rem; color: var(--lee-lee-muted); font-size: .82rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.lee_lee_diabetes_pre_meal_timer_back { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; border: 0; border-radius: 50%; background: transparent; color: var(--lee-lee-soft); font-size: 1.9rem; cursor: pointer; }
+.lee_lee_diabetes_pre_meal_timer_back:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 2px; }
+.lee_lee_diabetes_pre_meal_timer_status_icon { display: grid; place-items: center; inline-size: 3.2rem; block-size: 3.2rem; margin: .55rem auto 0; border-radius: 50%; background: rgb(var(--app-accent-rgb, 58 160 255) / 18%); color: var(--lee-lee-soft); font-size: 1.45rem; }
+.lee_lee_diabetes_pre_meal_timer_status_icon.is-success,
+.lee_lee_diabetes_pre_meal_timer_status_icon.is-complete { background: rgb(20 180 112 / 18%); color: var(--lee-lee-green); }
+.lee_lee_diabetes_pre_meal_timer_status_icon.is-conflict { background: rgb(245 158 11 / 18%); color: #f59e0b; }
+.lee_lee_diabetes_pre_meal_timer_ring { display: grid; place-items: center; inline-size: min(62vw, 15rem); aspect-ratio: 1; margin: 1rem auto; padding: .65rem; border-radius: 50%; background: conic-gradient(var(--lee-lee-accent) var(--timer-progress, 0%), rgb(var(--app-accent-rgb, 58 160 255) / 15%) 0); }
+.lee_lee_diabetes_pre_meal_timer_ring_inner { display: grid; place-items: center; align-content: center; inline-size: 100%; block-size: 100%; border-radius: 50%; background: var(--lee-lee-panel-strong); }
+.lee_lee_diabetes_pre_meal_timer_large { font-size: clamp(2.8rem, 14vw, 4.5rem); line-height: 1; }
+.lee_lee_diabetes_pre_meal_timer_ring_inner span,
+.lee_lee_diabetes_pre_meal_timer_conflict_time span { margin-top: .35rem; color: var(--lee-lee-muted); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+.lee_lee_diabetes_pre_meal_timer_message { margin: .35rem auto; color: var(--lee-lee-text); font-size: 1rem; }
+.lee_lee_diabetes_pre_meal_timer_background_note { max-width: 25rem; margin: .75rem auto 1rem; color: var(--lee-lee-muted); font-size: .8rem; }
+.lee_lee_diabetes_pre_meal_timer_source { display: grid; gap: .55rem; margin: 1rem 0; padding: .9rem 1rem; border: 1px solid var(--lee-lee-border); border-radius: 1rem; background: var(--lee-lee-panel); text-align: left; }
+.lee_lee_diabetes_pre_meal_timer_source div { display: flex; justify-content: space-between; gap: 1rem; }
+.lee_lee_diabetes_pre_meal_timer_source dt { opacity: .72; }
+.lee_lee_diabetes_pre_meal_timer_source dd { margin: 0; font-weight: 600; text-align: right; }
+.lee_lee_diabetes_pre_meal_timer_source_time { display: block; color: var(--lee-lee-muted); font-size: .78rem; font-weight: 400; }
+.lee_lee_diabetes_pre_meal_timer_success_countdown { display: flex; align-items: center; justify-content: center; gap: .7rem; margin: 1.05rem 0 .8rem; padding: 0; color: var(--lee-lee-soft); }
+.lee_lee_diabetes_pre_meal_timer_success_countdown .lee_lee_diabetes_pre_meal_timer_large { color: var(--lee-lee-text); font-size: clamp(2.4rem, 12vw, 4rem); }
+.lee_lee_diabetes_pre_meal_timer_success_icon { display: grid; place-items: center; inline-size: 2.25rem; block-size: 2.25rem; border-radius: 50%; background: rgb(var(--app-accent-rgb, 58 160 255) / 20%); font-size: 1.2rem; }
+.lee_lee_diabetes_pre_meal_timer_success_hint { margin: 0 0 1rem; color: var(--lee-lee-muted); }
+.lee_lee_diabetes_actions.lee_lee_diabetes_pre_meal_timer_success_actions { display: block; grid-template-columns: 1fr; width: 100%; margin-top: 1rem; }
+.lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: 100%; min-height: 2.9rem; }
+@media (min-width: 768px) {
+  .lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: min(100%, 14rem); margin-inline: auto; }
+}
+.lee_lee_diabetes_pre_meal_timer_actions { align-items: stretch; margin-top: 1rem; }
+.lee_lee_diabetes_pre_meal_timer_actions .lee_lee_diabetes_button { min-height: 2.8rem; }
+.lee_lee_diabetes_pre_meal_timer_done { grid-column: 1 / -1; }
+.lee_lee_diabetes_pre_meal_timer_panel--conflict { padding: 2rem 1.25rem max(1.5rem, env(safe-area-inset-bottom)); }
+.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm { width: min(100%, 24rem); max-width: 100%; padding: 1.5rem 1.25rem max(1.35rem, env(safe-area-inset-bottom)); border-color: var(--lee-lee-border-strong); background: var(--lee-lee-bg); }
+.lee_lee_diabetes_pre_meal_timer_conflict_time { margin: .8rem 0; font-size: clamp(2.4rem, 12vw, 3.8rem); line-height: 1; }
+.lee_lee_diabetes_pre_meal_timer_conflict_time span { display: block; }
+.lee_lee_diabetes_pre_meal_timer_conflict_actions { display: grid; gap: .65rem; margin-top: 1.25rem; }
+.lee_lee_diabetes_pre_meal_timer_stop_actions { display: grid; gap: .65rem; margin-top: 1.25rem; }
+.lee_lee_diabetes_pre_meal_timer_stop_actions .lee_lee_diabetes_button { width: 100%; }
+.lee_lee_diabetes_button--danger { border-color: rgb(239 68 68 / 45%); color: #fca5a5; }
+.lee_lee_diabetes_button--text { border: 0; background: transparent; color: var(--lee-lee-muted); }
+@media (max-width: 23rem) {
+  .lee_lee_diabetes_pre_meal_timer_actions { display: grid; grid-template-columns: 1fr; }
+}
+.lee_lee_diabetes_app_information { display: grid; gap: .65rem; margin: 0; }
+.lee_lee_diabetes_app_information > div { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(0, 2fr); gap: 1rem; align-items: baseline; }
+.lee_lee_diabetes_app_information dt { color: var(--lee-lee-muted); }
+.lee_lee_diabetes_app_information dd { margin: 0; overflow-wrap: anywhere; }
+.lee_lee_diabetes_app_information code { user-select: text; font-family: var(--llt-numeric-font); }
+.lee_lee_diabetes_app_information_marker { margin: 1rem 0 0; color: var(--lee-lee-muted); font-family: var(--llt-numeric-font); font-size: .8rem; letter-spacing: .04em; }
+@media (prefers-reduced-motion: reduce) {
+  .lee_lee_diabetes_pre_meal_timer_modal,
+  .lee_lee_diabetes_pre_meal_timer_card { scroll-behavior: auto; transition: none; }
+}
+
 .lee_lee_diabetes_cards,
 .lee_lee_diabetes_timeline,
 .lee_lee_diabetes_history_list {
@@ -906,6 +995,15 @@
 
 .lee_lee_diabetes_dose_card--notice {
   background: rgb(255 255 255 / 7%);
+}
+
+.lee_lee_diabetes_dose_card--verification-warning {
+  border-color: rgb(251 191 36 / 58%);
+  background: rgb(251 191 36 / 12%);
+}
+
+.lee_lee_diabetes_dose_card--verification-warning .lee_lee_diabetes_dose_label {
+  color: #fbbf24;
 }
 
 .lee_lee_diabetes_dose_label {
@@ -1831,6 +1929,24 @@
   padding-top: 0.85rem;
 }
 
+.lee_lee_diabetes_diagnostic_actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lee_lee_diabetes_diagnostic_banner {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 10%);
+}
+
+.lee_lee_diabetes_diagnostic_banner .lee_lee_diabetes_button {
+  justify-self: start;
+}
+
 .lee_lee_diabetes_audit_event {
   border: 1px solid var(--lee-lee-diabetes-border, #334155);
   border-radius: 0.75rem;
@@ -1987,6 +2103,98 @@
   color: var(--lee-lee-text);
   font-size: 1rem;
   font-weight: 600;
+}
+
+.lee_lee_diabetes_plan_verification {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--lee-lee-border-strong);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 10%);
+}
+
+.lee_lee_diabetes_plan_verification_header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lee_lee_diabetes_plan_verification_header h3 {
+  margin: 0;
+  color: var(--lee-lee-soft);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.lee_lee_diabetes_plan_verification_status {
+  margin: 0.35rem 0 0;
+  font-weight: 700;
+}
+
+.lee_lee_diabetes_plan_verification_status--verified {
+  color: var(--lee-lee-accent);
+}
+
+.lee_lee_diabetes_plan_verification_status--mismatch,
+.lee_lee_diabetes_plan_verification_status--not_verified {
+  color: #fbbf24;
+}
+
+.lee_lee_diabetes_plan_verification_compare {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.lee_lee_diabetes_plan_verification_row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.7fr) minmax(0, 1.3fr);
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--lee-lee-border);
+}
+
+.lee_lee_diabetes_plan_verification_row dt {
+  color: var(--lee-lee-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.lee_lee_diabetes_plan_verification_row dd {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lee_lee_diabetes_plan_verification_row dd span {
+  color: var(--lee-lee-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.lee_lee_diabetes_plan_verification_row dd strong {
+  color: var(--lee-lee-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.lee_lee_diabetes_plan_verification_difference {
+  color: #fbbf24;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lee_lee_diabetes_plan_verification_row.is-mismatch {
+  padding-inline: 0.45rem;
+  border-radius: 6px;
+  background: rgb(255 191 36 / 12%);
+  outline: 1px solid rgb(255 191 36 / 32%);
 }
 
 .lee_lee_diabetes_details {
@@ -2221,6 +2429,16 @@
   border-color: rgb(178 116 0 / 32%);
   background: rgb(255 202 87 / 24%);
   color: #6d4a00;
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_dose_card--verification-warning {
+  border-color: rgb(154 103 0 / 52%);
+  background: rgb(255 191 36 / 18%);
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_dose_card--verification-warning .lee_lee_diabetes_dose_label,
+:root[data-theme="light"] .lee_lee_diabetes_plan_verification_difference {
+  color: #8a5a00;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_adjustment_note,

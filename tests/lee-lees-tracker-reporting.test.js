@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const trackerSource = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
+const syncSource = readFileSync(new URL('../js/lee-lees-tracker-sync.js', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../css/lee-lee-diabetes.css', import.meta.url), 'utf8');
 const starterFoods = JSON.parse(readFileSync(new URL('../data/llt-starter-foods.json', import.meta.url), 'utf8'));
 
@@ -26,7 +27,7 @@ function createLocalStorage(seed = {}) {
   };
 }
 
-function createTrackerRuntime() {
+function createTrackerRuntime(seed = {}, options = {}) {
   const context = {
     console,
     Date,
@@ -46,7 +47,8 @@ function createTrackerRuntime() {
       addEventListener() {},
       getElementById: () => null,
     },
-    localStorage: createLocalStorage(),
+    localStorage: createLocalStorage(seed),
+    location: options.location || { hostname: 'test.invalid' },
     navigator: {
       language: 'en-US',
       storage: {
@@ -58,6 +60,29 @@ function createTrackerRuntime() {
   context.window = context;
   context.globalThis = context;
   vm.runInNewContext(trackerSource, context);
+  return context;
+}
+
+function createSyncRuntime() {
+  const context = {
+    console,
+    Date,
+    JSON,
+    Math,
+    Number,
+    Object,
+    Promise,
+    String,
+    URL,
+    crypto: { randomUUID: () => 'test-sync-id' },
+    document: { visibilityState: 'visible' },
+    localStorage: createLocalStorage(),
+    navigator: { onLine: true },
+    window: null,
+  };
+  context.window = context;
+  context.globalThis = context;
+  vm.runInNewContext(syncSource, context);
   return context;
 }
 
@@ -81,6 +106,51 @@ function record(overrides = {}) {
     notes: '',
     ...overrides,
   };
+}
+
+function completeVerificationPlan(overrides = {}) {
+  return {
+    id: 'verification-plan',
+    name: 'Verification Plan',
+    effectiveFrom: '2026-07-31',
+    effectiveTo: null,
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 6, Snack: 0 },
+    mealBaseUnits: 5,
+    bedtimeBaseUnits: 17,
+    bedtimeBaseUnitsMigratedTo17: true,
+    insulinCarbRatioGrams: 12,
+    doseRoundingMode: 'down',
+    doseIncrementUnits: 0.5,
+    minimumAllowableDoseUnits: 0.5,
+    temporaryEatingAdjustment: {
+      enabled: false,
+      units: 0.5,
+      startsAt: '',
+      endsAt: '',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+    },
+    targetGlucoseMin: 70,
+    targetGlucoseMax: 180,
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 179, correctionUnits: 0 },
+      { minGlucose: 180, maxGlucose: 249, correctionUnits: 1 },
+      { minGlucose: 250, maxGlucose: null, correctionUnits: 2 },
+    ],
+    ...overrides,
+  };
+}
+
+function installPlans(runtime, plans, activeInsulinPlanId) {
+  runtime.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+    ...current,
+    insulinPlans: plans,
+    activeInsulinPlanId,
+  }));
+}
+
+function editorForm({ date, time = '12:00' }) {
+  return { elements: { date: { value: date }, time: { value: time } } };
 }
 
 function countOccurrences(text, needle) {
@@ -1660,6 +1730,581 @@ test('shared settings contract applies restored patient and dose settings to cal
   assert.equal(lunch550.suggestedTotalUnits, 6);
 });
 
+test('shared insulin-plan snapshot preserves the complete dose-affecting plan through normalization', () => {
+  const tracker = createTrackerRuntime();
+  const sync = createSyncRuntime();
+  const plan = {
+    id: 'round-trip-plan',
+    name: 'Round Trip Plan',
+    effectiveFrom: '2026-09-14',
+    effectiveTo: null,
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 7 },
+    bedtimeBaseUnits: 17,
+    bedtimeBaseUnitsMigratedTo17: true,
+    insulinCarbRatioGrams: 12,
+    doseRoundingMode: 'nearest',
+    doseIncrementUnits: 0.25,
+    minimumAllowableDoseUnits: 0.75,
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 0.75,
+      startsAt: '2026-09-14T05:00:00.000Z',
+      endsAt: '2026-09-25T04:55:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    },
+    targetGlucoseMin: 70,
+    targetGlucoseMax: 180,
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    correctionRanges: [
+      { minGlucose: null, maxGlucose: 179, correctionUnits: 0 },
+      { minGlucose: 180, maxGlucose: 249, correctionUnits: 1.5 },
+      { minGlucose: 250, maxGlucose: null, correctionUnits: 3 },
+    ],
+    notes: 'Complete round-trip fixture',
+    createdAt: '2026-09-14T00:00:00.000Z',
+    updatedAt: '2026-09-14T00:00:00.000Z',
+  };
+  const original = JSON.parse(JSON.stringify(plan));
+  const snapshot = tracker.LeeLeeTrackerSharedSettings.createSharedInsulinPlanSnapshot(plan);
+  const normalized = sync.LeeLeeTrackerSync.normalizeSharedInsulinPlan(snapshot);
+
+  assert.notEqual(snapshot, plan);
+  assert.deepEqual(plan, original, 'serialization must not mutate the source plan');
+  assert.equal(normalized.id, plan.id);
+  assert.equal(normalized.bedtimeBaseUnits, 17);
+  assert.equal(normalized.insulinCarbRatioGrams, 12);
+  assert.equal(normalized.doseRoundingMode, 'nearest');
+  assert.equal(normalized.doseIncrementUnits, 0.25);
+  assert.equal(normalized.minimumAllowableDoseUnits, 0.75);
+  assert.equal(normalized.targetGlucoseMin, 70);
+  assert.equal(normalized.targetGlucoseMax, 180);
+  assert.deepEqual(Array.from(normalized.correctionRanges, (range) => ({ ...range })), plan.correctionRanges);
+  assert.equal(normalized.temporaryEatingAdjustment.enabled, true);
+  assert.equal(normalized.temporaryEatingAdjustment.units, 0.75);
+  assert.equal(normalized.temporaryEatingAdjustment.startsAt, plan.temporaryEatingAdjustment.startsAt);
+  assert.equal(normalized.temporaryEatingAdjustment.endsAt, plan.temporaryEatingAdjustment.endsAt);
+  assert.deepEqual(Array.from(normalized.temporaryEatingAdjustment.contexts), plan.temporaryEatingAdjustment.contexts);
+});
+
+test('temporary eating adjustment disabled state and legacy omission remain distinct and safe', () => {
+  const tracker = createTrackerRuntime();
+  const sync = createSyncRuntime();
+  const disabledPlan = {
+    id: 'disabled-adjustment-plan',
+    name: 'Disabled Adjustment',
+    effectiveFrom: '2026-09-14',
+    mealBaseUnitsByType: { Breakfast: 5, Lunch: 6, Dinner: 7 },
+    bedtimeBaseUnits: 17,
+    insulinCarbRatioGrams: 12,
+    doseRoundingMode: 'down',
+    doseIncrementUnits: 0.5,
+    minimumAllowableDoseUnits: 0.5,
+    temporaryEatingAdjustment: {
+      enabled: false,
+      units: 0.5,
+      startsAt: '2026-09-21T17:30:00.000Z',
+      endsAt: '2026-09-22T05:30:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    },
+    targetGlucoseMin: 70,
+    targetGlucoseMax: 180,
+    supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    correctionRanges: [{ minGlucose: null, maxGlucose: null, correctionUnits: 0 }],
+  };
+  const snapshot = tracker.LeeLeeTrackerSharedSettings.createSharedInsulinPlanSnapshot(disabledPlan);
+  const normalizedDisabled = sync.LeeLeeTrackerSync.normalizeSharedInsulinPlan(snapshot);
+  const normalizedLegacy = sync.LeeLeeTrackerSync.normalizeSharedInsulinPlan({
+    ...snapshot,
+    temporaryEatingAdjustment: undefined,
+  });
+
+  assert.equal(Object.hasOwn(snapshot, 'temporaryEatingAdjustment'), true);
+  assert.equal(normalizedDisabled.temporaryEatingAdjustment.enabled, false);
+  assert.equal(normalizedDisabled.temporaryEatingAdjustment.units, 0.5);
+  assert.equal(normalizedDisabled.temporaryEatingAdjustment.startsAt, disabledPlan.temporaryEatingAdjustment.startsAt);
+  assert.equal(normalizedDisabled.temporaryEatingAdjustment.endsAt, disabledPlan.temporaryEatingAdjustment.endsAt);
+  assert.deepEqual(Array.from(normalizedDisabled.temporaryEatingAdjustment.contexts), disabledPlan.temporaryEatingAdjustment.contexts);
+  assert.equal(normalizedLegacy.temporaryEatingAdjustment.enabled, false);
+  assert.equal(normalizedLegacy.temporaryEatingAdjustment.units, 0.5);
+  assert.deepEqual(Array.from(normalizedLegacy.temporaryEatingAdjustment.contexts), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']);
+});
+
+test('insulin-plan verification accepts only a complete identical fetched revision', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan: plan,
+    authoritative: {
+      settings: { version: 26, updatedAt: '2026-09-17T16:56:08.424643Z', insulinPlan: plan },
+      sourcePlan: plan,
+      fetchedAt: '2026-09-17T16:56:13.069Z',
+    },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0, realtimeStatus: 'connected' },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0 },
+  });
+
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.serverVersion, 26);
+  assert.equal(result.mismatchedFields.length, 0);
+  assert.deepEqual(Array.from(result.mismatchedPaths), []);
+});
+
+test('insulin-plan verification reports every dose-affecting mismatch field', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const changed = completeVerificationPlan({
+    id: 'different-plan',
+    bedtimeBaseUnits: 16,
+    bedtimeBaseUnitsMigratedTo17: false,
+    insulinCarbRatioGrams: 13,
+    doseRoundingMode: 'nearest',
+    doseIncrementUnits: 0.25,
+    minimumAllowableDoseUnits: 1,
+    targetGlucoseMin: 80,
+    targetGlucoseMax: 160,
+    correctionRanges: [{ minGlucose: null, maxGlucose: 179, correctionUnits: 1 }],
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 1,
+      startsAt: '2026-09-21T17:30:00.000Z',
+      endsAt: '2026-09-22T05:30:00.000Z',
+      contexts: ['Breakfast'],
+    },
+  });
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan: plan,
+    authoritative: { settings: { version: 26, insulinPlan: changed }, sourcePlan: changed, fetchedAt: '2026-09-17T16:56:13.069Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0 },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0 },
+  });
+
+  assert.equal(result.status, 'MISMATCH');
+  [
+    'Plan ID',
+    'Bedtime long-acting',
+    'Migrated-to-17',
+    'I:C ratio',
+    'Rounding',
+    'Increment',
+    'Minimum allowable dose',
+    'Target minimum',
+    'Target maximum',
+    'Correction table',
+    'Temporary adjustment',
+    'Adjustment amount',
+    'Adjustment start',
+    'Adjustment end',
+    'Adjustment contexts',
+  ].forEach((field) => assert.equal(result.mismatchedFields.includes(field), true, field));
+  assert.deepEqual(Array.from(result.mismatchedPaths), [
+    'id',
+    'bedtimeBaseUnits',
+    'bedtimeBaseUnitsMigratedTo17',
+    'insulinCarbRatioGrams',
+    'doseRoundingMode',
+    'doseIncrementUnits',
+    'minimumAllowableDoseUnits',
+    'targetGlucoseMin',
+    'targetGlucoseMax',
+    'correctionRanges',
+    'temporaryEatingAdjustment.enabled',
+    'temporaryEatingAdjustment.units',
+    'temporaryEatingAdjustment.startsAt',
+    'temporaryEatingAdjustment.endsAt',
+    'temporaryEatingAdjustment.contexts',
+  ]);
+});
+
+test('insulin-plan verification stays not verified without a fresh complete comparison', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const base = {
+    localPlan: plan,
+    authoritative: { settings: { version: 26, insulinPlan: plan }, sourcePlan: plan, fetchedAt: '2026-09-17T16:56:13.069Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0, realtimeStatus: 'connected' },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0 },
+  };
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, authoritative: null }).status, 'NOT_VERIFIED');
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, sharedSettingsStatus: { pendingCount: 1, conflictCount: 0 } }).status, 'NOT_VERIFIED');
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, sharedSettingsStatus: { pendingCount: 0, conflictCount: 1 } }).status, 'NOT_VERIFIED');
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: 'JWT issued at future' } }).status, 'NOT_VERIFIED');
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, syncState: { ...base.syncState, lastErrorCategory: 'authentication' } }).status, 'VERIFIED');
+  assert.equal(verification.evaluateInsulinPlanVerification({ ...base, authoritative: { settings: { version: 26, insulinPlan: { ...plan, temporaryEatingAdjustment: undefined } }, sourcePlan: { ...plan, temporaryEatingAdjustment: undefined } } }).status, 'NOT_VERIFIED');
+});
+
+test('unrelated patient and clinic authentication errors do not invalidate an identical verified plan', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan: plan,
+    authoritative: { settings: { version: 26, insulinPlan: plan }, sourcePlan: plan, fetchedAt: '2026-09-23T05:31:16.309Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0, lastErrorCategory: 'authentication' },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: '' },
+  });
+
+  assert.equal(result.status, 'VERIFIED');
+  assert.deepEqual(Array.from(result.mismatchedPaths), []);
+  assert.deepEqual(Array.from(result.mismatchedFields), []);
+});
+
+test('unrelated patient and clinic errors do not hide dose-affecting mismatches', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const localPlan = completeVerificationPlan({
+    id: 'meal_plan_2026_07_31',
+    bedtimeBaseUnits: 16,
+    bedtimeBaseUnitsMigratedTo17: false,
+  });
+  const authoritativePlan = completeVerificationPlan({
+    id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c',
+    bedtimeBaseUnits: 17,
+    bedtimeBaseUnitsMigratedTo17: true,
+  });
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan,
+    authoritative: { settings: { version: 26, insulinPlan: authoritativePlan }, sourcePlan: authoritativePlan, fetchedAt: '2026-09-23T05:31:16.309Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0, lastErrorCategory: 'authentication' },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: '' },
+  });
+
+  assert.equal(result.status, 'MISMATCH');
+  assert.deepEqual(Array.from(result.mismatchedPaths), [
+    'id',
+    'bedtimeBaseUnits',
+    'bedtimeBaseUnitsMigratedTo17',
+  ]);
+  assert.deepEqual(Array.from(result.mismatchedFields), [
+    'Plan ID',
+    'Bedtime long-acting',
+    'Migrated-to-17',
+  ]);
+});
+
+test('incomplete plans remain not verified while reporting available dose-affecting mismatches', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const localPlan = completeVerificationPlan({
+    id: 'meal_plan_2026_07_31',
+    bedtimeBaseUnits: 16,
+    bedtimeBaseUnitsMigratedTo17: false,
+  });
+  delete localPlan.targetGlucoseMin;
+  delete localPlan.targetGlucoseMax;
+  const authoritativePlan = completeVerificationPlan({
+    id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c',
+    bedtimeBaseUnits: 17,
+    bedtimeBaseUnitsMigratedTo17: true,
+  });
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan,
+    authoritative: { settings: { version: 26, insulinPlan: authoritativePlan }, sourcePlan: authoritativePlan, fetchedAt: '2026-09-23T05:31:16.309Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0 },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: '' },
+  });
+
+  assert.equal(result.status, 'NOT_VERIFIED');
+  assert.deepEqual(Array.from(result.mismatchedPaths), [
+    'id',
+    'bedtimeBaseUnits',
+    'bedtimeBaseUnitsMigratedTo17',
+  ]);
+  assert.deepEqual(Array.from(result.mismatchedFields), [
+    'Plan ID',
+    'Bedtime long-acting',
+    'Migrated-to-17',
+  ]);
+  assert.match(result.reasons.join(' '), /Target minimum/);
+  assert.match(result.reasons.join(' '), /Target maximum/);
+});
+
+test('authoritative shared-settings fetch failure remains not verified', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const result = verification.evaluateInsulinPlanVerification({
+    localPlan: plan,
+    authoritative: { settings: { version: 26, insulinPlan: plan }, sourcePlan: plan, fetchedAt: '2026-09-23T05:31:16.309Z' },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0 },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: 'Shared settings could not be refreshed. (PGRST303)' },
+  });
+
+  assert.equal(result.status, 'NOT_VERIFIED');
+  assert.deepEqual(Array.from(result.mismatchedPaths), []);
+  assert.match(result.reasons.join(' '), /PGRST303/);
+});
+
+test('current plan lookup honors the authoritative active-plan pointer when effective dates tie', () => {
+  const runtime = createTrackerRuntime();
+  const localPlan = completeVerificationPlan({ id: 'meal_plan_2026_07_31', bedtimeBaseUnits: 16, bedtimeBaseUnitsMigratedTo17: false });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  installPlans(runtime, [localPlan, authoritativePlan], authoritativePlan.id);
+
+  const current = runtime.LeeLeeTrackerSharedSettings.createSharedSettingsSnapshot().insulinPlan;
+  assert.equal(current.id, authoritativePlan.id);
+  assert.equal(current.bedtimeBaseUnits, 17);
+  assert.equal(runtime.LeeLeeTrackerStorage.getActiveInsulinPlan().id, authoritativePlan.id);
+});
+
+test('new current Log Entry guidance uses the active pointer for same-date plans', () => {
+  const runtime = createTrackerRuntime();
+  const localPlan = completeVerificationPlan({ id: 'meal_plan_2026_07_31', bedtimeBaseUnits: 16, bedtimeBaseUnitsMigratedTo17: false });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  installPlans(runtime, [localPlan, authoritativePlan], authoritativePlan.id);
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const timestamp = new Date(`${date}T12:00`).getTime();
+
+  assert.equal(runtime.LeeLeeTrackerDoseHelper.getEditorInsulinPlan(editorForm({ date }), timestamp).id, authoritativePlan.id);
+});
+
+test('existing current-day Log Entry guidance keeps using the active pointer after save', () => {
+  const runtime = createTrackerRuntime();
+  const localPlan = completeVerificationPlan({ id: 'meal_plan_2026_07_31', bedtimeBaseUnits: 16, bedtimeBaseUnitsMigratedTo17: false });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  installPlans(runtime, [localPlan, authoritativePlan], authoritativePlan.id);
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const timestamp = new Date(`${date}T12:00`).getTime();
+
+  assert.equal(
+    runtime.LeeLeeTrackerDoseHelper.getEditorInsulinPlan(editorForm({ date, existingId: 'saved-today-entry' }), timestamp).id,
+    authoritativePlan.id,
+  );
+  assert.match(trackerSource, /const isCurrentCalendarDateEntry = entryDateKey === getLocalDateKey\(\);/);
+  assert.doesNotMatch(trackerSource, /const isExistingRecord = Boolean\(currentEditor\?\.id\)/);
+});
+
+test('backdated new Log Entry guidance remains effective-date-based', () => {
+  const runtime = createTrackerRuntime();
+  const historicalPlan = completeVerificationPlan({ id: 'historical-plan', effectiveFrom: '2026-01-01', bedtimeBaseUnits: 15 });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c', effectiveFrom: '2026-07-31' });
+  installPlans(runtime, [historicalPlan, authoritativePlan], authoritativePlan.id);
+  const date = '2026-03-01';
+  const timestamp = new Date(`${date}T12:00`).getTime();
+
+  assert.equal(runtime.LeeLeeTrackerDoseHelper.getEditorInsulinPlan(editorForm({ date }), timestamp).id, historicalPlan.id);
+});
+
+test('active-plan pointer survives persistence and current lookup after reload', () => {
+  const first = createTrackerRuntime();
+  const localPlan = completeVerificationPlan({ id: 'meal_plan_2026_07_31', bedtimeBaseUnits: 16, bedtimeBaseUnitsMigratedTo17: false });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  installPlans(first, [localPlan, authoritativePlan], authoritativePlan.id);
+
+  const second = createTrackerRuntime({
+    [first.LeeLeeTrackerStorage.storageKey]: first.localStorage.getItem(first.LeeLeeTrackerStorage.storageKey),
+  });
+  assert.equal(second.LeeLeeTrackerStorage.loadTrackerData().activeInsulinPlanId, authoritativePlan.id);
+  assert.equal(second.LeeLeeTrackerStorage.getActiveInsulinPlan().id, authoritativePlan.id);
+});
+
+test('current pointed plan produces verified status when it matches the fetched authoritative plan', () => {
+  const runtime = createTrackerRuntime();
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  installPlans(runtime, [authoritativePlan], authoritativePlan.id);
+  const localPlan = runtime.LeeLeeTrackerSharedSettings.createSharedSettingsSnapshot().insulinPlan;
+  const result = runtime.LeeLeeTrackerVerification.evaluateInsulinPlanVerification({
+    localPlan,
+    authoritative: { settings: { version: 27, insulinPlan: authoritativePlan }, sourcePlan: authoritativePlan },
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0 },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: '' },
+  });
+  assert.equal(result.status, 'VERIFIED');
+});
+
+test('historical timestamp lookup remains effective-date-based instead of using current pointer', () => {
+  const runtime = createTrackerRuntime();
+  const historicalPlan = completeVerificationPlan({ id: 'historical-plan', effectiveFrom: '2026-01-01' });
+  const authoritativePlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c', effectiveFrom: '2026-07-31' });
+  installPlans(runtime, [historicalPlan, authoritativePlan], authoritativePlan.id);
+
+  assert.equal(runtime.LeeLeeTrackerStorage.getActiveInsulinPlan(Date.parse('2026-03-01T12:00:00.000Z')).id, historicalPlan.id);
+  assert.equal(runtime.LeeLeeTrackerStorage.getActiveInsulinPlan(Date.parse('2026-08-01T12:00:00.000Z')).id, authoritativePlan.id);
+});
+
+test('missing or invalid active-plan pointers fall back to date-based current selection', () => {
+  const runtime = createTrackerRuntime();
+  const earlierPlan = completeVerificationPlan({ id: 'earlier-plan', effectiveFrom: '2026-01-01' });
+  const laterPlan = completeVerificationPlan({ id: 'later-plan', effectiveFrom: '2026-07-31' });
+  installPlans(runtime, [earlierPlan, laterPlan], 'missing-plan');
+  assert.equal(runtime.LeeLeeTrackerStorage.getActiveInsulinPlan().id, laterPlan.id);
+
+  installPlans(runtime, [earlierPlan, laterPlan], '');
+  assert.equal(runtime.LeeLeeTrackerStorage.getActiveInsulinPlan().id, laterPlan.id);
+});
+
+test('verification is recomputed for changed plans and authoritative revisions instead of reusing authorization', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c' });
+  const changedPlan = completeVerificationPlan({ id: 'a22bd926-b6bf-41b0-9b8f-35a8ea5a979c', bedtimeBaseUnits: 18 });
+  const base = {
+    localPlan: plan,
+    syncState: { configured: true, signedIn: true, sharedSettingsPendingCount: 0, conflictCount: 0 },
+    sharedSettingsStatus: { pendingCount: 0, conflictCount: 0, lastFetchError: '' },
+  };
+  const verified = verification.evaluateInsulinPlanVerification({
+    ...base,
+    authoritative: { settings: { version: 27, insulinPlan: plan }, sourcePlan: plan },
+  });
+  const revisionChanged = verification.evaluateInsulinPlanVerification({
+    ...base,
+    authoritative: { settings: { version: 28, insulinPlan: changedPlan }, sourcePlan: changedPlan },
+  });
+
+  assert.equal(verified.status, 'VERIFIED');
+  assert.equal(revisionChanged.status, 'MISMATCH');
+  assert.deepEqual(Array.from(revisionChanged.mismatchedPaths), ['bedtimeBaseUnits']);
+});
+
+test('dose guidance keeps the fail-closed gate and refresh hook wired to shared-plan application', () => {
+  assert.match(trackerSource, /const verification = getInsulinPlanVerification\(\{ localPlan: insulinPlan \}\)/);
+  assert.match(trackerSource, /if \(verification\.status !== INSULIN_PLAN_VERIFICATION_STATUSES\.VERIFIED\)/);
+  assert.match(trackerSource, /function invalidateOpenDoseGuidance\(\)/);
+  assert.match(trackerSource, /applySharedSettingsToLocal\(settings\);\s*invalidateOpenDoseGuidance\(\);/);
+  assert.match(trackerSource, /getEditorInsulinPlan\(form, recordTimestamp\)/);
+});
+
+test('insulin-plan gate and diagnostic copy are explicit and read-only', () => {
+  assert.match(trackerSource, /status: 'insulin-plan-unverified'/);
+  assert.match(trackerSource, /Insulin plan needs to be verified before calculating a suggested dose/);
+  assert.match(trackerSource, /lee_lee_diabetes_dose_card--verification-warning/);
+  assert.match(trackerSource, /⚠ Insulin plan needs to be verified before calculating a suggested dose/);
+  assert.match(trackerSource, /data-action="copy-insulin-plan-diagnostics"/);
+  assert.match(trackerSource, /fetchedAuthoritativeInsulinPlan/);
+  assert.doesNotMatch(trackerSource, /buildInsulinPlanDiagnosticsPackage[\s\S]{0,300}saveSharedSettings/);
+  assert.match(trackerSource, /window\.LeeLeeTrackerVerification/);
+});
+
+test('Pre-Meal Timer presentation states use generic accessible LLT styling without changing behavior', () => {
+  assert.match(trackerSource, /startedFromSave = options\.startedFromSave === true/);
+  assert.match(trackerSource, /Entry Saved!/);
+  assert.match(trackerSource, /Pre-meal timer started/);
+  assert.match(trackerSource, /data-pre-meal-timer-value/);
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_ring/);
+  assert.match(trackerSource, /remaining/);
+  assert.match(trackerSource, /Timer continues while the app is backgrounded/);
+  assert.match(trackerSource, /source\.recordTimestamp \? ` <span/);
+  assert.match(trackerSource, /Timer Already Running/);
+  assert.match(trackerSource, /Keep Current Timer/);
+  assert.match(trackerSource, /Restart Timer/);
+  assert.match(trackerSource, /Pre-meal timer complete!/);
+  assert.match(trackerSource, /Ready to eat\./);
+  assert.match(trackerSource, /\$\{completed \? '<div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--single"><button[^}]*>OK<\/button><\/div>' : ''\}/);
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_modal--detail/);
+  assert.match(trackerSource, /data-action="close-pre-meal-timer">Back<\/button>/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_modal--detail[\s\S]*padding: 0/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_modal--detail[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_modal--detail[\s\S]*background: var\(--lee-lee-bg\)[\s\S]*isolation: isolate/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--detail[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_detail_inner[\s\S]*34rem/);
+  assert.match(trackerSource, /renderPreMealTimerModal\(timer, \{ startedFromSave: true \}\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_ring/);
+  assert.match(cssSource, /env\(safe-area-inset-bottom\)/);
+  assert.match(cssSource, /prefers-reduced-motion/);
+  assert.match(cssSource, /--llt-numeric-font/);
+});
+
+test('Pre-Meal Timer stop uses an LLT confirmation instead of native browser confirmation', () => {
+  assert.match(trackerSource, /function renderPreMealTimerStopConfirmation\(timer\)/);
+  assert.match(trackerSource, /Stop Pre-Meal Timer\?/);
+  assert.match(trackerSource, /Keep Timer Running/);
+  assert.match(trackerSource, /data-action="confirm-stop-pre-meal-timer">Stop Timer/);
+  assert.match(trackerSource, /if \(action === 'stop-pre-meal-timer'\)[\s\S]*renderPreMealTimerStopConfirmation\(timer\)/);
+  assert.match(trackerSource, /if \(action === 'cancel-stop-pre-meal-timer'\)[\s\S]*renderPreMealTimerModal/);
+  assert.match(trackerSource, /if \(action === 'confirm-stop-pre-meal-timer'\)[\s\S]*LeeLeePreMealTimer\?\.stop\(\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm[\s\S]*background: var\(--lee-lee-bg\)/);
+  assert.doesNotMatch(trackerSource, /if \(action === 'stop-pre-meal-timer'\)[\s\S]{0,400}window\.confirm/);
+});
+
+test('Pre-Meal Timer source summaries cannot expose escaped generated markup', () => {
+  assert.match(trackerSource, /source\.recordTimestamp \? ` <span class="lee_lee_diabetes_pre_meal_timer_source_time">\$\{renderRecordDateTime\(source\.recordTimestamp\)\}<\/span>`/);
+  assert.doesNotMatch(trackerSource, /escapeHtml\(renderRecordDateTime\(source\.recordTimestamp\)\)/);
+  assert.match(trackerSource, /Entry Saved!/);
+  assert.match(trackerSource, /data-action="close-pre-meal-timer">OK/);
+  assert.match(trackerSource, /data-action="close-pre-meal-timer" aria-label="Back to Today"/);
+  assert.match(trackerSource, /Timer continues while the app is backgrounded/);
+});
+
+test('Entry Saved confirmation uses an opaque compact theme surface and centered timer action', () => {
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_panel--saved/);
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_success_countdown/);
+  assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_success_actions/);
+  const savedRule = cssSource.match(/\.lee_lee_diabetes_pre_meal_timer_panel--saved\s*\{[^}]*\}/)?.[0] || '';
+  assert.match(savedRule, /background: var\(--lee-lee-bg\)/);
+  assert.match(savedRule, /border-color: var\(--lee-lee-border-strong\)/);
+  const stopRule = cssSource.match(/\.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm\s*\{[^}]*\}/)?.[0] || '';
+  assert.match(stopRule, /border-color: var\(--lee-lee-border-strong\)/);
+  assert.equal(
+    savedRule.match(/border-color: var\(--lee-lee-border-strong\)/)?.[0],
+    stopRule.match(/border-color: var\(--lee-lee-border-strong\)/)?.[0],
+  );
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_success_countdown[\s\S]*padding: 0/);
+  assert.match(cssSource, /\.lee_lee_diabetes_actions\.lee_lee_diabetes_pre_meal_timer_success_actions[\s\S]*grid-template-columns: 1fr[\s\S]*width: 100%/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_modal \{[\s\S]*box-sizing: border-box/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--saved[\s\S]*max-width: 100%/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm[\s\S]*max-width: 100%/);
+  assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_stop_actions \.lee_lee_diabetes_button[\s\S]*width: 100%/);
+  assert.match(cssSource, /@media \(min-width: 768px\)[\s\S]*\.lee_lee_diabetes_pre_meal_timer_success_actions \.lee_lee_diabetes_button \{ width: min\(100%, 14rem\); margin-inline: auto; \}/);
+  assert.doesNotMatch(savedRule, /background: var\(--lee-lee-panel-strong\)/);
+});
+
+test('settings diagnostics exporter is structured, bounded, sanitized, and read-only by contract', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const diagnostics = verification.buildSettingsDiagnosticsPackage();
+  const sectionNames = [
+    'syncStatus',
+    'syncDiagnostics',
+    'insulinPlanVerification',
+    'appInformation',
+    'settingsChangeHistory',
+    'patientAndClinicInfo',
+    'historyPreferences',
+    'preMealTimer',
+    'insulinDoseGuidance',
+    'correctionTable',
+    'localBackup',
+    'recentlyDeleted',
+  ];
+  assert.equal(diagnostics.diagnosticType, 'LLT Settings Diagnostics');
+  assert.deepEqual(Object.keys(diagnostics.sections), sectionNames);
+  assert.equal(diagnostics.sections.localBackup.fullPayloadIncluded, false);
+  assert.equal(diagnostics.sections.recentlyDeleted.fullRecordsIncluded, false);
+  assert.equal(diagnostics.sections.insulinPlanVerification.mismatchedPaths !== undefined, true);
+  assert.equal(diagnostics.sections.insulinDoseGuidance.persistedActivePlan !== undefined, true);
+  assert.equal(diagnostics.sections.patientAndClinicInfo.patientName, undefined);
+  const text = JSON.stringify(diagnostics).toLowerCase();
+  ['access token', 'refresh token', 'authorization', 'password', 'supabase_anon_key', 'service_role'].forEach((secretLabel) => {
+    assert.equal(text.includes(secretLabel), false, secretLabel);
+  });
+});
+
+test('individual patient and clinic diagnostic section may include only its visible values', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const section = verification.getSettingsSectionDiagnostic('patientAndClinicInfo');
+  assert.equal(section.section, 'patientAndClinicInfo');
+  assert.deepEqual(Object.keys(section.data).sort(), ['clinicName', 'clinicPhone', 'patientBirthDate', 'patientName'].sort());
+});
+
+test('settings diagnostic UI exposes reusable section actions and one all-settings action', () => {
+  assert.match(trackerSource, /buildSettingsDiagnosticsPackage/);
+  assert.match(trackerSource, /getSettingsSectionDiagnostic/);
+  assert.match(trackerSource, /data-action="copy-settings-section-info"/);
+  assert.match(trackerSource, /data-action="copy-all-settings-diagnostics"/);
+  assert.match(trackerSource, /Copy All Settings Diagnostics/);
+  assert.match(trackerSource, /copyDiagnosticPayload/);
+  assert.match(trackerSource, /No credentials or tokens are included/);
+  assert.match(trackerSource, /getSettingsAuditHistory\?\.\(\) \|\| \[\]\)\.slice\(0, 50\)/);
+  assert.match(trackerSource, /fullPayloadIncluded: false/);
+  assert.match(trackerSource, /fullRecordsIncluded: false/);
+  assert.match(trackerSource, /copySettingsSectionInfo\(target\.dataset\.diagnosticSection \|\| ''\)/);
+  assert.match(trackerSource, /copyAllSettingsDiagnostics\(\)/);
+  assert.match(trackerSource, /navigator\.clipboard\?\.writeText/);
+  assert.match(trackerSource, /if \(!copied\) throw new Error/);
+  assert.match(trackerSource, /Section info could not be copied on this device/);
+  assert.match(trackerSource, /Settings diagnostics could not be copied on this device/);
+  assert.match(trackerSource, /renderSettings\(\);/);
+  assert.doesNotMatch(trackerSource, /copy-all-settings-diagnostics[\s\S]{0,500}saveSharedSettings/);
+  assert.doesNotMatch(trackerSource, /copy-settings-section-info[\s\S]{0,500}syncNow/);
+  assert.doesNotMatch(trackerSource, /function copyDiagnosticPayload[\s\S]{0,3500}(saveSharedSettings|syncNow|saveTrackerData|updateTrackerData|saveSettings)/);
+});
+
 test('shared settings inventory classifies every current LLT settings control', () => {
   const inventory = createTrackerRuntime().LeeLeeTrackerSharedSettings.settingsInventory;
   const byLabel = new Map(inventory.map((item) => [item.label, item]));
@@ -1970,7 +2615,22 @@ test('check insulin scheduled contexts are marked logged and rechecked before sa
   assert.match(trackerSource, /getDuplicateScheduledContextMessage\(record\)/);
   assert.match(trackerSource, /\$\{context\} has already been logged for this date\./);
   assert.match(trackerSource, /showEditorError\(form, duplicateMessage\)/);
-  assert.match(trackerSource, /if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\)[\s\S]*getDuplicateScheduledContextMessage\(currentEditor\.pendingRecord\)/);
+  assert.match(trackerSource, /if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\)[\s\S]*const pendingRecord = currentEditor\.pendingRecord[\s\S]*getDuplicateScheduledContextMessage\(pendingRecord\)/);
+});
+
+test('confirmation save captures the record before teardown and runs timer integration afterward', () => {
+  const confirmationPath = trackerSource.match(/if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\) \{([\s\S]*?)\n      \}/)?.[1] || '';
+  assert.match(confirmationPath, /const pendingRecord = currentEditor\.pendingRecord/);
+  assert.match(confirmationPath, /const saved = upsertRecord\(pendingRecord\)/);
+  assert.match(confirmationPath, /renderAfterRecordChange\(pendingRecord\)/);
+  assert.match(confirmationPath, /maybeStartPreMealTimer\(pendingRecord, saved\.existingRecord, saved\)/);
+  assert.ok(confirmationPath.indexOf('const pendingRecord') < confirmationPath.indexOf('upsertRecord'));
+  assert.ok(confirmationPath.indexOf('upsertRecord') < confirmationPath.indexOf('renderAfterRecordChange'));
+  assert.ok(confirmationPath.indexOf('renderAfterRecordChange') < confirmationPath.indexOf('maybeStartPreMealTimer'));
+  assert.match(trackerSource, /function handleSave\(form\)[\s\S]*const saved = upsertRecord\(record\)[\s\S]*maybeStartPreMealTimer\(record, saved\.existingRecord, saved\)/);
+  assert.match(trackerSource, /saved\?\.ok !== true/);
+  assert.match(trackerSource, /const newCarbEntry = isNewCarbEntry\(record, existingRecord\)/);
+  assert.match(trackerSource, /if \(current\?\.status === 'active'\)[\s\S]*renderPreMealTimerConflict\(current\)/);
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {
@@ -2118,7 +2778,7 @@ test('settings sync status is consolidated into one global sync action', () => {
   const syncButtonMatches = trackerSource.match(/data-action="sync-now"/g) || [];
   assert.equal(syncButtonMatches.length, 1);
   assert.match(trackerSource, /id="lee-lee-sync-title">Sync Status/);
-  assert.match(trackerSource, /data-settings-accordion open aria-labelledby="lee-lee-sync-title"/);
+  assert.match(trackerSource, /data-settings-accordion data-settings-key="sync-status"\$\{isSettingsAccordionOpen\('sync-status', true\) \? ' open' : ''\} aria-labelledby="lee-lee-sync-title"/);
   assert.match(trackerSource, /querySelector\('\[aria-labelledby="lee-lee-sync-title"\]'\)/);
   assert.match(trackerSource, /Overall status/);
   assert.match(trackerSource, /Records pending/);
@@ -2136,9 +2796,21 @@ test('settings sync status is consolidated into one global sync action', () => {
 
 test('settings review and migration diagnostics are shown only when useful', () => {
   assert.match(trackerSource, /\$\{syncStatus\.conflictCount \? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="review-conflicts">Review Conflicts<\/button>' : ''\}/);
-  assert.match(trackerSource, /<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion aria-labelledby="lee-lee-migration-diagnostics-title">[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron"/);
+  assert.match(trackerSource, /<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="migration-diagnostics"[\s\S]*<summary id="lee-lee-migration-diagnostics-title">Migration Diagnostics <span class="lee_lee_diabetes_accordion_chevron"/);
   assert.match(trackerSource, /data-action="save-device-identity" hidden/);
   assert.match(trackerSource, /event\.target\.matches\('\[name="deviceIdentity"\]\[data-current-device-identity\]'\)/);
+});
+
+test('settings mismatch and accordion presentation are generic, transient, and multi-open', () => {
+  assert.match(trackerSource, /const mismatches = new Set\(verification\.mismatchedPaths \|\| \[\]\)/);
+  assert.match(trackerSource, /\[path, secondPath\]\.some\(\(fieldPath\) => mismatches\.has\(fieldPath\)\)/);
+  assert.match(trackerSource, /lee_lee_diabetes_plan_verification_difference/);
+  assert.match(trackerSource, /SETTINGS_UI_STATE_KEY = 'lando-world:lee-lees-tracker:settings-ui:v1'/);
+  assert.match(trackerSource, /sessionStorage\.setItem\(SETTINGS_UI_STATE_KEY/);
+  assert.match(trackerSource, /restoreSettingsUiState\(\);/);
+  assert.match(trackerSource, /window\.requestAnimationFrame\(restore\)/);
+  assert.match(trackerSource, /saveSettingsUiState\(\);/);
+  assert.doesNotMatch(trackerSource, /section\.removeAttribute\('open'\)/);
 });
 
 test('food editors preserve drafts until explicit cancel or successful save', () => {

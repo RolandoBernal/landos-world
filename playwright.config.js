@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = process.env.LANDOS_WORLD_SMOKE_PORT || '4173';
+const PORT = process.env.LANDOS_WORLD_SMOKE_PORT || '8000';
 const BASE_URL = process.env.LANDOS_WORLD_SMOKE_BASE_URL || `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
@@ -16,7 +16,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    command: `python3 -m http.server ${PORT} --bind 127.0.0.1`,
+    command: `node scripts/dev-local.mjs --port ${PORT} --quiet`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 15_000,

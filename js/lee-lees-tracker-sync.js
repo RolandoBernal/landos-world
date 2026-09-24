@@ -164,6 +164,12 @@
     return String(globalThis.location?.hostname || 'localhost');
   }
 
+  function isLocalDevelopmentEnvironment() {
+    const hostname = String(globalThis.location?.hostname || '').toLowerCase();
+    const protocol = String(globalThis.location?.protocol || '').toLowerCase();
+    return protocol === 'http:' && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(hostname);
+  }
+
   function getAppVersion() {
     return String(globalThis.LEE_LEE_TRACKER_APP_VERSION || '1.0.0');
   }
@@ -576,10 +582,10 @@
       versionBefore: row.version_before,
       versionAfter: row.version_after,
       authorizedUserId: row.authorized_user_id || null,
-      displayName: row.display_name || 'Unknown',
+      displayName: row.actor_name || row.display_name || 'Unknown',
       deviceProfile: row.device_profile || row.device_label || 'Unknown device',
       deviceInstallationId: row.device_installation_id || '',
-      deviceLabel: row.device_label || 'Unknown device',
+      deviceLabel: row.device_label || row.device_profile || 'Unknown device',
       devicePlatform: row.device_platform || 'Browser',
       appEnvironment: row.app_environment || 'Unknown',
       appVersion: row.app_version || 'Unknown',
@@ -1025,6 +1031,7 @@
     let fullSyncPromise = null;
     let realtimeChannel = null;
     let sharedSettingsChannel = null;
+    let latestFetchedSharedSettings = null;
 
     function emit() {
       listeners.forEach((listener) => listener(getSyncStatus()));
@@ -1058,6 +1065,11 @@
         updatedAt: cache.updatedAt,
         conflictCount: conflicts.length,
         pendingCount: queue.length,
+        lastFetchedAt: getMetadata().sharedSettingsLastFetchedAt || null,
+        lastFetchError: getMetadata().sharedSettingsLastFetchError || '',
+        lastFetchErrorCategory: getMetadata().sharedSettingsLastFetchErrorCategory || '',
+        lastFetchErrorCode: getMetadata().sharedSettingsLastFetchErrorCode || '',
+        lastFetchErrorMessage: getMetadata().sharedSettingsLastFetchErrorMessage || '',
         migration,
       };
     }
@@ -1125,6 +1137,9 @@
         lastFullSyncAttemptAt: metadata.lastFullSyncAttemptAt || null,
         realtimeStatus: metadata.realtimeStatus || 'idle',
         lastError: metadata.lastError || '',
+        lastErrorCategory: metadata.lastErrorCategory || '',
+        lastErrorCode: metadata.lastErrorCode || '',
+        lastErrorMessage: metadata.lastErrorMessage || '',
         lastSyncAttempt: metadata.lastSyncAttempt || null,
         lastFoodSyncAttempt: metadata.lastFoodSyncAttempt || null,
         state,
@@ -1328,9 +1343,20 @@
       const client = await ensureClient();
       if (client) await client.auth.signOut({ scope: 'local' });
       session = null;
+      latestFetchedSharedSettings = null;
       unsubscribeRealtime();
       unsubscribeSharedSettingsRealtime();
       emit();
+    }
+
+    function getLatestFetchedSharedSettings() {
+      return latestFetchedSharedSettings
+        ? {
+          settings: normalizeSharedSettings(latestFetchedSharedSettings.settings),
+          sourcePlan: latestFetchedSharedSettings.sourcePlan && { ...latestFetchedSharedSettings.sourcePlan },
+          fetchedAt: latestFetchedSharedSettings.fetchedAt,
+        }
+        : null;
     }
 
     async function sendPasswordReset(email) {
@@ -1619,8 +1645,21 @@
         .eq('user_id', session.user.id)
         .maybeSingle();
       if (error) throw error;
-      return data ? sharedSettingsFromRemote(data) : null;
+      const fetchedAt = nowIso();
+      const settings = data ? sharedSettingsFromRemote(data) : null;
+      latestFetchedSharedSettings = data && settings
+        ? { settings, sourcePlan: getSharedInsulinPlanSource(data), fetchedAt }
+        : null;
+      setMetadata({
+        sharedSettingsLastFetchedAt: fetchedAt,
+        sharedSettingsLastFetchError: '',
+        sharedSettingsLastFetchErrorCategory: '',
+        sharedSettingsLastFetchErrorCode: '',
+        sharedSettingsLastFetchErrorMessage: '',
+      });
+      return settings;
     }
+
 
     function mergeSharedSettings(settings, { force = false } = {}) {
       if (!settings) return;
@@ -1665,6 +1704,13 @@
         }
         await processSharedSettingsQueue();
       } catch (error) {
+        const details = sanitizeSupabaseError(error);
+        setMetadata({
+          sharedSettingsLastFetchError: details.message || 'Shared settings could not be refreshed.',
+          sharedSettingsLastFetchErrorCategory: categorizeError(error),
+          sharedSettingsLastFetchErrorCode: details.code || '',
+          sharedSettingsLastFetchErrorMessage: details.message || '',
+        });
         setRefreshError(error, 'Patient and clinic information could not be refreshed.');
       }
       emit();
@@ -2094,6 +2140,18 @@
             if (row?.user_id) {
               const pending = getSharedSettingsQueue()[0]?.payload;
               const remoteSettings = sharedSettingsFromRemote(row);
+              latestFetchedSharedSettings = {
+                settings: remoteSettings,
+                sourcePlan: getSharedInsulinPlanSource(row),
+                fetchedAt: nowIso(),
+              };
+              setMetadata({
+                sharedSettingsLastFetchedAt: latestFetchedSharedSettings.fetchedAt,
+                sharedSettingsLastFetchError: '',
+                sharedSettingsLastFetchErrorCategory: '',
+                sharedSettingsLastFetchErrorCode: '',
+                sharedSettingsLastFetchErrorMessage: '',
+              });
               if (!pending || sharedSettingsAreSame(pending, remoteSettings)) mergeSharedSettings(remoteSettings);
             }
           },
@@ -2411,6 +2469,7 @@
       useLocalVersions,
       cleanupIdenticalConflicts,
       getSharedSettings: getSharedSettingsCache,
+      getLatestFetchedSharedSettings,
       saveSharedSettings,
       queueFoodUpsert,
       queueSavedMealUpsert,

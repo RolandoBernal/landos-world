@@ -143,6 +143,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/weather-app.js',
     './js/daily-chief-briefing.js',
     './js/theme-manager.js',
+    './js/lee-lee-pre-meal-timer.js',
     './js/lee-lee-diabetes-tracker.js',
     './js/sprints-app.js',
     './js/violet-futbol-game-tracker.js',
@@ -188,7 +189,7 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-21-1'/);
+  assert.match(sw, /const SW_VERSION = '2026-09-21-2'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
@@ -220,9 +221,9 @@ test('localhost previews bypass service-worker registration', () => {
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260917-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260918-1/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20260921-1/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260917-1/],
-    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260918-1/],
+    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260921-1/],
     [html, /js\/pwa-manager\.js\?v=20260916-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [html, /css\/violet-futbol-game-tracker\.css\?v=20260919-2/],
