@@ -868,6 +868,40 @@ body {
   height: 100%;
 }
 
+.clock_utility_local_time {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin: auto 0 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid rgb(var(--app-accent-rgb, 102 255 153) / 28%);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgb(var(--app-accent-rgb, 102 255 153) / 16%), transparent 9rem),
+    rgb(var(--app-accent-rgb, 102 255 153) / 7%);
+  min-width: 0;
+}
+
+.clock_utility_local_time_value.digit_clock_time {
+  grid-template-columns:
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    var(--colon-width)
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    var(--colon-width)
+    calc(var(--digit-width) * 2 + var(--digit-gap))
+    auto;
+  width: 100%;
+  padding: 0;
+}
+
+.clock_utility_local_date.digit_clock_date_short {
+  padding-top: 0.45rem;
+  font-size: clamp(0.95rem, 4vw, 1.25rem);
+}
+
 
 .app_placeholder_content {
   justify-content: center;
