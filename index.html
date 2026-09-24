@@ -473,7 +473,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         iconAlt: '',
         iconClass: 'clock_utility_icon--exact',
         title: 'Digital Clock',
-        description: 'World clocks and current weather for the places that matter most.',
+        description: '',
         buttonId: 'open-digital-clock',
         buttonLabel: 'Open Digital Clock',
         route: 'digital-clock',
@@ -596,6 +596,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     let clockBindings = [];
     let clockTimerId = null;
     let weatherLauncherDateTimerId = null;
+    let digitalClockLauncherTimerId = null;
 
     function formatWeatherLauncherDate(date = new Date()) {
       return new Intl.DateTimeFormat(navigator.language || undefined, {
@@ -629,6 +630,45 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         updateWeatherLauncherDate();
         scheduleWeatherLauncherDateRefresh();
       }, Math.max(1000, nextLocalMidnight.getTime() - now.getTime() + 50));
+    }
+
+    function getLocalLauncherClockData(date = new Date()) {
+      const hour24 = date.getHours();
+      return {
+        hour: String(hour24 % 12 || 12),
+        minute: String(date.getMinutes()).padStart(2, '0'),
+        second: String(date.getSeconds()).padStart(2, '0'),
+        ampm: hour24 >= 12 ? 'PM' : 'AM',
+        date: `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`,
+        dateTime: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      };
+    }
+
+    function updateDigitalClockLauncher() {
+      const timeElement = document.querySelector('[data-launcher-digital-clock-time]');
+      const dateElement = document.querySelector('[data-launcher-digital-clock-date]');
+      if (!timeElement || !dateElement) return;
+      const data = getLocalLauncherClockData(new Date());
+      setClockPartText(timeElement.querySelector('.hour'), data.hour);
+      setClockSeparatorMarkup(timeElement.querySelector('.time_separator'));
+      setClockPartText(timeElement.querySelector('.minute'), data.minute);
+      setClockSeparatorMarkup(timeElement.querySelectorAll('.time_separator')[1]);
+      setClockPartText(timeElement.querySelector('.second'), data.second);
+      setTextIfChanged(timeElement.querySelector('.ampm'), data.ampm);
+      timeElement.setAttribute('aria-label', `${data.hour}:${data.minute}:${data.second} ${data.ampm}`);
+      timeElement.dateTime = new Date().toISOString();
+      setTextIfChanged(dateElement, data.date);
+      dateElement.dateTime = data.dateTime;
+    }
+
+    function scheduleDigitalClockLauncherRefresh() {
+      window.clearTimeout(digitalClockLauncherTimerId);
+      if (document.visibilityState !== 'visible') return;
+      const runTick = () => {
+        updateDigitalClockLauncher();
+        digitalClockLauncherTimerId = window.setTimeout(runTick, 1000);
+      };
+      runTick();
     }
 
     function renderLauncherCards() {
@@ -700,6 +740,19 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           weatherSummary.dataset.launcherWeather = 'weather';
           weatherSummary.setAttribute('aria-live', 'polite');
           card.appendChild(weatherSummary);
+        }
+        if (app.id === 'digital-clock') {
+          const localClock = document.createElement('div');
+          localClock.className = 'clock_utility_local_time';
+          const time = document.createElement('time');
+          time.className = 'digit_clock_time clock_utility_local_time_value';
+          time.dataset.launcherDigitalClockTime = 'true';
+          time.innerHTML = '<span class="hour"></span><span class="time_separator"></span><span class="minute"></span><span class="time_separator"></span><span class="second"></span><span class="ampm"></span>';
+          const date = document.createElement('time');
+          date.className = 'digit_clock_date_short clock_utility_local_date';
+          date.dataset.launcherDigitalClockDate = 'true';
+          localClock.append(time, date);
+          card.appendChild(localClock);
         }
         if (app.id === 'road-bike-checklist') {
           const checklistSummary = document.createElement('div');
@@ -1449,6 +1502,8 @@ ${dateLongParts.year}`;
     }
     document.addEventListener('DOMContentLoaded', () => {
       renderLauncherCards();
+      updateDigitalClockLauncher();
+      scheduleDigitalClockLauncherRefresh();
       initUIState();
       initAppearanceSettings();
       initMobileSettingsMenu();
@@ -1476,11 +1531,17 @@ ${dateLongParts.year}`;
         if (document.visibilityState === 'visible') {
           updateWeatherLauncherDate();
           scheduleWeatherLauncherDateRefresh();
+          updateDigitalClockLauncher();
+          scheduleDigitalClockLauncherRefresh();
+        } else {
+          window.clearTimeout(digitalClockLauncherTimerId);
         }
       });
       window.addEventListener('pageshow', () => {
         updateWeatherLauncherDate();
         scheduleWeatherLauncherDateRefresh();
+        updateDigitalClockLauncher();
+        scheduleDigitalClockLauncherRefresh();
       });
     });
   </script>

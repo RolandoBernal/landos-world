@@ -1123,6 +1123,55 @@ test('light appearance keeps launcher cards as branded islands', async ({ page }
   expect(await readWeatherStyles()).toEqual(lightWeatherStyles);
 });
 
+test('Digital Clock launcher shows live device-local seven-segment time and date', async ({ page }) => {
+  await page.goto('/#/');
+  const timeZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  await expect(page.locator('.clock_utility_card--clock .clock_utility_description')).toHaveCount(0);
+  for (const viewport of [{ width: 393, height: 852 }, { width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    const localClock = page.locator('.clock_utility_card--clock .clock_utility_local_time');
+    await expect(localClock).toBeVisible();
+    const expected = await page.evaluate(() => {
+      const now = new Date();
+      const hour = String(now.getHours() % 12 || 12);
+      const minute = String(now.getMinutes()).padStart(2, '0');
+      const second = String(now.getSeconds()).padStart(2, '0');
+      const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+      const date = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
+      return { ariaLabel: `${hour}:${minute}:${second} ${ampm}`, date };
+    });
+    await expect(localClock.locator('.digit_clock_time')).toHaveAttribute('aria-label', /^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d (AM|PM)$/);
+    await expect(localClock.locator('.digit_clock_time')).toHaveAttribute('aria-label', expected.ariaLabel);
+    await expect(localClock.locator('[data-launcher-digital-clock-date]')).toHaveText(expected.date);
+    await expect(localClock.locator('.vfgt_seven_segment_visual')).toHaveCount(3);
+    const panelStyle = await localClock.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { borderWidth: style.borderTopWidth, backgroundImage: style.backgroundImage };
+    });
+    expect(panelStyle.borderWidth).toBe('1px');
+    expect(panelStyle.backgroundImage).toContain('radial-gradient');
+    const cardGeometry = await page.locator('.clock_utility_card--clock').evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(cardGeometry.scrollHeight).toBeLessThanOrEqual(cardGeometry.clientHeight);
+    expect(cardGeometry.scrollWidth).toBeLessThanOrEqual(cardGeometry.clientWidth);
+  }
+
+  await page.waitForTimeout(1100);
+  const localClock = page.locator('.clock_utility_card--clock .clock_utility_local_time');
+  await expect(localClock.locator('.digit_clock_time')).toHaveAttribute('aria-label', /^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d (AM|PM)$/);
+
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pageshow'));
+  });
+  await expect(localClock.locator('.digit_clock_time')).toHaveAttribute('aria-label', /^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d (AM|PM)$/);
+  expect(timeZone).toBeTruthy();
+});
+
 test('shared app theme keeps mobile date and time inputs inside app containers', async ({ page }) => {
   const cases = [
     {
