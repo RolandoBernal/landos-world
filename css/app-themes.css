@@ -76,9 +76,7 @@
 }
 
 #lando-settings-view > .digit_clock_header .lando_settings_link.digit_clock_menu_toggle {
-  position: absolute;
-  top: var(--landos-page-top-space);
-  right: var(--landos-page-gutter-right);
+  position: static;
   z-index: 14;
 }
 

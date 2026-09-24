@@ -984,19 +984,21 @@ test('appearance setting reflects the preference and applies immediately', async
 });
 
 test('LsW settings cog stays white and keeps its top-right position', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('#/');
-  const homeToggle = page.getByRole('button', { name: 'Lando\'s World Settings' });
-  await expect(homeToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
-  const homeBox = await homeToggle.boundingBox();
-  await homeToggle.click();
-  const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
-  await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
-  const settingsBox = await settingsToggle.boundingBox();
-  expect(homeBox).not.toBeNull();
-  expect(settingsBox).not.toBeNull();
-  expect(Math.abs((homeBox?.x || 0) - (settingsBox?.x || 0))).toBeLessThan(2);
-  expect(Math.abs((homeBox?.y || 0) - (settingsBox?.y || 0))).toBeLessThan(2);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('#/');
+    const homeToggle = page.getByRole('button', { name: 'Lando\'s World Settings' });
+    await expect(homeToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+    const homeBox = await homeToggle.boundingBox();
+    await homeToggle.click();
+    const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
+    await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+    const settingsBox = await settingsToggle.boundingBox();
+    expect(homeBox).not.toBeNull();
+    expect(settingsBox).not.toBeNull();
+    expect(Math.abs((homeBox?.x || 0) - (settingsBox?.x || 0))).toBeLessThan(2);
+    expect(Math.abs((homeBox?.y || 0) - (settingsBox?.y || 0))).toBeLessThan(2);
+  }
 });
 
 test('light appearance reaches child app surfaces with readable foregrounds', async ({ page }) => {
