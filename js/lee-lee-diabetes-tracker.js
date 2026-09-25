@@ -5792,6 +5792,68 @@
     return recordTimestamp ? getActiveInsulinPlan(recordTimestamp) : null;
   }
 
+  function getEditorDoseAffectingSnapshot(form) {
+    const rows = collectEditableCarbCalculatorRowsFromForm(form);
+    return {
+      eventType: getEditorEventType(form),
+      type: getEditorType(form),
+      bloodSugar: normalizeBloodSugar(form.elements.bloodSugar?.value),
+      mealCarbs: normalizeNumber(form.elements.mealCarbs?.value),
+      date: form.elements.date?.value || '',
+      time: form.elements.time?.value || '',
+      mealComponents: rows,
+    };
+  }
+
+  function getRecordDoseAffectingSnapshot(record = {}) {
+    return {
+      eventType: normalizeEventType(record.eventType, record),
+      type: normalizeRecordContext(record.type, record.eventType),
+      bloodSugar: normalizeBloodSugar(record.bloodSugar),
+      mealCarbs: normalizeNumber(record.mealCarbs ?? record.totalCarbs),
+      date: record.date || getLocalDateKey(new Date(getRecordTimestamp(record))),
+      time: record.time || getLocalTimeKey(new Date(getRecordTimestamp(record))),
+      mealComponents: Array.isArray(record.mealComponents) ? record.mealComponents.map(normalizeMealComponent).filter(Boolean) : [],
+    };
+  }
+
+  function hasDoseAffectingEditorChanges(form, record = currentEditor?.originalRecord) {
+    if (!form || !record) return false;
+    const current = getEditorDoseAffectingSnapshot(form);
+    const original = getRecordDoseAffectingSnapshot(record);
+    return stableJson(current) !== stableJson(original);
+  }
+
+  function getHistoricalPlanForRecord(record) {
+    const historicalPlan = record?.insulinPlanSnapshot;
+    if (!historicalPlan || !getInsulinPlanCompleteness(historicalPlan).complete) return null;
+    return historicalPlan;
+  }
+
+  function buildCalculationAuditState(record = {}) {
+    return {
+      doseCalculationStatus: record.doseCalculationStatus ?? null,
+      administeredInsulinUnits: record.administeredInsulinUnits ?? null,
+      insulinUnits: record.insulinUnits ?? null,
+      suggestedBaseUnits: record.suggestedBaseUnits ?? null,
+      suggestedCarbDoseUnits: record.suggestedCarbDoseUnits ?? null,
+      rawCarbDose: record.rawCarbDose ?? null,
+      rawAggregateDose: record.rawAggregateDose ?? null,
+      roundedBaseDose: record.roundedBaseDose ?? null,
+      suggestedCorrectionUnits: record.suggestedCorrectionUnits ?? null,
+      suggestedTotalUnits: record.suggestedTotalUnits ?? null,
+      bloodSugar: record.bloodSugar ?? null,
+      mealCarbs: record.mealCarbs ?? null,
+      totalCarbs: record.totalCarbs ?? null,
+      type: record.type ?? null,
+      eventType: record.eventType ?? null,
+      temporaryEatingAdjustmentApplied: record.temporaryEatingAdjustmentApplied ?? null,
+      temporaryEatingAdjustmentUnits: record.temporaryEatingAdjustmentUnits ?? null,
+      insulinPlanId: record.insulinPlanId ?? null,
+      insulinPlanSnapshot: record.insulinPlanSnapshot || null,
+    };
+  }
+
   function getEditorDoseResult(form) {
     const type = getEditorType(form);
     const recordTimestamp = getEditorRecordTimestamp(form);
@@ -5808,7 +5870,52 @@
         message: '',
       };
     }
-    const insulinPlan = getEditorInsulinPlan(form, recordTimestamp);
+    const existingRecord = currentEditor?.originalRecord;
+    const doseAffectingEdit = Boolean(existingRecord && hasDoseAffectingEditorChanges(form, existingRecord));
+    if (existingRecord && !doseAffectingEdit) {
+      return {
+        status: 'historical-preserved',
+        baseUnits: existingRecord.suggestedBaseUnits ?? null,
+        correctionUnits: existingRecord.suggestedCorrectionUnits ?? null,
+        suggestedTotalUnits: existingRecord.suggestedTotalUnits ?? null,
+        insulinPlanId: existingRecord.insulinPlanId || null,
+        insulinPlanSnapshot: existingRecord.insulinPlanSnapshot || null,
+        message: 'Original insulin calculation preserved. Change dose inputs to recalculate.',
+      };
+    }
+    const historicalPlan = doseAffectingEdit ? getHistoricalPlanForRecord(existingRecord) : null;
+    if (doseAffectingEdit && !historicalPlan) {
+      return {
+        status: 'historical-plan-unavailable',
+        baseUnits: null,
+        correctionUnits: null,
+        suggestedTotalUnits: null,
+        matchedRange: null,
+        insulinPlanId: existingRecord?.insulinPlanId || null,
+        insulinPlanSnapshot: existingRecord?.insulinPlanSnapshot || null,
+        message: 'This historical entry cannot safely recalculate a suggested dose because the insulin plan used for the entry is unavailable.',
+      };
+    }
+    const currentPlan = getActiveInsulinPlan();
+    const currentVerification = getInsulinPlanVerification({ localPlan: currentPlan });
+    if (!existingRecord && currentVerification.status !== INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) {
+      return {
+        status: 'insulin-plan-unverified',
+        baseUnits: null,
+        correctionUnits: null,
+        suggestedTotalUnits: null,
+        matchedRange: null,
+        insulinPlanId: currentPlan?.id || null,
+        insulinPlanSnapshot: null,
+        verificationStatus: currentVerification.status,
+        verificationReasons: currentVerification.reasons,
+        message: 'Insulin plan needs to be verified before calculating a suggested dose.',
+      };
+    }
+    // Historical corrections use the snapshot captured with the event. The edited
+    // timestamp only determines when the corrected event occurred; it never makes
+    // the current active plan authoritative for an older record.
+    const insulinPlan = historicalPlan || getEditorInsulinPlan(form, recordTimestamp);
     if (!insulinPlan) {
       return {
         status: 'unavailable',
@@ -5819,21 +5926,6 @@
         insulinPlanId: null,
         insulinPlanSnapshot: null,
         message: 'No insulin plan is configured for this date.',
-      };
-    }
-    const verification = getInsulinPlanVerification({ localPlan: insulinPlan });
-    if (verification.status !== INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) {
-      return {
-        status: 'insulin-plan-unverified',
-        baseUnits: null,
-        correctionUnits: null,
-        suggestedTotalUnits: null,
-        matchedRange: null,
-        insulinPlanId: insulinPlan.id || null,
-        insulinPlanSnapshot: null,
-        verificationStatus: verification.status,
-        verificationReasons: verification.reasons,
-        message: 'Insulin plan needs to be verified before calculating a suggested dose.',
       };
     }
     const result = calculateMealInsulinDose({
@@ -6208,7 +6300,7 @@
   }
 
   function getScrollSnapshot() {
-    return {
+    const nextRecord = {
       x: window.scrollX || 0,
       y: window.scrollY || 0,
       viewportHeight: window.visualViewport?.height || window.innerHeight || 0,
@@ -6837,6 +6929,8 @@
     const nowTimestamp = now.toISOString();
     const calculatedGuidance = getCalculatedGuidance(form);
     const actualAction = getActualRecordedAction(form, calculatedGuidance);
+    const preserveOriginalCalculation = Boolean(existing && !hasDoseAffectingEditorChanges(form, existing));
+    const calculationSource = preserveOriginalCalculation ? existing : calculatedGuidance;
     return {
       id: existing?.id || createId(),
       date: getLocalDateKey(new Date(recordTimestamp)),
@@ -6858,24 +6952,25 @@
       activityDescription: observedContext.activityDescription,
       activityDurationMinutes: observedContext.activityDurationMinutes,
       activityIntensity: observedContext.activityIntensity,
-      suggestedBaseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.baseUnits : null,
-      suggestedCarbDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.carbDoseUnits : null,
-      rawCarbDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawCarbDose : null,
-      rawAggregateDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.rawAggregateDose : null,
-      roundedBaseDose: calculatedGuidance.status === 'calculated' ? calculatedGuidance.roundedBaseDose : null,
-      temporaryEatingAdjustmentApplied: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentApplied === true : false,
-      temporaryEatingAdjustmentUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentUnits : null,
-      temporaryEatingAdjustmentMessage: calculatedGuidance.status === 'calculated' ? calculatedGuidance.temporaryEatingAdjustmentMessage : '',
-      doseRoundingMode: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseRoundingMode : null,
-      doseIncrementUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.doseIncrementUnits : null,
-      minimumAllowableDoseUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumAllowableDoseUnits : null,
-      minimumDoseWarning: calculatedGuidance.status === 'calculated' ? calculatedGuidance.minimumDoseWarning : '',
-      insulinCarbRatioGrams: calculatedGuidance.status === 'calculated' ? calculatedGuidance.insulinCarbRatioGrams : null,
-      suggestedCorrectionUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.correctionUnits : null,
-      suggestedTotalUnits: calculatedGuidance.status === 'calculated' ? calculatedGuidance.suggestedTotalUnits : null,
-      insulinPlanId: calculatedGuidance.insulinPlanId || null,
-      insulinPlanSnapshot: calculatedGuidance.insulinPlanSnapshot || null,
-      doseCalculationStatus: calculatedGuidance.status,
+      suggestedBaseUnits: calculationSource.status === 'calculated' ? calculationSource.baseUnits : (preserveOriginalCalculation ? existing.suggestedBaseUnits : null),
+      suggestedCarbDoseUnits: calculationSource.status === 'calculated' ? calculationSource.carbDoseUnits : (preserveOriginalCalculation ? existing.suggestedCarbDoseUnits : null),
+      rawCarbDose: calculationSource.status === 'calculated' ? calculationSource.rawCarbDose : (preserveOriginalCalculation ? existing.rawCarbDose : null),
+      rawAggregateDose: calculationSource.status === 'calculated' ? calculationSource.rawAggregateDose : (preserveOriginalCalculation ? existing.rawAggregateDose : null),
+      roundedBaseDose: calculationSource.status === 'calculated' ? calculationSource.roundedBaseDose : (preserveOriginalCalculation ? existing.roundedBaseDose : null),
+      temporaryEatingAdjustmentApplied: calculationSource.status === 'calculated' ? calculationSource.temporaryEatingAdjustmentApplied === true : (preserveOriginalCalculation ? existing.temporaryEatingAdjustmentApplied === true : false),
+      temporaryEatingAdjustmentUnits: calculationSource.status === 'calculated' ? calculationSource.temporaryEatingAdjustmentUnits : (preserveOriginalCalculation ? existing.temporaryEatingAdjustmentUnits : null),
+      temporaryEatingAdjustmentMessage: calculationSource.status === 'calculated' ? calculationSource.temporaryEatingAdjustmentMessage : (preserveOriginalCalculation ? existing.temporaryEatingAdjustmentMessage : ''),
+      doseRoundingMode: calculationSource.status === 'calculated' ? calculationSource.doseRoundingMode : (preserveOriginalCalculation ? existing.doseRoundingMode : null),
+      doseIncrementUnits: calculationSource.status === 'calculated' ? calculationSource.doseIncrementUnits : (preserveOriginalCalculation ? existing.doseIncrementUnits : null),
+      minimumAllowableDoseUnits: calculationSource.status === 'calculated' ? calculationSource.minimumAllowableDoseUnits : (preserveOriginalCalculation ? existing.minimumAllowableDoseUnits : null),
+      minimumDoseWarning: calculationSource.status === 'calculated' ? calculationSource.minimumDoseWarning : (preserveOriginalCalculation ? existing.minimumDoseWarning : ''),
+      insulinCarbRatioGrams: calculationSource.status === 'calculated' ? calculationSource.insulinCarbRatioGrams : (preserveOriginalCalculation ? existing.insulinCarbRatioGrams : null),
+      suggestedCorrectionUnits: calculationSource.status === 'calculated' ? calculationSource.correctionUnits : (preserveOriginalCalculation ? existing.suggestedCorrectionUnits : null),
+      suggestedTotalUnits: calculationSource.status === 'calculated' ? calculationSource.suggestedTotalUnits : (preserveOriginalCalculation ? existing.suggestedTotalUnits : null),
+      insulinPlanId: preserveOriginalCalculation ? existing.insulinPlanId || null : calculatedGuidance.insulinPlanId || null,
+      insulinPlanSnapshot: preserveOriginalCalculation ? existing.insulinPlanSnapshot || null : calculatedGuidance.insulinPlanSnapshot || null,
+      doseCalculationStatus: preserveOriginalCalculation ? existing.doseCalculationStatus : calculatedGuidance.status,
+      calculationAudit: preserveOriginalCalculation ? existing.calculationAudit || null : existing?.calculationAudit || null,
       notes: observedContext.notes,
       recordTimestamp: new Date(recordTimestamp).toISOString(),
       createdAt: existing?.createdAt ?? nowTimestamp,
@@ -6888,6 +6983,27 @@
       source: existing?.source || 'app',
       clientCreatedAt: existing?.clientCreatedAt || existing?.createdAt || nowTimestamp,
     };
+    const administeredDoseChanged = existing
+      && normalizeNumber(existing.administeredInsulinUnits ?? existing.insulinUnits) !== actualAction.administeredInsulinUnits;
+    if (existing && calculatedGuidance.status === 'calculated' && !preserveOriginalCalculation) {
+      nextRecord.calculationAudit = {
+        kind: 'recalculated',
+        recalculatedAt: nowTimestamp,
+        source: 'historical-record-plan',
+        authoritativeRevision: null,
+        before: buildCalculationAuditState(existing),
+        after: buildCalculationAuditState(nextRecord),
+      };
+    } else if (existing && administeredDoseChanged) {
+      nextRecord.calculationAudit = {
+        kind: 'administered-dose-corrected',
+        correctedAt: nowTimestamp,
+        source: 'historical-record-fact',
+        before: buildCalculationAuditState(existing),
+        after: buildCalculationAuditState(nextRecord),
+      };
+    }
+    return nextRecord;
   }
 
   function getObservedEntryContext(form) {
@@ -6979,6 +7095,12 @@
   }
 
   function handleSave(form) {
+    if (currentEditor?.id && hasDoseAffectingEditorChanges(form, currentEditor.originalRecord)) {
+      if (!getHistoricalPlanForRecord(currentEditor.originalRecord)) {
+        showEditorError(form, 'This historical entry cannot safely recalculate because the insulin plan used for it is unavailable. You can still correct notes or the insulin actually given.');
+        return;
+      }
+    }
     const record = buildRecordFromForm(form);
     if (!record) return;
     const duplicateMessage = getDuplicateScheduledContextMessage(record);
@@ -7378,6 +7500,10 @@
       realtime: status.realtimeStatus || 'idle',
       online: Boolean(navigator.onLine),
       lastSuccessfulSyncAt: status.lastSuccessfulSyncAt || '',
+      lastFullSyncSucceededAt: status.lastFullSyncSucceededAt || status.lastSuccessfulSyncAt || '',
+      lastRecordQueueSuccessAt: status.lastRecordQueueSuccessAt || '',
+      lastSettingsFetchSucceededAt: status.lastSettingsFetchSucceededAt || '',
+      lastRealtimeConnectedAt: status.lastRealtimeConnectedAt || '',
       lastFullSyncAttemptAt: status.lastFullSyncAttemptAt || '',
       error: sanitizeDiagnosticError(status),
       sharedSettings: getSharedSettingsStatus(),
@@ -7395,6 +7521,7 @@
         oldestCreatedAt: summary.oldestCreatedAt || '',
         retryingCount: Number(summary.retryingCount || 0),
         byState: { ...(summary.byState || {}) },
+        operations: (diagnostics.queue || []).map((operation) => ({ ...operation })),
       },
       lastRecordAttempt: lastAttempt ? {
         startedAt: lastAttempt.startedAt || '',
@@ -10125,6 +10252,8 @@
     statuses: { ...INSULIN_PLAN_VERIFICATION_STATUSES },
     getDoseAffectingInsulinPlanSnapshot,
     compareInsulinPlansForVerification,
+    getHistoricalPlanForRecord,
+    buildCalculationAuditState,
     evaluateInsulinPlanVerification,
     getInsulinPlanVerification,
     buildInsulinPlanDiagnosticsPackage,

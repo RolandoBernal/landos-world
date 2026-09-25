@@ -19,7 +19,7 @@
   const REMOTE_SAVED_MEALS_TABLE = 'lee_lee_saved_meals';
   const REMOTE_SETTINGS_AUDIT_TABLE = 'lee_lee_settings_audit';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
-  const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict']);
+  const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict', 'missing-record', 'duplicate']);
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
@@ -191,6 +191,10 @@
     function getMetadata() {
       return {
         lastSuccessfulSyncAt: null,
+        lastFullSyncSucceededAt: null,
+        lastRecordQueueSuccessAt: null,
+        lastSettingsFetchSucceededAt: null,
+        lastRealtimeConnectedAt: null,
         lastFullSyncAttemptAt: null,
         realtimeStatus: 'idle',
       lastError: '',
@@ -788,6 +792,9 @@
       lastErrorCode: operation?.lastErrorCode || '',
       lastErrorMessage: operation?.lastErrorMessage || '',
       lastAttemptAt: operation?.lastAttemptAt || '',
+      online: Boolean(navigator.onLine),
+      transient: !DETERMINISTIC_ERROR_CATEGORIES.has(operation?.lastErrorCategory || ''),
+      remoteResultClassification: operation?.lastErrorCategory || '',
     };
   }
 
@@ -808,7 +815,9 @@
     if (code === '42501' || message.includes('permission') || message.includes('rls') || message.includes('row-level security')) return 'authorization';
     if (code === '23505' || message.includes('duplicate')) return 'duplicate';
     if (code === '23514' || code === '22P02' || message.includes('invalid') || message.includes('constraint')) return 'validation';
-    return navigator.onLine ? 'remote' : 'network';
+    if (!navigator.onLine || message.includes('failed to fetch') || message.includes('network') || message.includes('offline') || message.includes('timeout') || message.includes('timed out') || message.includes('connection')) return 'network';
+    if (code === 'PGRST116' || message.includes('no rows') || message.includes('not found') || message.includes('does not exist')) return 'missing-record';
+    return 'remote';
   }
 
   function createSyncAttempt(total) {
@@ -1134,6 +1143,10 @@
         conflictCount: conflicts.length,
         sharedSettingsStatus: getSharedSettingsStatus(),
         lastSuccessfulSyncAt: metadata.lastSuccessfulSyncAt,
+        lastFullSyncSucceededAt: metadata.lastFullSyncSucceededAt || metadata.lastSuccessfulSyncAt || null,
+        lastRecordQueueSuccessAt: metadata.lastRecordQueueSuccessAt || null,
+        lastSettingsFetchSucceededAt: metadata.lastSettingsFetchSucceededAt || null,
+        lastRealtimeConnectedAt: metadata.lastRealtimeConnectedAt || null,
         lastFullSyncAttemptAt: metadata.lastFullSyncAttemptAt || null,
         realtimeStatus: metadata.realtimeStatus || 'idle',
         lastError: metadata.lastError || '',
@@ -1249,6 +1262,7 @@
         lastErrorMessage: metadata.lastErrorMessage || '',
         lastErrorDetails: metadata.lastErrorDetails || '',
         lastErrorHint: metadata.lastErrorHint || '',
+        online: Boolean(navigator.onLine),
       };
     }
 
@@ -1386,6 +1400,13 @@
       } else {
         mergeRemoteRecords([remote]);
       }
+      setMetadata({ lastRecordQueueSuccessAt: nowIso() });
+    }
+
+    function acknowledgeAbsentSoftDelete(operation) {
+      setQueue(getQueue().filter((item) => item.id !== operation.id));
+      markLocalRecord(operation.payload, 'synced', '');
+      setMetadata({ lastRecordQueueSuccessAt: nowIso() });
     }
 
     function queueOperation(type, record, baseVersion = null) {
@@ -1544,6 +1565,18 @@
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
           if (!updatedRow) {
+            if (attemptedOperation.type === 'soft-delete') {
+              const remoteState = await inspectRemoteRecord(attemptedOperation.recordId);
+              if (remoteState.state === 'absent') {
+                acknowledgeAbsentSoftDelete(attemptedOperation);
+                recordAttemptItem(attempt, attemptedOperation, 'succeeded', {
+                  category: 'missing-record',
+                  idempotent: true,
+                  remoteResultClassification: 'confirmed-absent',
+                });
+                continue;
+              }
+            }
             await registerConflict(attemptedOperation);
             recordAttemptItem(attempt, attemptedOperation, 'succeeded', { conflictCreated: true, category: 'conflict' });
             continue;
@@ -1553,6 +1586,18 @@
         } catch (error) {
           const category = categorizeError(error);
           const details = sanitizeSupabaseError(error);
+          if (attemptedOperation.type === 'soft-delete') {
+            const remoteState = await inspectRemoteRecord(attemptedOperation.recordId);
+            if (remoteState.state === 'absent') {
+              acknowledgeAbsentSoftDelete(attemptedOperation);
+              recordAttemptItem(attempt, attemptedOperation, 'succeeded', {
+                category: 'missing-record',
+                idempotent: true,
+                remoteResultClassification: 'confirmed-absent',
+              });
+              continue;
+            }
+          }
           const failed = {
             ...attemptedOperation,
             retryCount: Number(attemptedOperation.retryCount || 0) + 1,
@@ -1569,9 +1614,33 @@
             error: details,
           });
           if (['authentication', 'authorization', 'validation'].includes(failed.lastErrorCategory)) {
-            setMetadata({ lastError: 'A sync item needs review before it can be uploaded.' });
+            setMetadata({
+              lastError: 'A sync item needs review before it can be uploaded.',
+              lastErrorCategory: failed.lastErrorCategory,
+              lastErrorCode: details.code,
+              lastErrorMessage: details.message,
+            });
+          } else if (failed.lastErrorCategory === 'conflict') {
+            setMetadata({
+              lastError: 'This record needs attention because the local and remote versions conflict.',
+              lastErrorCategory: failed.lastErrorCategory,
+              lastErrorCode: details.code,
+              lastErrorMessage: details.message,
+            });
+          } else if (failed.lastErrorCategory === 'network') {
+            setMetadata({
+              lastError: 'Sync will retry when the connection is available.',
+              lastErrorCategory: failed.lastErrorCategory,
+              lastErrorCode: details.code,
+              lastErrorMessage: details.message,
+            });
           } else {
-            setMetadata({ lastError: 'Sync will retry when the connection is available.' });
+            setMetadata({
+              lastError: 'Sync could not complete because the remote operation failed. It will be retried.',
+              lastErrorCategory: failed.lastErrorCategory,
+              lastErrorCode: details.code,
+              lastErrorMessage: details.message,
+            });
           }
         }
       }
@@ -1599,6 +1668,19 @@
         if (data) return recordFromRemote(data);
       }
       return null;
+    }
+
+    async function inspectRemoteRecord(recordId) {
+      const client = await ensureClient();
+      if (!client || !session?.user?.id) return { state: 'unknown', error: 'No authenticated client.' };
+      const { data, error } = await client
+        .from(REMOTE_RECORDS_TABLE)
+        .select('*')
+        .eq('id', recordId)
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      if (error) return { state: 'unknown', error: sanitizeSupabaseError(error) };
+      return data ? { state: 'present', record: recordFromRemote(data) } : { state: 'absent' };
     }
 
     async function registerConflict(operation, knownSharedRecord = null) {
@@ -1652,6 +1734,7 @@
         : null;
       setMetadata({
         sharedSettingsLastFetchedAt: fetchedAt,
+        lastSettingsFetchSucceededAt: fetchedAt,
         sharedSettingsLastFetchError: '',
         sharedSettingsLastFetchErrorCategory: '',
         sharedSettingsLastFetchErrorCode: '',
@@ -2119,6 +2202,7 @@
         )
         .subscribe((status) => {
           setMetadata({ realtimeStatus: status === 'SUBSCRIBED' ? 'connected' : 'connecting' });
+          if (status === 'SUBSCRIBED') setMetadata({ lastRealtimeConnectedAt: nowIso() });
           emit();
         });
     }
@@ -2287,7 +2371,8 @@
           cleanupIdenticalConflicts();
           const status = getSyncStatus();
           if (status.signedIn && navigator.onLine && !status.pendingCount && !status.conflictCount && !status.lastError) {
-            setMetadata({ lastSuccessfulSyncAt: nowIso() });
+            const completedAt = nowIso();
+            setMetadata({ lastSuccessfulSyncAt: completedAt, lastFullSyncSucceededAt: completedAt });
           }
         } finally {
           fullSyncPromise = null;

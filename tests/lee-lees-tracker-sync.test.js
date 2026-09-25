@@ -288,6 +288,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
       if (name !== 'update_lee_lee_record_with_version') {
         return Promise.resolve({ data: null, error: { message: 'unknown rpc' } });
       }
+      if (options.updateRecordRpcError) {
+        return Promise.resolve({ data: null, error: options.updateRecordRpcError });
+      }
       const row = rows.find((item) => item.id === args.p_id && item.user_id === userId);
       if (!row || Number(row.version) !== Number(args.p_expected_version)) {
         return Promise.resolve({ data: null, error: null });
@@ -492,6 +495,31 @@ test('sync serialization accepts Levi, Violet, and Unknown identities', () => {
   }
 });
 
+test('recalculation audit survives record remote serialization unchanged', () => {
+  const context = createSyncContext();
+  const audit = {
+    kind: 'recalculated',
+    recalculatedAt: '2026-09-24T12:00:00.000Z',
+    source: 'current-authoritative-plan',
+    authoritativeRevision: 27,
+    before: { doseCalculationStatus: 'manual', administeredInsulinUnits: 3, mealCarbs: 30, insulinPlanSnapshot: { id: 'plan-a' } },
+    after: { doseCalculationStatus: 'calculated', administeredInsulinUnits: 3, mealCarbs: 50, suggestedTotalUnits: 4, insulinPlanSnapshot: { id: 'plan-b' } },
+  };
+  const original = record({
+    id: 'audit-round-trip',
+    insulinPlanId: 'plan-a',
+    insulinPlanSnapshot: { id: 'plan-a', temporaryEatingAdjustment: { enabled: false, units: 0, startsAt: null, endsAt: null, contexts: [] } },
+    calculationAudit: audit,
+  });
+  const remote = context.LeeLeeTrackerSync.sanitizeRecordForRemote(original, 'user-1');
+  const restored = { ...remote.payload, id: remote.id, calculationAudit: remote.payload.calculationAudit };
+
+  assert.deepEqual(restored.calculationAudit, audit);
+  assert.equal(restored.insulinPlanSnapshot.id, 'plan-a');
+  assert.equal(restored.calculationAudit.before.doseCalculationStatus, 'manual');
+  assert.equal(restored.calculationAudit.after.insulinPlanSnapshot.id, 'plan-b');
+});
+
 test('new record queues locally and uploads through Supabase once initialized', async () => {
   const supabase = createMockSupabase();
   const context = createSyncContext({
@@ -607,6 +635,57 @@ test('automatic queue processing skips deterministic needs-attention items until
 
   await repository.processQueue({ includeNeedsAttention: true });
   assert.equal(repository.getSyncDiagnostics().queue[0].retryCount, 2);
+});
+
+test('soft-delete for a confirmed-missing remote record is idempotently satisfied', async () => {
+  const supabase = createMockSupabase([], {
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const local = record({ id: 'missing-delete', deletedAt: '2026-08-18T00:30:32.726Z' });
+  const store = createDocumentStore({ records: [local] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  context.navigator.onLine = false;
+  repository.queueSoftDelete(local);
+  context.navigator.onLine = true;
+  await repository.processQueue();
+
+  assert.equal(repository.getSyncStatus().recordPendingCount, 0);
+  assert.equal(repository.getConflicts().length, 0);
+  assert.equal(store.getDocument().records[0].syncStatus, 'synced');
+  assert.equal(repository.getSyncDiagnostics().lastSyncAttempt.items[0].idempotent, true);
+});
+
+test('online remote record RPC failure is not reported as a connectivity failure', async () => {
+  const supabase = createMockSupabase([], {
+    updateRecordRpcError: { code: 'PGRST204', message: 'Remote RPC failed' },
+  });
+  const context = createSyncContext({
+    supabase,
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+  });
+  const local = record({ id: 'remote-failure', version: 1 });
+  const store = createDocumentStore({ records: [local] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+
+  await repository.initialize();
+  context.navigator.onLine = false;
+  repository.queueUpsert(local, local);
+  context.navigator.onLine = true;
+  await repository.processQueue();
+
+  const status = repository.getSyncStatus();
+  const diagnostics = repository.getSyncDiagnostics();
+  assert.equal(status.lastErrorCategory, 'remote');
+  assert.match(status.lastError, /remote operation failed/i);
+  assert.equal(diagnostics.queue[0].online, true);
+  assert.equal(diagnostics.queue[0].transient, true);
+  assert.equal(diagnostics.queue[0].remoteResultClassification, 'remote');
 });
 
 test('same-record stale update creates a conflict instead of overwriting', async () => {
