@@ -118,7 +118,7 @@ function completeVerificationPlan(overrides = {}) {
     mealBaseUnits: 5,
     bedtimeBaseUnits: 17,
     bedtimeBaseUnitsMigratedTo17: true,
-    insulinCarbRatioGrams: 12,
+    insulinCarbRatioGrams: 10,
     doseRoundingMode: 'down',
     doseIncrementUnits: 0.5,
     minimumAllowableDoseUnits: 0.5,
@@ -1849,6 +1849,122 @@ test('insulin-plan verification accepts only a complete identical fetched revisi
   assert.deepEqual(Array.from(result.mismatchedPaths), []);
 });
 
+test('historical edits select only a complete stored plan snapshot', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const historicalPlan = completeVerificationPlan({
+    id: 'historical-plan',
+  });
+  assert.equal(verification.getHistoricalPlanForRecord({ insulinPlanSnapshot: historicalPlan }).id, 'historical-plan');
+  assert.equal(verification.getHistoricalPlanForRecord({ insulinPlanSnapshot: { id: 'incomplete' } }), null);
+  assert.equal(verification.getHistoricalPlanForRecord({}), null);
+});
+
+test('recalculation audit state preserves manual provenance and null suggestions', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const historicalPlan = completeVerificationPlan({ id: 'historical-plan' });
+  const before = verification.buildCalculationAuditState({
+    doseCalculationStatus: 'manual',
+    administeredInsulinUnits: 3,
+    insulinUnits: 3,
+    suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null,
+    suggestedTotalUnits: null,
+    bloodSugar: 140,
+    mealCarbs: 30,
+    totalCarbs: 30,
+    type: 'Dinner',
+    eventType: 'check-insulin',
+    insulinPlanId: historicalPlan.id,
+    insulinPlanSnapshot: historicalPlan,
+  });
+  const after = verification.buildCalculationAuditState({
+    doseCalculationStatus: 'calculated',
+    administeredInsulinUnits: 3,
+    insulinUnits: 3,
+    suggestedBaseUnits: 4,
+    suggestedCorrectionUnits: 0,
+    suggestedTotalUnits: 4,
+    bloodSugar: 140,
+    mealCarbs: 50,
+    totalCarbs: 50,
+    type: 'Dinner',
+    eventType: 'check-insulin',
+    insulinPlanId: 'current-plan',
+    insulinPlanSnapshot: completeVerificationPlan({ id: 'current-plan' }),
+  });
+
+  assert.equal(before.doseCalculationStatus, 'manual');
+  assert.equal(before.administeredInsulinUnits, 3);
+  assert.equal(before.suggestedTotalUnits, null);
+  assert.equal(before.mealCarbs, 30);
+  assert.equal(before.insulinPlanSnapshot.id, 'historical-plan');
+  assert.equal(after.doseCalculationStatus, 'calculated');
+  assert.equal(after.administeredInsulinUnits, 3);
+  assert.equal(after.suggestedTotalUnits, 4);
+  assert.equal(after.mealCarbs, 50);
+  assert.equal(after.insulinPlanSnapshot.id, 'current-plan');
+});
+
+test('older limited recalculation audit structures remain readable', () => {
+  const verification = createTrackerRuntime().LeeLeeTrackerVerification;
+  const legacyAudit = {
+    kind: 'recalculated',
+    recalculatedAt: '2026-09-24T12:00:00.000Z',
+    source: 'current-authoritative-plan',
+    originalInsulinPlanSnapshot: completeVerificationPlan({ id: 'historical-plan' }),
+  };
+  const state = verification.buildCalculationAuditState({ calculationAudit: legacyAudit, doseCalculationStatus: 'calculated' });
+  assert.equal(state.doseCalculationStatus, 'calculated');
+  assert.equal(Object.hasOwn(state, 'before'), false);
+});
+
+test('historical recalculation keeps the event plan and never uses current-plan terminology', () => {
+  const historicalPlan = completeVerificationPlan({
+    id: 'plan-a',
+    insulinCarbRatioGrams: 15,
+    temporaryEatingAdjustment: {
+      enabled: true,
+      units: 0.5,
+      startsAt: '2026-08-15T00:00:00.000Z',
+      endsAt: '2026-08-16T00:00:00.000Z',
+      contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'],
+    },
+  });
+  const currentPlan = completeVerificationPlan({
+    id: 'plan-b',
+    insulinCarbRatioGrams: 10,
+    temporaryEatingAdjustment: null,
+  });
+  const helper = createTrackerRuntime().LeeLeeTrackerDoseHelper;
+  const historical = helper.calculateMealInsulinDose({
+    bloodSugar: 120,
+    entryType: 'Snack',
+    totalCarbs: 30,
+    recordTimestamp: Date.parse('2026-08-15T18:00:00.000Z'),
+    insulinPlan: historicalPlan,
+  });
+  const current = helper.calculateMealInsulinDose({
+    bloodSugar: 120,
+    entryType: 'Snack',
+    totalCarbs: 30,
+    recordTimestamp: Date.parse('2026-08-15T18:00:00.000Z'),
+    insulinPlan: currentPlan,
+  });
+
+  assert.equal(historical.insulinPlanId, 'plan-a');
+  assert.equal(historical.temporaryEatingAdjustmentApplied, true);
+  assert.notEqual(historical.suggestedTotalUnits, current.suggestedTotalUnits);
+  assert.match(trackerSource, /source: 'historical-record-plan'/);
+  assert.doesNotMatch(trackerSource, /source: 'current-authoritative-plan'/);
+});
+
+test('historical administered-dose correction uses a separate audit kind', () => {
+  assert.match(trackerSource, /kind: 'administered-dose-corrected'/);
+  assert.match(trackerSource, /source: 'historical-record-fact'/);
+  assert.match(trackerSource, /before: buildCalculationAuditState\(existing\)/);
+  assert.match(trackerSource, /after: buildCalculationAuditState\(nextRecord\)/);
+});
+
 test('insulin-plan verification reports every dose-affecting mismatch field', () => {
   const verification = createTrackerRuntime().LeeLeeTrackerVerification;
   const plan = completeVerificationPlan();
@@ -2154,11 +2270,15 @@ test('verification is recomputed for changed plans and authoritative revisions i
 });
 
 test('dose guidance keeps the fail-closed gate and refresh hook wired to shared-plan application', () => {
-  assert.match(trackerSource, /const verification = getInsulinPlanVerification\(\{ localPlan: insulinPlan \}\)/);
-  assert.match(trackerSource, /if \(verification\.status !== INSULIN_PLAN_VERIFICATION_STATUSES\.VERIFIED\)/);
+  assert.match(trackerSource, /const currentVerification = getInsulinPlanVerification\(\{ localPlan: currentPlan \}\)/);
+  assert.match(trackerSource, /if \(!existingRecord && currentVerification\.status !== INSULIN_PLAN_VERIFICATION_STATUSES\.VERIFIED\)/);
   assert.match(trackerSource, /function invalidateOpenDoseGuidance\(\)/);
   assert.match(trackerSource, /applySharedSettingsToLocal\(settings\);\s*invalidateOpenDoseGuidance\(\);/);
-  assert.match(trackerSource, /getEditorInsulinPlan\(form, recordTimestamp\)/);
+  assert.match(trackerSource, /const insulinPlan = historicalPlan \|\| getEditorInsulinPlan\(form, recordTimestamp\)/);
+  assert.match(trackerSource, /status: 'historical-plan-unavailable'/);
+  assert.match(trackerSource, /calculationAudit: preserveOriginalCalculation \? existing\.calculationAudit \|\| null/);
+  assert.doesNotMatch(trackerSource, /Recalculate Using Current Plan/);
+  assert.doesNotMatch(trackerSource, /data-action="recalculate-current-plan"/);
 });
 
 test('insulin-plan gate and diagnostic copy are explicit and read-only', () => {
