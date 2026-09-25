@@ -21,6 +21,7 @@
   <meta name="apple-mobile-web-app-title" content="Lando's World">
   <meta name="theme-color" content="#000000">
   <script src="js/theme-manager.js?v=20260822-1"></script>
+  <script src="js/landos-world-modal-utils.js?v=1"></script>
   <script src="js/landos-world-build-metadata.js?v=1"></script>
   <script>
     if (['localhost', '127.0.0.1', '[::1]', '::1'].includes(window.location.hostname)) {
@@ -872,8 +873,14 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       document.body.classList.toggle('is-ecosystem-scrolled', window.scrollY > 2 || window.scrollX > 0);
     }
 
+    function updateEcosystemAppState(route) {
+      const isChildApp = LANDO_ACTIVE_ROUTES.has(route) && route !== 'settings';
+      document.body.classList.toggle('is-child-app-active', isChildApp);
+    }
+
     function handleRouteChange() {
       const route = normalizeRouteFromHash();
+      updateEcosystemAppState(route);
       const shouldResetScroll = shouldResetForInitialRoute(route);
       let activeView;
       if (LANDO_ACTIVE_ROUTES.has(route)) {

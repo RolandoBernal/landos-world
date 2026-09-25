@@ -1628,9 +1628,39 @@ test('carb calculator food library uses the shared select navigation', () => {
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_tabs/);
 });
 
+test('carb calculator food search refreshes results without replacing the search input', () => {
+  const refreshStart = trackerSource.indexOf('function refreshCarbCalculatorLibrarySearch(form)');
+  const refreshEnd = trackerSource.indexOf('\n  function updateEditorState(', refreshStart);
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(refreshEnd, -1);
+  const refreshBody = trackerSource.slice(refreshStart, refreshEnd);
+  assert.match(refreshBody, /querySelector\('\[data-carb-library-list\]'\)/);
+  assert.match(refreshBody, /resultsList\.innerHTML = renderCarbCalculatorLibraryList\([\s\S]*'search'[\s\S]*currentEditor\.carbCalculatorRows/);
+  assert.doesNotMatch(refreshBody, /renderEditor\(/);
+});
+
 test('carb item editor actions reuse LLT buttons and keep the footer compact', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_actions \{[\s\S]*min-height: 0[\s\S]*padding: 0\.55rem 0 0\.25rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_actions \{[\s\S]*min-height: 0[\s\S]*padding: 1\.25rem 0 0\.25rem/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_actions \.lee_lee_diabetes_button \{[\s\S]*flex: 1 1 0[\s\S]*min-height: 52px/);
+});
+
+test('carb item editor keeps the label input shrink-safe beside compact quantity', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_secondary_fields \{[\s\S]*grid-template-columns: minmax\(5\.5rem, auto\) minmax\(0, 1fr\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_secondary_fields > \.lee_lee_diabetes_field \{[\s\S]*box-sizing: border-box[\s\S]*min-width: 0[\s\S]*padding-inline: 0\.4rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_secondary_fields > \.lee_lee_diabetes_field:last-child \.lee_lee_diabetes_input \{[\s\S]*width: 100%[\s\S]*min-width: 0[\s\S]*max-width: 100%[\s\S]*box-sizing: border-box/);
+  assert.match(cssSource, /\.lee_lee_diabetes_input:focus-visible[\s\S]*outline: 2px solid var\(--lee-lee-soft\)/);
+});
+
+test('carb item editor keeps all three inputs at the compact 40px height', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_input \{[\s\S]*height: 40px[\s\S]*min-height: 40px[\s\S]*box-sizing: border-box/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*box-sizing: border-box[\s\S]*height: 40px[\s\S]*min-height: 40px/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \[name="carbItemCarbs"\]\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 5rem[\s\S]*min-width: 5rem[\s\S]*max-width: 5rem/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*box-sizing: content-box[\s\S]*min-height: 48px/);
+});
+
+test('carb item editor uses the parent grid gap without an extra action margin', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto auto auto[\s\S]*gap: 0\.85rem/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top:/);
 });
 
 test('carb calculator compact rows keep narrow item controls and icon actions', () => {

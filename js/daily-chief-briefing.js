@@ -49,6 +49,7 @@
   let pendingImportDocument = null;
   let activeDialogName = null;
   let dialogReturnFocus = null;
+  let dialogScrollLockToken = null;
   let refreshInProgress = false;
   let generationInProgress = false;
   let generationError = '';
@@ -1059,6 +1060,7 @@
     const dialog = document.getElementById(dialogId(activeDialogName));
     if (!dialog) return;
     if (!dialog.open) {
+      dialogScrollLockToken ||= window.LandosWorldModalUtils?.lockBackgroundScroll?.('daily-briefing');
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
@@ -1078,6 +1080,10 @@
   function closeDialog() {
     const previousFocus = dialogReturnFocus;
     activeDialogName = null;
+    if (dialogScrollLockToken) {
+      window.LandosWorldModalUtils?.unlockBackgroundScroll?.(dialogScrollLockToken);
+      dialogScrollLockToken = null;
+    }
     pendingImportDocument = null;
     renderBriefing();
     if (previousFocus && typeof previousFocus.focus === 'function') {
