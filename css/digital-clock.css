@@ -563,6 +563,10 @@ body {
   font-weight: 800;
 }
 
+body.is-child-app-active .pwa_network_status {
+  display: none;
+}
+
 .pwa_network_status.is-offline {
   border-color: rgb(255 212 0 / 44%);
   color: var(--color-warning);

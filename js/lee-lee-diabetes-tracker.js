@@ -5337,7 +5337,7 @@
         ${pickerKey === 'search' ? `
           <div class="lee_lee_diabetes_carb_search_controls">
             <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
-            <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" aria-label="Search foods" placeholder="Search foods..." value="${escapeHtml(search)}">
+            <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" autocomplete="off" autofocus aria-label="Search foods" placeholder="Search foods..." value="${escapeHtml(search)}">
           </div>
         ` : ''}
         <div class="lee_lee_diabetes_carb_library_list" data-carb-library-list>
@@ -5485,7 +5485,7 @@
           <label class="lee_lee_diabetes_field">
             Carbs per serving
             <span class="lee_lee_diabetes_unit_input">
-              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs)}">
+              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" autofocus value="${escapeHtml(draft.carbs)}">
               <span>g</span>
             </span>
           </label>
@@ -6144,27 +6144,17 @@
     const calculator = form?.querySelector('[data-carb-calculator]');
     if (!calculator) return;
     const searchInput = calculator.querySelector('[name="carbFoodSearch"]');
-    if (!searchInput) return;
+    const resultsList = calculator.querySelector('[data-carb-library-list]');
+    if (!searchInput || !resultsList) return;
     const search = searchInput.value || '';
     currentEditor.carbCalculatorSearch = search;
     currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
     currentEditor.carbCalculatorPicker = 'search';
-    renderEditor({
-      mode: currentEditor?.mode || 'log-entry',
-      eventType: getEditorEventType(form),
-      type: getEditorType(form),
-      record: buildDraftFromEditor(form),
-      returnTo: currentEditor?.returnTo || null,
-      returnDateKey: currentEditor?.returnDateKey || null,
-      carbCalculatorOpen: true,
-      carbCalculatorRows: currentEditor.carbCalculatorRows,
-      mealComponents: currentEditor?.mealComponents || [],
-      carbCalculatorPicker: 'search',
-      carbCalculatorSearch: search,
-      carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-      carbCalculatorPickerFocus: '[name="carbFoodSearch"]',
-      preventFocusScroll: true,
-    });
+    resultsList.innerHTML = renderCarbCalculatorLibraryList(
+      'search',
+      search,
+      currentEditor.carbCalculatorRows,
+    );
   }
 
   function updateEditorState(form, options = {}) {
@@ -6305,6 +6295,7 @@
       y: window.scrollY || 0,
       viewportHeight: window.visualViewport?.height || window.innerHeight || 0,
     };
+    return nextRecord;
   }
 
   function restoreScrollSnapshot(snapshot) {
@@ -6378,15 +6369,8 @@
       carbCalculatorScrollLock = {
         x: lockedSnapshot.x,
         y: lockedSnapshot.y,
-        htmlOverflow: document.documentElement.style.overflow,
-        htmlOverscrollBehavior: document.documentElement.style.overscrollBehavior,
-        bodyOverflow: document.body.style.overflow,
-        bodyOverscrollBehavior: document.body.style.overscrollBehavior,
+        token: window.LandosWorldModalUtils?.lockBackgroundScroll?.('llt-carb-calculator') || null,
       };
-      document.documentElement.style.overflow = 'hidden';
-      document.documentElement.style.overscrollBehavior = 'none';
-      document.body.style.overflow = 'hidden';
-      document.body.style.overscrollBehavior = 'none';
       window.addEventListener('scroll', restoreLockedCarbCalculatorScroll, { passive: true });
     }
     restoreLockedCarbCalculatorScroll();
@@ -6405,10 +6389,7 @@
     const lock = carbCalculatorScrollLock;
     if (!lock) return null;
     window.removeEventListener('scroll', restoreLockedCarbCalculatorScroll);
-    document.documentElement.style.overflow = lock.htmlOverflow;
-    document.documentElement.style.overscrollBehavior = lock.htmlOverscrollBehavior;
-    document.body.style.overflow = lock.bodyOverflow;
-    document.body.style.overscrollBehavior = lock.bodyOverscrollBehavior;
+    if (lock.token) window.LandosWorldModalUtils?.unlockBackgroundScroll?.(lock.token);
     carbCalculatorScrollLock = null;
     const snapshot = { x: lock.x, y: lock.y, viewportHeight: window.visualViewport?.height || window.innerHeight || 0 };
     restoreScrollSnapshot(snapshot);

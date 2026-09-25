@@ -1266,6 +1266,7 @@
       const titleId = `vfgt-confirm-title-${createId()}`;
       const messageId = `vfgt-confirm-message-${createId()}`;
       const dialog = document.createElement('div');
+      const scrollLockToken = window.LandosWorldModalUtils?.lockBackgroundScroll?.('violet-futbol-confirm');
       dialog.className = 'vfgt_confirm';
       dialog.innerHTML = `
         <div class="vfgt_confirm__backdrop" aria-hidden="true"></div>
@@ -1282,6 +1283,7 @@
       function close(confirmed) {
         if (settled) return;
         settled = true;
+        window.LandosWorldModalUtils?.unlockBackgroundScroll?.(scrollLockToken);
         document.removeEventListener('keydown', handleKeydown);
         dialog.remove();
         if (previousFocus?.isConnected) previousFocus.focus();

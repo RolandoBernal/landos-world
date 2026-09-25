@@ -355,6 +355,7 @@
       const titleId = 'road-bike-reset-title';
       const messageId = 'road-bike-reset-message';
       const dialog = document.createElement('div');
+      const scrollLockToken = window.LandosWorldModalUtils?.lockBackgroundScroll?.('road-bike-confirm');
       dialog.className = 'road_bike_confirm';
       dialog.innerHTML = `
         <div class="road_bike_confirm__backdrop" data-road-bike-confirm-action="cancel"></div>
@@ -372,6 +373,7 @@
       function close(confirmed) {
         if (settled) return;
         settled = true;
+        window.LandosWorldModalUtils?.unlockBackgroundScroll?.(scrollLockToken);
         document.removeEventListener('keydown', handleKeydown);
         dialog.remove();
         if (previousFocus?.isConnected) previousFocus.focus();

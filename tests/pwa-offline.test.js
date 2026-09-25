@@ -268,6 +268,17 @@ test('offline, install, update, and settings UI hooks are present and accessible
   assert.match(digitalClockCss, /\.pwa_offline_panel/);
 });
 
+test('network status is hidden by centralized child-app state without changing PWA ownership', () => {
+  assert.match(html, /function updateEcosystemAppState\(route\)/);
+  assert.match(html, /document\.body\.classList\.toggle\('is-child-app-active', isChildApp\)/);
+  assert.match(html, /updateEcosystemAppState\(route\);/);
+  assert.match(digitalClockCss, /body\.is-child-app-active \.pwa_network_status \{\s*display: none;/);
+  assert.match(pwaManager, /navigator\.onLine/);
+  assert.match(pwaManager, /window\.addEventListener\('online'/);
+  assert.match(pwaManager, /window\.addEventListener\('offline'/);
+  assert.match(pwaManager, /id="pwa-offline-panel"/);
+});
+
 test('Application Status lives in the ecosystem settings view outside Digital Clock', () => {
   const settingsViewStart = html.indexOf('id="lando-settings-view"');
   const dailyBriefingStart = html.indexOf('id="daily-chief-briefing-view"');

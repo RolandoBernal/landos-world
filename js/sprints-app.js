@@ -480,6 +480,7 @@
       const titleId = `sprints-confirm-title-${createId()}`;
       const messageId = `sprints-confirm-message-${createId()}`;
       const dialog = document.createElement('div');
+      const scrollLockToken = window.LandosWorldModalUtils?.lockBackgroundScroll?.('violet-sprints-confirm');
       dialog.className = 'sprints-confirm';
       dialog.innerHTML = `
         <div class="sprints-confirm__backdrop" data-confirm-action="cancel"></div>
@@ -497,6 +498,7 @@
       function close(confirmed) {
         if (settled) return;
         settled = true;
+        window.LandosWorldModalUtils?.unlockBackgroundScroll?.(scrollLockToken);
         document.removeEventListener('keydown', handleKeydown);
         dialog.remove();
         const focusTarget = previousFocus?.isConnected
