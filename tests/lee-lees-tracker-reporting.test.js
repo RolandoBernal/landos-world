@@ -1674,6 +1674,12 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
   assert.doesNotMatch(cssSource, /decrement-carb-row|increment-carb-row|lee_lee_diabetes_quantity_control/);
 });
 
+test('carb calculator overlay uses the fixed visual-viewport origin and internal containment', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: 0[\s\S]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*min-block-size: 0[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
+});
+
 test('settings plan activation closes an existing plan with the same effective date', () => {
   assert.match(trackerSource, /range\.start <= pendingStart && range\.end > pendingStart/);
 });

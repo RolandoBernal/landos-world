@@ -66,10 +66,20 @@
     return null;
   }
 
+  function isFixedViewportDescendant(element) {
+    let current = element;
+    while (current && current !== document.body && current !== document.documentElement) {
+      if (window.getComputedStyle?.(current).position === 'fixed') return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
   function ensureFocusedElementVisible(element, margin = 16) {
     if (!isEditableControl(element)) return false;
     const viewport = window.visualViewport;
-    const viewportTop = viewport?.offsetTop || 0;
+    const fixedViewport = isFixedViewportDescendant(element);
+    const viewportTop = fixedViewport ? 0 : (viewport?.offsetTop || 0);
     const viewportBottom = viewportTop + (viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
     const rect = element.getBoundingClientRect();
     const scrollContainer = findScrollableAncestor(element);

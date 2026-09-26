@@ -2846,6 +2846,24 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(84);
   expect(editorMetrics.backIconVisible).toBe(true);
   expect(editorMetrics.backIconPath).toBe('m15 18-6-6 6-6');
+  const closedViewportContainment = await calculator.evaluate((node) => {
+    const layer = node.closest('[data-carb-calculator-layer]');
+    const layerBox = layer.getBoundingClientRect();
+    const modalBox = node.getBoundingClientRect();
+    const layerStyle = getComputedStyle(layer);
+    return {
+      modalTopClearance: modalBox.top - layerBox.top,
+      modalBottomClearance: layerBox.bottom - modalBox.bottom,
+      safeTopPadding: Number.parseFloat(layerStyle.paddingTop),
+      safeBottomPadding: Number.parseFloat(layerStyle.paddingBottom),
+      layerOverflow: layerStyle.overflow,
+    };
+  });
+  expect(closedViewportContainment.modalTopClearance).toBeGreaterThanOrEqual(closedViewportContainment.safeTopPadding - 1);
+  expect(closedViewportContainment.modalBottomClearance).toBeGreaterThanOrEqual(closedViewportContainment.safeBottomPadding - 1);
+  expect(closedViewportContainment.safeTopPadding).toBeGreaterThanOrEqual(12);
+  expect(closedViewportContainment.safeBottomPadding).toBeGreaterThanOrEqual(12);
+  expect(closedViewportContainment.layerOverflow).toBe('hidden');
   const qtyInput = calculator.locator('[name="carbItemQty"]');
   for (const value of ['0', '0.', '0.5']) {
     await qtyInput.fill(value);
@@ -3080,15 +3098,15 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       overflow: getComputedStyle(node).overflow,
     };
   })).toEqual({
-    top: 18,
-    bottom: 198,
+    top: 0,
+    bottom: 180,
     height: 180,
     overflow: 'hidden',
   });
   await expect.poll(() => calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return Math.round(rect.top + (rect.height / 2));
-  })).toBe(108);
+  })).toBe(90);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(calculator).toBeVisible();
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();

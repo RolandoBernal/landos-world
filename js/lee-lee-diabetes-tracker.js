@@ -5724,7 +5724,7 @@
           target.setSelectionRange(end, end);
         }
         if (target.closest?.('[data-carb-calculator]')) {
-          keepCarbCalculatorInputVisible(target);
+          window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(target, 14);
         }
       };
       applyFocus();
@@ -6322,24 +6322,9 @@
     const viewportHeight = visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
     return {
       left: Math.max(0, visualViewport?.offsetLeft || 0),
-      top: Math.max(0, visualViewport?.offsetTop || 0),
       width: Math.max(0, viewportWidth),
       height: Math.max(160, viewportHeight),
     };
-  }
-
-  function keepCarbCalculatorInputVisible(input) {
-    const calculator = input?.closest?.('[data-carb-calculator]');
-    if (!calculator) return;
-    const scrollContainer = input.closest('[data-carb-item-editor-body]') || calculator;
-    const inputRect = input.getBoundingClientRect();
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const breathingRoom = 14;
-    if (inputRect.bottom > containerRect.bottom - breathingRoom) {
-      scrollContainer.scrollTop += inputRect.bottom - containerRect.bottom + breathingRoom;
-    } else if (inputRect.top < containerRect.top + breathingRoom) {
-      scrollContainer.scrollTop -= containerRect.top - inputRect.top + breathingRoom;
-    }
   }
 
   function applyCarbCalculatorViewportFrame() {
@@ -6347,12 +6332,11 @@
     if (!layer) return;
     const frame = getCarbCalculatorViewportFrame();
     layer.style.setProperty('--lee-lee-carb-calc-viewport-left', `${frame.left}px`);
-    layer.style.setProperty('--lee-lee-carb-calc-viewport-top', `${frame.top}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-width', `${frame.width}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-height', `${frame.height}px`);
     const activeElement = document.activeElement;
     if (activeElement?.closest?.('[data-carb-calculator]')) {
-      keepCarbCalculatorInputVisible(activeElement);
+      window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(activeElement, 14);
     }
   }
 
