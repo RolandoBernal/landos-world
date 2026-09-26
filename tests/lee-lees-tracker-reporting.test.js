@@ -1680,6 +1680,12 @@ test('carb calculator overlay uses the fixed visual-viewport origin and internal
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*min-block-size: 0[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
 });
 
+test('carb calculator search owns scrolling while its parent stays fixed', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open \{[^}]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \.lee_lee_diabetes_carb_library_list \{[\s\S]*max-height: none[\s\S]*overflow: visible/);
+});
+
 test('settings plan activation closes an existing plan with the same effective date', () => {
   assert.match(trackerSource, /range\.start <= pendingStart && range\.end > pendingStart/);
 });

@@ -5255,7 +5255,7 @@
     return `
       <div class="lee_lee_diabetes_carb_calc_layer" data-carb-calculator-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>
-        <section class="lee_lee_diabetes_carb_calculator" data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
+        <section class="lee_lee_diabetes_carb_calculator${activePicker || search ? ' lee_lee_diabetes_carb_calculator--picker-open' : ''}" data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
           ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : `
             <div class="lee_lee_diabetes_carb_calculator_header">
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator</h2>

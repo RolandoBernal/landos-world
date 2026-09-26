@@ -1135,6 +1135,10 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.lee_lee_diabetes_carb_calculator--picker-open {
+  overflow: hidden;
+}
+
 .lee_lee_diabetes_unit_input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1298,12 +1302,16 @@
   position: absolute;
   inset: 0;
   z-index: 2;
+  min-height: 0;
   align-content: start;
   padding: 1rem;
+  box-sizing: border-box;
   border: 0;
   border-radius: 18px;
   background: #06142b;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .lee_lee_diabetes_carb_picker_header {
@@ -1331,7 +1339,8 @@
 }
 
 .lee_lee_diabetes_carb_picker--search .lee_lee_diabetes_carb_library_list {
-  max-height: min(22rem, calc(100dvh - 12rem));
+  max-height: none;
+  overflow: visible;
 }
 
 .lee_lee_diabetes_carb_food_row,

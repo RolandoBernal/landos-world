@@ -2210,6 +2210,17 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const searchInput = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
   await expect(searchInput).toBeFocused();
+  const searchScrollMetrics = await calculator.evaluate((node) => {
+    const picker = node.querySelector('[data-carb-picker="search"]');
+    return {
+      calculatorOverflowY: getComputedStyle(node).overflowY,
+      pickerOverflowY: getComputedStyle(picker).overflowY,
+      pickerMaxHeight: getComputedStyle(picker).maxHeight,
+    };
+  });
+  expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
+  expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
+  expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
 
