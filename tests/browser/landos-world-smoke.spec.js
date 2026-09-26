@@ -2214,13 +2214,11 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
     const picker = node.querySelector('[data-carb-picker="search"]');
     return {
       calculatorOverflowY: getComputedStyle(node).overflowY,
-      bodyOverflowY: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calculator_body')).overflowY,
       pickerOverflowY: getComputedStyle(picker).overflowY,
       pickerMaxHeight: getComputedStyle(picker).maxHeight,
     };
   });
-  expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
-  expect(searchScrollMetrics.bodyOverflowY).toBe('hidden');
+  expect(searchScrollMetrics.calculatorOverflowY).toBe('auto');
   expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
   expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
@@ -3000,6 +2998,23 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   const calculator = page.locator('[data-carb-calculator]');
   await expect(calculator).toBeVisible();
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
+  const emptyModalGeometry = await calculator.evaluate((node) => {
+    const layer = node.closest('[data-carb-calculator-layer]');
+    const layerBox = layer.getBoundingClientRect();
+    const modalBox = node.getBoundingClientRect();
+    const layerStyle = getComputedStyle(layer);
+    return {
+      modalHeight: modalBox.height,
+      layerHeight: layerBox.height,
+      topClearance: modalBox.top - layerBox.top,
+      bottomClearance: layerBox.bottom - modalBox.bottom,
+      safeTopPadding: Number.parseFloat(layerStyle.paddingTop),
+      safeBottomPadding: Number.parseFloat(layerStyle.paddingBottom),
+    };
+  });
+  expect(emptyModalGeometry.modalHeight).toBeLessThan(emptyModalGeometry.layerHeight - 80);
+  expect(emptyModalGeometry.topClearance).toBeGreaterThanOrEqual(emptyModalGeometry.safeTopPadding - 1);
+  expect(emptyModalGeometry.bottomClearance).toBeGreaterThanOrEqual(emptyModalGeometry.safeBottomPadding - 1);
   await expect.poll(() => calculator.evaluate((node) => getComputedStyle(node).maxHeight)).toBe('100%');
   expect(await page.evaluate(() => ({ scrollY: window.scrollY, bodyTop: getComputedStyle(document.body).top }))).toEqual({ scrollY: 0, bodyTop: `-${scrollBeforeOpen}px` });
 
@@ -3024,6 +3039,16 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('60 g');
   await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
+  const oneRowModalGeometry = await calculator.evaluate((node) => {
+    const layer = node.closest('[data-carb-calculator-layer]');
+    return {
+      modalHeight: node.getBoundingClientRect().height,
+      layerHeight: layer.getBoundingClientRect().height,
+      scrollTop: node.scrollTop,
+    };
+  });
+  expect(oneRowModalGeometry.modalHeight).toBeLessThanOrEqual(oneRowModalGeometry.layerHeight);
+  expect(oneRowModalGeometry.scrollTop).toBe(0);
   expect(await page.evaluate(() => window.__leeLeeEditorSubmitCount)).toBe(0);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -3125,12 +3150,11 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
-    const body = node.querySelector('.lee_lee_diabetes_carb_calculator_body');
-    body.scrollTop = body.scrollHeight;
+    node.scrollTop = node.scrollHeight;
     return {
-      clientHeight: body.clientHeight,
-      scrollHeight: body.scrollHeight,
-      scrollTop: body.scrollTop,
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      scrollTop: node.scrollTop,
     };
   });
   expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);

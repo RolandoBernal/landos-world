@@ -1118,8 +1118,6 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-block-size: 0;
   gap: 0.9rem;
   width: min(100%, 34rem);
   max-height: 100%;
@@ -1130,35 +1128,10 @@
   background: #06142b;
   color: var(--lee-lee-text);
   box-shadow: 0 24px 70px rgb(0 0 0 / 44%);
-  overflow: hidden;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
-}
-
-.lee_lee_diabetes_carb_calculator--picker-open {
-  overflow: hidden;
-}
-
-.lee_lee_diabetes_carb_calculator_body {
-  position: relative;
-  min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
-}
-
-.lee_lee_diabetes_carb_calculator_body--picker-open {
-  overflow: hidden;
-}
-
-.lee_lee_diabetes_carb_calculator_body--item-editor {
-  overflow: hidden;
-}
-
-.lee_lee_diabetes_carb_calculator_body--item-editor > .lee_lee_diabetes_carb_item_editor {
-  block-size: 100%;
 }
 
 .lee_lee_diabetes_unit_input {
@@ -1579,9 +1552,8 @@
 
 .lee_lee_diabetes_carb_item_editor {
   display: grid;
-  grid-row: 1 / -1;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   gap: 0.85rem;
   padding-bottom: 0.75rem;
   overflow: hidden;
