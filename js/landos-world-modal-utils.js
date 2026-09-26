@@ -75,6 +75,17 @@
     return null;
   }
 
+  function isWithinScrollContainer(element, container) {
+    if (!element || !container) return false;
+    if (element === container || container.contains?.(element)) return true;
+    let current = element.parentElement;
+    while (current && current !== document.body && current !== document.documentElement) {
+      if (current === container) return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
   function isFixedViewportDescendant(element) {
     let current = element;
     while (current && current !== document.body && current !== document.documentElement) {
@@ -84,15 +95,17 @@
     return false;
   }
 
-  function ensureFocusedElementVisible(element, margin = 16) {
+  function ensureFocusedElementVisible(element, margin = 16, allowedScrollContainer = null) {
     if (!isEditableControl(element)) return false;
     const viewport = window.visualViewport;
     const fixedViewport = isFixedViewportDescendant(element);
     const viewportTop = fixedViewport ? 0 : (viewport?.offsetTop || 0);
     const viewportBottom = viewportTop + (viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
     const rect = element.getBoundingClientRect();
-    const explicitScrollContainer = findExplicitModalScrollContainer(element);
-    const scrollContainer = explicitScrollContainer || findScrollableAncestor(element);
+    const explicitScrollContainer = allowedScrollContainer
+      ? (isWithinScrollContainer(element, allowedScrollContainer) ? allowedScrollContainer : null)
+      : findExplicitModalScrollContainer(element);
+    const scrollContainer = explicitScrollContainer || (allowedScrollContainer ? null : findScrollableAncestor(element));
     if (explicitScrollContainer && explicitScrollContainer.scrollHeight <= explicitScrollContainer.clientHeight) return false;
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();

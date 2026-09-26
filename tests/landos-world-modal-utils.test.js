@@ -62,10 +62,10 @@ test('explicit modal scroll owners remain the boundary even when they are not ov
     scrollTop: 0,
     scrollHeight: 480,
     clientHeight: 300,
-    matches(selector) { return selector === '[data-modal-scroll-container]'; },
+    matches() { return false; },
     getBoundingClientRect() { return { top: 0, bottom: 300 }; },
   };
-  const search = {
+  const modalBody = {
     parentElement: calculator,
     scrollTop: 0,
     scrollHeight: 300,
@@ -74,7 +74,7 @@ test('explicit modal scroll owners remain the boundary even when they are not ov
     getBoundingClientRect() { return { top: 0, bottom: 300 }; },
   };
   const input = {
-    parentElement: search,
+    parentElement: modalBody,
     matches(selector) { return selector.includes('input'); },
     getBoundingClientRect() { return { top: 320, bottom: 360 }; },
   };
@@ -86,6 +86,43 @@ test('explicit modal scroll owners remain the boundary even when they are not ov
   window.visualViewport = { height: 400, offsetTop: 80 };
 
   assert.equal(window.LandosWorldModalUtils.ensureFocusedElementVisible(input), false);
-  assert.equal(search.scrollTop, 0);
+  assert.equal(modalBody.scrollTop, 0);
   assert.equal(calculator.scrollTop, 0);
+});
+
+test('an explicitly supplied modal scroll owner prevents fallback to the shell or document', () => {
+  const { window, document } = createRuntime();
+  const shell = {
+    parentElement: document.body,
+    scrollTop: 0,
+    scrollHeight: 900,
+    clientHeight: 300,
+    matches() { return false; },
+    getBoundingClientRect() { return { top: 0, bottom: 300 }; },
+  };
+  const modalBody = {
+    parentElement: shell,
+    scrollTop: 0,
+    scrollHeight: 600,
+    clientHeight: 300,
+    contains(element) { return element === input; },
+    matches(selector) { return selector === '[data-modal-scroll-container]'; },
+    getBoundingClientRect() { return { top: 0, bottom: 300 }; },
+  };
+  const input = {
+    parentElement: modalBody,
+    matches(selector) { return selector.includes('input'); },
+    getBoundingClientRect() { return { top: 320, bottom: 360 }; },
+  };
+  document.body.parentElement = document.documentElement;
+  window.getComputedStyle = (element) => ({
+    position: element === shell ? 'relative' : 'static',
+    overflowY: element === shell ? 'auto' : 'visible',
+  });
+  window.visualViewport = { height: 400, offsetTop: 0 };
+
+  assert.equal(window.LandosWorldModalUtils.ensureFocusedElementVisible(input, 16, modalBody), true);
+  assert.ok(modalBody.scrollTop > 0);
+  assert.equal(shell.scrollTop, 0);
+  assert.equal(window.scrollY, 180);
 });

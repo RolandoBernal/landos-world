@@ -2210,15 +2210,54 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const searchInput = calculator.locator('[data-carb-picker="search"]').getByLabel('Search foods');
   await expect(searchInput).toBeFocused();
+  const focusedSearchStyle = await searchInput.evaluate((input) => {
+    const rect = input.getBoundingClientRect();
+    const style = getComputedStyle(input);
+    return {
+      width: rect.width,
+      height: rect.height,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      borderRadius: style.borderRadius,
+    };
+  });
+  expect(focusedSearchStyle.outlineStyle).toBe('solid');
+  expect(focusedSearchStyle.outlineWidth).toBe('2px');
+  expect(focusedSearchStyle.outlineOffset).toBe('-3px');
+  await searchInput.evaluate((input) => input.blur());
+  const unfocusedSearchSize = await searchInput.evaluate((input) => {
+    const rect = input.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+  await searchInput.focus();
+  await expect(searchInput).toBeFocused();
+  const refocusedSearchStyle = await searchInput.evaluate((input) => {
+    const rect = input.getBoundingClientRect();
+    const style = getComputedStyle(input);
+    return {
+      width: rect.width,
+      height: rect.height,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      borderRadius: style.borderRadius,
+    };
+  });
+  expect(refocusedSearchStyle).toEqual(focusedSearchStyle);
+  expect(unfocusedSearchSize).toEqual({ width: focusedSearchStyle.width, height: focusedSearchStyle.height });
   const searchScrollMetrics = await calculator.evaluate((node) => {
     const picker = node.querySelector('[data-carb-picker="search"]');
+    const body = node.querySelector('[data-carb-calculator-body]');
     return {
       calculatorOverflowY: getComputedStyle(node).overflowY,
+      bodyOverflowY: getComputedStyle(body).overflowY,
       pickerOverflowY: getComputedStyle(picker).overflowY,
       pickerMaxHeight: getComputedStyle(picker).maxHeight,
     };
   });
-  expect(searchScrollMetrics.calculatorOverflowY).toBe('auto');
+  expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
+  expect(searchScrollMetrics.bodyOverflowY).toBe('hidden');
   expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
   expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
@@ -2784,24 +2823,39 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
     const qtyStyle = getComputedStyle(qtyInput);
     const labelStyle = getComputedStyle(labelInput);
     const carbsStyle = getComputedStyle(carbsInput);
-    const actions = node.querySelector('.lee_lee_diabetes_actions');
+    const carbsFieldStyle = getComputedStyle(carbsInput.closest('.lee_lee_diabetes_field'));
+    const qtyFieldStyle = getComputedStyle(qtyInput.closest('.lee_lee_diabetes_field'));
+    const editorBody = node.closest('[data-carb-calculator]').querySelector('[data-carb-item-editor-body]');
+    const editorBodyBox = editorBody.getBoundingClientRect();
+    const calculator = node.closest('[data-carb-calculator]');
+    const actions = calculator.querySelector('.lee_lee_diabetes_carb_item_editor_actions');
     const actionsStyle = getComputedStyle(actions);
-    const cancel = node.querySelector('.lee_lee_diabetes_carb_item_editor_actions [data-action="cancel-carb-calculator-item-editor"]');
-    const addItem = node.querySelector('[data-action="save-carb-calculator-item-editor"]');
+    const cancel = actions.querySelector('[data-action="cancel-carb-calculator-item-editor"]');
+    const addItem = actions.querySelector('[data-action="save-carb-calculator-item-editor"]');
     const cancelStyle = getComputedStyle(cancel);
     const addItemStyle = getComputedStyle(addItem);
-    const backIcon = node.querySelector('.lee_lee_diabetes_back_icon svg');
+    const backIcon = calculator.querySelector('.lee_lee_diabetes_back_icon svg');
     return {
       qtyHasVisibleBox: qtyStyle.borderTopWidth !== '0px' && qtyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       labelHasVisibleBox: labelStyle.borderTopWidth !== '0px' && labelStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       carbsHasVisibleBox: carbsStyle.borderTopWidth !== '0px' && carbsStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
       carbsWidth: carbsBox.width,
+      carbsFieldPaddingInline: carbsFieldStyle.paddingInline,
+      qtyFieldPaddingInline: qtyFieldStyle.paddingInline,
+      carbsInputLeftClearance: carbsBox.left - editorBodyBox.left,
+      carbsFocusOutlineWidth: carbsStyle.outlineWidth,
+      carbsFocusOutlineOffset: carbsStyle.outlineOffset,
+      qtyWidth: qtyBox.width,
+      qtyContentWidth: qtyInput.clientWidth - Number.parseFloat(qtyStyle.paddingLeft) - Number.parseFloat(qtyStyle.paddingRight),
+      qtyFontFamily: qtyStyle.fontFamily,
+      qtyTextAlign: qtyStyle.textAlign,
+      qtyIsNarrowerThanLabel: qtyBox.width < labelBox.width,
       carbsUnitGap: unitBox.left - carbsBox.right,
       labelGap: qtyBox.top - node.querySelector('label').getBoundingClientRect().top,
       inputGap: labelBox.left - qtyBox.right,
       secondaryTop: secondaryBox.top,
       actionsPosition: actionsStyle.position,
-      bodyOverflowY: getComputedStyle(node.querySelector('[data-carb-item-editor-body]')).overflowY,
+      bodyOverflowY: getComputedStyle(calculator.querySelector('[data-carb-item-editor-body]')).overflowY,
       actionsTop: actions.getBoundingClientRect().top,
       actionsHeight: actions.getBoundingClientRect().height,
       carbsBottom: carbsBox.bottom,
@@ -2810,7 +2864,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
         const secondary = node.querySelector('.lee_lee_diabetes_carb_item_editor_secondary_fields');
         const secondaryBox = secondary.getBoundingClientRect();
         const actionsBox = actions.getBoundingClientRect();
-        const button = node.querySelector('[data-action="save-carb-calculator-item-editor"]');
+        const button = actions.querySelector('[data-action="save-carb-calculator-item-editor"]');
         const buttonBox = button.getBoundingClientRect();
         return Math.abs((actionsBox.top - secondaryBox.bottom) - (buttonBox.top - actionsBox.top));
       })(),
@@ -2824,7 +2878,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
       addItemPrimary: addItem.classList.contains('lee_lee_diabetes_button--primary'),
       cancelColor: cancelStyle.color,
       addItemColor: addItemStyle.color,
-      editorPaddingBottom: Number.parseFloat(getComputedStyle(node).paddingBottom),
+      editorPaddingBottom: Number.parseFloat(getComputedStyle(calculator.querySelector('[data-carb-item-editor-body]')).paddingBottom),
       backIconVisible: Boolean(backIcon && backIcon.getBoundingClientRect().width > 0),
       backIconPath: backIcon?.querySelector('path')?.getAttribute('d') || '',
     };
@@ -2832,8 +2886,18 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.qtyHasVisibleBox).toBe(true);
   expect(editorMetrics.labelHasVisibleBox).toBe(true);
   expect(editorMetrics.carbsHasVisibleBox).toBe(true);
+  expect(editorMetrics.carbsFieldPaddingInline).toBe(editorMetrics.qtyFieldPaddingInline);
+  expect(editorMetrics.carbsInputLeftClearance).toBeGreaterThanOrEqual(4);
+  expect(editorMetrics.carbsFocusOutlineWidth).toBe('2px');
+  expect(editorMetrics.carbsFocusOutlineOffset).toBe('1px');
   expect(editorMetrics.carbsWidth).toBeGreaterThanOrEqual(72);
   expect(editorMetrics.carbsWidth).toBeLessThanOrEqual(82);
+  expect(editorMetrics.qtyWidth).toBeGreaterThanOrEqual(48);
+  expect(editorMetrics.qtyWidth).toBeLessThan(100);
+  expect(editorMetrics.qtyContentWidth).toBeGreaterThanOrEqual(20);
+  expect(editorMetrics.qtyFontFamily).toContain('Roboto Mono');
+  expect(editorMetrics.qtyTextAlign).toBe('left');
+  expect(editorMetrics.qtyIsNarrowerThanLabel).toBe(true);
   expect(editorMetrics.carbsUnitGap).toBeGreaterThanOrEqual(4);
   expect(editorMetrics.carbsUnitGap).toBeLessThanOrEqual(12);
   expect(editorMetrics.labelGap).toBeGreaterThanOrEqual(8);
@@ -2853,7 +2917,7 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(editorMetrics.addItemMinHeight).toBe('52px');
   expect(editorMetrics.addItemPrimary).toBe(true);
   expect(editorMetrics.cancelColor).not.toBe(editorMetrics.addItemColor);
-  expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(12);
+  expect(editorMetrics.editorPaddingBottom).toBeGreaterThanOrEqual(4);
   expect(editorMetrics.actionsHeight).toBeLessThanOrEqual(84);
   expect(editorMetrics.backIconVisible).toBe(true);
   expect(editorMetrics.backIconPath).toBe('m15 18-6-6 6-6');
@@ -2876,9 +2940,19 @@ test('Lee-Lee Carb Calc keeps item-editor inputs stable and uses the total on fi
   expect(closedViewportContainment.safeBottomPadding).toBeGreaterThanOrEqual(12);
   expect(closedViewportContainment.layerOverflow).toBe('hidden');
   const qtyInput = calculator.locator('[name="carbItemQty"]');
-  for (const value of ['0', '0.', '0.5']) {
+  for (const value of ['5', '10', '12', '25', '99', '0', '0.', '0.5']) {
     await qtyInput.fill(value);
     await expect(qtyInput).toHaveValue(value);
+    const textFits = await qtyInput.evaluate((input) => {
+      const style = getComputedStyle(input);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      context.font = style.font;
+      const textWidth = context.measureText(input.value).width;
+      const contentWidth = input.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+      return textWidth <= contentWidth;
+    });
+    expect(textFits).toBe(true);
   }
   await expect(qtyInput).toHaveAttribute('inputmode', 'decimal');
   const carbsInput = calculator.locator('[name="carbItemCarbs"]');
@@ -3061,13 +3135,23 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   expect(consoleErrorCount).toBeLessThanOrEqual(1);
 });
 
-test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 640 });
-  await page.addInitScript(() => {
+test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async ({ page }, testInfo) => {
+  let viewportWidth;
+  let viewportHeight;
+  if (testInfo.project.name === 'mobile-chromium') {
+    await page.setViewportSize({ width: 390, height: 640 });
+    viewportWidth = 390;
+    viewportHeight = 640;
+  } else {
+    const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    viewportWidth = viewport.width;
+    viewportHeight = viewport.height;
+  }
+  await page.addInitScript((initialViewport) => {
     const listeners = new Map();
     const frame = {
-      width: 390,
-      height: 640,
+      width: initialViewport.width,
+      height: initialViewport.height,
       offsetLeft: 0,
       offsetTop: 0,
     };
@@ -3099,7 +3183,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       value: mockVisualViewport,
     });
     window.__setLeeLeeVisualViewportFrame = (nextFrame) => mockVisualViewport.setFrame(nextFrame);
-  });
+  }, { width: viewportWidth, height: viewportHeight });
   await openProtectedLeeLeeTracker(page);
   await page.getByRole('button', { name: 'Log Entry' }).click();
 
@@ -3114,6 +3198,9 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   const calculator = page.locator('[data-carb-calculator]');
   const layer = page.locator('[data-carb-calculator-layer]');
   await expect(calculator).toBeVisible();
+  await expect(calculator).toHaveAccessibleName('Carb Calculator');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calculator_header')).toHaveCount(1);
+  await expect(page.locator('[data-carb-calculator-layer] [role="dialog"]')).toHaveCount(1);
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
@@ -3121,10 +3208,11 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   await expect.poll(() => calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return Math.round(rect.top + (rect.height / 2));
-  })).toBe(320);
+  })).toBe(Math.round(viewportHeight / 2));
   const normalCardGeometry = await calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+    const body = node.querySelector('[data-carb-calculator-body]');
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop, bodyScrollTop: body?.scrollTop || 0 };
   });
 
   await page.evaluate(() => window.scrollTo(0, 420));
@@ -3132,10 +3220,16 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
 
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
   const searchInput = calculator.locator('[data-carb-picker="search"] [name="carbFoodSearch"]');
+  await expect(calculator).toHaveAccessibleName('Food Search');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calculator_header')).toHaveCount(1);
+  await expect(calculator.getByRole('heading', { name: 'Food Search', level: 2 })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker="search"][role="dialog"], [data-carb-picker="search"][aria-modal]')).toHaveCount(0);
+  await expect(page.locator('[data-carb-calculator-layer] [role="dialog"]')).toHaveCount(1);
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
   await expect(searchInput).toBeFocused();
-  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).not.toBeNull();
+  await expect(calculator.locator('[data-carb-calculator-body][data-modal-scroll-container]')).toHaveCount(0);
+  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).toBe('');
 
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
   await expect.poll(() => layer.evaluate((node) => {
@@ -3145,15 +3239,18 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     const picker = node.querySelector('[data-carb-picker="search"]');
     const input = node.querySelector('[name="carbFoodSearch"]');
     const inputRect = input?.getBoundingClientRect();
+    const headingRect = node.querySelector('#lee-lee-carb-calculator-title')?.getBoundingClientRect();
     return {
       top: Math.round(rect.top),
       bottom: Math.round(rect.bottom),
       backdropTop: Math.round(backdrop?.top || 0),
       backdropBottom: Math.round(backdrop?.bottom || 0),
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: calculatorNode?.querySelector('[data-carb-calculator-body]')?.scrollTop || 0,
       pickerScrollTop: picker?.scrollTop || 0,
-      inputTop: Math.round(inputRect?.top || 0),
-      inputBottom: Math.round(inputRect?.bottom || 0),
+      searchOwner: picker?.hasAttribute('data-modal-scroll-container') || false,
+      headingVisible: Boolean(headingRect && headingRect.top >= 0 && headingRect.bottom <= 180),
+      inputVisible: Boolean(inputRect && inputRect.top >= 18 && inputRect.bottom <= 180),
     };
   })).toEqual({
     top: 0,
@@ -3161,10 +3258,35 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     backdropTop: 0,
     backdropBottom: 180,
     calculatorScrollTop: 0,
+    bodyScrollTop: 0,
     pickerScrollTop: 0,
-    inputTop: 75,
-    inputBottom: 125,
+    searchOwner: true,
+    headingVisible: true,
+    inputVisible: true,
   });
+  const searchScrollMetrics = await calculator.evaluate((node) => {
+    const picker = node.querySelector('[data-carb-picker="search"]');
+    const body = node.querySelector('[data-carb-calculator-body]');
+    const calculatorContent = document.createElement('div');
+    calculatorContent.dataset.testSearchOverflow = 'true';
+    calculatorContent.style.height = '240px';
+    picker.querySelector('[data-carb-library-list]').append(calculatorContent);
+    picker.scrollTop = picker.scrollHeight;
+    const metrics = {
+      clientHeight: picker.clientHeight,
+      scrollHeight: picker.scrollHeight,
+      pickerScrollTop: picker.scrollTop,
+      bodyScrollTop: body.scrollTop,
+      calculatorScrollTop: node.scrollTop,
+    };
+    picker.scrollTop = 0;
+    calculatorContent.remove();
+    return metrics;
+  });
+  expect(searchScrollMetrics.scrollHeight).toBeGreaterThan(searchScrollMetrics.clientHeight);
+  expect(searchScrollMetrics.pickerScrollTop).toBeGreaterThan(0);
+  expect(searchScrollMetrics.bodyScrollTop).toBe(0);
+  expect(searchScrollMetrics.calculatorScrollTop).toBe(0);
   let typedSearch = '';
   for (const character of 'Chicken') {
     typedSearch += character;
@@ -3178,16 +3300,18 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     }), searchHandle);
     expect(state).toEqual({ connected: true, focused: true, value: typedSearch, selectionStart: typedSearch.length, selectionEnd: typedSearch.length });
   }
-  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 640, offsetTop: 0 }));
+  await page.evaluate((height) => window.__setLeeLeeVisualViewportFrame({ height, offsetTop: 0 }), viewportHeight);
   await expect.poll(() => layer.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
-  })).toEqual({ top: 0, bottom: 640, height: 640 });
+  })).toEqual({ top: 0, bottom: viewportHeight, height: viewportHeight });
   await calculator.locator('[data-action="close-carb-calculator-picker"]').click();
+  await expect(calculator).toHaveAccessibleName('Carb Calculator');
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
   const restoredCardGeometry = await calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+    const body = node.querySelector('[data-carb-calculator-body]');
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop, bodyScrollTop: body?.scrollTop || 0 };
   });
   expect(restoredCardGeometry.scrollTop).toBe(0);
   expect(restoredCardGeometry.height).toBeCloseTo(normalCardGeometry.height, 1);
@@ -3231,11 +3355,14 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       top: rect.top,
       bottom: rect.bottom,
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: node.closest('[data-carb-calculator]')?.querySelector('[data-carb-item-editor-body]')?.scrollTop || 0,
       windowScrollY: window.scrollY,
     };
   });
   expect(focusedInputMetrics.bottom).toBeLessThanOrEqual(180);
   expect(focusedInputMetrics.windowScrollY).toBe(0);
+  await expect(calculator).toHaveAccessibleName('Add Manual Amount');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calculator_header')).toHaveCount(1);
 
   const lowerInput = calculator.locator('[name="carbItemQty"]');
   await page.evaluate(() => document.querySelector('[name="carbItemQty"]')?.focus({ preventScroll: true }));
@@ -3248,32 +3375,57 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       top: rect.top,
       bottom: rect.bottom,
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: node.closest('[data-carb-calculator]')?.querySelector('[data-carb-item-editor-body]')?.scrollTop || 0,
       windowScrollY: window.scrollY,
     };
   });
   expect(lowerInputMetrics.bottom).toBeLessThanOrEqual(180);
-  expect(lowerInputMetrics.calculatorScrollTop).toBeGreaterThan(0);
+  expect(lowerInputMetrics.calculatorScrollTop).toBe(0);
+  expect(lowerInputMetrics.bodyScrollTop).toBeGreaterThan(0);
   expect(lowerInputMetrics.windowScrollY).toBe(0);
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
+    const body = node.querySelector('[data-carb-item-editor-body]');
+    body.scrollTop = body.scrollHeight;
     return {
-      clientHeight: node.clientHeight,
-      scrollHeight: node.scrollHeight,
-      scrollTop: node.scrollTop,
+      clientHeight: body.clientHeight,
+      scrollHeight: body.scrollHeight,
+      scrollTop: body.scrollTop,
+      calculatorScrollTop: node.scrollTop,
     };
   });
   expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);
   expect(modalScrollMetrics.scrollTop).toBeGreaterThan(0);
+  expect(modalScrollMetrics.calculatorScrollTop).toBe(0);
 
-  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 640, offsetTop: 0 }));
+  await page.evaluate((height) => window.__setLeeLeeVisualViewportFrame({ height, offsetTop: 0 }), viewportHeight);
   await expect.poll(() => layer.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
-  })).toEqual({ top: 0, bottom: 640, height: 640 });
-  await calculator.evaluate((node) => { node.scrollTop = 0; });
+  })).toEqual({ top: 0, bottom: viewportHeight, height: viewportHeight });
+  await calculator.locator('.lee_lee_diabetes_carb_calculator_header [data-action="cancel-carb-calculator-item-editor"]').click();
+  await expect(calculator).toHaveAccessibleName('Carb Calculator');
+  const returnedFromEditor = await calculator.evaluate((node) => {
+    const body = node.querySelector('[data-carb-calculator-body]');
+    const rect = node.getBoundingClientRect();
+    return { scrollTop: node.scrollTop, bodyScrollTop: body?.scrollTop || 0, top: rect.top, height: rect.height };
+  });
+  expect(returnedFromEditor.scrollTop).toBe(0);
+  expect(returnedFromEditor.bodyScrollTop).toBe(0);
+  expect(returnedFromEditor.height).toBeCloseTo(normalCardGeometry.height, 1);
+  expect(returnedFromEditor.top).toBeCloseTo(normalCardGeometry.top, 1);
+  await calculator.getByRole('button', { name: 'Search foods...' }).click();
+  await expect(calculator).toHaveAccessibleName('Food Search');
+  await expect(calculator.locator('.lee_lee_diabetes_carb_calculator_header')).toHaveCount(1);
+  await calculator.locator('[data-action="close-carb-calculator-picker"]').click();
+  await expect(calculator).toHaveAccessibleName('Carb Calculator');
+  await expect(calculator.locator('[data-carb-calculator-body]')).toHaveJSProperty('scrollTop', 0);
+  await calculator.evaluate((node) => {
+    node.scrollTop = 0;
+    node.querySelector('[data-carb-item-editor-body]')?.scrollTo(0, 0);
+  });
 
-  await page.locator('[data-carb-calculator-layer] [data-action="close-carb-calculator"]').evaluate((backdrop) => backdrop.click());
+  await page.locator('[data-carb-calculator-layer] .lee_lee_diabetes_carb_calc_backdrop').evaluate((backdrop) => backdrop.click());
 
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('');
