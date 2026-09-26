@@ -3122,9 +3122,76 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     const rect = node.getBoundingClientRect();
     return Math.round(rect.top + (rect.height / 2));
   })).toBe(320);
+  const normalCardGeometry = await calculator.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+  });
 
   await page.evaluate(() => window.scrollTo(0, 420));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  await calculator.getByRole('button', { name: 'Search foods...' }).click();
+  const searchInput = calculator.locator('[data-carb-picker="search"] [name="carbFoodSearch"]');
+  const searchHandle = await searchInput.elementHandle();
+  expect(searchHandle).not.toBeNull();
+  await expect(searchInput).toBeFocused();
+  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).not.toBeNull();
+
+  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
+  await expect.poll(() => layer.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const backdrop = node.querySelector('[data-action="close-carb-calculator"]')?.getBoundingClientRect();
+    const calculatorNode = node.querySelector('[data-carb-calculator]');
+    const picker = node.querySelector('[data-carb-picker="search"]');
+    const input = node.querySelector('[name="carbFoodSearch"]');
+    const inputRect = input?.getBoundingClientRect();
+    return {
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      backdropTop: Math.round(backdrop?.top || 0),
+      backdropBottom: Math.round(backdrop?.bottom || 0),
+      calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      pickerScrollTop: picker?.scrollTop || 0,
+      inputTop: Math.round(inputRect?.top || 0),
+      inputBottom: Math.round(inputRect?.bottom || 0),
+    };
+  })).toEqual({
+    top: 0,
+    bottom: 180,
+    backdropTop: 0,
+    backdropBottom: 180,
+    calculatorScrollTop: 0,
+    pickerScrollTop: 0,
+    inputTop: 75,
+    inputBottom: 125,
+  });
+  let typedSearch = '';
+  for (const character of 'Chicken') {
+    typedSearch += character;
+    await page.keyboard.type(character);
+    const state = await page.evaluate((input) => ({
+      connected: input.isConnected,
+      focused: document.activeElement === input,
+      value: input.value,
+      selectionStart: input.selectionStart,
+      selectionEnd: input.selectionEnd,
+    }), searchHandle);
+    expect(state).toEqual({ connected: true, focused: true, value: typedSearch, selectionStart: typedSearch.length, selectionEnd: typedSearch.length });
+  }
+  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 640, offsetTop: 0 }));
+  await expect.poll(() => layer.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
+  })).toEqual({ top: 0, bottom: 640, height: 640 });
+  await calculator.locator('[data-action="close-carb-calculator-picker"]').click();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+  const restoredCardGeometry = await calculator.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+  });
+  expect(restoredCardGeometry.scrollTop).toBe(0);
+  expect(restoredCardGeometry.height).toBeCloseTo(normalCardGeometry.height, 1);
+  expect(restoredCardGeometry.top).toBeCloseTo(normalCardGeometry.top, 1);
 
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
   await expect.poll(() => layer.evaluate((node) => {
@@ -3173,6 +3240,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   const lowerInput = calculator.locator('[name="carbItemQty"]');
   await page.evaluate(() => document.querySelector('[name="carbItemQty"]')?.focus({ preventScroll: true }));
   await expect(lowerInput).toBeFocused();
+  await page.waitForTimeout(100);
   const lowerInputMetrics = await lowerInput.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     const calculatorNode = node.closest('[data-carb-calculator]');

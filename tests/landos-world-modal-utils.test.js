@@ -53,3 +53,39 @@ test('unknown modal lock tokens do not release an active lock', () => {
   window.LandosWorldModalUtils.unlockBackgroundScroll(token);
   assert.equal(document.body.style.position, undefined);
 });
+
+test('explicit modal scroll owners remain the boundary even when they are not overflowing', () => {
+  const { window, document } = createRuntime();
+  const body = document.body;
+  const calculator = {
+    parentElement: body,
+    scrollTop: 0,
+    scrollHeight: 480,
+    clientHeight: 300,
+    matches(selector) { return selector === '[data-modal-scroll-container]'; },
+    getBoundingClientRect() { return { top: 0, bottom: 300 }; },
+  };
+  const search = {
+    parentElement: calculator,
+    scrollTop: 0,
+    scrollHeight: 300,
+    clientHeight: 300,
+    matches(selector) { return selector === '[data-modal-scroll-container]'; },
+    getBoundingClientRect() { return { top: 0, bottom: 300 }; },
+  };
+  const input = {
+    parentElement: search,
+    matches(selector) { return selector.includes('input'); },
+    getBoundingClientRect() { return { top: 320, bottom: 360 }; },
+  };
+  body.parentElement = document.documentElement;
+  window.getComputedStyle = (element) => ({
+    position: element === calculator ? 'relative' : 'static',
+    overflowY: element === calculator ? 'auto' : 'visible',
+  });
+  window.visualViewport = { height: 400, offsetTop: 80 };
+
+  assert.equal(window.LandosWorldModalUtils.ensureFocusedElementVisible(input), false);
+  assert.equal(search.scrollTop, 0);
+  assert.equal(calculator.scrollTop, 0);
+});

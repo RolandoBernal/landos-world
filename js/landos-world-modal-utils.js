@@ -66,6 +66,15 @@
     return null;
   }
 
+  function findExplicitModalScrollContainer(element) {
+    let current = element?.parentElement;
+    while (current && current !== document.body && current !== document.documentElement) {
+      if (current.matches?.('[data-modal-scroll-container]')) return current;
+      current = current.parentElement;
+    }
+    return null;
+  }
+
   function isFixedViewportDescendant(element) {
     let current = element;
     while (current && current !== document.body && current !== document.documentElement) {
@@ -82,7 +91,9 @@
     const viewportTop = fixedViewport ? 0 : (viewport?.offsetTop || 0);
     const viewportBottom = viewportTop + (viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
     const rect = element.getBoundingClientRect();
-    const scrollContainer = findScrollableAncestor(element);
+    const explicitScrollContainer = findExplicitModalScrollContainer(element);
+    const scrollContainer = explicitScrollContainer || findScrollableAncestor(element);
+    if (explicitScrollContainer && explicitScrollContainer.scrollHeight <= explicitScrollContainer.clientHeight) return false;
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();
       const visibleTop = Math.max(viewportTop, containerRect.top);
