@@ -6319,7 +6319,6 @@
     const viewportHeight = visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
     return {
       left: Math.max(0, visualViewport?.offsetLeft || 0),
-      top: Math.max(0, visualViewport?.offsetTop || 0),
       width: Math.max(0, viewportWidth),
       height: Math.max(160, viewportHeight),
     };
@@ -6330,7 +6329,6 @@
     if (!layer) return;
     const frame = getCarbCalculatorViewportFrame();
     layer.style.setProperty('--lee-lee-carb-calc-viewport-left', `${frame.left}px`);
-    layer.style.setProperty('--lee-lee-carb-calc-viewport-top', `${frame.top}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-width', `${frame.width}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-height', `${frame.height}px`);
   }

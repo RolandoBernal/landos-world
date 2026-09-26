@@ -1675,7 +1675,7 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
 });
 
 test('carb calculator keeps compact content-sized geometry with bounded overflow', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: var\(--lee-lee-carb-calc-viewport-top, 0\)[\s\S]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: 0[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);

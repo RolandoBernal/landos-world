@@ -1087,7 +1087,7 @@
 .lee_lee_diabetes_carb_calc_layer {
   position: fixed;
   inset: auto;
-  inset-block-start: var(--lee-lee-carb-calc-viewport-top, 0);
+  inset-block-start: 0;
   inset-inline-start: var(--lee-lee-carb-calc-viewport-left, 0);
   z-index: 80;
   display: grid;
