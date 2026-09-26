@@ -1659,7 +1659,7 @@ test('carb item editor keeps all three inputs at the compact 40px height', () =>
 });
 
 test('carb item editor uses the parent grid gap without an extra action margin', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto auto auto[\s\S]*gap: 0\.85rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) auto[\s\S]*gap: 0\.85rem/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top:/);
 });
 
@@ -1677,14 +1677,16 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
 test('carb calculator keeps compact content-sized geometry with bounded overflow', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: 0[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator_body/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*max-height: 100%[\s\S]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator_body \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
+  assert.match(trackerSource, /data-carb-calculator-body data-modal-scroll-container/);
+  assert.doesNotMatch(trackerSource, /data-carb-calculator data-modal-scroll-container/);
 });
 
-test('carb calculator search keeps its own scrollable results without changing modal sizing', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
+test('carb calculator search stays inside the explicit modal body without changing modal sizing', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[\s\S]*overflow: visible/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \.lee_lee_diabetes_carb_library_list \{[\s\S]*max-height: none[\s\S]*overflow: visible/);
+  assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*data-modal-scroll-container/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open/);
 });
 

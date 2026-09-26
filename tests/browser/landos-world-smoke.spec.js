@@ -2212,14 +2212,17 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
   await expect(searchInput).toBeFocused();
   const searchScrollMetrics = await calculator.evaluate((node) => {
     const picker = node.querySelector('[data-carb-picker="search"]');
+    const body = node.querySelector('[data-carb-calculator-body]');
     return {
       calculatorOverflowY: getComputedStyle(node).overflowY,
+      bodyOverflowY: getComputedStyle(body).overflowY,
       pickerOverflowY: getComputedStyle(picker).overflowY,
       pickerMaxHeight: getComputedStyle(picker).maxHeight,
     };
   });
-  expect(searchScrollMetrics.calculatorOverflowY).toBe('auto');
-  expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
+  expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
+  expect(searchScrollMetrics.bodyOverflowY).toBe('auto');
+  expect(searchScrollMetrics.pickerOverflowY).toBe('visible');
   expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
@@ -3124,7 +3127,8 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   })).toBe(320);
   const normalCardGeometry = await calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+    const body = node.querySelector('[data-carb-calculator-body]');
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop, bodyScrollTop: body?.scrollTop || 0 };
   });
 
   await page.evaluate(() => window.scrollTo(0, 420));
@@ -3135,7 +3139,8 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
   await expect(searchInput).toBeFocused();
-  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).not.toBeNull();
+  await expect(calculator.locator('[data-carb-calculator-body][data-modal-scroll-container]')).toHaveCount(1);
+  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).toBeNull();
 
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
   await expect.poll(() => layer.evaluate((node) => {
@@ -3151,9 +3156,9 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       backdropTop: Math.round(backdrop?.top || 0),
       backdropBottom: Math.round(backdrop?.bottom || 0),
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: calculatorNode?.querySelector('[data-carb-calculator-body]')?.scrollTop || 0,
       pickerScrollTop: picker?.scrollTop || 0,
-      inputTop: Math.round(inputRect?.top || 0),
-      inputBottom: Math.round(inputRect?.bottom || 0),
+      inputVisible: Boolean(inputRect && inputRect.top >= 18 && inputRect.bottom <= 180),
     };
   })).toEqual({
     top: 0,
@@ -3161,9 +3166,9 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     backdropTop: 0,
     backdropBottom: 180,
     calculatorScrollTop: 0,
+    bodyScrollTop: 0,
     pickerScrollTop: 0,
-    inputTop: 75,
-    inputBottom: 125,
+    inputVisible: true,
   });
   let typedSearch = '';
   for (const character of 'Chicken') {
@@ -3187,7 +3192,8 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
   const restoredCardGeometry = await calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop };
+    const body = node.querySelector('[data-carb-calculator-body]');
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, scrollTop: node.scrollTop, bodyScrollTop: body?.scrollTop || 0 };
   });
   expect(restoredCardGeometry.scrollTop).toBe(0);
   expect(restoredCardGeometry.height).toBeCloseTo(normalCardGeometry.height, 1);
@@ -3231,6 +3237,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       top: rect.top,
       bottom: rect.bottom,
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: node.closest('[data-carb-calculator]')?.querySelector('[data-carb-item-editor-body]')?.scrollTop || 0,
       windowScrollY: window.scrollY,
     };
   });
@@ -3248,30 +3255,38 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       top: rect.top,
       bottom: rect.bottom,
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      bodyScrollTop: node.closest('[data-carb-calculator]')?.querySelector('[data-carb-item-editor-body]')?.scrollTop || 0,
       windowScrollY: window.scrollY,
     };
   });
   expect(lowerInputMetrics.bottom).toBeLessThanOrEqual(180);
-  expect(lowerInputMetrics.calculatorScrollTop).toBeGreaterThan(0);
+  expect(lowerInputMetrics.calculatorScrollTop).toBe(0);
+  expect(lowerInputMetrics.bodyScrollTop).toBeGreaterThan(0);
   expect(lowerInputMetrics.windowScrollY).toBe(0);
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
+    const body = node.querySelector('[data-carb-item-editor-body]');
+    body.scrollTop = body.scrollHeight;
     return {
-      clientHeight: node.clientHeight,
-      scrollHeight: node.scrollHeight,
-      scrollTop: node.scrollTop,
+      clientHeight: body.clientHeight,
+      scrollHeight: body.scrollHeight,
+      scrollTop: body.scrollTop,
+      calculatorScrollTop: node.scrollTop,
     };
   });
   expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);
   expect(modalScrollMetrics.scrollTop).toBeGreaterThan(0);
+  expect(modalScrollMetrics.calculatorScrollTop).toBe(0);
 
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 640, offsetTop: 0 }));
   await expect.poll(() => layer.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
   })).toEqual({ top: 0, bottom: 640, height: 640 });
-  await calculator.evaluate((node) => { node.scrollTop = 0; });
+  await calculator.evaluate((node) => {
+    node.scrollTop = 0;
+    node.querySelector('[data-carb-item-editor-body]')?.scrollTo(0, 0);
+  });
 
   await page.locator('[data-carb-calculator-layer] [data-action="close-carb-calculator"]').evaluate((backdrop) => backdrop.click());
 
