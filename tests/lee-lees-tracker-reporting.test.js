@@ -1659,7 +1659,7 @@ test('carb item editor keeps all three inputs at the compact 40px height', () =>
 });
 
 test('carb item editor uses the parent grid gap without an extra action margin', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto auto auto[\s\S]*gap: 0\.85rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) auto[\s\S]*gap: 0\.85rem/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top:/);
 });
 
@@ -1675,9 +1675,10 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
 });
 
 test('carb calculator overlay uses the fixed visual-viewport origin and internal containment', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: 0[\s\S]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: var\(--lee-lee-carb-calc-viewport-top, 0\)[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*min-block-size: 0[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*min-block-size: 0[\s\S]*max-height: 100%[\s\S]*overflow: hidden/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator_body \{[\s\S]*min-block-size: 0[\s\S]*overflow-y: auto/);
 });
 
 test('carb calculator search owns scrolling while its parent stays fixed', () => {
