@@ -5255,7 +5255,7 @@
     return `
       <div class="lee_lee_diabetes_carb_calc_layer" data-carb-calculator-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>
-        <section class="lee_lee_diabetes_carb_calculator" data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
+        <section class="lee_lee_diabetes_carb_calculator" data-carb-calculator data-modal-scroll-container role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
           ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : `
             <div class="lee_lee_diabetes_carb_calculator_header">
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator</h2>
@@ -5329,7 +5329,7 @@
     const hasFoodEditor = currentEditor?.carbCalculatorFoodEditorOpen === true;
     const hasMealEditor = currentEditor?.carbCalculatorMealEditorOpen === true;
     return `
-      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" role="dialog" aria-modal="${pickerKey === 'search' ? 'true' : 'false'}" aria-labelledby="lee-lee-carb-picker-title">
+      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}"${pickerKey === 'search' ? ' data-modal-scroll-container' : ''} role="dialog" aria-modal="${pickerKey === 'search' ? 'true' : 'false'}" aria-labelledby="lee-lee-carb-picker-title">
         <div class="lee_lee_diabetes_carb_picker_header">
           <h3 id="lee-lee-carb-picker-title">${escapeHtml(title)}</h3>
           ${pickerKey === 'search' ? '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">Cancel</button>' : ''}
