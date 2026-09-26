@@ -3129,25 +3129,63 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 180, offsetTop: 18 }));
   await expect.poll(() => layer.evaluate((node) => {
     const rect = node.getBoundingClientRect();
+    const backdrop = node.querySelector('[data-action="close-carb-calculator"]')?.getBoundingClientRect();
     return {
       top: Math.round(rect.top),
       bottom: Math.round(rect.bottom),
       height: Math.round(rect.height),
+      backdropTop: Math.round(backdrop?.top || 0),
+      backdropBottom: Math.round(backdrop?.bottom || 0),
       overflow: getComputedStyle(node).overflow,
     };
   })).toEqual({
-    top: 18,
-    bottom: 198,
+    top: 0,
+    bottom: 180,
     height: 180,
+    backdropTop: 0,
+    backdropBottom: 180,
     overflow: 'hidden',
   });
   await expect.poll(() => calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return Math.round(rect.top + (rect.height / 2));
-  })).toBe(108);
+  })).toBe(90);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(calculator).toBeVisible();
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
+
+  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  const focusedInput = calculator.locator('[name="carbItemCarbs"]');
+  await expect(focusedInput).toBeFocused();
+  const focusedInputMetrics = await focusedInput.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const calculatorNode = node.closest('[data-carb-calculator]');
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      windowScrollY: window.scrollY,
+    };
+  });
+  expect(focusedInputMetrics.bottom).toBeLessThanOrEqual(180);
+  expect(focusedInputMetrics.windowScrollY).toBe(0);
+
+  const lowerInput = calculator.locator('[name="carbItemQty"]');
+  await page.evaluate(() => document.querySelector('[name="carbItemQty"]')?.focus({ preventScroll: true }));
+  await expect(lowerInput).toBeFocused();
+  const lowerInputMetrics = await lowerInput.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const calculatorNode = node.closest('[data-carb-calculator]');
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      calculatorScrollTop: calculatorNode?.scrollTop || 0,
+      windowScrollY: window.scrollY,
+    };
+  });
+  expect(lowerInputMetrics.bottom).toBeLessThanOrEqual(180);
+  expect(lowerInputMetrics.calculatorScrollTop).toBeGreaterThan(0);
+  expect(lowerInputMetrics.windowScrollY).toBe(0);
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
     node.scrollTop = node.scrollHeight;
@@ -3160,7 +3198,14 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);
   expect(modalScrollMetrics.scrollTop).toBeGreaterThan(0);
 
-  await calculator.getByRole('button', { name: 'Cancel Carb Calculator' }).click();
+  await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 640, offsetTop: 0 }));
+  await expect.poll(() => layer.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
+  })).toEqual({ top: 0, bottom: 640, height: 640 });
+  await calculator.evaluate((node) => { node.scrollTop = 0; });
+
+  await page.locator('[data-carb-calculator-layer] [data-action="close-carb-calculator"]').evaluate((backdrop) => backdrop.click());
 
   await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
   await expect(form.getByRole('spinbutton', { name: 'Total Carbs' })).toHaveValue('');
