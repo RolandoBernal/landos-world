@@ -5252,18 +5252,23 @@
     const activeFoodLibraryTab = activePicker;
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
-    const isSearchOpen = activePicker === 'search' || Boolean(String(search).trim());
+    const isSearchOpen = !itemEditorMode && (activePicker === 'search' || Boolean(String(search).trim()));
+    const activeTitle = isSearchOpen ? 'Food Search' : (itemEditorMode ? (itemEditorMode === 'edit' ? 'Edit Manual Amount' : 'Add Manual Amount') : 'Carb Calculator');
     return `
       <div class="lee_lee_diabetes_carb_calc_layer" data-carb-calculator-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>
         <section class="lee_lee_diabetes_carb_calculator${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
-          ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : `
-            <div class="lee_lee_diabetes_carb_calculator_header">
-              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator</h2>
-              <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>
-            </div>
-            <div class="lee_lee_diabetes_carb_calculator_body" data-carb-calculator-body data-modal-scroll-container>
-              ${isSearchOpen ? renderCarbCalculatorPicker(activePicker, search, normalizedRows) : `
+          <div class="lee_lee_diabetes_carb_calculator_header${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_header' : ''}">
+            ${itemEditorMode ? `
+              <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Carb Calculator</span></button>
+              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>
+            ` : `
+              <h2 class="lee_lee_diabetes_section_title${isSearchOpen ? ' lee_lee_diabetes_carb_search_title' : ''}" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>
+              <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="${isSearchOpen ? 'close-carb-calculator-picker' : 'close-carb-calculator'}" aria-label="${isSearchOpen ? 'Back to Carb Calculator' : 'Cancel Carb Calculator'}">Cancel</button>
+            `}
+          </div>
+          <div class="lee_lee_diabetes_carb_calculator_body${isSearchOpen ? ' lee_lee_diabetes_carb_calculator_body--search' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body${isSearchOpen ? '' : ' data-modal-scroll-container'}${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
+            ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : isSearchOpen ? renderCarbCalculatorPicker(activePicker, search, normalizedRows) : `
                 ${renderCarbCalculatorLibrary(activePicker, search, normalizedRows, activeFoodLibraryTab)}
                 <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
                   <div class="lee_lee_diabetes_carb_calc_heading">Qty</div>
@@ -5290,9 +5295,14 @@
                   <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="use-carb-calculator-total" ${canUseTotal ? '' : 'disabled'} aria-label="Use ${escapeHtml(formatCarbAmount(mealTotal))} grams">Use ${escapeHtml(formatCarbAmount(mealTotal))} g</button>
                 </div>
                 ${renderCarbCalculatorPicker(activePicker, search, normalizedRows)}
-              `}
+            `}
+          </div>
+          ${itemEditorMode ? `
+            <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions">
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor">${itemEditorMode === 'edit' ? 'Save Item' : 'Add Item'}</button>
             </div>
-          `}
+          ` : ''}
         </section>
       </div>
     `;
@@ -5304,7 +5314,7 @@
     return `
       <div class="lee_lee_diabetes_carb_library">
         <div class="lee_lee_diabetes_carb_search">
-          <button type="button" class="lee_lee_diabetes_carb_search_button" data-action="open-carb-calculator-search" aria-haspopup="dialog">
+          <button type="button" class="lee_lee_diabetes_carb_search_button" data-action="open-carb-calculator-search">
             <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
             <span>Search foods...</span>
           </button>
@@ -5330,15 +5340,11 @@
     const normalizedSearch = String(search || '').trim();
     if (!activePicker && !normalizedSearch) return '';
     const pickerKey = normalizedSearch ? 'search' : activePicker;
-    const title = pickerKey === 'search' ? 'Food Search' : (FOOD_LIBRARY_TABS.find(([tab]) => tab === activePicker)?.[1] || 'Foods');
+    const title = FOOD_LIBRARY_TABS.find(([tab]) => tab === activePicker)?.[1] || 'Foods';
     const hasFoodEditor = currentEditor?.carbCalculatorFoodEditorOpen === true;
     const hasMealEditor = currentEditor?.carbCalculatorMealEditorOpen === true;
     return `
-      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}" role="dialog" aria-modal="${pickerKey === 'search' ? 'true' : 'false'}" aria-labelledby="lee-lee-carb-picker-title">
-        <div class="lee_lee_diabetes_carb_picker_header">
-          <h3 id="lee-lee-carb-picker-title">${escapeHtml(title)}</h3>
-          ${pickerKey === 'search' ? '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator-picker">Cancel</button>' : ''}
-        </div>
+      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}"${pickerKey === 'search' ? ' data-modal-scroll-container' : ` aria-label="${escapeHtml(title)}"`}>
         ${pickerKey === 'search' ? `
           <div class="lee_lee_diabetes_carb_search_controls">
             <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
@@ -5479,14 +5485,8 @@
 
   function renderCarbCalculatorItemEditor(mode) {
     const draft = normalizeCarbCalculatorRow(currentEditor?.carbCalculatorItemDraft || createBlankCarbCalculatorRow());
-    const isEdit = mode === 'edit';
     return `
       <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor>
-        <div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
-          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Carb Calculator</span></button>
-          <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${isEdit ? 'Edit Manual Amount' : 'Add Manual Amount'}</h2>
-        </div>
-        <div class="lee_lee_diabetes_carb_item_editor_body" data-carb-item-editor-body>
           <label class="lee_lee_diabetes_field">
             Carbs per serving
             <span class="lee_lee_diabetes_unit_input">
@@ -5504,11 +5504,6 @@
               <input class="lee_lee_diabetes_input" name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Orange" value="${escapeHtml(draft.name)}">
             </label>
           </div>
-        </div>
-        <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor">${isEdit ? 'Save Item' : 'Add Item'}</button>
-        </div>
       </div>
     `;
   }
