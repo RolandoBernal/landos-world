@@ -2214,11 +2214,13 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
     const picker = node.querySelector('[data-carb-picker="search"]');
     return {
       calculatorOverflowY: getComputedStyle(node).overflowY,
+      bodyOverflowY: getComputedStyle(node.querySelector('.lee_lee_diabetes_carb_calculator_body')).overflowY,
       pickerOverflowY: getComputedStyle(picker).overflowY,
       pickerMaxHeight: getComputedStyle(picker).maxHeight,
     };
   });
   expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
+  expect(searchScrollMetrics.bodyOverflowY).toBe('hidden');
   expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
   expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
@@ -3109,25 +3111,26 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       overflow: getComputedStyle(node).overflow,
     };
   })).toEqual({
-    top: 0,
-    bottom: 180,
+    top: 18,
+    bottom: 198,
     height: 180,
     overflow: 'hidden',
   });
   await expect.poll(() => calculator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return Math.round(rect.top + (rect.height / 2));
-  })).toBe(90);
+  })).toBe(108);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(calculator).toBeVisible();
   await expect(calculator.getByRole('button', { name: '+ Add Manual Amount...' })).toBeVisible();
 
   const modalScrollMetrics = await calculator.evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
+    const body = node.querySelector('.lee_lee_diabetes_carb_calculator_body');
+    body.scrollTop = body.scrollHeight;
     return {
-      clientHeight: node.clientHeight,
-      scrollHeight: node.scrollHeight,
-      scrollTop: node.scrollTop,
+      clientHeight: body.clientHeight,
+      scrollHeight: body.scrollHeight,
+      scrollTop: body.scrollTop,
     };
   });
   expect(modalScrollMetrics.scrollHeight).toBeGreaterThan(modalScrollMetrics.clientHeight);

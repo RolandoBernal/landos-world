@@ -97,6 +97,7 @@
       }
       return false;
     }
+    if (fixedViewport) return false;
     if (rect.bottom > viewportBottom - margin) {
       window.scrollBy?.(0, rect.bottom - viewportBottom + margin);
       return true;
