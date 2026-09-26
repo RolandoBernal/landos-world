@@ -1659,7 +1659,7 @@ test('carb item editor keeps all three inputs at the compact 40px height', () =>
 });
 
 test('carb item editor uses the parent grid gap without an extra action margin', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) auto[\s\S]*gap: 0\.85rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor \{[\s\S]*grid-template-rows: auto auto auto[\s\S]*gap: 0\.85rem/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_item_editor \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top:/);
 });
 
@@ -1674,17 +1674,18 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
   assert.doesNotMatch(cssSource, /decrement-carb-row|increment-carb-row|lee_lee_diabetes_quantity_control/);
 });
 
-test('carb calculator overlay uses the fixed visual-viewport origin and internal containment', () => {
+test('carb calculator keeps compact content-sized geometry with bounded overflow', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*position: fixed[\s\S]*inset-block-start: var\(--lee-lee-carb-calc-viewport-top, 0\)[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*min-block-size: 0[\s\S]*max-height: 100%[\s\S]*overflow: hidden/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator_body \{[\s\S]*min-block-size: 0[\s\S]*overflow-y: auto/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*max-height: 100%[\s\S]*overflow-y: auto/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator_body/);
 });
 
-test('carb calculator search owns scrolling while its parent stays fixed', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open \{[^}]*overflow: hidden/);
+test('carb calculator search keeps its own scrollable results without changing modal sizing', () => {
   assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_picker--search \.lee_lee_diabetes_carb_library_list \{[\s\S]*max-height: none[\s\S]*overflow: visible/);
+  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open/);
 });
 
 test('settings plan activation closes an existing plan with the same effective date', () => {
