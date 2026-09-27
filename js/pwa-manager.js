@@ -247,7 +247,7 @@
             <dd>${getRunningVersionLabel()}</dd>
           </div>
           <div>
-            <dt>Running Build</dt>
+            <dt>Build</dt>
             <dd><code>${getBuildShortCommit()}</code></dd>
           </div>
           <div>
