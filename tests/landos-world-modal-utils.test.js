@@ -90,6 +90,39 @@ test('explicit modal scroll owners remain the boundary even when they are not ov
   assert.equal(calculator.scrollTop, 0);
 });
 
+test('visual-viewport-aligned modal descendants use the panned visual viewport for focus visibility', () => {
+  const { window, document } = createRuntime();
+  const body = document.body;
+  const layer = {
+    parentElement: body,
+    matches() { return false; },
+  };
+  const visualViewport = {
+    parentElement: layer,
+    matches(selector) { return selector === '[data-modal-visual-viewport]'; },
+  };
+  const scrollOwner = {
+    parentElement: visualViewport,
+    scrollTop: 0,
+    scrollHeight: 600,
+    clientHeight: 300,
+    matches(selector) { return selector === '[data-modal-scroll-container]'; },
+    getBoundingClientRect() { return { top: 80, bottom: 480 }; },
+  };
+  const input = {
+    parentElement: scrollOwner,
+    matches(selector) { return selector.includes('input'); },
+    getBoundingClientRect() { return { top: 470, bottom: 510 }; },
+  };
+  body.parentElement = document.documentElement;
+  window.getComputedStyle = (element) => ({ position: element === layer ? 'fixed' : 'static', overflowY: 'auto' });
+  window.visualViewport = { height: 400, offsetTop: 80 };
+
+  assert.equal(window.LandosWorldModalUtils.ensureFocusedElementVisible(input), true);
+  assert.equal(scrollOwner.scrollTop, 46);
+  assert.equal(window.scrollY, 180);
+});
+
 test('an explicitly supplied modal scroll owner prevents fallback to the shell or document', () => {
   const { window, document } = createRuntime();
   const shell = {
