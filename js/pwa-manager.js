@@ -243,7 +243,7 @@
             <dd><code>${getBuildShortCommit()}</code></dd>
           </div>
           <div>
-            <dt>Latest Deployed</dt>
+            <dt>Latest Version</dt>
             <dd>${getLatestVersionLabel()}</dd>
           </div>
           <div>

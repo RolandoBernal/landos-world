@@ -29,7 +29,7 @@ test('deployed release status, Later, foreground re-check, and safe update block
   await expect(notice).toContainText('Lando’s World 2026-09-26-42 is available');
   await expect(notice).toContainText('You’re using 2026-09-26-41');
   await expect(status).toContainText('Running Version');
-  await expect(status).toContainText('Latest Deployed');
+  await expect(status).toContainText('Latest Version');
   await expect(status).toContainText('Update available');
   await expect(status).toContainText(runningSha.slice(0, 7));
 
