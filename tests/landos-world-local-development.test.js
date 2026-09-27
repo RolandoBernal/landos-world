@@ -14,6 +14,7 @@ test('canonical local development contract is explicit', async () => {
   const packageData = JSON.parse(packageJson);
 
   assert.equal(packageData.scripts.dev, 'node scripts/dev-local.mjs');
+  assert.equal(packageData.scripts['dev:iphone'], 'node scripts/dev-iphone.mjs');
   assert.match(server, /const DEFAULT_PORT = 8000;/);
   assert.match(server, /Serving current working tree/);
   assert.match(server, /Cache-Control': 'no-store'/);

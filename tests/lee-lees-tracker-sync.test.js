@@ -57,7 +57,13 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-function createSyncContext({ localStorage = createLocalStorage(), supabase = null, config = null, location = { hostname: 'localhost', protocol: 'http:' } } = {}) {
+function createSyncContext({
+  localStorage = createLocalStorage(),
+  supabase = null,
+  config = null,
+  location = { hostname: 'localhost', protocol: 'http:' },
+  buildMetadata = { environment: 'unknown' },
+} = {}) {
   const context = {
     Date,
     JSON,
@@ -84,6 +90,7 @@ function createSyncContext({ localStorage = createLocalStorage(), supabase = nul
   };
   context.window = context;
   context.globalThis = context;
+  context.LandoWorldBuildMetadata = buildMetadata;
   if (config) context.LEE_LEE_TRACKER_SUPABASE_CONFIG = config;
   if (supabase) context.supabase = supabase;
   vm.runInNewContext(syncSource, context);
@@ -2100,4 +2107,37 @@ test('legacy remote settings cannot replace a locally configured ratio with defa
   await repository.syncSharedSettings();
   assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
   assert.equal(repository.getConflicts().length, 1);
+});
+
+test('explicit local-device mode exposes local-only LLT state without constructing or authenticating a Supabase client', async () => {
+  let clientCreations = 0;
+  let remoteRequests = 0;
+  const context = createSyncContext({
+    location: { hostname: '192.168.1.24', protocol: 'http:' },
+    buildMetadata: { environment: 'local-device' },
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+    supabase: {
+      createClient() {
+        clientCreations += 1;
+        remoteRequests += 1;
+        return createMockSupabase().client;
+      },
+    },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  await repository.initialize();
+  const status = repository.getSyncStatus();
+  assert.equal(status.localOnly, true);
+  assert.equal(status.configured, false);
+  assert.equal(status.signedIn, false);
+  assert.match(status.message, /Supabase authentication and sync are disabled/);
+  const signInResult = await repository.signIn('test@example.com', 'not-a-real-password');
+  assert.equal(signInResult.error, 'Authentication is disabled in local-device development.');
+  const resetResult = await repository.sendPasswordReset('test@example.com');
+  assert.equal(resetResult.error, 'Password reset is disabled in local-device development.');
+  await repository.syncNow();
+
+  assert.equal(clientCreations, 0);
+  assert.equal(remoteRequests, 0);
 });
