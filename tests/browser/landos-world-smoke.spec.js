@@ -198,6 +198,7 @@ for (const route of LOCAL_APP_ROUTES) {
   test(`${route.name} route renders its first screen`, async ({ page }) => {
     await page.goto(`/${route.hash}`);
     await expect(page.locator('body')).toBeVisible();
+    await expect(page.locator('#lws-local-dev-badge')).toHaveCount(0);
     await expect(page.locator('body')).not.toHaveText(/Loading\.\.\./);
     await expect(page.locator('[hidden]:target')).toHaveCount(0);
     const activeView = page.locator(route.root);

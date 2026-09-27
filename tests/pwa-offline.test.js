@@ -251,6 +251,31 @@ test('localhost previews bypass service-worker registration', () => {
   assert.match(pwaManager, /registration\.unregister\(\)/);
 });
 
+test('explicit local-device mode skips service-worker registration and deployed-release requests', async () => {
+  let registerCalls = 0;
+  let fetchCalls = 0;
+  const serviceWorker = {
+    register: async () => { registerCalls += 1; throw new Error('must not register in local-device mode'); },
+    getRegistrations: async () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    controller: null,
+  };
+  const { elements } = createPwaContext({
+    buildMetadata: { environment: 'local-device', appVersion: '1.0.0' },
+    serviceWorker,
+    fetchImplementation: async () => {
+      fetchCalls += 1;
+      return { ok: true, json: async () => ({}) };
+    },
+  });
+  await flushAsync();
+  assert.equal(registerCalls, 0);
+  assert.equal(fetchCalls, 0);
+  assert.equal(elements['pwa-toast'].innerHTML, '');
+  assert.equal(elements['pwa-network-status'].textContent, 'Online');
+});
+
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260917-1/],

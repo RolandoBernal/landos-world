@@ -170,6 +170,10 @@
     return protocol === 'http:' && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(hostname);
   }
 
+  function isLocalDeviceDevelopment() {
+    return globalThis.LandoWorldBuildMetadata?.environment === 'local-device';
+  }
+
   function getAppVersion() {
     return String(globalThis.LEE_LEE_TRACKER_APP_VERSION || '1.0.0');
   }
@@ -1096,7 +1100,11 @@
       const totalPendingCount = pendingCount + sharedPendingCount + foodLibraryPendingCount;
       let state = 'saved';
       let message = 'Saved on this device';
-      if (!config.configured) {
+      const localOnly = isLocalDeviceDevelopment();
+      if (localOnly) {
+        state = 'local-only';
+        message = 'Local-device development — Supabase authentication and sync are disabled.';
+      } else if (!config.configured) {
         state = 'config-needed';
         message = 'Supabase setup needed';
       } else if (!session) {
@@ -1133,7 +1141,8 @@
         message = 'Synced';
       }
       return {
-        configured: config.configured,
+        configured: config.configured && !localOnly,
+        localOnly,
         signedIn: Boolean(session),
         deviceIdentity: getDeviceIdentity(),
         pendingCount: totalPendingCount,
@@ -1273,6 +1282,7 @@
     }
 
     async function ensureClient() {
+      if (isLocalDeviceDevelopment()) return null;
       const config = getConfig();
       if (!config.configured) return null;
       if (!supabaseClient) {
@@ -1298,6 +1308,10 @@
     async function initialize() {
       if (initialized) return getSyncStatus();
       initialized = true;
+      if (isLocalDeviceDevelopment()) {
+        emit();
+        return getSyncStatus();
+      }
       pruneDefaultSeedFoodQueue();
       try {
         const client = await ensureClient();
@@ -1335,6 +1349,7 @@
     }
 
     async function signIn(email, password) {
+      if (isLocalDeviceDevelopment()) return { error: 'Authentication is disabled in local-device development.' };
       const client = await ensureClient();
       if (!client) return { error: 'Supabase setup is missing.' };
       const { data, error } = await client.auth.signInWithPassword({ email, password });
@@ -1374,6 +1389,7 @@
     }
 
     async function sendPasswordReset(email) {
+      if (isLocalDeviceDevelopment()) return { error: 'Password reset is disabled in local-device development.' };
       const client = await ensureClient();
       if (!client) return { error: 'Supabase setup is missing.' };
       const redirectTo = `${location.origin}${location.pathname}`;

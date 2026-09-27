@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,18 +61,21 @@ async function fingerprintDirtySource(status, stagedDiff, workingDiff, untracked
   return hash.digest('hex').slice(0, 8);
 }
 
-async function generateMetadata() {
+export async function generateMetadata({ environment = 'local', includeUntracked = true } = {}) {
   const status = git(['status', '--porcelain', '--untracked-files=all']);
   const dirty = Boolean(status);
   const commitFull = git(['rev-parse', 'HEAD'], 'unavailable');
   const commit = commitFull === 'unavailable' ? 'unavailable' : commitFull.slice(0, 7);
   const branch = git(['symbolic-ref', '--short', 'HEAD'], 'detached HEAD');
   const packageData = JSON.parse(await readFile(join(REPO_ROOT, 'package.json'), 'utf8'));
+  const untrackedFiles = includeUntracked
+    ? git(['ls-files', '--others', '--exclude-standard', '-z'])
+    : '';
   const sourceId = dirty
-    ? `${commit}+dirty.${await fingerprintDirtySource(status, git(['diff', '--cached', '--binary']), git(['diff', '--binary']), git(['ls-files', '--others', '--exclude-standard', '-z']))}`
+    ? `${commit}+dirty.${await fingerprintDirtySource(status, git(['diff', '--cached', '--binary']), git(['diff', '--binary']), untrackedFiles)}`
     : commit;
   const metadata = {
-    environment: 'local',
+    environment,
     appVersion: packageData.version || null,
     branch,
     commit,
@@ -142,8 +145,10 @@ async function main() {
   process.once('SIGTERM', stop);
 }
 
-main().catch((error) => {
-  console.error(`ERROR: ${error.message}`);
-  console.error('Local server was not started.');
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(`ERROR: ${error.message}`);
+    console.error('Local server was not started.');
+    process.exitCode = 1;
+  });
+}

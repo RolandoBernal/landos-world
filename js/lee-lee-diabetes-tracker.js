@@ -7757,6 +7757,17 @@
   }
 
   function renderSyncStatusSection() {
+    if (isLocalDeviceDevelopment()) {
+      return `
+        <h2 class="lee_lee_diabetes_visually_hidden">Sync Status</h2>
+        <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="sync-status" aria-labelledby="lee-lee-sync-title">
+          <summary id="lee-lee-sync-title">Sync Status <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+          <div class="lee_lee_diabetes_settings_accordion_body">
+            <p class="lee_lee_diabetes_save_status" role="status">LOCAL DEV — Supabase authentication and production sync are disabled.</p>
+          </div>
+        </details>
+      `;
+    }
     const friendlySyncStatus = getFriendlySyncStatus(syncStatus);
     const syncIsRunning = manualSyncState.state === 'syncing' || syncStatus.state === 'syncing';
     const syncButtonLabel = syncIsRunning ? 'Syncing...' : 'Sync Now';
@@ -9124,10 +9135,19 @@
   }
 
   function shouldShowProtectedApp() {
-    return syncStatus.configured && syncStatus.signedIn && Boolean(syncStatus.deviceIdentity);
+    return isLocalDeviceDevelopment()
+      || (syncStatus.configured && syncStatus.signedIn && Boolean(syncStatus.deviceIdentity));
+  }
+
+  function isLocalDeviceDevelopment() {
+    return window.LandoWorldBuildMetadata?.environment === 'local-device';
   }
 
   function renderInitialRoute() {
+    if (isLocalDeviceDevelopment()) {
+      renderHome();
+      return;
+    }
     if (!syncStatus.configured) {
       renderConfigurationNeeded();
       return;

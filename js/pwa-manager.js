@@ -30,7 +30,7 @@
   let updateBlockedReason = '';
   let latestRelease = null;
   let releaseCheckSequence = 0;
-  let releaseStatus = buildMetadata.environment === 'local' ? 'local' : 'unverified';
+  let releaseStatus = (buildMetadata.environment === 'local' || buildMetadata.environment === 'local-device') ? 'local' : 'unverified';
   const updateBlockers = new Map();
   let controllerBuildMismatch = '';
   let controllerReloadPending = false;
@@ -40,6 +40,14 @@
 
   function isLocalPreview() {
     return LOCAL_PREVIEW_HOSTS.has(window.location?.hostname || '');
+  }
+
+  function isLocalDeviceDevelopment() {
+    return buildMetadata.environment === 'local-device';
+  }
+
+  function isLocalBuild() {
+    return buildMetadata.environment === 'local' || isLocalDeviceDevelopment();
   }
 
   async function disableLocalPreviewServiceWorkers() {
@@ -323,7 +331,7 @@
 
   async function checkForDeployedRelease({ resurface = false } = {}) {
     const checkSequence = ++releaseCheckSequence;
-    if (buildMetadata.environment === 'local') {
+    if (isLocalBuild()) {
       releaseStatus = 'local';
       latestRelease = null;
       updateUi();
@@ -567,6 +575,11 @@
       } catch (error) {
         console.warn('Local preview service-worker cleanup failed.', error);
       }
+      return;
+    }
+    if (isLocalDeviceDevelopment()) {
+      offlineReadiness = 'unavailable';
+      updateUi();
       return;
     }
     if (!('serviceWorker' in navigator)) {

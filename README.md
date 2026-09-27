@@ -56,6 +56,16 @@ Do not use `localhost:5500`, VS Code Live Server, or an arbitrary manually start
 
 The browser app remains static. `pnpm dev` is a small repository-owned static server, not a bundler or build system. It sends `Cache-Control: no-store` for local responses so a normal reload requests current working-tree files. Localhost service workers are intentionally disabled; local development does not clear LLT records, settings, pending sync state, foods, or timer state.
 
+For physical-iPhone Safari UI testing on the same trusted local network, run:
+
+```sh
+pnpm dev:iphone
+```
+
+This separate HTTP server binds only to the Mac's private IPv4 address on its default network interface, accepts clients on that interface's subnet, and serves only the reviewed Pages runtime allowlist plus generated local metadata. It prints the URL to open in iPhone Safari. If the network route is ambiguous or no single private address can be selected, it refuses to start. macOS Firewall may ask to allow Node.js incoming connections; do not disable the firewall. Stop the server with `Ctrl-C`.
+
+The served shell is marked `environment: local-device` and shows a small `LOCAL DEV` badge. This explicit mode bypasses LLT's sign-in gate only for local UI testing and fails closed before creating a Supabase client; LLT records/changes stay in that browser origin and are not synchronized. Use test data only. The mode disables service-worker registration and deployed-release checks and serves assets with `Cache-Control: no-store`, so refresh requests current working-tree code. It intentionally uses HTTP and does not represent installed-PWA, service-worker, offline, Cache Storage, or secure-context behavior. The LAN origin has separate browser storage from production, but storage separation does not isolate the shared Supabase backend; real authentication/sync is blocked in this mode.
+
 For a source-identity fallback check, request the generated metadata directly:
 
 ```sh
