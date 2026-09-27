@@ -286,7 +286,8 @@ test('offline, install, update, and settings UI hooks are present and accessible
   assert.match(html, /id="pwa-offline-settings" aria-live="polite"/);
   assert.match(pwaManager, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);
   assert.match(pwaManager, /beforeinstallprompt/);
-  assert.match(pwaManager, /Lando’s World \$\{escapeHtml\(latestRelease\.releaseVersion\)\} is available/);
+  assert.match(pwaManager, /<h2 class="pwa_update_title">Update Available<\/h2>/);
+  assert.match(pwaManager, /Lando’s World <span class="pwa_version_token">\$\{escapeHtml\(latestRelease\.releaseVersion\)\}<\/span> is ready/);
   assert.match(pwaManager, /data-pwa-action="update-now"/);
   assert.match(pwaManager, /data-pwa-action="later"/);
   assert.match(pwaManager, /registerUpdateBlocker/);
@@ -375,8 +376,12 @@ test('deployed release is fetched with cache bypass and distinguished from the r
 
   assert.equal(context.LandosPWA.getState().releaseStatus, 'available');
   assert.equal(context.LandosPWA.getState().latestRelease.commitFull, latestSha);
-  assert.match(elements['pwa-toast'].innerHTML, /2026-09-26-42 is available/);
-  assert.match(elements['pwa-toast'].innerHTML, /You’re using 2026-09-26-41/);
+  assert.ok(elements['pwa-toast'].classList.values.has('pwa_toast--update'));
+  assert.match(elements['pwa-toast'].innerHTML, /<h2 class="pwa_update_title">Update Available<\/h2>/);
+  assert.match(elements['pwa-toast'].innerHTML, /Lando’s World <span class="pwa_version_token">2026-09-26-42<\/span> is ready/);
+  assert.match(elements['pwa-toast'].innerHTML, /You’re currently using <span class="pwa_version_token">2026-09-26-41<\/span>/);
+  assert.match(elements['pwa-toast'].innerHTML, /data-pwa-action="update-now"/);
+  assert.match(elements['pwa-toast'].innerHTML, /data-pwa-action="later"/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Running Version<\/dt>\s*<dd>2026-09-26-41<\/dd>/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Latest Version<\/dt>\s*<dd>2026-09-26-42<\/dd>/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Update Status<\/dt>\s*<dd[^>]*>Update available/);

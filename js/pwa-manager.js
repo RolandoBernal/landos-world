@@ -175,6 +175,7 @@
   function renderToast() {
     const el = getToastEl();
     if (!el) return;
+    el.classList.toggle('pwa_toast--update', false);
     if (updateRequested) {
       el.hidden = false;
       el.innerHTML = `
@@ -201,12 +202,19 @@
       return;
     }
     if (releaseStatus === 'available' && latestRelease?.commitFull !== runningCommit && latestRelease?.commitFull !== dismissedUpdateCommit) {
+      el.classList.toggle('pwa_toast--update', true);
       el.hidden = false;
       el.innerHTML = `
-        <span class="pwa_update_message">Lando’s World ${escapeHtml(latestRelease.releaseVersion)} is available. You’re using ${escapeHtml(getRunningVersionLabel())}.</span>
-        ${updateBlockedReason ? `<span class="pwa_update_blocked" role="status">${escapeHtml(updateBlockedReason)}</span>` : ''}
-        <button type="button" data-pwa-action="update-now">Update Now</button>
-        <button type="button" data-pwa-action="later">Later</button>
+        <div class="pwa_update_notice">
+          <h2 class="pwa_update_title">Update Available</h2>
+          <p class="pwa_update_primary_message">Lando’s World <span class="pwa_version_token">${escapeHtml(latestRelease.releaseVersion)}</span> is ready.</p>
+          <p class="pwa_update_secondary_message">You’re currently using <span class="pwa_version_token">${escapeHtml(getRunningVersionLabel())}</span>.</p>
+          ${updateBlockedReason ? `<p class="pwa_update_blocked" role="status">${escapeHtml(updateBlockedReason)}</p>` : ''}
+          <div class="pwa_update_actions">
+            <button type="button" class="pwa_update_primary_action" data-pwa-action="update-now">Update Now</button>
+            <button type="button" class="pwa_update_secondary_action" data-pwa-action="later">Later</button>
+          </div>
+        </div>
       `;
       return;
     }

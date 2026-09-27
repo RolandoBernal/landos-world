@@ -602,6 +602,157 @@ body.is-child-app-active .pwa_network_status {
   line-height: 1.4;
 }
 
+.pwa_toast--update {
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  width: auto;
+  max-width: 38rem;
+  max-height: calc(100vh - max(1rem, env(safe-area-inset-top, 0px)) - max(1rem, env(safe-area-inset-bottom, 0px)));
+  max-height: calc(100dvh - max(1rem, env(safe-area-inset-top, 0px)) - max(1rem, env(safe-area-inset-bottom, 0px)));
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1rem;
+  font-weight: 400;
+  transform: none;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pwa_update_notice {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.95rem 1rem 1rem;
+  border: 1px solid rgb(var(--app-accent-rgb, 102 255 153) / 38%);
+  border-radius: inherit;
+  color: var(--color-text);
+  background: rgb(var(--color-bg-rgb) / 96%);
+  box-shadow: 0 14px 34px var(--color-shadow);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.4;
+}
+
+.pwa_update_title,
+.pwa_update_primary_message,
+.pwa_update_secondary_message,
+.pwa_update_blocked {
+  min-width: 0;
+  margin: 0;
+}
+
+.pwa_update_title {
+  color: var(--color-success);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.pwa_update_primary_message {
+  color: var(--color-text);
+  font-size: 0.94rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.pwa_update_secondary_message {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.pwa_version_token {
+  color: var(--color-text-strong);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pwa_toast--update .pwa_update_blocked {
+  color: var(--color-warning);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pwa_update_actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.pwa_toast--update .pwa_update_actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.pwa_toast--update .pwa_update_primary_action {
+  border-color: var(--color-success);
+  color: #082615;
+  background: var(--color-success);
+}
+
+:root[data-theme="light"] .pwa_toast--update .pwa_update_actions .pwa_update_primary_action {
+  border-color: #11683f;
+  color: #fff;
+  background: #11683f;
+}
+
+.pwa_toast--update .pwa_update_primary_action:hover {
+  background: var(--color-success);
+  filter: brightness(0.94);
+}
+
+.pwa_toast--update .pwa_update_secondary_action {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  background: transparent;
+}
+
+:root[data-theme="light"] .pwa_toast--update .pwa_update_actions .pwa_update_secondary_action {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  background: transparent;
+}
+
+.pwa_toast--update .pwa_update_secondary_action:hover {
+  background: rgb(var(--app-accent-rgb, 102 255 153) / 10%);
+}
+
+:root[data-theme="light"] .pwa_toast--update .pwa_update_actions .pwa_update_primary_action:hover {
+  background: #11683f;
+}
+
+:root[data-theme="light"] .pwa_toast--update .pwa_update_actions .pwa_update_secondary_action:hover {
+  background: rgb(17 104 63 / 10%);
+}
+
+.pwa_toast--update .pwa_update_actions button:focus-visible {
+  outline-color: var(--color-success);
+}
+
+@media (max-width: 320px) {
+  .pwa_update_actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .pwa_toast button,
 .pwa_cache_button {
   min-height: 36px;
