@@ -341,6 +341,8 @@ test('PWA settings panel renders directly on the settings screen', async () => {
   assert.match(settings.innerHTML, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);
   assert.match(settings.innerHTML, /Application Status/);
   assert.match(settings.innerHTML, /<dt>Running Version<\/dt>\s*<dd>Unknown<\/dd>/);
+  assert.match(settings.innerHTML, /<dt>Build<\/dt>\s*<dd><code>Unknown<\/code><\/dd>/);
+  assert.doesNotMatch(settings.innerHTML, /<dt>Running Build<\/dt>/);
   assert.match(settings.innerHTML, /<dt>Latest Version<\/dt>\s*<dd>Unknown<\/dd>/);
   assert.match(settings.innerHTML, /<dt>Update Status<\/dt>\s*<dd[^>]*>Unable to verify/);
   assert.match(settings.innerHTML, /<dt>Service Worker \/ Cache<\/dt>/);
@@ -383,6 +385,8 @@ test('deployed release is fetched with cache bypass and distinguished from the r
   assert.match(elements['pwa-toast'].innerHTML, /data-pwa-action="update-now"/);
   assert.match(elements['pwa-toast'].innerHTML, /data-pwa-action="later"/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Running Version<\/dt>\s*<dd>2026-09-26-41<\/dd>/);
+  assert.match(elements['pwa-offline-settings'].innerHTML, new RegExp(`<dt>Build<\\/dt>\\s*<dd><code>${runningSha.slice(0, 7)}</code></dd>`));
+  assert.doesNotMatch(elements['pwa-offline-settings'].innerHTML, /<dt>Running Build<\/dt>/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Latest Version<\/dt>\s*<dd>2026-09-26-42<\/dd>/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Update Status<\/dt>\s*<dd[^>]*>Update available/);
   assert.ok(calls.length >= 1);
