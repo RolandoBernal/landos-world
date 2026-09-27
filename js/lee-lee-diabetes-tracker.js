@@ -5253,10 +5253,12 @@
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
     const isSearchOpen = !itemEditorMode && (activePicker === 'search' || Boolean(String(search).trim()));
+    const usesVisualViewportPanel = isSearchOpen || Boolean(itemEditorMode);
     const activeTitle = isSearchOpen ? 'Food Search' : (itemEditorMode ? (itemEditorMode === 'edit' ? 'Edit Manual Amount' : 'Add Manual Amount') : 'Carb Calculator');
     return `
       <div class="lee_lee_diabetes_carb_calc_layer" data-carb-calculator-layer>
         <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>
+        ${usesVisualViewportPanel ? '<div class="lee_lee_diabetes_carb_calc_visual_viewport" data-modal-visual-viewport>' : ''}
         <section class="lee_lee_diabetes_carb_calculator${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">
           <div class="lee_lee_diabetes_carb_calculator_header${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_header' : ''}">
             ${itemEditorMode ? `
@@ -5304,6 +5306,7 @@
             </div>
           ` : ''}
         </section>
+        ${usesVisualViewportPanel ? '</div>' : ''}
       </div>
     `;
   }
@@ -6324,6 +6327,7 @@
     const viewportHeight = visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
     return {
       left: Math.max(0, visualViewport?.offsetLeft || 0),
+      top: Math.max(0, visualViewport?.offsetTop || 0),
       width: Math.max(0, viewportWidth),
       height: Math.max(160, viewportHeight),
     };
@@ -6334,6 +6338,7 @@
     if (!layer) return;
     const frame = getCarbCalculatorViewportFrame();
     layer.style.setProperty('--lee-lee-carb-calc-viewport-left', `${frame.left}px`);
+    layer.style.setProperty('--lee-lee-carb-calc-viewport-top', `${frame.top}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-width', `${frame.width}px`);
     layer.style.setProperty('--lee-lee-carb-calc-viewport-height', `${frame.height}px`);
   }

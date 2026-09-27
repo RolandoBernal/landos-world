@@ -95,11 +95,22 @@
     return false;
   }
 
+  function isVisualViewportAlignedModalDescendant(element) {
+    let current = element;
+    while (current && current !== document.body && current !== document.documentElement) {
+      if (current.matches?.('[data-modal-visual-viewport]')) return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
   function ensureFocusedElementVisible(element, margin = 16, allowedScrollContainer = null) {
     if (!isEditableControl(element)) return false;
     const viewport = window.visualViewport;
     const fixedViewport = isFixedViewportDescendant(element);
-    const viewportTop = fixedViewport ? 0 : (viewport?.offsetTop || 0);
+    const viewportTop = fixedViewport && !isVisualViewportAlignedModalDescendant(element)
+      ? 0
+      : (viewport?.offsetTop || 0);
     const viewportBottom = viewportTop + (viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
     const rect = element.getBoundingClientRect();
     const explicitScrollContainer = allowedScrollContainer
