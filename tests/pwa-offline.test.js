@@ -39,6 +39,10 @@ function createPwaContext({
   caches,
   storage,
   standalone = false,
+  buildMetadata = { environment: 'unknown', appVersion: '1.0.0' },
+  fetchImplementation,
+  visibleForms = [],
+  timerDelay,
 } = {}) {
   const documentListeners = {};
   const windowListeners = {};
@@ -61,6 +65,13 @@ function createPwaContext({
       }
     },
     Intl,
+    URL,
+    Date,
+    Math,
+    Map,
+    Symbol,
+    WeakMap,
+    WeakSet,
     MessageChannel: class MessageChannel {
       constructor() {
         const port1 = { onmessage: null, close: () => {} };
@@ -77,8 +88,14 @@ function createPwaContext({
     String,
     clearTimeout,
     document: {
+      activeElement: null,
+      body: {},
+      visibilityState: 'visible',
       addEventListener(type, handler) {
         documentListeners[type] = handler;
+      },
+      querySelectorAll() {
+        return visibleForms;
       },
       getElementById(id) {
         return elements[id] || null;
@@ -102,11 +119,23 @@ function createPwaContext({
       serviceWorker,
       storage,
     },
-    setTimeout,
+    setTimeout: timerDelay === undefined
+      ? setTimeout
+      : (callback, delay, ...args) => setTimeout(callback, Math.min(delay, timerDelay), ...args),
+    clearTimeout,
+    location: { hostname: 'example.com', href: 'https://example.com/index.html', reloadCount: 0, reload() { this.reloadCount += 1; } },
     window: null,
   };
   context.window = context;
   context.globalThis = context;
+  context.LandoWorldBuildMetadata = buildMetadata;
+  const sessionStore = new Map();
+  context.sessionStorage = {
+    getItem(key) { return sessionStore.get(key) || null; },
+    setItem(key, value) { sessionStore.set(key, String(value)); },
+    removeItem(key) { sessionStore.delete(key); },
+  };
+  if (fetchImplementation) context.fetch = fetchImplementation;
   context.addEventListener = (type, handler) => {
     windowListeners[type] ||= [];
     windowListeners[type].push(handler);
@@ -143,6 +172,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/weather-app.js',
     './js/daily-chief-briefing.js',
     './js/theme-manager.js',
+    './js/landos-world-build-metadata.js',
     './js/lee-lee-pre-meal-timer.js',
     './js/lee-lee-diabetes-tracker.js',
     './js/sprints-app.js',
@@ -189,13 +219,16 @@ test('Digital Clock seven-segment CSS is scoped away from normal interface text'
 });
 
 test('service worker uses separate versioned caches and strategy-specific runtime handling', () => {
-  assert.match(sw, /const SW_VERSION = '2026-09-26-1'/);
+  assert.match(sw, /const SW_VERSION = '__LANDOS_BUILD_SHA__'/);
   assert.match(sw, /const APP_CACHE = `landos-world-app-\$\{SW_VERSION\}`/);
   assert.match(sw, /const WEATHER_CACHE = `landos-world-weather-\$\{SW_VERSION\}`/);
   assert.match(sw, /const IMAGE_CACHE = `landos-world-images-\$\{SW_VERSION\}`/);
   assert.match(sw, /async function cacheFirst/);
   assert.match(sw, /const cached = await cache\.match\(request\)\s*\n\s*\|\| await cache\.match\(request, \{ ignoreSearch: true \}\)/);
-  assert.match(sw, /self\.skipWaiting\(\)/);
+  assert.doesNotMatch(sw.match(/self\.addEventListener\('install',[\s\S]*?\n\}\);/)?.[0] || '', /skipWaiting/);
+  assert.match(sw, /if \(message\.type === 'SKIP_WAITING'\)[\s\S]*self\.skipWaiting\(\)/);
+  assert.match(sw, /deployment-version\.json[\s\S]*fetch\(new Request\(request, \{ cache: 'no-store' \}\)\)/);
+  assert.match(sw, /message\.type === 'GET_BUILD_METADATA'/);
   assert.match(sw, /async function staleWhileRevalidate/);
   assert.match(sw, /async function networkFirst/);
   assert.match(sw, /new Request\(url, \{ cache: 'reload' \}\)/);
@@ -207,7 +240,7 @@ test('PWA checks for updates when the app opens, returns to the foreground, reco
   assert.match(pwaManager, /registration\.update\(\)/);
   assert.match(pwaManager, /document\.addEventListener\('visibilitychange'/);
   assert.match(pwaManager, /window\.addEventListener\('pageshow'/);
-  assert.match(pwaManager, /window\.setInterval\(\(\) => checkForServiceWorkerUpdate/);
+  assert.match(pwaManager, /window\.setInterval\(\(\) => \{[\s\S]*checkForServiceWorkerUpdate\(activeRegistration\);[\s\S]*checkForDeployedRelease\(\)/);
   assert.match(pwaManager, /checkForServiceWorkerUpdate\(\);/);
 });
 
@@ -253,11 +286,12 @@ test('offline, install, update, and settings UI hooks are present and accessible
   assert.match(html, /id="pwa-offline-settings" aria-live="polite"/);
   assert.match(pwaManager, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);
   assert.match(pwaManager, /beforeinstallprompt/);
-  assert.match(pwaManager, /Update available/);
-  assert.match(pwaManager, /data-pwa-action="restart"/);
-  assert.match(pwaManager, /Updating Lando's World/);
+  assert.match(pwaManager, /Lando’s World \$\{escapeHtml\(latestRelease\.releaseVersion\)\} is available/);
+  assert.match(pwaManager, /data-pwa-action="update-now"/);
+  assert.match(pwaManager, /data-pwa-action="later"/);
+  assert.match(pwaManager, /registerUpdateBlocker/);
   assert.match(pwaManager, /The update is taking longer than expected/);
-  assert.match(pwaManager, /data-pwa-action="reload"/);
+  assert.match(pwaManager, /cache: 'no-store'/);
   assert.match(pwaManager, /navigator\.storage\.persist/);
   assert.match(pwaManager, /navigator\.storage\.estimate/);
   assert.match(digitalClockCss, /\.pwa_network_status/);
@@ -298,16 +332,425 @@ test('Application Status lives in the ecosystem settings view outside Digital Cl
   assert.match(html, /'settings',/);
 });
 
-test('PWA settings panel renders directly on the settings screen', () => {
+test('PWA settings panel renders directly on the settings screen', async () => {
   const { elements } = createPwaContext();
+  await flushAsync();
   const settings = elements['pwa-offline-settings'];
 
   assert.match(settings.innerHTML, /<section class="pwa_offline_panel" id="pwa-offline-panel" aria-labelledby="pwa-offline-title">/);
   assert.match(settings.innerHTML, /Application Status/);
-  assert.match(settings.innerHTML, /<dt>Application Version<\/dt>\s*<dd>Not available<\/dd>/);
+  assert.match(settings.innerHTML, /<dt>Running Version<\/dt>\s*<dd>Unknown<\/dd>/);
+  assert.match(settings.innerHTML, /<dt>Latest Deployed<\/dt>\s*<dd>Unknown<\/dd>/);
+  assert.match(settings.innerHTML, /<dt>Update Status<\/dt>\s*<dd[^>]*>Unable to verify/);
+  assert.match(settings.innerHTML, /<dt>Service Worker \/ Cache<\/dt>/);
   assert.match(settings.innerHTML, /Clear Application Cache/);
   assert.match(settings.innerHTML, /Cache cleanup never deletes Lee-Lee's Tracker records or other local app data/);
   assert.doesNotMatch(settings.innerHTML, /toggle-offline-settings|Show Application Status|Hide Application Status|hidden/);
+});
+
+test('deployed release is fetched with cache bypass and distinguished from the running build', async () => {
+  const runningSha = 'a'.repeat(40);
+  const latestSha = 'b'.repeat(40);
+  const calls = [];
+  const latest = {
+    releaseVersion: '2026-09-26-42',
+    commitFull: latestSha,
+    shortCommit: latestSha.slice(0, 7),
+    deploymentRun: '42',
+  };
+  const { context, elements } = createPwaContext({
+    buildMetadata: {
+      environment: 'production',
+      releaseVersion: '2026-09-26-41',
+      commit: runningSha.slice(0, 7),
+      commitFull: runningSha,
+    },
+    fetchImplementation: async (url, options) => {
+      calls.push({ url, options });
+      return { ok: true, json: async () => latest };
+    },
+  });
+
+  await context.LandosPWA.checkForUpdates();
+
+  assert.equal(context.LandosPWA.getState().releaseStatus, 'available');
+  assert.equal(context.LandosPWA.getState().latestRelease.commitFull, latestSha);
+  assert.match(elements['pwa-toast'].innerHTML, /2026-09-26-42 is available/);
+  assert.match(elements['pwa-toast'].innerHTML, /You’re using 2026-09-26-41/);
+  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Running Version<\/dt>\s*<dd>2026-09-26-41<\/dd>/);
+  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Latest Deployed<\/dt>\s*<dd>2026-09-26-42<\/dd>/);
+  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Update Status<\/dt>\s*<dd[^>]*>Update available/);
+  assert.ok(calls.length >= 1);
+  for (const call of calls) {
+    assert.equal(call.options.cache, 'no-store');
+    assert.equal(new URL(call.url).pathname, '/deployment-version.json');
+    assert.ok(new URL(call.url).searchParams.has('check'));
+  }
+});
+
+test('matching deployed SHA reports current, while offline and bad metadata remain unverified', async () => {
+  const sha = 'c'.repeat(40);
+  const metadata = {
+    releaseVersion: '2026-09-26-7',
+    commitFull: sha,
+    shortCommit: sha.slice(0, 7),
+    deploymentRun: '7',
+  };
+  const current = createPwaContext({
+    buildMetadata: { environment: 'production', releaseVersion: metadata.releaseVersion, commitFull: sha, commit: sha.slice(0, 7) },
+    fetchImplementation: async () => ({ ok: true, json: async () => metadata }),
+  });
+  await current.context.LandosPWA.checkForUpdates();
+  assert.equal(current.context.LandosPWA.getState().releaseStatus, 'current');
+  assert.match(current.elements['pwa-offline-settings'].innerHTML, /Up to date/);
+
+  const offline = createPwaContext({ onLine: false, buildMetadata: { environment: 'production', releaseVersion: metadata.releaseVersion, commitFull: sha, commit: sha.slice(0, 7) } });
+  await offline.context.LandosPWA.checkForUpdates();
+  assert.equal(offline.context.LandosPWA.getState().releaseStatus, 'unverified');
+  assert.equal(offline.context.LandosPWA.getState().latestRelease, null);
+  assert.match(offline.elements['pwa-offline-settings'].innerHTML, /Unable to verify \/ Offline/);
+
+  for (const fetchImplementation of [
+    async () => { throw new Error('network failure'); },
+    async () => ({ ok: true, json: async () => ({ releaseVersion: 'invalid', commitFull: 'bad' }) }),
+    async () => ({ ok: false, status: 503 }),
+  ]) {
+    const failed = createPwaContext({
+      buildMetadata: { environment: 'production', releaseVersion: metadata.releaseVersion, commitFull: sha, commit: sha.slice(0, 7) },
+      fetchImplementation,
+    });
+    await failed.context.LandosPWA.checkForUpdates();
+    assert.equal(failed.context.LandosPWA.getState().releaseStatus, 'unverified');
+    assert.equal(failed.context.LandosPWA.getState().latestRelease, null);
+  }
+});
+
+test('redeploying the same SHA with a new display run remains up to date', async () => {
+  const sha = 'a'.repeat(40);
+  const { context, elements } = createPwaContext({
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-25-8', commit: sha.slice(0, 7), commitFull: sha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({
+      releaseVersion: '2026-09-26-9', commitFull: sha, shortCommit: sha.slice(0, 7), deploymentRun: '9',
+    }) }),
+  });
+  await context.LandosPWA.checkForUpdates();
+  assert.equal(context.LandosPWA.getState().releaseStatus, 'current');
+  assert.equal(elements['pwa-toast'].hidden, true);
+});
+
+test('Later hides only the current notice and a foreground-style check can resurface it', async () => {
+  const runningSha = 'd'.repeat(40);
+  const latestSha = 'e'.repeat(40);
+  const { context, elements } = createPwaContext({
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-10', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ releaseVersion: '2026-09-26-11', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '11' }) }),
+  });
+  await context.LandosPWA.checkForUpdates();
+  assert.equal(elements['pwa-toast'].hidden, false);
+  context.LandosPWA.dismissUpdate();
+  assert.equal(elements['pwa-toast'].hidden, true);
+  await context.LandosPWA.checkForUpdates({ resurface: true });
+  assert.equal(elements['pwa-toast'].hidden, false);
+});
+
+test('ordinary forms and focus are not mistaken for unsaved work', () => {
+  const { context } = createPwaContext({ visibleForms: [{ open: true }] });
+  context.document.activeElement = { tagName: 'INPUT', value: 'draft' };
+  assert.equal(context.LandosPWA.getState().updateBlocked, false);
+});
+
+test('explicit update blockers defer activation until work is safe', async () => {
+  const runningSha = 'f'.repeat(40);
+  const latestSha = '1'.repeat(40);
+  let blocked = true;
+  let registrationUpdateCalls = 0;
+  const registration = {
+    update: async () => { registrationUpdateCalls += 1; throw new Error('no worker in unit fixture'); },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const serviceWorker = {
+    controller: null,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const { context, elements } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-12', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ releaseVersion: '2026-09-26-13', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '13' }) }),
+  });
+  await flushAsync();
+  const initialUpdateCalls = registrationUpdateCalls;
+  const unregister = context.LandosPWA.registerUpdateBlocker('test editor', () => blocked && 'Save the test editor first.');
+  await context.LandosPWA.checkForUpdates();
+  await context.LandosPWA.updateNow();
+  assert.equal(registrationUpdateCalls, initialUpdateCalls);
+  assert.equal(context.location.reloadCount, 0);
+  assert.match(elements['pwa-toast'].innerHTML, /Save the test editor first/);
+
+  blocked = false;
+  context.LandosPWA.notifyUpdateSafetyChanged();
+  await flushAsync();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushAsync();
+  assert.ok(registrationUpdateCalls > initialUpdateCalls);
+  assert.equal(context.location.reloadCount, 0);
+  unregister();
+});
+
+test('an update blocker callback failure fails closed', () => {
+  const { context, elements } = createPwaContext();
+  context.LandosPWA.registerUpdateBlocker('uncertain editor', () => { throw new Error('state unavailable'); });
+  assert.equal(context.LandosPWA.getState().updateBlocked, true);
+  assert.equal(elements['pwa-toast'].hidden, true);
+});
+
+test('repeated Update Now taps share one in-flight release operation', async () => {
+  const runningSha = '6'.repeat(40);
+  const latestSha = '7'.repeat(40);
+  let fetchCalls = 0;
+  const registration = { update: async () => { throw new Error('expected test worker absence'); } };
+  const serviceWorker = {
+    controller: null,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener() {},
+  };
+  const { context } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-20', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => {
+      fetchCalls += 1;
+      return { ok: true, json: async () => ({ releaseVersion: '2026-09-26-21', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '21' }) };
+    },
+  });
+  await flushAsync();
+  await context.LandosPWA.checkForUpdates();
+  const fetchCountBeforeTap = fetchCalls;
+  const first = context.LandosPWA.updateNow();
+  const second = context.LandosPWA.updateNow();
+  assert.equal(first, second);
+  await first;
+  assert.equal(fetchCalls, fetchCountBeforeTap + 1);
+});
+
+test('a controller build mismatch never reloads another client until that client explicitly asks', async () => {
+  const runningSha = '8'.repeat(40);
+  const controllerSha = '9'.repeat(40);
+  let blocked = true;
+  let metadataRequests = 0;
+  const controller = {
+    postMessage(message, ports = []) {
+      if (message.type === 'GET_BUILD_METADATA') {
+        metadataRequests += 1;
+        ports[0]?.postMessage({ type: 'BUILD_METADATA', requestId: message.requestId, metadata: {
+          releaseVersion: '2026-09-26-31', commitFull: controllerSha, shortCommit: controllerSha.slice(0, 7), deploymentRun: '31',
+        } });
+      }
+    },
+  };
+  const registration = { active: controller, update: async () => {}, addEventListener() {} };
+  const serviceWorkerListeners = new Map();
+  const serviceWorker = {
+    controller,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener(type, callback) { serviceWorkerListeners.set(type, callback); },
+  };
+  const { context, elements, documentListeners } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-30', commit: runningSha.slice(0, 7), commitFull: runningSha },
+  });
+  await flushAsync();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await flushAsync();
+  assert.ok(metadataRequests > 0);
+  assert.equal(context.LandosPWA.getState().controllerBuildMismatch, controllerSha);
+  assert.equal(context.location.reloadCount, 0);
+  assert.match(elements['pwa-toast'].innerHTML, /Restart This Tab/);
+
+  const unregister = context.LandosPWA.registerUpdateBlocker('draft', () => blocked && 'Save this draft first.');
+  documentListeners.click({ target: { closest: () => ({ dataset: { pwaAction: 'restart-client' } }) } });
+  assert.equal(context.location.reloadCount, 0);
+  assert.equal(context.LandosPWA.getState().controllerReloadPending, true);
+  blocked = false;
+  context.LandosPWA.notifyUpdateSafetyChanged();
+  await flushAsync();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushAsync();
+  assert.equal(context.location.reloadCount, 1);
+  assert.equal(context.sessionStorage.getItem('landos_world_update_reload_target_v1'), controllerSha);
+  assert.ok(serviceWorkerListeners.has('controllerchange'));
+  unregister();
+});
+
+test('Update Now activates the exact deployed worker before one guarded reload', async () => {
+  const runningSha = '2'.repeat(40);
+  const latestSha = '3'.repeat(40);
+  const listeners = new Map();
+  let registration;
+  let serviceWorker;
+  const makeWorker = (sha, label) => {
+    const workerListeners = new Map();
+    const worker = {
+      state: 'installed',
+      scriptURL: 'https://example.com/service-worker.js',
+      addEventListener(type, callback) {
+        workerListeners.set(type, [...(workerListeners.get(type) || []), callback]);
+      },
+      removeEventListener(type, callback) {
+        workerListeners.set(type, (workerListeners.get(type) || []).filter((item) => item !== callback));
+      },
+      postMessage(message, ports = []) {
+        if (message.type === 'GET_BUILD_METADATA') {
+          ports[0]?.postMessage({
+            type: 'BUILD_METADATA',
+            requestId: message.requestId,
+            metadata: { releaseVersion: label, commitFull: sha, shortCommit: sha.slice(0, 7), deploymentRun: label.endsWith('14') ? '14' : '13' },
+          });
+        }
+        if (message.type === 'GET_CACHE_STATUS') {
+          ports[0]?.postMessage({ type: 'CACHE_STATUS', requestId: message.requestId, status: { version: sha.slice(0, 7), appCacheReady: true } });
+        }
+        if (message.type === 'SKIP_WAITING') {
+          registration.waiting = null;
+          registration.active = worker;
+          serviceWorker.controller = worker;
+          worker.state = 'activated';
+          (listeners.get('controllerchange') || []).forEach((callback) => callback());
+          (workerListeners.get('statechange') || []).forEach((callback) => callback());
+        }
+      },
+    };
+    return worker;
+  };
+  const currentWorker = makeWorker(runningSha, '2026-09-26-13');
+  const updatedWorker = makeWorker(latestSha, '2026-09-26-14');
+  registration = {
+    active: currentWorker,
+    waiting: null,
+    installing: null,
+    addEventListener(type, callback) { listeners.set(type, [...(listeners.get(type) || []), callback]); },
+    removeEventListener(type, callback) { listeners.set(type, (listeners.get(type) || []).filter((item) => item !== callback)); },
+    async update() { this.waiting = updatedWorker; },
+  };
+  serviceWorker = {
+    controller: currentWorker,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener(type, callback) { listeners.set(type, [...(listeners.get(type) || []), callback]); },
+    removeEventListener(type, callback) { listeners.set(type, (listeners.get(type) || []).filter((item) => item !== callback)); },
+  };
+  const { context } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-13', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ releaseVersion: '2026-09-26-14', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '14' }) }),
+  });
+  await flushAsync();
+  await context.LandosPWA.checkForUpdates();
+  await context.LandosPWA.updateNow();
+  assert.equal(context.location.reloadCount, 1);
+  assert.equal(serviceWorker.controller, updatedWorker);
+  assert.equal(context.sessionStorage.getItem('landos_world_update_reload_target_v1'), latestSha);
+
+  await context.LandosPWA.updateNow();
+  assert.equal(context.location.reloadCount, 1);
+});
+
+test('worker control timeout offers retry without reloading the old page', async () => {
+  const runningSha = '4'.repeat(40);
+  const latestSha = '5'.repeat(40);
+  const listeners = new Map();
+  const worker = {
+    state: 'installed',
+    postMessage(message, ports = []) {
+      if (message.type === 'GET_BUILD_METADATA') ports[0]?.postMessage({ type: 'BUILD_METADATA', requestId: message.requestId, metadata: { releaseVersion: '2026-09-26-16', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '16' } });
+      if (message.type === 'SKIP_WAITING') this.activationRequested = true;
+    },
+  };
+  const currentWorker = {
+    postMessage(message, ports = []) {
+      if (message.type === 'GET_BUILD_METADATA') ports[0]?.postMessage({ type: 'BUILD_METADATA', requestId: message.requestId, metadata: { releaseVersion: '2026-09-26-15', commitFull: runningSha, shortCommit: runningSha.slice(0, 7), deploymentRun: '15' } });
+      if (message.type === 'GET_CACHE_STATUS') ports[0]?.postMessage({ type: 'CACHE_STATUS', requestId: message.requestId, status: { version: runningSha.slice(0, 7), appCacheReady: true } });
+    },
+  };
+  const registration = {
+    active: currentWorker,
+    waiting: worker,
+    addEventListener(type, callback) { listeners.set(type, callback); },
+    removeEventListener() {},
+    async update() {},
+  };
+  const serviceWorker = {
+    controller: currentWorker,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener(type, callback) { listeners.set(type, callback); },
+    removeEventListener() {},
+  };
+  const { context, elements } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    timerDelay: 2,
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-15', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ releaseVersion: '2026-09-26-16', commitFull: latestSha, shortCommit: latestSha.slice(0, 7), deploymentRun: '16' }) }),
+  });
+  await flushAsync();
+  await context.LandosPWA.checkForUpdates();
+  await context.LandosPWA.updateNow();
+  assert.equal(worker.activationRequested, true);
+  assert.equal(context.location.reloadCount, 0);
+  assert.match(elements['pwa-toast'].innerHTML, /Retry Update/);
+});
+
+test('a worker with an unverified or different SHA is never activated', async () => {
+  const runningSha = 'a'.repeat(40);
+  const deployedSha = 'b'.repeat(40);
+  let activationRequested = false;
+  const wrongWorker = {
+    state: 'installed',
+    postMessage(message, ports = []) {
+      if (message.type === 'GET_BUILD_METADATA') {
+        ports[0]?.postMessage({ type: 'BUILD_METADATA', requestId: message.requestId, metadata: {
+          releaseVersion: '2026-09-26-44', commitFull: 'c'.repeat(40), shortCommit: 'c'.repeat(7), deploymentRun: '44',
+        } });
+      }
+      if (message.type === 'SKIP_WAITING') activationRequested = true;
+    },
+  };
+  const registration = {
+    waiting: wrongWorker,
+    active: null,
+    update: async () => {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const serviceWorker = {
+    controller: null,
+    register: async () => registration,
+    ready: Promise.resolve(registration),
+    addEventListener() {},
+  };
+  const { context } = createPwaContext({
+    serviceWorker,
+    caches: {},
+    timerDelay: 2,
+    buildMetadata: { environment: 'production', releaseVersion: '2026-09-26-43', commit: runningSha.slice(0, 7), commitFull: runningSha },
+    fetchImplementation: async () => ({ ok: true, json: async () => ({
+      releaseVersion: '2026-09-26-44', commitFull: deployedSha, shortCommit: deployedSha.slice(0, 7), deploymentRun: '44',
+    }) }),
+  });
+  await flushAsync();
+  await context.LandosPWA.checkForUpdates();
+  await context.LandosPWA.updateNow();
+  assert.equal(activationRequested, false);
+  assert.equal(context.location.reloadCount, 0);
 });
 
 test('PWA panel reports browser connection separately from installation status', () => {
@@ -359,7 +802,7 @@ test('PWA panel marks offline readiness from app-shell cache status', async () =
   await flushAsync();
 
   assert.ok(messages.some((message) => message.type === 'GET_CACHE_STATUS'));
-  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Application Version<\/dt>\s*<dd>2026-08-05-1<\/dd>/);
+  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Service Worker \/ Cache<\/dt>\s*<dd title="2026-08-05-1"><code>2026-08-05-1<\/code><\/dd>/);
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Offline Ready<\/dt>\s*<dd class="[^"]*">Ready<\/dd>/);
   assert.doesNotMatch(elements['pwa-offline-settings'].innerHTML, /Preparing<\/dd>/);
   assert.doesNotMatch(elements['pwa-offline-settings'].innerHTML, /<dt>Last Cache Update<\/dt>\s*<dd>Not available<\/dd>/);

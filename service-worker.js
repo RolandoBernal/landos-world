@@ -1,4 +1,12 @@
-const SW_VERSION = '2026-09-26-1';
+const SW_VERSION = '__LANDOS_BUILD_SHA__';
+const BUILD_METADATA = Object.freeze({
+  releaseVersion: '__LANDOS_RELEASE_VERSION__',
+  commit: '__LANDOS_BUILD_SHORT_SHA__',
+  commitFull: '__LANDOS_BUILD_SHA__',
+  shortCommit: '__LANDOS_BUILD_SHORT_SHA__',
+  builtAt: '__LANDOS_BUILT_AT__',
+  deploymentRun: '__LANDOS_DEPLOYMENT_RUN__',
+});
 const APP_CACHE = `landos-world-app-${SW_VERSION}`;
 const RUNTIME_CACHE = `landos-world-runtime-${SW_VERSION}`;
 const WEATHER_CACHE = `landos-world-weather-${SW_VERSION}`;
@@ -29,6 +37,7 @@ const PRECACHE_URLS = [
   './css/road-bike-checklist.css',
   './css/maintenance-total.css',
   './js/theme-manager.js',
+  './js/landos-world-build-metadata.js',
   './js/pwa-manager.js',
   './js/weather-service.js',
   './js/weather-app.js',
@@ -209,7 +218,6 @@ async function clearApplicationCaches() {
 }
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(precacheApplicationShell('install'));
 });
 
@@ -231,6 +239,11 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  if (url.origin === self.location.origin && url.pathname.endsWith('/deployment-version.json')) {
+    event.respondWith(fetch(new Request(request, { cache: 'no-store' })));
+    return;
+  }
 
   if (WEATHER_HOSTS.has(url.hostname)) {
     event.respondWith(staleWhileRevalidate(request, WEATHER_CACHE));
@@ -278,6 +291,10 @@ self.addEventListener('message', (event) => {
   };
   if (message.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  if (message.type === 'GET_BUILD_METADATA') {
+    respond({ type: 'BUILD_METADATA', metadata: BUILD_METADATA });
     return;
   }
   if (message.type === 'GET_CACHE_STATUS') {

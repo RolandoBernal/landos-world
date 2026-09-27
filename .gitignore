@@ -6,6 +6,7 @@ obj/
 node_modules/
 .pnpm-store/
 .local/
+/dist-pages/
 test-results/
 playwright-report/
 .env

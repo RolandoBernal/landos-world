@@ -8,7 +8,7 @@ Accepted
 
 Lando's World is evolving from a static website into a personal app ecosystem. The launcher, Digital Clock, Lee-Lee's Tracker, Violet Sprints, Weather, Daily Chief Briefing, and future apps should continue to open reliably when the device has no network connection.
 
-The project is deployed to GitHub Pages and does not use a client build step for the shell. Lee-Lee's Tracker stores sensitive medical records locally. Cache cleanup must never delete those records.
+The project is deployed to GitHub Pages as a static shell. Lee-Lee's Tracker stores sensitive medical records locally. Cache cleanup must never delete those records. Production now has a small Pages artifact-staging step to inject deployment identity; the browser application remains static and does not add a runtime framework/bundler.
 
 ## Decision
 
@@ -31,7 +31,7 @@ Local apps continue working offline because their HTML, CSS, JavaScript, icons, 
 
 Weather and Daily Chief Briefing can display cached weather while offline and refresh automatically when the network returns.
 
-New deployments install in the background and notify the user only when a restart is available.
+Production build identity is generated from the exact commit deployed by GitHub Pages Actions. The app compares its embedded running SHA to fresh network-only deployed metadata. New workers prepare caches and wait until the user selects Update Now; they do not skip waiting automatically. Reload is blocked only by explicit app-specific unsaved-work blockers, not ordinary forms or focused controls.
 
 Cross-scope apps cannot be fully controlled by this service worker after navigation leaves Lando's World's GitHub Pages scope. Death on Notecards should eventually own its own offline-first architecture if it must be fully installable and offline on its own.
 
@@ -43,4 +43,4 @@ Network first for the entire app shell was rejected because it makes offline lau
 
 Clearing all browser storage was rejected because it could erase Lee-Lee's Tracker records and other user data.
 
-Adding a build-time PWA plugin was rejected for now because the current codebase is intentionally static and GitHub Pages friendly.
+Adding a build-time PWA plugin or application bundler remains unnecessary: the Pages workflow only stages tracked static files and generates a small metadata artifact.

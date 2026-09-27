@@ -591,6 +591,15 @@ body.is-child-app-active .pwa_network_status {
   font-size: 0.88rem;
   font-weight: 800;
   transform: translateX(-50%);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: min(38rem, calc(100vw - 2rem));
+}
+
+.pwa_toast .pwa_update_message,
+.pwa_toast .pwa_update_blocked {
+  flex: 1 1 100%;
+  line-height: 1.4;
 }
 
 .pwa_toast button,

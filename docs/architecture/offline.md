@@ -12,11 +12,9 @@ Weather and future online services are allowed to be stale while offline. They s
 
 `manifest.webmanifest` defines `Lando's World` with the short name `Lando`, standalone display, black background/theme colors, portrait-primary orientation, GitHub Pages start/scope URLs, install icons, and app shortcuts.
 
-The manifest is intentionally static and does not require a build step.
-
 ## Service Worker
 
-`service-worker.js` owns application caching only. It uses versioned cache names:
+`service-worker.js` owns application caching only. `SW_VERSION` is an internal cache identity generated for each production build; it is not the application release version. It uses versioned cache names:
 
 - `landos-world-app-*` for the application shell and precached static files.
 - `landos-world-runtime-*` for same-origin runtime documents/assets.
@@ -66,14 +64,17 @@ iOS Safari does not expose `beforeinstallprompt`; users still install through Ad
 
 ## Update Flow
 
-New deployments install silently in the background. If a new service worker is waiting, the app shows a small "Update available" message with a Restart button.
+The GitHub Pages Actions build generates `deployment-version.json` and `js/landos-world-build-metadata.js` from the exact production commit being deployed. The running page gets its identity from the generated build script. Latest deployed identity is checked with a cache-busted `cache: 'no-store'` request; the service worker explicitly sends this endpoint to the network without storing it. A failed or offline check is Unverified, never Up to date.
 
-Restart sends `SKIP_WAITING` to the waiting service worker and reloads the page after the new worker becomes active. Local app data is not cleared.
+A changed service worker installs and prepares its versioned application cache but does not call `skipWaiting()` automatically. The PWA presents Update Now/Later only after it confirms a different deployed commit. Update Now verifies the waiting worker's embedded full SHA, requests activation, waits for that exact worker to control the page, checks explicit reload-safety blockers, then performs one guarded reload. Ordinary forms and focused controls do not imply unsaved work. Local app data is not cleared. See [deployed release updates](deployed-release-updates.md) for the release identity, first-migration caveat, and multi-client lifecycle contract.
 
 ## Settings
 
 The Digital Clock settings toolbar includes an Offline section with:
 
+- Running Version and short build ID.
+- Latest Deployed and Update Status (or Unknown/Unverified).
+- Service Worker / Cache Version as a separate internal diagnostic.
 - Application Installed.
 - Offline Ready.
 - Last Cache Update.
@@ -124,7 +125,7 @@ Service-worker updates are browser controlled; exact timing varies by browser.
 
 ## Recovery Procedures
 
-If the app shell appears stale, use the Update Available Restart button when shown.
+If a newer production build is verified, use Update Now when it is safe to reload. Later hides that release notice until a subsequent foreground/reopen check.
 
 If cached files appear corrupted, open Digital Clock settings and choose Clear Application Cache. The page reloads and downloads fresh application files when online.
 
