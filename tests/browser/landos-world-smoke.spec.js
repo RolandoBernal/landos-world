@@ -1557,6 +1557,229 @@ test('Lee-Lee mobile bottom plus opens the existing Log Entry flow', async ({ pa
   await expect(page.locator('[data-lee-lee-editor]')).toBeVisible();
 });
 
+test('LLT fresh Log Entry has independent scroll state and restores Today across viewport sizes', async ({ page }) => {
+  await page.addInitScript(() => {
+    let frame = { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
+    const listeners = new Map();
+    const dispatch = (type) => {
+      const event = new Event(type);
+      listeners.get(type)?.forEach((listener) => listener.call(visualViewportMock, event));
+    };
+    const visualViewportMock = {
+      get width() { return frame.width; },
+      get height() { return frame.height; },
+      get offsetLeft() { return frame.offsetLeft; },
+      get offsetTop() { return frame.offsetTop; },
+      get scale() { return 1; },
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(listener);
+      },
+      removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+      setFrame(nextFrame) {
+        Object.assign(frame, nextFrame);
+        dispatch('resize');
+        dispatch('scroll');
+      },
+    };
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: visualViewportMock });
+    window.__setBug6VisualViewportFrame = (nextFrame) => visualViewportMock.setFrame(nextFrame);
+    window.__dispatchBug6VisualViewportEvent = (type) => dispatch(type);
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProtectedLeeLeeTracker(page);
+  await page.addStyleTag({ content: '#lee-lee-diabetes-root::after { content: ""; display: block; height: 2200px; }' });
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(({ width, height }) => {
+      window.__setBug6VisualViewportFrame({ width, height, offsetLeft: 0, offsetTop: 0 });
+      window.scrollTo(0, 0);
+    }, viewport);
+
+    const nav = page.getByLabel("Lee-Lee’s Tracker mobile navigation");
+    await nav.getByRole('button', { name: 'Log Entry' }).click();
+    const form = page.locator('[data-lee-lee-editor]');
+    await expect(form).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
+    const bloodSugar = form.getByLabel('Blood Sugar');
+    await expect(page.getByRole('heading', { name: 'Log Entry' })).toBeVisible();
+    await expect(bloodSugar).toBeFocused();
+    const openedAtTop = await page.evaluate(() => {
+      const heading = document.querySelector('#lee-lee-diabetes-title').getBoundingClientRect();
+      const input = document.querySelector('[name="bloodSugar"]').getBoundingClientRect();
+      return {
+        scrollY: window.scrollY,
+        headingTop: heading.top,
+        inputTop: input.top,
+        inputBottom: input.bottom,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(openedAtTop.scrollY).toBe(0);
+    expect(openedAtTop.headingTop).toBeGreaterThanOrEqual(0);
+    expect(openedAtTop.inputTop).toBeGreaterThanOrEqual(0);
+    expect(openedAtTop.inputBottom).toBeLessThanOrEqual(openedAtTop.viewportHeight);
+
+    await form.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+    const todayScrollY = await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      return window.scrollY;
+    });
+    expect(todayScrollY).toBeGreaterThan(viewport.height / 2);
+    await nav.getByRole('button', { name: 'Log Entry' }).click();
+    await expect(page.getByRole('heading', { name: 'Log Entry' })).toBeVisible();
+    await expect(bloodSugar).toBeFocused();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+    if (viewport.width === 390) {
+      await page.evaluate(() => window.__setBug6VisualViewportFrame({
+        width: window.innerWidth,
+        height: 320,
+        offsetLeft: 0,
+        offsetTop: 60,
+      }));
+      await expect.poll(() => page.evaluate(() => {
+        const input = document.querySelector('[name="bloodSugar"]').getBoundingClientRect();
+        const visibleTop = window.visualViewport.offsetTop;
+        const visibleBottom = visibleTop + window.visualViewport.height;
+        return input.top >= visibleTop && input.bottom <= visibleBottom && window.scrollY === 0;
+      })).toBe(true);
+      await page.evaluate(() => {
+        document.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 320 }));
+        window.scrollTo(0, 320);
+      });
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+      await expect(bloodSugar).toBeFocused();
+      const bloodSugarUserScrollY = await page.evaluate(() => window.scrollY);
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('resize'));
+        window.__setBug6VisualViewportFrame({
+          width: window.innerWidth,
+          height: 320,
+          offsetLeft: 0,
+          offsetTop: 60,
+        });
+      });
+      await page.waitForTimeout(2300);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(bloodSugarUserScrollY);
+      await expect(bloodSugar).toBeFocused();
+      expect(await page.evaluate(() => window.visualViewport.height)).toBe(320);
+
+      const insulinInput = form.locator('[name="insulinUnits"]');
+      await insulinInput.click();
+      await expect(insulinInput).toBeFocused();
+      await expect.poll(() => page.evaluate(() => {
+        const input = document.querySelector('[name="insulinUnits"]').getBoundingClientRect();
+        return input.top >= window.visualViewport.offsetTop
+          && input.bottom <= window.visualViewport.offsetTop + window.visualViewport.height;
+      })).toBe(true);
+      await page.evaluate(() => {
+        document.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 260 }));
+        window.scrollTo(0, window.scrollY + 260);
+      });
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(bloodSugarUserScrollY);
+      const insulinUserScrollY = await page.evaluate(() => window.scrollY);
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('resize'));
+        window.__setBug6VisualViewportFrame({
+          width: window.innerWidth,
+          height: 320,
+          offsetLeft: 0,
+          offsetTop: 60,
+        });
+      });
+      await page.waitForTimeout(2300);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(insulinUserScrollY);
+      await expect(insulinInput).toBeFocused();
+
+      const notesInput = form.locator('[name="notes"]');
+      await notesInput.click();
+      await expect(notesInput).toBeFocused();
+      await page.evaluate(() => {
+        document.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 220 }));
+        window.scrollTo(0, window.scrollY + 220);
+      });
+      const notesUserScrollY = await page.evaluate(() => window.scrollY);
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('resize'));
+        window.__setBug6VisualViewportFrame({
+          width: window.innerWidth,
+          height: 320,
+          offsetLeft: 0,
+          offsetTop: 60,
+        });
+      });
+      await page.waitForTimeout(2300);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(notesUserScrollY);
+      await expect(notesInput).toBeFocused();
+
+      await insulinInput.click();
+      await expect(insulinInput).toBeFocused();
+      expect(await page.evaluate(() => window.visualViewport.height)).toBe(320);
+
+      const scrollBeforeKeyboardDismiss = await page.evaluate(() => window.scrollY);
+      await page.evaluate((height) => window.__setBug6VisualViewportFrame({
+        width: window.innerWidth,
+        height,
+        offsetLeft: 0,
+        offsetTop: 0,
+      }), viewport.height);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeKeyboardDismiss);
+    }
+
+    for (const userScrollY of [300, 700, 400]) {
+      await page.evaluate(async (nextScrollY) => {
+        window.scrollTo(0, nextScrollY);
+        window.__dispatchBug6VisualViewportEvent('scroll');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }, userScrollY);
+      await expect.poll(() => page.evaluate((targetY) => Math.abs(window.scrollY - targetY) <= 16, userScrollY), {
+        message: `New Entry should stay near user scroll target ${userScrollY}, allowing only a small focused-input visibility correction`,
+      }).toBe(true);
+      const settledScrollY = await page.evaluate(() => window.scrollY);
+      await page.evaluate(async () => {
+        window.__dispatchBug6VisualViewportEvent('scroll');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(settledScrollY);
+    }
+
+    await form.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(todayScrollY);
+  }
+
+  await page.evaluate(() => {
+    const now = Date.now();
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      records: [...current.records, {
+        id: 'bug6-existing-edit-check',
+        type: 'Breakfast',
+        eventType: 'check-insulin',
+        bloodSugar: 142,
+        recordTimestamp: now,
+        createdAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+      }],
+    }));
+  });
+  await page.getByLabel("Lee-Lee’s Tracker mobile navigation").getByRole('button', { name: 'Today' }).click();
+  await expect(page.locator('[data-action="edit-today-record"]')).toHaveCount(1);
+  await page.evaluate(() => window.scrollTo(0, 320));
+  await page.locator('[data-action="edit-today-record"]').evaluate((button) => button.click());
+  await expect(page.getByRole('heading', { name: 'Edit Entry' })).toBeVisible();
+  await expect(page.locator('[name="bloodSugar"]')).toHaveValue('142');
+  await expect(page.locator('[name="bloodSugar"]')).toBeFocused();
+});
+
 test('Lee-Lee Reports summarizes stored records and renders trend charts', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   const recentDateKey = relativeLocalDateKey(-1);
