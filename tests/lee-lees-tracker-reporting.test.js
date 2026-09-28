@@ -2396,7 +2396,7 @@ test('Pre-Meal Timer presentation states use generic accessible LLT styling with
   assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_ring/);
   assert.match(trackerSource, /remaining/);
   assert.match(trackerSource, /Timer continues while the app is backgrounded/);
-  assert.match(trackerSource, /source\.recordTimestamp \? renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)/);
+  assert.match(trackerSource, /Number\.isFinite\(timer\.startedAt\) \? renderPreMealTimerSourceTimestamp\(new Date\(timer\.startedAt\)\.toISOString\(\)\)/);
   assert.match(trackerSource, /Timer Already Running/);
   assert.match(trackerSource, /Keep Current Timer/);
   assert.match(trackerSource, /Restart Timer/);
@@ -2411,10 +2411,30 @@ test('Pre-Meal Timer presentation states use generic accessible LLT styling with
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--detail[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_detail_inner[\s\S]*34rem/);
   assert.match(trackerSource, /renderPreMealTimerModal\(timer, \{ startedFromSave: true \}\)/);
+  assert.match(trackerSource, /After insulin has been given, start the \$\{duration\}-minute pre-meal timer/);
+  assert.match(trackerSource, /Insulin Given — Start \$\{duration\}-Min Timer/);
+  assert.match(trackerSource, /data-action="not-now-pre-meal-timer">Not Now/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_ring/);
   assert.match(cssSource, /env\(safe-area-inset-bottom\)/);
   assert.match(cssSource, /prefers-reduced-motion/);
   assert.match(cssSource, /--llt-numeric-font/);
+});
+
+test('pre-meal timer entry eligibility preserves the supported positive-carb new-entry matrix', () => {
+  const eligible = createTrackerRuntime().LeeLeeTrackerEntryTypes.isPreMealTimerEntryEligible;
+  for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']) {
+    assert.equal(eligible({ eventType: 'meal', type, mealCarbs: 24 }, null), true, `${type} meal`);
+  }
+  for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack']) {
+    assert.equal(eligible({ eventType: 'check-insulin', type, mealCarbs: 24 }, null), true, `${type} food-calculator entry`);
+  }
+  assert.equal(eligible({ eventType: 'meal', type: 'Dinner', mealCarbs: 0 }, null), false);
+  assert.equal(eligible({ eventType: 'meal', type: 'Dinner', mealCarbs: null }, null), false);
+  assert.equal(eligible({ eventType: 'activity', type: 'Exercise', mealCarbs: 24 }, null), false);
+  assert.equal(eligible({ eventType: 'check-insulin', type: 'Correction', mealCarbs: null }, null), false);
+  assert.equal(eligible({ eventType: 'check-insulin', type: 'Bedtime', mealCarbs: null }, null), false);
+  assert.equal(eligible({ eventType: 'note', type: 'Other', mealCarbs: null }, null), false);
+  assert.equal(eligible({ eventType: 'meal', type: 'Dinner', mealCarbs: 24 }, { id: 'existing' }), false);
 });
 
 test('Pre-Meal Timer stop uses an LLT confirmation instead of native browser confirmation', () => {
@@ -2431,7 +2451,7 @@ test('Pre-Meal Timer stop uses an LLT confirmation instead of native browser con
 
 test('Pre-Meal Timer source summaries cannot expose escaped generated markup', () => {
   assert.match(trackerSource, /function renderPreMealTimerSourceTimestamp\(timestamp\)/);
-  assert.match(trackerSource, /source\.recordTimestamp \? renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)/);
+  assert.match(trackerSource, /<dt>Started<\/dt><dd class="lee_lee_diabetes_pre_meal_timer_source_time">\$\{Number\.isFinite\(timer\.startedAt\)/);
   assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_source_context/);
   assert.match(trackerSource, /<dt>Started<\/dt>/);
   assert.doesNotMatch(trackerSource, /Started from/);
@@ -2838,19 +2858,24 @@ test('check insulin scheduled contexts are marked logged and rechecked before sa
   assert.match(trackerSource, /if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\)[\s\S]*const pendingRecord = currentEditor\.pendingRecord[\s\S]*getDuplicateScheduledContextMessage\(pendingRecord\)/);
 });
 
-test('confirmation save captures the record before teardown and runs timer integration afterward', () => {
+test('confirmation save captures the record and presents the timer offer only after successful save', () => {
   const confirmationPath = trackerSource.match(/if \(action === 'confirm-save' && currentEditor\?\.pendingRecord\) \{([\s\S]*?)\n      \}/)?.[1] || '';
   assert.match(confirmationPath, /const pendingRecord = currentEditor\.pendingRecord/);
   assert.match(confirmationPath, /const saved = upsertRecord\(pendingRecord\)/);
   assert.match(confirmationPath, /renderAfterRecordChange\(pendingRecord\)/);
-  assert.match(confirmationPath, /maybeStartPreMealTimer\(pendingRecord, saved\.existingRecord, saved\)/);
+  assert.match(confirmationPath, /maybeOfferPreMealTimer\(pendingRecord, saved\.existingRecord, saved\)/);
   assert.ok(confirmationPath.indexOf('const pendingRecord') < confirmationPath.indexOf('upsertRecord'));
   assert.ok(confirmationPath.indexOf('upsertRecord') < confirmationPath.indexOf('renderAfterRecordChange'));
-  assert.ok(confirmationPath.indexOf('renderAfterRecordChange') < confirmationPath.indexOf('maybeStartPreMealTimer'));
-  assert.match(trackerSource, /function handleSave\(form\)[\s\S]*const saved = upsertRecord\(record\)[\s\S]*maybeStartPreMealTimer\(record, saved\.existingRecord, saved\)/);
+  assert.ok(confirmationPath.indexOf('renderAfterRecordChange') < confirmationPath.indexOf('maybeOfferPreMealTimer'));
+  assert.match(trackerSource, /function handleSave\(form\)[\s\S]*const saved = upsertRecord\(record\)[\s\S]*maybeOfferPreMealTimer\(record, saved\.existingRecord, saved\)/);
+  assert.match(trackerSource, /function maybeOfferPreMealTimer\(record, existingRecord, saved\)[\s\S]*renderPreMealTimerOffer\(record, settings\.durationMinutes\)/);
+  assert.match(trackerSource, /function startPreMealTimerFromOffer\(\)[\s\S]*const timer = service\.start\(\{ durationMinutes: settings\.durationMinutes/);
+  assert.doesNotMatch(confirmationPath, /\.start\(/);
   assert.match(trackerSource, /saved\?\.ok !== true/);
-  assert.match(trackerSource, /const newCarbEntry = isNewCarbEntry\(record, existingRecord\)/);
+  assert.match(trackerSource, /isPreMealTimerEntryEligible\(record, existingRecord\)/);
   assert.match(trackerSource, /if \(current\?\.status === 'active'\)[\s\S]*renderPreMealTimerConflict\(current\)/);
+  assert.match(trackerSource, /action === 'dismiss-pre-meal-timer' && currentEditor\?\.mode === 'pre-meal-conflict'[\s\S]*renderPreMealTimerOffer\(record, duration\)/);
+  assert.match(trackerSource, /action === 'not-now-pre-meal-timer'[\s\S]*renderHome\(\)/);
 });
 
 test('today activity edit action uses the shared edit pipeline', () => {

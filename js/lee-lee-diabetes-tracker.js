@@ -3141,6 +3141,7 @@
     entryTypeUsesMealGuidance,
     entryTypeUsesFoodCalculator,
     entryTypeHasField,
+    isPreMealTimerEntryEligible,
   };
 
   function getRecordEventDateKey(record) {
@@ -6869,7 +6870,7 @@
     return { ...saved, existingRecord };
   }
 
-  function isNewCarbEntry(record, existingRecord) {
+  function isPreMealTimerEntryEligible(record, existingRecord) {
     return !existingRecord && record?.eventType !== 'activity' && normalizeNumber(record?.mealCarbs) > 0;
   }
 
@@ -6896,7 +6897,7 @@
     const startedFromSave = options.startedFromSave === true && timer.status === 'active';
     const source = timer.sourceEntry;
     const remaining = formatPreMealRemaining(timer);
-    const sourceSummaryMarkup = source && !stopped ? `<dl class="lee_lee_diabetes_pre_meal_timer_source"><p class="lee_lee_diabetes_pre_meal_timer_source_context">${escapeHtml(source.type || 'Entry')}</p><div><dt>Started</dt><dd class="lee_lee_diabetes_pre_meal_timer_source_time">${source.recordTimestamp ? renderPreMealTimerSourceTimestamp(source.recordTimestamp) : '—'}</dd></div><div><dt>Carbs</dt><dd>${source.mealCarbs == null ? '—' : escapeHtml(formatCarbs(source.mealCarbs))}</dd></div><div><dt>Insulin given</dt><dd>${source.administeredInsulinUnits == null ? '—' : escapeHtml(formatInsulin(source.administeredInsulinUnits))}</dd></div></dl>` : '';
+    const sourceSummaryMarkup = source && !stopped ? `<dl class="lee_lee_diabetes_pre_meal_timer_source"><p class="lee_lee_diabetes_pre_meal_timer_source_context">${escapeHtml(source.type || 'Entry')}</p><div><dt>Started</dt><dd class="lee_lee_diabetes_pre_meal_timer_source_time">${Number.isFinite(timer.startedAt) ? renderPreMealTimerSourceTimestamp(new Date(timer.startedAt).toISOString()) : '—'}</dd></div><div><dt>Carbs</dt><dd>${source.mealCarbs == null ? '—' : escapeHtml(formatCarbs(source.mealCarbs))}</dd></div><div><dt>Insulin given</dt><dd>${source.administeredInsulinUnits == null ? '—' : escapeHtml(formatInsulin(source.administeredInsulinUnits))}</dd></div></dl>` : '';
     const detailContent = `
       <div class="lee_lee_diabetes_pre_meal_timer_detail_inner">
         <div class="lee_lee_diabetes_pre_meal_timer_header"><button type="button" class="lee_lee_diabetes_pre_meal_timer_back" data-action="close-pre-meal-timer" aria-label="Back to Today">‹</button><span>Pre-Meal Timer</span><span aria-hidden="true"></span></div>
@@ -6943,20 +6944,49 @@
     }
   }
 
-  function maybeStartPreMealTimer(record, existingRecord, saved) {
+  function renderPreMealTimerOffer(record, durationMinutes, errorMessage = '') {
+    const root = getRoot();
+    if (!root || !record) return;
+    const duration = Math.max(1, Math.round(Number(durationMinutes) || 15));
+    currentEditor = { mode: 'pre-meal-timer-offer', pendingTimerRecord: record, timerDurationMinutes: duration };
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" role="dialog" aria-modal="true" aria-labelledby="pre-meal-timer-title">
+      <div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div>
+      <section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--saved">
+        <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-success" aria-hidden="true">✓</div>
+        <h1 id="pre-meal-timer-title">Entry Saved!</h1>
+        <p class="lee_lee_diabetes_pre_meal_timer_message">After insulin has been given, start the ${duration}-minute pre-meal timer.</p>
+        ${errorMessage ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(errorMessage)}</p>` : ''}
+        <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_success_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="start-pre-meal-timer">Insulin Given — Start ${duration}-Min Timer</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="not-now-pre-meal-timer">Not Now</button>
+        </div>
+      </section>
+    </div>`);
+    root.querySelector('[data-action="start-pre-meal-timer"]')?.focus();
+  }
+
+  function maybeOfferPreMealTimer(record, existingRecord, saved) {
     const service = window.LeeLeePreMealTimer;
     const settings = service?.getSettings() || null;
-    const normalizedCarbs = normalizeNumber(record?.mealCarbs);
-    const newCarbEntry = isNewCarbEntry(record, existingRecord);
-    if (saved?.ok !== true || !newCarbEntry || !service || !settings?.enabled) return;
+    if (saved?.ok !== true || !isPreMealTimerEntryEligible(record, existingRecord) || !service || !settings?.enabled) return;
+    renderPreMealTimerOffer(record, settings.durationMinutes);
+  }
+
+  function startPreMealTimerFromOffer() {
+    const service = window.LeeLeePreMealTimer;
+    const record = currentEditor?.mode === 'pre-meal-timer-offer' ? currentEditor.pendingTimerRecord : null;
+    const settings = service?.getSettings() || null;
+    if (!service || !record || !settings?.enabled) return;
+    getRoot()?.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
     const current = service.normalize();
     if (current?.status === 'active') {
-      currentEditor = { mode: 'pre-meal-conflict', timer: current, pendingTimerRecord: record };
+      currentEditor = { mode: 'pre-meal-conflict', timer: current, pendingTimerRecord: record, timerDurationMinutes: settings.durationMinutes };
       renderPreMealTimerConflict(current);
       return;
     }
     const timer = service.start({ durationMinutes: settings.durationMinutes, sourceEntryId: record.id, sourceEntry: record });
     if (timer) renderPreMealTimerModal(timer, { startedFromSave: true });
+    else renderPreMealTimerOffer(record, settings.durationMinutes, 'The timer could not be started. Your entry is saved; you can try again or choose Not Now.');
   }
 
   function renderPreMealTimerStopConfirmation(timer) {
@@ -7194,7 +7224,7 @@
     }
     const saved = upsertRecord(record);
     renderAfterRecordChange(record);
-    maybeStartPreMealTimer(record, saved.existingRecord, saved);
+    maybeOfferPreMealTimer(record, saved.existingRecord, saved);
   }
 
   function renderAfterRecordChange(record) {
@@ -9668,9 +9698,25 @@
         renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
       }
       if (action === 'close-pre-meal-timer' || action === 'dismiss-pre-meal-timer') {
+        if (action === 'dismiss-pre-meal-timer' && currentEditor?.mode === 'pre-meal-conflict' && currentEditor.pendingTimerRecord) {
+          const record = currentEditor.pendingTimerRecord;
+          const duration = currentEditor.timerDurationMinutes;
+          target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+          renderPreMealTimerOffer(record, duration);
+          return;
+        }
         if (window.LeeLeePreMealTimer?.getTimer()?.status === 'completed') window.LeeLeePreMealTimer.dismiss();
         if (target.closest('.lee_lee_diabetes_pre_meal_timer_modal')) target.closest('.lee_lee_diabetes_pre_meal_timer_modal').remove();
         renderHome();
+      }
+      if (action === 'start-pre-meal-timer') {
+        startPreMealTimerFromOffer();
+        return;
+      }
+      if (action === 'not-now-pre-meal-timer') {
+        target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+        renderHome();
+        return;
       }
       if (action === 'stop-pre-meal-timer') {
         const timer = window.LeeLeePreMealTimer?.normalize();
@@ -9745,7 +9791,7 @@
         }
         const saved = upsertRecord(pendingRecord);
         renderAfterRecordChange(pendingRecord);
-        maybeStartPreMealTimer(pendingRecord, saved.existingRecord, saved);
+        maybeOfferPreMealTimer(pendingRecord, saved.existingRecord, saved);
       }
       if (action === 'confirm-plan') {
         activatePendingPlan();

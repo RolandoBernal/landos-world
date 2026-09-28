@@ -205,7 +205,7 @@
 .lee_lee_diabetes_pre_meal_timer_success_countdown .lee_lee_diabetes_pre_meal_timer_large { color: var(--lee-lee-text); font-size: clamp(2.4rem, 12vw, 4rem); }
 .lee_lee_diabetes_pre_meal_timer_success_icon { display: grid; place-items: center; inline-size: 2.25rem; block-size: 2.25rem; border-radius: 50%; background: rgb(var(--app-accent-rgb, 58 160 255) / 20%); font-size: 1.2rem; }
 .lee_lee_diabetes_pre_meal_timer_success_hint { margin: 0 0 1rem; color: var(--lee-lee-muted); }
-.lee_lee_diabetes_actions.lee_lee_diabetes_pre_meal_timer_success_actions { display: block; grid-template-columns: 1fr; width: 100%; margin-top: 1rem; }
+.lee_lee_diabetes_actions.lee_lee_diabetes_pre_meal_timer_success_actions { display: grid; grid-template-columns: 1fr; gap: .65rem; width: 100%; margin-top: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: 100%; min-height: 2.9rem; }
 @media (min-width: 768px) {
   .lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: min(100%, 14rem); margin-inline: auto; }

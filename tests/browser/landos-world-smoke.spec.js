@@ -1394,6 +1394,35 @@ async function seedLeeLeeRecords(page, records) {
   }, records);
 }
 
+async function openLeeLeePreMealTimerTest(page, { enabled = true, durationMinutes = 3 } = {}) {
+  await page.addInitScript(({ enabled: isEnabled, duration }) => {
+    localStorage.setItem('lando-world:lee-lees-tracker:pre-meal-timer-settings:v1', JSON.stringify({
+      enabled: isEnabled,
+      durationMinutes: duration,
+    }));
+    localStorage.setItem('lando-world:lee-lees-tracker:v1:shared-sync-migration:v1', JSON.stringify({ promptDismissed: true }));
+  }, { enabled, duration: durationMinutes });
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => localStorage.removeItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'));
+}
+
+async function saveLeeLeeTimerEligibleMeal(page, { carbs = '42', date = '2020-01-02', time = '03:04' } = {}) {
+  const nav = page.getByLabel("Lee-Lee’s Tracker mobile navigation");
+  await nav.getByRole('button', { name: 'Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.locator('[name="eventType"]').evaluate((field) => { field.value = 'meal'; });
+  const mealCarbs = form.locator('[name="mealCarbs"]');
+  await mealCarbs.fill(carbs);
+  await form.locator('[name="date"]').fill(date);
+  await form.locator('[name="time"]').fill(time);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const confirmSave = page.getByRole('button', { name: 'Confirm and Save' });
+  if (await confirmSave.isVisible().catch(() => false)) await confirmSave.click();
+  const offer = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
+  const entry = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records.at(-1));
+  return { offer, entry };
+}
+
 async function openSeededLeeLeeHistoryDay(page, dateKey = '2026-08-25') {
   await chooseLeeLeeSection(page, 'History');
   await page.locator(`[data-action="history-date"][data-date="${dateKey}"]`).click();
@@ -4395,4 +4424,133 @@ test('Lee-Lee food upload failures appear beside Sync Now and in food attempt di
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sync Now', exact: true })).toBeEnabled();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:food-library-queue:v1')).length)).toBe(4);
+});
+
+test('LLT starts the pre-meal timer only from the post-save Insulin Given action', async ({ page }) => {
+  await openLeeLeePreMealTimerTest(page, { durationMinutes: 3 });
+  const { offer, entry } = await saveLeeLeeTimerEligibleMeal(page);
+  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toBeVisible();
+  await expect(offer).toContainText('After insulin has been given, start the 3-minute pre-meal timer.');
+  const start = offer.getByRole('button', { name: 'Insulin Given — Start 3-Min Timer' });
+  await expect(start).toBeVisible();
+  const savedState = await page.evaluate(() => ({
+    timer: localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'),
+    records: window.LeeLeeTrackerStorage.loadTrackerData().records,
+  }));
+  expect(savedState.timer).toBeNull();
+  expect(savedState.records.some((record) => record.id === entry.id)).toBe(true);
+  expect(entry.date).toBe('2020-01-02');
+  expect(entry.time).toBe('03:04');
+
+  const beforeAction = await page.evaluate(() => Date.now());
+  await start.click();
+  const timer = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')));
+  const afterAction = await page.evaluate(() => Date.now());
+  expect(timer.status).toBe('active');
+  expect(timer.sourceEntryId).toBe(entry.id);
+  expect(timer.startedAt).toBeGreaterThanOrEqual(beforeAction);
+  expect(timer.startedAt).toBeLessThanOrEqual(afterAction);
+  expect(timer.endsAt - timer.startedAt).toBe(3 * 60 * 1000);
+
+  await page.locator('.lee_lee_diabetes_pre_meal_timer_panel').getByRole('button', { name: 'OK' }).click();
+  await page.getByRole('button', { name: 'Open active Pre-Meal Timer' }).click();
+  const startedValue = page.locator('.lee_lee_diabetes_pre_meal_timer_source div').first().locator('dd');
+  const detailStartedText = await startedValue.innerText();
+  const expectedTimerDate = await page.evaluate((startedAt) => new Intl.DateTimeFormat(navigator.language || undefined, {
+    month: 'short', day: 'numeric',
+  }).format(new Date(startedAt)), timer.startedAt);
+  expect(detailStartedText).toContain(expectedTimerDate);
+  expect(detailStartedText).not.toContain('Jan 2');
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Open active Pre-Meal Timer' })).toBeVisible();
+  const persistedTimer = await page.evaluate(() => window.LeeLeePreMealTimer.getTimer());
+  expect(persistedTimer.startedAt).toBe(timer.startedAt);
+  expect(persistedTimer.endsAt).toBe(timer.endsAt);
+});
+
+test('LLT Not Now, zero-carb entries, and disabled setting never create a pre-meal timer', async ({ page }) => {
+  await openLeeLeePreMealTimerTest(page, { durationMinutes: 4 });
+  const first = await saveLeeLeeTimerEligibleMeal(page);
+  await expect(first.offer).toBeVisible();
+  await first.offer.getByRole('button', { name: 'Not Now' }).click();
+  await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toHaveCount(0);
+  const afterNotNow = await page.evaluate(() => ({
+    timer: localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'),
+    records: window.LeeLeeTrackerStorage.loadTrackerData().records,
+  }));
+  expect(afterNotNow.timer).toBeNull();
+  expect(afterNotNow.records.some((record) => record.id === first.entry.id)).toBe(true);
+
+  const zero = await saveLeeLeeTimerEligibleMeal(page, { carbs: '0', date: '2020-01-03' });
+  await expect(zero.offer).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBeNull();
+
+  await page.evaluate(() => localStorage.setItem('lando-world:lee-lees-tracker:pre-meal-timer-settings:v1', JSON.stringify({ enabled: false, durationMinutes: 4 })));
+  const disabled = await saveLeeLeeTimerEligibleMeal(page, { carbs: '30', date: '2020-01-04' });
+  await expect(disabled.offer).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBeNull();
+});
+
+test('LLT defers an existing-timer conflict until explicit start and preserves all three choices', async ({ page }) => {
+  await openLeeLeePreMealTimerTest(page, { durationMinutes: 4 });
+  const first = await saveLeeLeeTimerEligibleMeal(page);
+  await first.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  await page.locator('.lee_lee_diabetes_pre_meal_timer_panel').getByRole('button', { name: 'OK' }).click();
+  const timerA = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')));
+
+  const second = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-03' });
+  await expect(second.offer).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')).sourceEntryId)).toBe(timerA.sourceEntryId);
+  await second.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  const conflictKeep = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
+  await expect(conflictKeep.getByRole('heading', { name: 'Timer Already Running' })).toBeVisible();
+  await conflictKeep.getByRole('button', { name: 'Keep Current Timer' }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')).sourceEntryId)).toBe(timerA.sourceEntryId);
+  await page.locator('.lee_lee_diabetes_pre_meal_timer_modal').getByRole('button', { name: 'Back to Today' }).click();
+
+  const third = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-04' });
+  await third.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  const conflictRestart = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
+  await expect(conflictRestart.getByRole('heading', { name: 'Timer Already Running' })).toBeVisible();
+  await conflictRestart.getByRole('button', { name: 'Restart Timer' }).click();
+  const timerRestarted = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')));
+  expect(timerRestarted.sourceEntryId).toBe(third.entry.id);
+  expect(timerRestarted.startedAt).toBeGreaterThanOrEqual(timerA.startedAt);
+  await page.locator('.lee_lee_diabetes_pre_meal_timer_modal').getByRole('button', { name: 'Back to Today' }).click();
+
+  const fourth = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-05' });
+  await fourth.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  const beforeCancel = await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'));
+  const conflictCancel = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
+  await conflictCancel.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBe(beforeCancel);
+  await page.getByRole('button', { name: 'Not Now' }).click();
+  const finalState = await page.evaluate(() => ({
+    timer: JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')),
+    records: window.LeeLeeTrackerStorage.loadTrackerData().records,
+  }));
+  expect(finalState.timer.sourceEntryId).toBe(third.entry.id);
+  expect(finalState.records.some((record) => record.id === fourth.entry.id)).toBe(true);
+});
+
+test('LLT editing an existing carb entry does not reopen the fresh timer offer or start a timer', async ({ page }) => {
+  await openLeeLeePreMealTimerTest(page);
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  });
+  const saved = await saveLeeLeeTimerEligibleMeal(page, { date: today });
+  await saved.offer.getByRole('button', { name: 'Not Now' }).click();
+  const edit = page.locator(`[data-action="edit-today-record"][data-id="${saved.entry.id}"]`);
+  await expect(edit).toBeVisible();
+  await edit.click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.locator('[name="mealCarbs"]').fill('48');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toHaveCount(0);
+  await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBeNull();
 });
