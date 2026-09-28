@@ -145,19 +145,77 @@
   }
 
   let visibilityFrame = 0;
+  let userScrolledFocusedElement = null;
+  let touchGestureStart = null;
+
+  function isDocumentScrollFocusTarget(element) {
+    return Boolean(element?.closest?.('[data-preserve-document-scroll-on-viewport-pan]'))
+      && !findExplicitModalScrollContainer(element);
+  }
+
+  function elementFromEventTarget(target) {
+    if (target?.nodeType === 1) return target;
+    return target?.parentElement || null;
+  }
+
+  function markUserScrollIntent(eventTarget) {
+    const activeElement = document.activeElement;
+    if (!isDocumentScrollFocusTarget(activeElement)) return;
+    const target = elementFromEventTarget(eventTarget);
+    if (target?.closest?.('[data-modal-scroll-container], [data-modal-visual-viewport]')) return;
+    userScrolledFocusedElement = activeElement;
+  }
+
   function scheduleFocusedElementVisibility() {
     if (visibilityFrame) return;
     visibilityFrame = window.requestAnimationFrame?.(() => {
       visibilityFrame = 0;
-      ensureFocusedElementVisible(document.activeElement);
+      const activeElement = document.activeElement;
+      if (activeElement === userScrolledFocusedElement) return;
+      ensureFocusedElementVisible(activeElement);
     }) || 0;
   }
 
+  function handleFocusIn(event) {
+    if (event.target !== userScrolledFocusedElement) userScrolledFocusedElement = null;
+    scheduleFocusedElementVisibility();
+  }
+
+  function scheduleFocusedElementVisibilityForViewportPan() {
+    const activeElement = document.activeElement;
+    const preservesDocumentScroll = activeElement?.closest?.('[data-preserve-document-scroll-on-viewport-pan]');
+    if (preservesDocumentScroll && !findExplicitModalScrollContainer(activeElement)) return;
+    scheduleFocusedElementVisibility();
+  }
+
   function initializeFocusVisibility() {
-    document.addEventListener?.('focusin', scheduleFocusedElementVisibility);
+    document.addEventListener?.('focusin', handleFocusIn);
     window.addEventListener?.('resize', scheduleFocusedElementVisibility, { passive: true });
     window.visualViewport?.addEventListener?.('resize', scheduleFocusedElementVisibility, { passive: true });
-    window.visualViewport?.addEventListener?.('scroll', scheduleFocusedElementVisibility, { passive: true });
+    // VisualViewport panning also occurs during ordinary document scrolling. A marked page
+    // surface can retain native document scroll ownership, while explicit modal scroll owners
+    // continue to receive focused-control visibility corrections.
+    window.visualViewport?.addEventListener?.('scroll', scheduleFocusedElementVisibilityForViewportPan, { passive: true });
+    document.addEventListener?.('wheel', (event) => {
+      if (Math.abs(event.deltaY || 0) > 0) markUserScrollIntent(event.target);
+    }, { passive: true, capture: true });
+    document.addEventListener?.('touchstart', (event) => {
+      const touch = event.touches?.[0];
+      touchGestureStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    }, { passive: true, capture: true });
+    document.addEventListener?.('touchmove', (event) => {
+      const touch = event.touches?.[0];
+      if (!touch || !touchGestureStart) return;
+      const deltaX = touch.clientX - touchGestureStart.x;
+      const deltaY = touch.clientY - touchGestureStart.y;
+      if (Math.abs(deltaY) >= 8 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        markUserScrollIntent(event.target);
+        touchGestureStart = { x: touch.clientX, y: touch.clientY };
+      }
+    }, { passive: true, capture: true });
+    const clearTouchGesture = () => { touchGestureStart = null; };
+    document.addEventListener?.('touchend', clearTouchGesture, { passive: true, capture: true });
+    document.addEventListener?.('touchcancel', clearTouchGesture, { passive: true, capture: true });
   }
 
   initializeFocusVisibility();

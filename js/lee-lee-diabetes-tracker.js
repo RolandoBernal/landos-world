@@ -4164,7 +4164,7 @@
     `;
   }
 
-  function renderHome() {
+  function renderHome({ restoreScrollY } = {}) {
     currentEditor = null;
     const root = getRoot();
     if (!root) return;
@@ -4190,6 +4190,11 @@
         ${timeline.length ? `<div class="lee_lee_diabetes_timeline">${timeline.map(renderTimelineItem).join('')}</div>` : '<p class="lee_lee_diabetes_empty">No entries today.</p>'}
       </section>
     `;
+    if (Number.isFinite(restoreScrollY)) {
+      // Measure the newly rendered Today content before restoring its saved document position.
+      root.getBoundingClientRect();
+      window.scrollTo?.(0, restoreScrollY);
+    }
     if (initialTimer?.status === 'completed') renderPreMealTimerModal(initialTimer);
   }
 
@@ -5650,6 +5655,11 @@
       originalRecord: record.id ? { ...record } : null,
       returnTo: options.returnTo || null,
       returnDateKey: options.returnDateKey || null,
+      returnScrollY: Number.isFinite(options.returnScrollY)
+        ? options.returnScrollY
+        : (sameEditorSession && Number.isFinite(previousEditor.returnScrollY) ? previousEditor.returnScrollY : null),
+      preserveDocumentScrollOnViewportPan: options.preserveDocumentScrollOnViewportPan === true
+        || (sameEditorSession && previousEditor.preserveDocumentScrollOnViewportPan === true),
       carbCalculatorOpen: options.carbCalculatorOpen === true,
       carbCalculatorRows,
       mealComponents: Array.isArray(options.mealComponents)
@@ -5684,7 +5694,7 @@
     const showCarbEntry = eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
-      <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor>
+      <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor${currentEditor.preserveDocumentScrollOnViewportPan ? ' data-preserve-document-scroll-on-viewport-pan' : ''}>
         <div class="lee_lee_diabetes_editor_main" data-editor-main ${currentEditor.carbCalculatorOpen ? 'inert aria-hidden="true"' : ''}>
           <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
           ${showLegacyEventSelect ? renderEventTypeSelect(currentEditor.eventType) : `<input type="hidden" name="eventType" value="${escapeHtml(currentEditor.eventType)}">`}
@@ -5747,6 +5757,12 @@
     if (options.error) {
       showEditorError(root.querySelector('[data-lee-lee-editor]'), options.error);
     }
+    if (options.startAtTopBeforeFocus === true) {
+      // The editor shares document scrolling with Today; establish its own starting position
+      // before the initial focus can trigger native or shared focus-visibility scrolling.
+      root.getBoundingClientRect();
+      window.scrollTo?.(0, 0);
+    }
     if (currentEditor.carbCalculatorOpen) {
       enableCarbCalculatorModalViewport(currentEditor.carbCalculatorScrollSnapshot || getScrollSnapshot());
     }
@@ -5793,7 +5809,9 @@
       restoreCarbCalculatorFocus(root, previousCarbCalculatorFocus);
     } else {
       if (!currentEditor.carbCalculatorOpen) {
-        root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
+        root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus({
+          preventScroll: options.startAtTopBeforeFocus === true,
+        });
       }
     }
     if (options.restoreScrollSnapshot) {
@@ -6799,15 +6817,29 @@
     openEventEditor('check-insulin');
   }
 
+  function openNewLogEntryFromToday() {
+    const eventType = 'check-insulin';
+    openEventEditor(eventType, {}, {
+      returnTo: 'today',
+      returnScrollY: window.scrollY || 0,
+      preserveDocumentScrollOnViewportPan: true,
+      startAtTopBeforeFocus: true,
+    });
+  }
+
   function openLogEntryEditor() {
     openEventEditor('check-insulin');
   }
 
-  function openEventEditor(eventType, draft = {}) {
+  function openEventEditor(eventType, draft = {}, navigationOptions = {}) {
     const config = getEventTypeConfig(eventType);
     renderEditor({
       mode: 'log-entry',
       eventType,
+      returnTo: navigationOptions.returnTo || null,
+      returnScrollY: navigationOptions.returnScrollY,
+      preserveDocumentScrollOnViewportPan: navigationOptions.preserveDocumentScrollOnViewportPan === true,
+      startAtTopBeforeFocus: navigationOptions.startAtTopBeforeFocus === true,
       record: {
         eventType,
         type: normalizeRecordContext(draft.type || config.defaultContext, eventType),
@@ -8940,6 +8972,10 @@
       renderHistoryDay(currentEditor.returnDateKey);
       return;
     }
+    if (currentEditor?.mode === 'log-entry' && Number.isFinite(currentEditor.returnScrollY)) {
+      renderHome({ restoreScrollY: currentEditor.returnScrollY });
+      return;
+    }
     renderHome();
   }
 
@@ -9435,9 +9471,10 @@
       if (action === 'edit-primary') {
         openPrimaryEditor(target.dataset.type);
       }
-      if (action === 'extra' || action === 'log-entry') {
+      if (action === 'extra') {
         openExtraEditor();
       }
+      if (action === 'log-entry') openNewLogEntryFromToday();
       if (action === 'open-carb-calculator') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
         const scrollSnapshot = getScrollSnapshot();
