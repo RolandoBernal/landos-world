@@ -2489,8 +2489,8 @@ test('Lee-Lee Carb Calculator Food Search keeps one focused input while filterin
     };
   });
   expect(searchScrollMetrics.calculatorOverflowY).toBe('hidden');
-  expect(searchScrollMetrics.bodyOverflowY).toBe('hidden');
-  expect(searchScrollMetrics.pickerOverflowY).toBe('auto');
+  expect(searchScrollMetrics.bodyOverflowY).toBe('auto');
+  expect(searchScrollMetrics.pickerOverflowY).toBe('visible');
   expect(searchScrollMetrics.pickerMaxHeight).toBe('none');
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
@@ -2929,7 +2929,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
 
   await chocolateMilkRow.getByRole('button', { name: 'Edit Chocolate Milk' }).click();
   const itemQty = calculator.locator('[name="carbItemQty"]');
-  await expect(itemQty).toBeFocused();
+  await expect(calculator.locator('[name="carbItemCarbs"]')).toBeFocused();
   expect(await itemQty.evaluate((input) => input.getBoundingClientRect().width)).toBeLessThanOrEqual(62);
   await itemQty.fill('99');
   expect(await itemQty.evaluate((input) => input.scrollWidth <= input.clientWidth)).toBe(true);
@@ -2986,7 +2986,7 @@ test('Lee-Lee Carb Calc keeps food rows compact on narrow iPhone widths', async 
   expect(compactMetrics.qtyWeight).toBe('400');
   expect(compactMetrics.carbsWeight).toBe('400');
   expect(compactMetrics.operatorWeight).toBe('400');
-  expect(compactMetrics.operatorText).toBe('×');
+  expect(compactMetrics.operatorText).toBe('@');
   expect(compactMetrics.qtyFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.carbsFontFamily).toContain('Roboto Mono');
   expect(compactMetrics.rowTotalFontFamily).toContain('DM Sans');
@@ -3367,6 +3367,156 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   expect(consoleErrorCount).toBeLessThanOrEqual(1);
 });
 
+test('Lee-Lee Carb Calculator uses one body scroll owner across modes and viewport sizes', async ({ page }) => {
+  const viewportSizes = [
+    { width: 390, height: 640 },
+    { width: 820, height: 1024 },
+    { width: 1280, height: 900 },
+  ];
+  await page.setViewportSize(viewportSizes[0]);
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    const timestamp = '2026-09-27T12:00:00.000Z';
+    const foodLibrary = Array.from({ length: 36 }, (_, index) => {
+      const number = String(index + 1).padStart(12, '0');
+      return {
+        id: `90000000-9000-4000-8000-${number}`,
+        name: `Scroll Owner Food ${String(index + 1).padStart(2, '0')}`,
+        emoji: '🍎',
+        carbs: 10 + index,
+        servingLabel: '1 serving',
+        sourceType: 'reference',
+        sourceName: 'Regression fixture',
+        favorite: true,
+        lastUsedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    });
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({ ...current, foodLibrary }));
+  });
+  await page.getByRole('button', { name: 'Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+
+  for (const viewportSize of viewportSizes) {
+    await page.setViewportSize(viewportSize);
+    await page.evaluate(() => window.scrollTo(0, Math.min(180, document.documentElement.scrollHeight)));
+    const scrollBeforeOpen = await page.evaluate(() => window.scrollY);
+    await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+    let calculator = page.locator('[data-carb-calculator]');
+    let body = calculator.locator('[data-carb-calculator-body]');
+    await expect(body).toHaveAttribute('data-modal-scroll-container', '');
+    await expect(body).toHaveCSS('padding-right', '10px');
+    await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
+    await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
+
+    const select = calculator.getByLabel('Food Library');
+    await select.selectOption('favorites');
+    await expect(select).toHaveValue('favorites');
+    let picker = calculator.locator('[data-carb-picker="favorites"]');
+    let results = picker.locator('[data-carb-library-list]');
+    await expect(results.getByRole('button', { name: /Scroll Owner Food/ })).toHaveCount(36);
+    const libraryFlowMetrics = await calculator.evaluate((node) => {
+      const bodyNode = node.querySelector('[data-carb-calculator-body]');
+      const list = node.querySelector('[data-carb-library-list]');
+      const style = getComputedStyle(list);
+      bodyNode.scrollTop = bodyNode.scrollHeight;
+      list.scrollTop = 120;
+      return {
+        bodyClientHeight: bodyNode.clientHeight,
+        bodyScrollHeight: bodyNode.scrollHeight,
+        bodyScrollTop: bodyNode.scrollTop,
+        listClientHeight: list.clientHeight,
+        listScrollHeight: list.scrollHeight,
+        listScrollTop: list.scrollTop,
+        listOverflowY: style.overflowY,
+        documentScrollY: window.scrollY,
+      };
+    });
+    expect(libraryFlowMetrics.bodyScrollHeight).toBeGreaterThan(libraryFlowMetrics.bodyClientHeight);
+    expect(libraryFlowMetrics.bodyScrollTop).toBeGreaterThan(0);
+    expect(libraryFlowMetrics.listOverflowY).toBe('visible');
+    expect(libraryFlowMetrics.listScrollTop).toBe(0);
+    expect(libraryFlowMetrics.documentScrollY).toBe(0);
+
+    await calculator.evaluate((node) => { node.querySelector('[data-carb-calculator-body]').scrollTop = 0; });
+    await results.getByRole('button', { name: /Scroll Owner Food 01/ }).click();
+    await expect(calculator.locator('[data-carb-calculator-row]')).toContainText('Scroll Owner Food 01');
+    calculator = page.locator('[data-carb-calculator]');
+    body = calculator.locator('[data-carb-calculator-body]');
+    await calculator.getByLabel('Food Library').selectOption('favorites');
+    picker = calculator.locator('[data-carb-picker="favorites"]');
+    results = picker.locator('[data-carb-library-list]');
+    await expect(calculator.locator('[data-carb-calculator-row]')).toContainText('Scroll Owner Food 01');
+    const selectedAndLibraryReachable = await calculator.evaluate((node) => {
+      const scrollBody = node.querySelector('[data-carb-calculator-body]');
+      const list = node.querySelector('[data-carb-library-list]');
+      scrollBody.scrollTop = scrollBody.scrollHeight;
+      const selectedRowVisibleInScrollRange = scrollBody.scrollHeight > scrollBody.clientHeight;
+      const bottomReached = scrollBody.scrollTop + scrollBody.clientHeight >= scrollBody.scrollHeight - 1;
+      list.scrollTop = 80;
+      return { selectedRowVisibleInScrollRange, bottomReached, listScrollTop: list.scrollTop };
+    });
+    expect(selectedAndLibraryReachable).toEqual({ selectedRowVisibleInScrollRange: true, bottomReached: true, listScrollTop: 0 });
+
+    await body.evaluate((node) => { node.scrollTop = 0; });
+    await calculator.getByRole('button', { name: 'Search foods...' }).click();
+    calculator = page.locator('[data-carb-calculator]');
+    body = calculator.locator('[data-carb-calculator-body]');
+    picker = calculator.locator('[data-carb-picker="search"]');
+    results = picker.locator('[data-carb-library-list]');
+    await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
+    await expect(body).toHaveAttribute('data-modal-scroll-container', '');
+    await expect(body).toHaveCSS('padding-right', '10px');
+    await expect(picker).not.toHaveAttribute('data-modal-scroll-container', '');
+    await picker.getByLabel('Search foods').fill('Scroll Owner Food');
+    await expect(results.getByRole('button', { name: /Scroll Owner Food/ })).toHaveCount(36);
+    const searchFlowMetrics = await calculator.evaluate((node) => {
+      const scrollBody = node.querySelector('[data-carb-calculator-body]');
+      const list = node.querySelector('[data-carb-library-list]');
+      scrollBody.scrollTop = scrollBody.scrollHeight;
+      list.scrollTop = 120;
+      return {
+        bodyClientHeight: scrollBody.clientHeight,
+        bodyScrollHeight: scrollBody.scrollHeight,
+        bodyScrollTop: scrollBody.scrollTop,
+        listOverflowY: getComputedStyle(list).overflowY,
+        listScrollTop: list.scrollTop,
+        documentScrollY: window.scrollY,
+      };
+    });
+    expect(searchFlowMetrics.bodyScrollHeight).toBeGreaterThan(searchFlowMetrics.bodyClientHeight);
+    expect(searchFlowMetrics.bodyScrollTop).toBeGreaterThan(0);
+    expect(searchFlowMetrics.listOverflowY).toBe('visible');
+    expect(searchFlowMetrics.listScrollTop).toBe(0);
+    expect(searchFlowMetrics.documentScrollY).toBe(0);
+
+    await calculator.locator('.lee_lee_diabetes_carb_calculator_header [data-action="close-carb-calculator-picker"]').click();
+    calculator = page.locator('[data-carb-calculator]');
+    body = calculator.locator('[data-carb-calculator-body]');
+    await expect(calculator).toHaveAccessibleName('Carb Calculator');
+    await expect(body).toHaveAttribute('data-modal-scroll-container', '');
+    await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    calculator = page.locator('[data-carb-calculator]');
+    body = calculator.locator('[data-carb-item-editor-body]');
+    await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
+    await expect(body).toHaveAttribute('data-modal-scroll-container', '');
+    await expect(body).toHaveCSS('padding-right', '10px');
+    await expect(calculator.locator('.lee_lee_diabetes_carb_item_editor_actions')).toBeVisible();
+    await calculator.locator('.lee_lee_diabetes_carb_calculator_header [data-action="cancel-carb-calculator-item-editor"]').click();
+    calculator = page.locator('[data-carb-calculator]');
+    body = calculator.locator('[data-carb-calculator-body]');
+    await expect(calculator).toHaveAccessibleName('Carb Calculator');
+    await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
+
+    await calculator.locator('.lee_lee_diabetes_carb_calculator_header [data-action="close-carb-calculator"]').click();
+    await expect(page.locator('[data-carb-calculator]')).toHaveCount(0);
+    await page.waitForFunction((expected) => window.scrollY === expected, scrollBeforeOpen);
+  }
+});
+
 test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async ({ page }, testInfo) => {
   let viewportWidth;
   let viewportHeight;
@@ -3460,8 +3610,8 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
   const searchHandle = await searchInput.elementHandle();
   expect(searchHandle).not.toBeNull();
   await expect(searchInput).toBeFocused();
-  await expect(calculator.locator('[data-carb-calculator-body][data-modal-scroll-container]')).toHaveCount(0);
-  expect(await calculator.locator('[data-carb-picker="search"]').getAttribute('data-modal-scroll-container')).toBe('');
+  await expect(calculator.locator('[data-carb-calculator-body][data-modal-scroll-container]')).toHaveCount(1);
+  await expect(calculator.locator('[data-carb-picker="search"][data-modal-scroll-container]')).toHaveCount(0);
 
   await page.evaluate(() => window.__setLeeLeeVisualViewportFrame({ height: 280, offsetTop: 140 }));
   await expect.poll(() => layer.evaluate((node) => {
@@ -3469,6 +3619,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     const backdrop = node.querySelector('[data-action="close-carb-calculator"]')?.getBoundingClientRect();
     const calculatorNode = node.querySelector('[data-carb-calculator]');
     const picker = node.querySelector('[data-carb-picker="search"]');
+    const body = calculatorNode?.querySelector('[data-carb-calculator-body]');
     const input = node.querySelector('[name="carbFoodSearch"]');
     const inputRect = input?.getBoundingClientRect();
     const headingRect = node.querySelector('#lee-lee-carb-calculator-title')?.getBoundingClientRect();
@@ -3483,7 +3634,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       calculatorScrollTop: calculatorNode?.scrollTop || 0,
       bodyScrollTop: calculatorNode?.querySelector('[data-carb-calculator-body]')?.scrollTop || 0,
       pickerScrollTop: picker?.scrollTop || 0,
-      searchOwner: picker?.hasAttribute('data-modal-scroll-container') || false,
+      calculatorBodyOwner: body?.hasAttribute('data-modal-scroll-container') || false,
       visualViewportTop: Math.round(visibleViewport?.top || 0),
       visualViewportBottom: Math.round(visibleViewport?.bottom || 0),
         headingVisible: Boolean(headingRect && headingRect.top >= 140 && headingRect.bottom <= 420),
@@ -3499,7 +3650,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     calculatorScrollTop: 0,
     bodyScrollTop: 0,
     pickerScrollTop: 0,
-    searchOwner: true,
+    calculatorBodyOwner: true,
     visualViewportTop: 140,
     visualViewportBottom: 420,
     headingVisible: true,
@@ -3512,7 +3663,7 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
     calculatorContent.dataset.testSearchOverflow = 'true';
     calculatorContent.style.height = '240px';
     picker.querySelector('[data-carb-library-list]').append(calculatorContent);
-    picker.scrollTop = picker.scrollHeight;
+    body.scrollTop = body.scrollHeight;
     const metrics = {
       clientHeight: picker.clientHeight,
       scrollHeight: picker.scrollHeight,
@@ -3520,13 +3671,12 @@ test('Lee-Lee Carb Calc tracks the visual viewport and locks page scroll', async
       bodyScrollTop: body.scrollTop,
       calculatorScrollTop: node.scrollTop,
     };
-    picker.scrollTop = 0;
+    body.scrollTop = 0;
     calculatorContent.remove();
     return metrics;
   });
-  expect(searchScrollMetrics.scrollHeight).toBeGreaterThan(searchScrollMetrics.clientHeight);
-  expect(searchScrollMetrics.pickerScrollTop).toBeGreaterThan(0);
-  expect(searchScrollMetrics.bodyScrollTop).toBe(0);
+  expect(searchScrollMetrics.bodyScrollTop).toBeGreaterThan(0);
+  expect(searchScrollMetrics.pickerScrollTop).toBe(0);
   expect(searchScrollMetrics.calculatorScrollTop).toBe(0);
   let typedSearch = '';
   for (const character of 'Chicken') {

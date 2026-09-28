@@ -1152,6 +1152,7 @@
   display: grid;
   min-height: 0;
   gap: 0.9rem;
+  padding-right: 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -1160,7 +1161,6 @@
 
 .lee_lee_diabetes_carb_calculator_body--search {
   display: block;
-  overflow: hidden;
 }
 
 .lee_lee_diabetes_carb_calculator [data-carb-library-view]:focus,
@@ -1338,18 +1338,12 @@
   position: relative;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
-  height: 100%;
   padding: 0;
   box-sizing: border-box;
   border: 0;
   border-radius: 0;
   background: transparent;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
 }
 
 .lee_lee_diabetes_carb_subtitle,
@@ -1363,16 +1357,6 @@
 .lee_lee_diabetes_carb_picker .lee_lee_diabetes_carb_library_list {
   display: grid;
   gap: 0.55rem;
-  max-height: min(18rem, 42vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.lee_lee_diabetes_carb_picker--search .lee_lee_diabetes_carb_library_list {
-  min-height: 0;
-  max-height: none;
-  overflow: visible;
 }
 
 .lee_lee_diabetes_carb_food_row,
@@ -1600,7 +1584,7 @@
   gap: 0.65rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.05rem 0.1rem 7.25px 0;
+  padding: 0.05rem 10px 7.25px 0;
   -webkit-overflow-scrolling: touch;
 }
 
