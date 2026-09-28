@@ -2184,6 +2184,237 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(page.getByText(/Manual Amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
 });
 
+test('Food Library focus treatment remains inset within the calculator at desktop and mobile widths', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.getByRole('button', { name: 'Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByLabel('Blood Sugar').fill('299');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const librarySelect = calculator.getByLabel('Food Library');
+  await librarySelect.focus();
+  const geometry = await librarySelect.evaluate((select) => {
+    const style = getComputedStyle(select);
+    const rect = select.getBoundingClientRect();
+    const calculatorElement = select.closest('[data-carb-calculator]');
+    const calculatorRect = calculatorElement.getBoundingClientRect();
+    const body = select.closest('[data-carb-calculator-body]');
+    const bodyRect = body.getBoundingClientRect();
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      selectLeft: rect.left,
+      selectRight: rect.right,
+      bodyLeft: bodyRect.left,
+      bodyRight: bodyRect.right,
+      calculatorLeft: calculatorRect.left,
+      calculatorRight: calculatorRect.right,
+      bodyScrollWidth: body.scrollWidth,
+      bodyClientWidth: body.clientWidth,
+      calculatorScrollWidth: calculatorElement.scrollWidth,
+      calculatorClientWidth: calculatorElement.clientWidth,
+    };
+  });
+
+  expect(geometry.outlineStyle).toBe('solid');
+  expect(geometry.outlineWidth).toBe('2px');
+  expect(geometry.outlineOffset).toBe('-3px');
+  expect(geometry.selectLeft).toBeGreaterThanOrEqual(geometry.bodyLeft);
+  expect(geometry.selectRight).toBeLessThanOrEqual(geometry.bodyRight);
+  expect(geometry.selectLeft).toBeGreaterThan(geometry.calculatorLeft);
+  expect(geometry.selectRight).toBeLessThan(geometry.calculatorRight);
+  expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.bodyClientWidth + 1);
+  expect(geometry.calculatorScrollWidth).toBeLessThanOrEqual(geometry.calculatorClientWidth + 1);
+});
+
+test('Food Library selection updates results without recreating or programmatically refocusing the select', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [{
+        id: '55555555-5555-4555-8555-555555555555',
+        name: 'Library Regression Food',
+        carbs: 12,
+        servingLabel: '1 serving',
+        favorite: true,
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      }],
+    }));
+  });
+  await page.getByRole('button', { name: 'Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const librarySelect = calculator.getByLabel('Food Library');
+  await page.evaluate(() => {
+    window.__lltCarbLibrarySelectOriginal = document.querySelector('[data-carb-library-view]');
+    window.__lltCarbLibrarySelectFocusCalls = 0;
+    const nativeFocus = HTMLSelectElement.prototype.focus;
+    HTMLSelectElement.prototype.focus = function (...args) {
+      if (this.matches('[data-carb-library-view]')) window.__lltCarbLibrarySelectFocusCalls += 1;
+      return nativeFocus.apply(this, args);
+    };
+  });
+  await librarySelect.focus();
+  const focusCallsBeforeSelection = await page.evaluate(() => window.__lltCarbLibrarySelectFocusCalls);
+
+  await librarySelect.selectOption('favorites');
+  const favoritesPicker = calculator.locator('[data-carb-picker="favorites"]');
+  await expect(librarySelect).toHaveValue('favorites');
+  await expect(favoritesPicker).toHaveAttribute('aria-label', 'Favorites');
+  await expect(favoritesPicker.getByRole('button', { name: /Library Regression Food 12 g carbs/ })).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector('[data-carb-library-view]') === window.__lltCarbLibrarySelectOriginal)).toBe(true);
+  expect(await page.evaluate(() => window.__lltCarbLibrarySelectFocusCalls)).toBe(focusCallsBeforeSelection);
+
+  await librarySelect.selectOption('foods');
+  await expect(librarySelect).toHaveValue('foods');
+  await expect(calculator.locator('[data-carb-picker="foods"]')).toHaveAttribute('aria-label', 'My Foods');
+  await expect(calculator.locator('[data-carb-picker="foods"]').getByRole('button', { name: /Library Regression Food 12 g carbs/ })).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector('[data-carb-library-view]') === window.__lltCarbLibrarySelectOriginal)).toBe(true);
+  await expect(librarySelect).toBeFocused();
+});
+
+test('Food Library selection and calculator rerenders never script focus back to the select', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [{
+        id: '56565656-5656-4565-8565-565656565656',
+        name: 'Focus Contract Food',
+        carbs: 12,
+        servingLabel: '1 serving',
+        favorite: false,
+        lastUsedAt: '2026-09-27T12:00:00.000Z',
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      }],
+      savedMeals: [{
+        id: '67676767-6767-4676-8676-676767676767',
+        name: 'Focus Contract Meal',
+        components: [{
+          componentType: 'food',
+          foodId: '56565656-5656-4565-8565-565656565656',
+          nameSnapshot: 'Focus Contract Food',
+          quantity: 1,
+          carbsPerServing: 12,
+          carbTotal: 12,
+        }],
+        totalCarbs: 12,
+        favorite: false,
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      }],
+    }));
+    window.__lltLibrarySelectFocusCalls = 0;
+    const nativeFocus = HTMLSelectElement.prototype.focus;
+    HTMLSelectElement.prototype.focus = function (...args) {
+      if (this.matches('[data-carb-library-view]')) window.__lltLibrarySelectFocusCalls += 1;
+      return nativeFocus.apply(this, args);
+    };
+  });
+  await page.getByRole('button', { name: 'Log Entry' }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+
+  const calculator = page.locator('[data-carb-calculator]');
+  const librarySelect = calculator.getByLabel('Food Library');
+  const focusCalls = async () => page.evaluate(() => window.__lltLibrarySelectFocusCalls);
+  const assertNoScriptedSelectFocus = async (action) => {
+    const before = await focusCalls();
+    await action();
+    expect(await focusCalls()).toBe(before);
+    expect(await page.evaluate(() => document.activeElement?.matches('[data-carb-library-view]') === true)).toBe(false);
+  };
+
+  await librarySelect.focus();
+  for (const [value, label] of [
+    ['favorites', 'Favorites'],
+    ['recent', 'Recent'],
+    ['foods', 'My Foods'],
+    ['meals', 'My Meals'],
+  ]) {
+    const before = await focusCalls();
+    await librarySelect.selectOption(value);
+    await expect(librarySelect).toHaveValue(value);
+    await expect(calculator.locator(`[data-carb-picker="${value}"]`)).toHaveAttribute('aria-label', label);
+    expect(await focusCalls()).toBe(before);
+    await expect(librarySelect).toBeFocused();
+  }
+
+  const mealsPicker = calculator.locator('[data-carb-picker="meals"]');
+  await expect(mealsPicker.getByRole('button', { name: /Focus Contract Meal/ })).toBeVisible();
+  // The checked-in My Meals renderer exposes add actions, not favorite toggles.
+  // Exercise the reported category + delegated Favorite action combination directly
+  // as well, so the shared rerender contract is covered if such an action is present.
+  await expect(mealsPicker.getByRole('button', { name: /Mark favorite|Remove favorite/ })).toHaveCount(0);
+  await page.evaluate(() => {
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.dataset.action = 'toggle-food-favorite';
+    action.dataset.id = '56565656-5656-4565-8565-565656565656';
+    action.setAttribute('aria-label', 'Mark favorite');
+    document.querySelector('[data-carb-picker="meals"]').append(action);
+  });
+  await assertNoScriptedSelectFocus(() => mealsPicker.locator('[data-action="toggle-food-favorite"]').click());
+  await expect(librarySelect).toHaveValue('meals');
+  expect(await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.find((food) => food.id === '56565656-5656-4565-8565-565656565656')?.favorite)).toBe(true);
+  await assertNoScriptedSelectFocus(() => mealsPicker.getByRole('button', { name: /Focus Contract Meal/ }).click());
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('12 g');
+  await expect(librarySelect).toHaveValue('');
+
+  await assertNoScriptedSelectFocus(() => calculator.getByRole('button', { name: 'Edit Focus Contract Food' }).click());
+  await calculator.getByLabel('Quantity').fill('2');
+  await assertNoScriptedSelectFocus(() => calculator.getByRole('button', { name: 'Save Item' }).click());
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('24 g');
+  await expect(librarySelect).toHaveValue('');
+
+  const row = calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Focus Contract Food' });
+  await assertNoScriptedSelectFocus(() => row.getByRole('button', { name: 'Remove Focus Contract Food' }).click());
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('0 g');
+
+  await librarySelect.selectOption('');
+  await librarySelect.selectOption('foods');
+  const foodPicker = calculator.locator('[data-carb-picker="foods"]');
+  const favoriteButton = foodPicker.locator('[data-action="toggle-food-favorite"][data-id="56565656-5656-4565-8565-565656565656"]');
+  await expect(favoriteButton).toHaveAttribute('aria-label', 'Remove favorite');
+  await assertNoScriptedSelectFocus(() => favoriteButton.click());
+  await expect(favoriteButton).toHaveAttribute('aria-label', 'Mark favorite');
+  await expect(favoriteButton).toBeFocused();
+  await expect(librarySelect).toHaveValue('foods');
+  await assertNoScriptedSelectFocus(() => favoriteButton.click());
+  await expect(favoriteButton).toHaveAttribute('aria-label', 'Remove favorite');
+  await expect(favoriteButton).toBeFocused();
+  await expect(librarySelect).toHaveValue('foods');
+
+  await assertNoScriptedSelectFocus(() => foodPicker.locator('[data-action="add-food-to-carb-calculator"][data-id="56565656-5656-4565-8565-565656565656"]').click());
+  await expect(calculator.locator('[data-carb-calculator-row]')).toContainText('Focus Contract Food');
+  await expect(librarySelect).toHaveValue('');
+  await assertNoScriptedSelectFocus(() => calculator.getByRole('button', { name: 'Save as My Meal', exact: true }).click());
+  await calculator.getByLabel('Meal Name').fill('Focus Contract Saved Meal');
+  await assertNoScriptedSelectFocus(() => calculator.getByRole('button', { name: 'Save My Meal' }).click());
+  await expect(calculator.locator('[data-carb-picker="meals"]').getByRole('button', { name: /Focus Contract Saved Meal/ })).toBeVisible();
+  await expect(librarySelect).toHaveValue('meals');
+
+  await assertNoScriptedSelectFocus(() => calculator.locator('[data-carb-picker="meals"]').getByRole('button', { name: /Focus Contract Meal/ }).click());
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('24 g');
+  await expect(librarySelect).toHaveValue('');
+
+  const beforeIntentionalSelection = await focusCalls();
+  await librarySelect.selectOption('recent');
+  await expect(librarySelect).toHaveValue('recent');
+  await expect(calculator.locator('[data-carb-picker="recent"]')).toBeVisible();
+  expect(await focusCalls()).toBe(beforeIntentionalSelection);
+});
+
 test('Lee-Lee Carb Calculator Food Search keeps one focused input while filtering', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProtectedLeeLeeTracker(page);
