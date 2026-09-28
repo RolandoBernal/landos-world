@@ -5269,7 +5269,7 @@
               <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="${isSearchOpen ? 'close-carb-calculator-picker' : 'close-carb-calculator'}" aria-label="${isSearchOpen ? 'Back to Carb Calculator' : 'Cancel Carb Calculator'}">Cancel</button>
             `}
           </div>
-          <div class="lee_lee_diabetes_carb_calculator_body${isSearchOpen ? ' lee_lee_diabetes_carb_calculator_body--search' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body${isSearchOpen ? '' : ' data-modal-scroll-container'}${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
+          <div class="lee_lee_diabetes_carb_calculator_body${isSearchOpen ? ' lee_lee_diabetes_carb_calculator_body--search' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body data-modal-scroll-container${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
             ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : isSearchOpen ? renderCarbCalculatorPicker(activePicker, search, normalizedRows) : `
                 ${renderCarbCalculatorLibrary(activePicker, search, normalizedRows, activeFoodLibraryTab)}
                 <div class="lee_lee_diabetes_carb_calc_grid" data-carb-calculator-rows aria-label="Carb Calculator meal items">
@@ -5347,7 +5347,7 @@
     const hasFoodEditor = currentEditor?.carbCalculatorFoodEditorOpen === true;
     const hasMealEditor = currentEditor?.carbCalculatorMealEditorOpen === true;
     return `
-      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}"${pickerKey === 'search' ? ' data-modal-scroll-container' : ` aria-label="${escapeHtml(title)}"`}>
+      <section class="lee_lee_diabetes_carb_picker${pickerKey === 'search' ? ' lee_lee_diabetes_carb_picker--search' : ''}" id="lee-lee-carb-picker-panel" data-carb-picker="${escapeHtml(pickerKey)}"${pickerKey === 'search' ? '' : ` aria-label="${escapeHtml(title)}"`}>
         ${pickerKey === 'search' ? `
           <div class="lee_lee_diabetes_carb_search_controls">
             <span class="lee_lee_diabetes_search_icon" aria-hidden="true"></span>
