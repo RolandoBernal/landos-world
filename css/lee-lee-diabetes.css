@@ -1163,6 +1163,12 @@
   overflow: hidden;
 }
 
+.lee_lee_diabetes_carb_calculator [data-carb-library-view]:focus,
+.lee_lee_diabetes_carb_calculator [data-carb-library-view]:focus-visible {
+  outline: 2px solid var(--lee-lee-soft);
+  outline-offset: -3px;
+}
+
 .lee_lee_diabetes_unit_input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

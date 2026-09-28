@@ -1628,6 +1628,38 @@ test('carb calculator food library uses the shared select navigation', () => {
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_tabs/);
 });
 
+test('carb calculator library focus treatment is inset and picker changes preserve the native select', () => {
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \[data-carb-library-view\]:focus,[\s\S]*\.lee_lee_diabetes_carb_calculator \[data-carb-library-view\]:focus-visible \{[\s\S]*outline: 2px solid var\(--lee-lee-soft\)[\s\S]*outline-offset: -3px/);
+  const refreshStart = trackerSource.indexOf('function refreshCarbCalculatorLibraryView(form, picker)');
+  const refreshEnd = trackerSource.indexOf('\n  function updateEditorState(', refreshStart);
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(refreshEnd, -1);
+  const refreshBody = trackerSource.slice(refreshStart, refreshEnd);
+  assert.match(refreshBody, /renderCarbCalculatorPicker\(picker, '', rows\)/);
+  assert.match(refreshBody, /pickerElement\.replaceWith\(nextPicker\)/);
+  assert.doesNotMatch(refreshBody, /renderEditor\(|\.focus\(/);
+  assert.match(trackerSource, /if \(event\.target\.matches\('\[data-carb-library-view\]'\)\) \{[\s\S]*refreshCarbCalculatorLibraryView\(form, requestedPicker\);/);
+});
+
+test('carb calculator rerenders never restore focus to the Food Library select', () => {
+  const renderStart = trackerSource.indexOf('function renderEditor(options)');
+  const renderEnd = trackerSource.indexOf('\n  function buildDraftFromEditor(', renderStart);
+  const renderBody = trackerSource.slice(renderStart, renderEnd);
+  assert.match(renderBody, /carbCalculatorPickerFocus: options\.carbCalculatorPickerFocus \|\| ''/);
+  assert.match(renderBody, /if \(target\.matches\('\[data-carb-library-view\]'\)\) return/);
+  assert.match(renderBody, /currentEditor\.carbCalculatorPicker === 'search'/);
+  assert.match(renderBody, /restoreCarbCalculatorFocus\(root, previousCarbCalculatorFocus\)/);
+  assert.doesNotMatch(renderBody, /currentEditor\.carbCalculatorPicker === 'search' \? '\[name="carbFoodSearch"\]' : '\[data-carb-library-view\]'/);
+  assert.doesNotMatch(trackerSource, /carbCalculatorPickerFocus: '\[data-carb-library-view\]'/);
+
+  const pointerFocusStart = trackerSource.indexOf('function focusCarbCalculatorInputOnPointer(event)');
+  const pointerFocusEnd = trackerSource.indexOf('\n  function closeCarbCalculator(', pointerFocusStart);
+  const pointerFocusBody = trackerSource.slice(pointerFocusStart, pointerFocusEnd);
+  assert.match(pointerFocusBody, /if \(input\.matches\('select'\)\) return/);
+  assert.match(trackerSource, /function captureCarbCalculatorFocus\(root\)[\s\S]*activeElement\.matches\('\[data-carb-library-view\]'\)/);
+  assert.match(trackerSource, /function restoreCarbCalculatorFocus\(root, identity\)[\s\S]*candidate\.matches\('\[data-carb-library-view\]'\)/);
+});
+
 test('carb calculator food search refreshes results without replacing the search input', () => {
   const refreshStart = trackerSource.indexOf('function refreshCarbCalculatorLibrarySearch(form)');
   const refreshEnd = trackerSource.indexOf('\n  function updateEditorState(', refreshStart);

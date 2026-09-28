@@ -5593,10 +5593,47 @@
       .filter(Boolean);
   }
 
+  function captureCarbCalculatorFocus(root) {
+    const activeElement = document.activeElement;
+    const calculator = activeElement?.closest?.('[data-carb-calculator]');
+    if (!calculator || activeElement.matches('[data-carb-library-view]')) return null;
+
+    const identity = {};
+    for (const key of ['action', 'id', 'carbRowId', 'name']) {
+      const value = activeElement.dataset?.[key] || activeElement.getAttribute?.(key === 'name' ? 'name' : `data-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
+      if (value) identity[key] = value;
+    }
+    if (!Object.keys(identity).length || !root.contains(activeElement)) return null;
+    return identity;
+  }
+
+  function restoreCarbCalculatorFocus(root, identity) {
+    if (!identity || currentEditor?.carbCalculatorOpen !== true) return false;
+    const calculator = root.querySelector('[data-carb-calculator]');
+    if (!calculator) return false;
+    const candidates = calculator.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const target = [...candidates].find((candidate) => {
+      if (candidate.matches('[data-carb-library-view]')) return false;
+      return Object.entries(identity).every(([key, value]) => {
+        const candidateValue = key === 'name' ? candidate.getAttribute('name') : candidate.dataset?.[key];
+        return candidateValue === value;
+      });
+    });
+    if (!target) return false;
+    target.focus({ preventScroll: true });
+    window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(
+      target,
+      14,
+      target.closest?.('[data-modal-scroll-container]'),
+    );
+    return true;
+  }
+
   function renderEditor(options) {
     const root = getRoot();
     if (!root) return;
     const previousEditor = currentEditor;
+    const previousCarbCalculatorFocus = captureCarbCalculatorFocus(root);
     const record = options.record || {};
     const recordComponentRows = record.id && Array.isArray(record.mealComponents) && record.mealComponents.length
       ? carbRowsFromMealComponents(record.mealComponents)
@@ -5620,7 +5657,7 @@
         : (Array.isArray(record.mealComponents) ? record.mealComponents.map(normalizeMealComponent).filter(Boolean) : []),
       carbCalculatorTab: options.carbCalculatorTab || previousEditor?.carbCalculatorTab || 'favorites',
       carbCalculatorPicker: options.carbCalculatorPicker ?? previousEditor?.carbCalculatorPicker ?? '',
-      carbCalculatorPickerFocus: options.carbCalculatorPickerFocus || previousEditor?.carbCalculatorPickerFocus || '',
+      carbCalculatorPickerFocus: options.carbCalculatorPickerFocus || '',
       carbCalculatorSearch: options.carbCalculatorSearch ?? previousEditor?.carbCalculatorSearch ?? '',
       carbCalculatorItemEditorMode: options.carbCalculatorItemEditorMode || '',
       carbCalculatorItemEditId: options.carbCalculatorItemEditId || '',
@@ -5717,6 +5754,7 @@
       const applyFocus = () => {
         const target = root.querySelector(selector);
         if (!target) return;
+        if (target.matches('[data-carb-library-view]')) return;
         const activeElement = document.activeElement;
         if (currentEditor.carbCalculatorOpen && activeElement?.closest?.('[data-carb-calculator]') && activeElement !== target) {
           return;
@@ -5739,16 +5777,24 @@
     if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
       focusTarget(currentEditor.carbCalculatorPickerFocus);
       currentEditor.carbCalculatorPickerFocus = '';
-    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker) {
-      focusTarget(currentEditor.carbCalculatorPicker === 'search' ? '[name="carbFoodSearch"]' : '[data-carb-library-view]');
+    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker === 'search') {
+      focusTarget('[name="carbFoodSearch"]');
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode) {
       focusTarget('[name="carbItemCarbs"]');
-    } else if (currentEditor.carbCalculatorOpen) {
+    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorFoodEditorOpen) {
+      focusTarget('[name="foodName"]');
+    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorMealEditorOpen) {
+      focusTarget('[name="savedMealName"]');
+    } else if (currentEditor.carbCalculatorOpen && !previousEditor?.carbCalculatorOpen) {
       focusTarget('[data-action="open-carb-calculator-item-editor"], [data-action="use-carb-calculator-total"]');
     } else if (options.focusAction) {
       focusTarget(`[data-action="${options.focusAction}"]`);
+    } else if (currentEditor.carbCalculatorOpen && previousCarbCalculatorFocus) {
+      restoreCarbCalculatorFocus(root, previousCarbCalculatorFocus);
     } else {
-      root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
+      if (!currentEditor.carbCalculatorOpen) {
+        root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus();
+      }
     }
     if (options.restoreScrollSnapshot) {
       restoreScrollSnapshot(options.restoreScrollSnapshot);
@@ -6162,6 +6208,36 @@
     );
   }
 
+  function refreshCarbCalculatorLibraryView(form, picker) {
+    const calculator = form?.querySelector('[data-carb-calculator]');
+    if (!calculator) return;
+    const rows = collectCarbCalculatorRowsFromForm(form);
+    const librarySelect = calculator.querySelector('[data-carb-library-view]');
+    const emptyState = calculator.querySelector('[data-carb-calculator-empty]');
+    const pickerElement = calculator.querySelector('[data-carb-picker]');
+
+    currentEditor.carbCalculatorRows = rows;
+    currentEditor.carbCalculatorTab = picker;
+    currentEditor.carbCalculatorPicker = picker;
+    currentEditor.carbCalculatorSearch = '';
+    if (librarySelect && librarySelect.value !== picker) librarySelect.value = picker;
+    if (emptyState) emptyState.hidden = Boolean(picker) || rows.some(isCarbCalculatorRowStarted);
+    const pickerMarkup = renderCarbCalculatorPicker(picker, '', rows);
+    if (!pickerMarkup) {
+      pickerElement?.remove();
+      return;
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = pickerMarkup.trim();
+    const nextPicker = template.content.firstElementChild;
+    if (pickerElement) {
+      pickerElement.replaceWith(nextPicker);
+    } else {
+      calculator.querySelector('[data-carb-calculator-body]')?.append(nextPicker);
+    }
+  }
+
   function updateEditorState(form, options = {}) {
     showEditorError(form, '');
     refreshCarbCalculator(form, options.preserveCarbRowId || '');
@@ -6413,6 +6489,9 @@
     const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
     const input = eventTarget?.closest?.('[data-carb-calculator] input, [data-carb-calculator] select, [data-carb-calculator] textarea');
     if (!input || document.activeElement === input) return;
+    // Native selects receive focus from their own user activation. Retrying focus
+    // after a native picker opens can make iOS reopen it after the selection.
+    if (input.matches('select')) return;
     const shouldSelectValue = ['carbCalcQty', 'carbCalcCarbs', 'carbItemQty', 'carbItemCarbs'].includes(input.name || '');
     const focusInput = () => {
       input.focus({ preventScroll: true });
@@ -9431,7 +9510,6 @@
       }
       if (action === 'close-carb-calculator-picker') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
-        const picker = currentEditor?.carbCalculatorPicker || '';
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
         currentEditor.carbCalculatorPicker = '';
         currentEditor.carbCalculatorSearch = '';
@@ -9448,7 +9526,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker && picker !== 'search' ? '[data-carb-library-view]' : '[data-action="open-carb-calculator-search"]',
+          carbCalculatorPickerFocus: '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;
@@ -10026,25 +10104,7 @@
       if (event.target.closest('[data-carb-item-editor]')) return;
       if (event.target.matches('[data-carb-library-view]')) {
         const requestedPicker = FOOD_LIBRARY_TABS.some(([tab]) => tab === event.target.value) ? event.target.value : '';
-        currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-        currentEditor.carbCalculatorTab = requestedPicker;
-        renderEditor({
-          mode: currentEditor?.mode || 'log-entry',
-          eventType: getEditorEventType(form),
-          type: getEditorType(form),
-          record: buildDraftFromEditor(form),
-          returnTo: currentEditor?.returnTo || null,
-          returnDateKey: currentEditor?.returnDateKey || null,
-          carbCalculatorOpen: true,
-          carbCalculatorRows: currentEditor.carbCalculatorRows,
-          mealComponents: currentEditor?.mealComponents || [],
-          carbCalculatorPicker: requestedPicker,
-          carbCalculatorTab: requestedPicker,
-          carbCalculatorSearch: '',
-          carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: '[data-carb-library-view]',
-          preventFocusScroll: true,
-        });
+        refreshCarbCalculatorLibraryView(form, requestedPicker);
         return;
       }
       if (event.target.name === 'eventType') {
@@ -10140,7 +10200,6 @@
       if (currentEditor?.carbCalculatorOpen === true && event.key === 'Escape' && currentEditor?.carbCalculatorPicker) {
         event.preventDefault();
         const form = root.querySelector('[data-lee-lee-editor]');
-        const picker = currentEditor.carbCalculatorPicker;
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
         renderEditor({
           mode: currentEditor?.mode || 'log-entry',
@@ -10155,7 +10214,7 @@
           carbCalculatorPicker: '',
           carbCalculatorSearch: '',
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
-          carbCalculatorPickerFocus: picker && picker !== 'search' ? '[data-carb-library-view]' : '[data-action="open-carb-calculator-search"]',
+          carbCalculatorPickerFocus: '[data-action="open-carb-calculator-search"]',
           preventFocusScroll: true,
         });
         return;
