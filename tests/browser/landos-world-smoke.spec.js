@@ -3602,6 +3602,7 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
   await openProtectedLeeLeeTracker(page);
   await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
   await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'foods');
 
   await expect(page.locator('[data-food-library-accordion="foods"] > summary')).toContainText('My Foods');
   await expect(page.locator('[data-food-library-editor]')).toHaveCount(0);
