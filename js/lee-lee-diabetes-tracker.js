@@ -327,8 +327,13 @@
   let selectedTrendPointId = '';
   let foodLibrarySearch = '';
   let savedMealsSearch = '';
+  let foodLibraryOpenSection = 'meals';
   let foodLibraryMessage = '';
+  let foodLibraryMessageTimer = 0;
   let foodLibraryError = '';
+  let mealBuilderState = null;
+  let mealBuilderScrollLock = null;
+  let mealBuilderViewportCleanup = null;
   let preMealTimerRefresh = null;
   let currentEditor = null;
   let pendingCarbCalculatorFocusRowId = '';
@@ -986,12 +991,14 @@
     const components = (Array.isArray(source.components) ? source.components : [])
       .map(normalizeMealComponent)
       .filter(Boolean);
+    const standaloneTotal = normalizeNumber(source.totalCarbs ?? source.total_carbs);
     return {
       id: typeof source.id === 'string' && source.id ? source.id : createId(),
       name,
+      emoji: normalizeFoodEmoji(source.emoji),
       components,
       favorite: source.favorite === true || source.is_favorite === true,
-      totalCarbs: calculateMealComponentTotal(components),
+      totalCarbs: components.length ? calculateMealComponentTotal(components) : Math.max(0, standaloneTotal ?? 0),
       createdAt: toIsoTimestamp(source.createdAt || source.created_at, now),
       updatedAt: toIsoTimestamp(source.updatedAt || source.updated_at, now),
       version: Number(source.version || 1),
@@ -2397,7 +2404,7 @@
       enteredBy: existing?.enteredBy || identity,
       lastEditedBy: existing ? identity : null,
     });
-    if (!normalized || !normalized.components.length) return { error: 'Saved meals need a name and at least one carb item.' };
+    if (!normalized || (!normalized.components.length && normalizeNumber(meal.totalCarbs) == null)) return { error: 'Enter meal carbs or add at least one food item.' };
     updateTrackerData((current) => ({
       ...current,
       savedMeals: dedupeLibraryItems([...(current.savedMeals || []).filter((item) => item.id !== normalized.id), normalized]),
@@ -4414,7 +4421,8 @@
   function renderFoodLibrary(options = {}) {
     const root = getRoot();
     if (!root) return;
-    const savedDraft = !options.foodLibraryEditorId && !options.foodLibraryEditorDraft ? readFoodLibraryDraft() : null;
+    if (currentEditor?.mode !== 'foods' && !mealBuilderState) foodLibraryOpenSection = 'meals';
+    const savedDraft = !mealBuilderState && !options.foodLibraryEditorId && !options.foodLibraryEditorDraft ? readFoodLibraryDraft() : null;
     currentEditor = {
       mode: 'foods',
       foodLibraryEditorOpen: options.foodLibraryEditorOpen === true || Boolean(savedDraft),
@@ -4433,25 +4441,33 @@
       ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
-      ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved">${escapeHtml(foodLibraryMessage)}</p>` : ''}
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-foods-list-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-foods-list-title">My Foods</h2>
-        <div class="lee_lee_diabetes_food_library_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-food-library-editor">+ Add New Food</button>
+      ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved" data-food-library-feedback role="status" aria-live="polite">${escapeHtml(foodLibraryMessage)}</p>` : ''}
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion lee_lee_diabetes_food_library_accordion" data-food-library-accordion="foods"${foodLibraryOpenSection === 'foods' ? ' open' : ''}>
+        <summary aria-controls="lee-lee-foods-list-body"><span class="lee_lee_diabetes_section_title">My Foods</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+        <div class="lee_lee_diabetes_settings_accordion_body" id="lee-lee-foods-list-body">
+          <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
+          <div class="lee_lee_diabetes_food_library_actions">
+            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-food-library-editor">+ Add New Food</button>
+          </div>
+          <div class="lee_lee_diabetes_food_list" data-food-library-list>
+            ${renderFoodLibraryResults(foods)}
+          </div>
         </div>
-        <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" autocomplete="off"></label>
-        <div class="lee_lee_diabetes_food_list" data-food-library-list>
-          ${renderFoodLibraryResults(foods)}
+      </details>
+      <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion lee_lee_diabetes_food_library_accordion" data-food-library-accordion="meals"${foodLibraryOpenSection === 'meals' ? ' open' : ''}>
+        <summary aria-controls="lee-lee-meals-list-body"><span class="lee_lee_diabetes_section_title">My Meals</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
+        <div class="lee_lee_diabetes_settings_accordion_body" id="lee-lee-meals-list-body">
+          <label class="lee_lee_diabetes_field">Search Meals<input class="lee_lee_diabetes_input" name="savedMealsSearch" type="search" value="${escapeHtml(savedMealsSearch)}" autocomplete="off"></label>
+          <div class="lee_lee_diabetes_food_library_actions">
+            <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary lee_lee_diabetes_log_entry_button" data-action="open-saved-meal-builder">+ Add New Meal</button>
+          </div>
+          <div class="lee_lee_diabetes_food_list" data-saved-meals-list>
+            ${renderSavedMealResults(meals)}
+          </div>
         </div>
-      </section>
-      <section class="lee_lee_diabetes_settings_section" aria-labelledby="lee-lee-meals-list-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meals-list-title">My Meals</h2>
-        <label class="lee_lee_diabetes_field">Search My Meals<input class="lee_lee_diabetes_input" name="savedMealsSearch" type="search" value="${escapeHtml(savedMealsSearch)}" autocomplete="off"></label>
-        <div class="lee_lee_diabetes_food_list" data-saved-meals-list>
-          ${renderSavedMealResults(meals)}
-        </div>
-      </section>
+      </details>
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
+      ${mealBuilderState ? renderSavedMealBuilder(mealBuilderState) : ''}
     `;
     if (currentEditor.foodLibraryEditorOpen) {
       requestAnimationFrame(() => {
@@ -4551,18 +4567,276 @@
   }
 
   function renderSavedMealLibraryRow(meal) {
+    const componentSummary = meal.components.map(renderMealComponentLabel).filter(Boolean).join(' · ');
     return `
       <article class="lee_lee_diabetes_food_item">
-        <div>
-          <strong>${escapeHtml(meal.name)}</strong>
+        <div class="lee_lee_diabetes_food_item_content">
+          <strong>${meal.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(meal.emoji)}</span>` : ''}${escapeHtml(meal.name)}</strong>
           <p>${renderCarbs(meal.totalCarbs)}</p>
-          <p>${meal.components.map(renderMealComponentLabel).join(' · ')}</p>
+          ${componentSummary ? `<p>${escapeHtml(componentSummary)}</p>` : ''}
         </div>
-        <div class="lee_lee_diabetes_record_actions">
-          <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-saved-meal" data-id="${escapeHtml(meal.id)}">Delete</button>
-        </div>
+        <footer class="lee_lee_diabetes_food_item_footer"><div class="lee_lee_diabetes_food_item_actions">
+          <button type="button" class="lee_lee_diabetes_icon_button" data-action="toggle-saved-meal-favorite" data-id="${escapeHtml(meal.id)}" aria-label="${meal.favorite ? 'Remove meal favorite' : 'Favorite meal'}" aria-pressed="${meal.favorite ? 'true' : 'false'}">${meal.favorite ? '★' : '☆'}</button>
+          <span class="lee_lee_diabetes_food_item_actions_right">
+            <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="edit-saved-meal" data-id="${escapeHtml(meal.id)}">Edit</button>
+            <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-saved-meal" data-id="${escapeHtml(meal.id)}">Delete</button>
+          </span>
+        </div></footer>
       </article>
     `;
+  }
+
+  function renderSavedMealBuilder(state) {
+    const isPicker = state.view === 'picker';
+    const total = getMealBuilderTotal(state);
+    return `
+      <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_meal_builder_layer" data-meal-builder-layer>
+        <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-saved-meal-builder" aria-hidden="true"></div>
+        <div class="lee_lee_diabetes_meal_builder_viewport" data-meal-builder-viewport data-modal-visual-viewport>
+          <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_meal_builder" data-meal-builder role="dialog" aria-modal="true" aria-labelledby="lee-lee-meal-builder-title">
+            <header class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_meal_builder_header">
+              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">${isPicker ? 'Add Food Item' : state.mode === 'edit' ? 'Edit Meal' : 'Add Meal'}</h2>
+              <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="${isPicker ? 'return-to-saved-meal-builder' : 'cancel-saved-meal-builder'}">${isPicker ? 'Back' : 'Cancel'}</button>
+            </header>
+            ${isPicker ? `
+              <div class="lee_lee_diabetes_meal_builder_body lee_lee_diabetes_meal_builder_picker_body" data-meal-builder-body data-modal-scroll-container>
+                <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="mealBuilderFoodSearch" type="search" autocomplete="off" value="${escapeHtml(state.foodSearch)}" placeholder="Search foods..."></label>
+                <div class="lee_lee_diabetes_food_list" data-meal-builder-food-results>${renderMealBuilderFoodResults(state.foodSearch)}</div>
+              </div>
+            ` : `
+              <div class="lee_lee_diabetes_meal_builder_body" data-meal-builder-body data-modal-scroll-container>
+                ${state.error ? `<p class="lee_lee_diabetes_error" data-meal-builder-error role="alert">${escapeHtml(state.error)}</p>` : '<p class="lee_lee_diabetes_error" data-meal-builder-error role="alert" hidden></p>'}
+                <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="mealBuilderName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(state.name)}" required></label>
+                <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="mealBuilderEmoji" type="text" maxlength="16" autocomplete="off" value="${escapeHtml(state.emoji)}" placeholder="Optional"></label>
+                ${state.components.length ? `
+                  <section class="lee_lee_diabetes_meal_builder_items" aria-labelledby="lee-lee-meal-builder-items-title">
+                    <div class="lee_lee_diabetes_meal_builder_items_intro">
+                      <h3 id="lee-lee-meal-builder-items-title">Items</h3>
+                      <p class="lee_lee_diabetes_meal_builder_help">Total carbs are calculated from the food items below.</p>
+                      <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_meal_builder_add_food" data-action="open-meal-builder-food-picker">+ Add Food Item</button>
+                    </div>
+                    <div class="lee_lee_diabetes_food_list" data-meal-builder-components>${state.components.map(renderSavedMealBuilderComponent).join('')}</div>
+                  </section>
+                ` : `
+                  <div class="lee_lee_diabetes_meal_builder_carbs_group">
+                    <label class="lee_lee_diabetes_field">Meal Carbs<input class="lee_lee_diabetes_input" name="mealBuilderCarbs" type="number" inputmode="decimal" min="0" step="0.01" autocomplete="off" value="${escapeHtml(state.mealCarbs)}" aria-describedby="meal-builder-carbs-help" required></label>
+                    <p class="lee_lee_diabetes_meal_builder_help" id="meal-builder-carbs-help">Enter a total you already know, or add food items and LLT will calculate it.</p>
+                  </div>
+                  <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_meal_builder_add_food" data-action="open-meal-builder-food-picker">+ Add Food Item</button>
+                `}
+              </div>
+              <footer class="lee_lee_diabetes_meal_builder_footer">
+                <div class="lee_lee_diabetes_meal_builder_total"><span>Total Carbs</span><strong data-meal-builder-total>${renderCarbs(total)}</strong></div>
+                <div class="lee_lee_diabetes_food_editor_actions">
+                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-saved-meal-builder">Cancel</button>
+                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-saved-meal-builder">Save Meal</button>
+                </div>
+              </footer>
+            `}
+          </section>
+        </div>
+      </div>
+    `;
+  }
+
+  function getMealBuilderTotal(state = mealBuilderState) {
+    if (!state) return 0;
+    return state.components.length
+      ? calculateMealComponentTotal(state.components)
+      : Math.max(0, normalizeNumber(state.mealCarbs) ?? 0);
+  }
+
+  function renderSavedMealBuilderComponent(component) {
+    const normalized = normalizeMealComponent(component);
+    if (!normalized) return '';
+    const name = normalized.nameSnapshot || 'Manual amount';
+    const carbs = component.carbTotalDraft ?? formatCarbAmount(normalized.carbTotal);
+    const serving = normalized.servingLabelSnapshot || (normalized.componentType === 'manual' ? 'Manual amount' : 'Per serving');
+    const servingSummary = normalized.componentType === 'food' && normalized.quantity !== 1
+      ? `${formatCarbAmount(normalized.quantity)} × ${serving}`
+      : serving;
+    return `
+      <article class="lee_lee_diabetes_food_item lee_lee_diabetes_meal_builder_component" data-meal-builder-component data-component-id="${escapeHtml(normalized.id)}">
+        <div class="lee_lee_diabetes_meal_builder_component_info">
+          <strong>${normalized.emojiSnapshot ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(normalized.emojiSnapshot)}</span>` : ''}${escapeHtml(name)}</strong>
+          <p>${escapeHtml(servingSummary)}</p>
+        </div>
+        <label class="lee_lee_diabetes_field lee_lee_diabetes_meal_builder_component_carbs"><span>Carbs</span><span class="lee_lee_diabetes_meal_builder_component_amount"><input class="lee_lee_diabetes_input" data-meal-builder-component-carbs data-component-id="${escapeHtml(normalized.id)}" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(carbs)}" aria-label="${escapeHtml(`${name} carbs`)}" ${component.carbTotalDraft != null && (normalizeNumber(component.carbTotalDraft) == null || normalizeNumber(component.carbTotalDraft) < 0) ? 'aria-invalid="true"' : ''}><small>g</small></span></label>
+        <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="remove-meal-builder-component" data-component-id="${escapeHtml(normalized.id)}" aria-label="Remove ${escapeHtml(name)}">Remove</button>
+      </article>
+    `;
+  }
+
+  function renderMealBuilderFoodResults(query = '') {
+    const foods = searchFoodItems(foodLibrary, query);
+    return foods.length ? foods.map((food) => `
+      <article class="lee_lee_diabetes_food_item lee_lee_diabetes_meal_builder_food_result">
+        <div><strong>${food.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(food.emoji)}</span>` : ''}${escapeHtml(food.name)}</strong><p>${[food.servingLabel, `${formatCarbAmount(food.carbs)} g`, food.brand].filter(Boolean).map(escapeHtml).join(' · ')}</p></div>
+        <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="select-meal-builder-food" data-id="${escapeHtml(food.id)}" aria-label="Add ${escapeHtml(food.name)}">Add</button>
+      </article>
+    `).join('') : '<p class="lee_lee_diabetes_empty">No foods match.</p>';
+  }
+
+  function updateMealBuilderViewport() {
+    const frame = document.querySelector('[data-meal-builder-viewport]');
+    if (!frame) return;
+    const viewport = window.visualViewport;
+    frame.style.setProperty('--lee-lee-meal-builder-viewport-top', `${viewport?.offsetTop || 0}px`);
+    frame.style.setProperty('--lee-lee-meal-builder-viewport-left', `${viewport?.offsetLeft || 0}px`);
+    frame.style.setProperty('--lee-lee-meal-builder-viewport-width', `${viewport?.width || window.innerWidth}px`);
+    frame.style.setProperty('--lee-lee-meal-builder-viewport-height', `${viewport?.height || window.innerHeight}px`);
+  }
+
+  function attachMealBuilderViewportListeners() {
+    if (mealBuilderViewportCleanup) return;
+    const viewport = window.visualViewport;
+    const update = () => requestAnimationFrame(updateMealBuilderViewport);
+    viewport?.addEventListener?.('resize', update, { passive: true });
+    viewport?.addEventListener?.('scroll', update, { passive: true });
+    window.addEventListener('resize', update, { passive: true });
+    mealBuilderViewportCleanup = () => {
+      viewport?.removeEventListener?.('resize', update);
+      viewport?.removeEventListener?.('scroll', update);
+      window.removeEventListener('resize', update);
+      mealBuilderViewportCleanup = null;
+    };
+  }
+
+  function openSavedMealBuilder(meal = null) {
+    const normalizedMeal = meal ? normalizeSavedMeal(meal) : null;
+    mealBuilderState = {
+      mode: normalizedMeal ? 'edit' : 'create',
+      id: normalizedMeal?.id || createId(),
+      name: normalizedMeal?.name || '',
+      emoji: normalizedMeal?.emoji || '',
+      favorite: normalizedMeal?.favorite === true,
+      components: normalizedMeal?.components.map((component) => ({ ...component })) || [],
+      mealCarbs: normalizedMeal?.components.length ? '' : (normalizedMeal ? formatCarbAmount(normalizedMeal.totalCarbs) : ''),
+      foodSearch: '',
+      view: 'builder',
+      error: '',
+    };
+    mealBuilderScrollLock = window.LandosWorldModalUtils?.lockBackgroundScroll?.('llt-meal-builder') || null;
+    attachMealBuilderViewportListeners();
+    renderFoodLibrary();
+    updateMealBuilderViewport();
+    requestAnimationFrame(() => {
+      const input = getRoot()?.querySelector('[data-meal-builder] [name="mealBuilderName"]');
+      input?.focus({ preventScroll: true });
+      if (input) window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(input, 16, getRoot()?.querySelector('[data-meal-builder-body]'));
+    });
+  }
+
+  function closeSavedMealBuilder() {
+    if (mealBuilderViewportCleanup) mealBuilderViewportCleanup();
+    if (mealBuilderScrollLock) window.LandosWorldModalUtils?.unlockBackgroundScroll?.(mealBuilderScrollLock);
+    mealBuilderViewportCleanup = null;
+    mealBuilderScrollLock = null;
+    mealBuilderState = null;
+  }
+
+  function showMealBuilderError(message) {
+    if (!mealBuilderState) return;
+    mealBuilderState.error = message;
+    const error = getRoot()?.querySelector('[data-meal-builder-error]');
+    if (error) {
+      error.textContent = message;
+      error.hidden = !message;
+    }
+  }
+
+  function refreshMealBuilderTotals() {
+    if (!mealBuilderState) return;
+    const root = getRoot();
+    const total = getMealBuilderTotal(mealBuilderState);
+    const totalNode = root?.querySelector('[data-meal-builder-total]');
+    if (totalNode) totalNode.innerHTML = renderCarbs(total);
+  }
+
+  function addFoodToSavedMealBuilder(foodId) {
+    const food = foodLibrary.find((item) => item.id === foodId && !isLibraryItemDeleted(item));
+    const component = food ? getFoodSnapshot(food) : null;
+    if (!component || !mealBuilderState) return;
+    if (!mealBuilderState.components.length) mealBuilderState.mealCarbs = '';
+    mealBuilderState.components.push(component);
+    mealBuilderState.error = '';
+    mealBuilderState.view = 'builder';
+    renderFoodLibrary();
+    updateMealBuilderViewport();
+    requestAnimationFrame(() => {
+      const addFoodButton = getRoot()?.querySelector('[data-action="open-meal-builder-food-picker"]');
+      addFoodButton?.focus({ preventScroll: true });
+    });
+  }
+
+  function openMealBuilderFoodPicker() {
+    if (!mealBuilderState) return;
+    mealBuilderState.view = 'picker';
+    renderFoodLibrary();
+    updateMealBuilderViewport();
+    requestAnimationFrame(() => {
+      const search = getRoot()?.querySelector('[data-meal-builder] [name="mealBuilderFoodSearch"]');
+      search?.focus({ preventScroll: true });
+      if (search) window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(search, 16, getRoot()?.querySelector('[data-meal-builder-body]'));
+    });
+  }
+
+  function saveSavedMealBuilder() {
+    if (!mealBuilderState) return;
+    const root = getRoot();
+    const name = root?.querySelector('[name="mealBuilderName"]')?.value || '';
+    const emoji = root?.querySelector('[name="mealBuilderEmoji"]')?.value || '';
+    const invalidComponentCarbs = mealBuilderState.components.some((component) => component.carbTotalDraft != null
+      && (normalizeNumber(component.carbTotalDraft) == null || normalizeNumber(component.carbTotalDraft) < 0));
+    if (invalidComponentCarbs) {
+      showMealBuilderError('Enter a valid non-negative carb amount for each food item.');
+      root?.querySelector('[data-meal-builder-component-carbs][aria-invalid="true"]')?.focus({ preventScroll: true });
+      return;
+    }
+    if (!sanitizeShortText(name, 80)) {
+      showMealBuilderError('Enter a meal name.');
+      root?.querySelector('[name="mealBuilderName"]')?.focus({ preventScroll: true });
+      return;
+    }
+    const mealCarbs = mealBuilderState.components.length ? null : normalizeNumber(root?.querySelector('[name="mealBuilderCarbs"]')?.value);
+    if (!mealBuilderState.components.length && (mealCarbs == null || mealCarbs < 0)) {
+      showMealBuilderError('Enter meal carbs or add at least one food item.');
+      root?.querySelector('[name="mealBuilderCarbs"]')?.focus({ preventScroll: true });
+      return;
+    }
+    const result = saveSavedMeal({
+      id: mealBuilderState.id,
+      name,
+      emoji,
+      components: mealBuilderState.components,
+      totalCarbs: mealBuilderState.components.length ? calculateMealComponentTotal(mealBuilderState.components) : mealCarbs,
+      favorite: mealBuilderState.favorite,
+    });
+    if (result.error) {
+      showMealBuilderError(result.error);
+      return;
+    }
+    const message = mealBuilderState.mode === 'edit' ? 'Meal updated.' : 'Meal saved.';
+    closeSavedMealBuilder();
+    foodLibraryError = '';
+    showFoodLibraryMessage(message);
+    renderFoodLibrary();
+  }
+
+  function showFoodLibraryMessage(message) {
+    window.clearTimeout(foodLibraryMessageTimer);
+    foodLibraryMessage = message;
+    foodLibraryMessageTimer = window.setTimeout(() => {
+      foodLibraryMessageTimer = 0;
+      foodLibraryMessage = '';
+      getRoot()?.querySelector('[data-food-library-feedback]')?.remove();
+    }, 4000);
+  }
+
+  function clearFoodLibraryMessage() {
+    window.clearTimeout(foodLibraryMessageTimer);
+    foodLibraryMessageTimer = 0;
+    foodLibraryMessage = '';
   }
 
   function renderDeleteConfirmation(record, returnTo = 'history-day') {
@@ -5393,7 +5667,7 @@
         .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
       return meals.length ? meals.map((meal) => `
         <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}">
-            <span><strong>${escapeHtml(meal.name)}</strong><small>${renderCarbs(meal.totalCarbs)}</small></span>
+            <span><strong>${meal.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(meal.emoji)}</span>` : ''}${escapeHtml(meal.name)}</strong><small>${renderCarbs(meal.totalCarbs)}</small></span>
           <span aria-hidden="true">+</span>
         </button>
       `).join('') : '<p class="lee_lee_diabetes_empty">No My Meals yet.</p>';
@@ -6592,9 +6866,12 @@
   function addSavedMealToCarbCalculator(form, mealId) {
     const meal = activeSavedMeals(savedMeals).find((item) => item.id === mealId);
     if (!meal) return;
+    const mealRows = meal.components.length
+      ? carbRowsFromMealComponents(meal.components)
+      : [{ ...createBlankCarbCalculatorRow(), name: meal.name, carbs: formatCarbAmount(meal.totalCarbs) }];
     currentEditor.carbCalculatorRows = mergeCarbCalculatorRows(
       collectCarbCalculatorRowsFromForm(form),
-      carbRowsFromMealComponents(meal.components),
+      mealRows,
     );
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
@@ -9505,6 +9782,62 @@
         openExtraEditor();
       }
       if (action === 'log-entry') openNewLogEntryFromToday();
+      if (action === 'open-saved-meal-builder') {
+        foodLibraryError = '';
+        clearFoodLibraryMessage();
+        openSavedMealBuilder();
+        return;
+      }
+      if (action === 'edit-saved-meal') {
+        const meal = savedMeals.find((item) => item.id === target.dataset.id && !isLibraryItemDeleted(item));
+        if (meal) openSavedMealBuilder(meal);
+        return;
+      }
+      if (action === 'cancel-saved-meal-builder') {
+        closeSavedMealBuilder();
+        renderFoodLibrary();
+        return;
+      }
+      if (action === 'save-saved-meal-builder') {
+        saveSavedMealBuilder();
+        return;
+      }
+      if (action === 'open-meal-builder-food-picker') {
+        openMealBuilderFoodPicker();
+        return;
+      }
+      if (action === 'return-to-saved-meal-builder') {
+        if (!mealBuilderState) return;
+        mealBuilderState.view = 'builder';
+        renderFoodLibrary();
+        updateMealBuilderViewport();
+        requestAnimationFrame(() => getRoot()?.querySelector('[data-action="open-meal-builder-food-picker"]')?.focus({ preventScroll: true }));
+        return;
+      }
+      if (action === 'select-meal-builder-food') {
+        addFoodToSavedMealBuilder(target.dataset.id || '');
+        return;
+      }
+      if (action === 'remove-meal-builder-component') {
+        if (!mealBuilderState) return;
+        mealBuilderState.components = mealBuilderState.components.filter((component) => component.id !== target.dataset.componentId);
+        if (!mealBuilderState.components.length) mealBuilderState.mealCarbs = '';
+        mealBuilderState.error = '';
+        renderFoodLibrary();
+        updateMealBuilderViewport();
+        return;
+      }
+      if (action === 'toggle-saved-meal-favorite') {
+        const meal = savedMeals.find((item) => item.id === target.dataset.id && !isLibraryItemDeleted(item));
+        if (meal) {
+          const result = saveSavedMeal({ ...meal, favorite: !meal.favorite });
+          foodLibraryError = result.error || '';
+          if (result.meal) showFoodLibraryMessage(result.meal.favorite ? 'Meal favorited.' : 'Meal removed from favorites.');
+          else clearFoodLibraryMessage();
+          renderFoodLibrary();
+        }
+        return;
+      }
       if (action === 'open-carb-calculator') {
         const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
         const scrollSnapshot = getScrollSnapshot();
@@ -9675,7 +10008,7 @@
         renderReports();
       }
       if (action === 'foods') {
-        foodLibraryMessage = '';
+        clearFoodLibraryMessage();
         foodLibraryError = '';
         renderFoodLibrary();
       }
@@ -9849,7 +10182,8 @@
           sourceType: id ? undefined : 'user',
         });
         foodLibraryError = result.error || '';
-        foodLibraryMessage = result.food ? 'Food saved.' : '';
+        if (result.food) showFoodLibraryMessage('Food saved.');
+        else clearFoodLibraryMessage();
         if (result.food) clearFoodLibraryDraft();
         renderFoodLibrary(result.error
           ? { foodLibraryEditorOpen: true, foodLibraryEditorId: id, foodLibraryEditorDraft: draft }
@@ -9857,7 +10191,7 @@
       }
       if (action === 'open-food-library-editor') {
         foodLibraryError = '';
-        foodLibraryMessage = '';
+        clearFoodLibraryMessage();
         renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorDraft: readFoodLibraryDraft()?.draft || null });
       }
       if (action === 'cancel-food-library-editor') {
@@ -9872,7 +10206,7 @@
         const food = foodLibrary.find((item) => item.id === target.dataset.id);
         if (food) {
           foodLibraryError = '';
-          foodLibraryMessage = '';
+          clearFoodLibraryMessage();
           renderFoodLibrary({ foodLibraryEditorOpen: true, foodLibraryEditorId: food.id, foodLibraryEditorDraft: null });
         }
       }
@@ -9908,7 +10242,7 @@
         const food = foodLibrary.find((item) => item.id === target.dataset.id);
         if (food && window.confirm(`Delete ${food.name}? History entries will keep their saved food snapshot.`)) {
           softDeleteLibraryItem('food', food.id);
-          foodLibraryMessage = 'Food deleted.';
+          showFoodLibraryMessage('Food deleted.');
           renderFoodLibrary();
         }
       }
@@ -9916,7 +10250,7 @@
         const meal = savedMeals.find((item) => item.id === target.dataset.id);
         if (meal && window.confirm(`Delete ${meal.name}?`)) {
           softDeleteLibraryItem('saved-meal', meal.id);
-          foodLibraryMessage = 'Saved meal deleted.';
+          showFoodLibraryMessage('Saved meal deleted.');
           renderFoodLibrary();
         }
       }
@@ -10055,9 +10389,21 @@
       }
     });
     root.addEventListener('toggle', (event) => {
+      const foodAccordion = event.target.closest?.('details[data-food-library-accordion]');
+      if (foodAccordion && currentEditor?.mode === 'foods') {
+        if (foodAccordion.open) {
+          foodLibraryOpenSection = foodAccordion.dataset.foodLibraryAccordion;
+          root.querySelectorAll('details[data-food-library-accordion]').forEach((section) => {
+            if (section !== foodAccordion) section.open = false;
+          });
+        } else if (foodLibraryOpenSection === foodAccordion.dataset.foodLibraryAccordion) {
+          foodLibraryOpenSection = '';
+        }
+        return;
+      }
       if (!event.target.matches?.('details[data-settings-accordion][data-settings-key]')) return;
       saveSettingsUiState();
-    });
+    }, true);
     root.addEventListener('submit', (event) => {
       if (!event.target.matches('[data-auth-form], [data-device-identity-form], [data-lee-lee-editor], [data-plan-editor]')) return;
       event.preventDefault();
@@ -10112,6 +10458,45 @@
       }
     }, true);
     root.addEventListener('input', (event) => {
+      if (mealBuilderState && event.target.name === 'mealBuilderName') {
+        mealBuilderState.name = event.target.value;
+        mealBuilderState.error = '';
+        showMealBuilderError('');
+        return;
+      }
+      if (mealBuilderState && event.target.name === 'mealBuilderEmoji') {
+        mealBuilderState.emoji = event.target.value;
+        return;
+      }
+      if (mealBuilderState && event.target.name === 'mealBuilderCarbs') {
+        mealBuilderState.mealCarbs = event.target.value;
+        mealBuilderState.error = '';
+        showMealBuilderError('');
+        refreshMealBuilderTotals();
+        return;
+      }
+      if (mealBuilderState && event.target.name === 'mealBuilderFoodSearch') {
+        mealBuilderState.foodSearch = event.target.value;
+        const results = root.querySelector('[data-meal-builder-food-results]');
+        if (results) results.innerHTML = renderMealBuilderFoodResults(mealBuilderState.foodSearch);
+        return;
+      }
+      if (mealBuilderState && event.target.matches('[data-meal-builder-component-carbs]')) {
+        const component = mealBuilderState.components.find((item) => item.id === event.target.dataset.componentId);
+        if (!component) return;
+        component.carbTotalDraft = event.target.value;
+        const amount = normalizeNumber(event.target.value);
+        const valid = amount != null && amount >= 0;
+        event.target.setAttribute('aria-invalid', String(!valid));
+        if (valid) {
+          Object.assign(component, normalizeMealComponent({ ...component, quantity: 1, carbsPerServing: amount, carbTotal: amount }));
+          delete component.carbTotalDraft;
+        }
+        mealBuilderState.error = '';
+        showMealBuilderError('');
+        refreshMealBuilderTotals();
+        return;
+      }
       const foodLibraryPanel = event.target.closest('[data-food-library-editor]');
       if (foodLibraryPanel) {
         currentEditor.foodLibraryEditorDraft = collectFoodLibraryEditorDraft(foodLibraryPanel);
@@ -10255,6 +10640,35 @@
       }
     });
     root.addEventListener('keydown', (event) => {
+      if (mealBuilderState && event.key === 'Escape') {
+        event.preventDefault();
+        if (mealBuilderState.view === 'picker') {
+          mealBuilderState.view = 'builder';
+          renderFoodLibrary();
+          updateMealBuilderViewport();
+          return;
+        }
+        closeSavedMealBuilder();
+        renderFoodLibrary();
+        return;
+      }
+      if (mealBuilderState && event.key === 'Tab') {
+        const dialog = root.querySelector('[data-meal-builder]');
+        const focusable = [...(dialog?.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])]
+          .filter((element) => !element.closest('[hidden]'));
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+        return;
+      }
       if (currentEditor?.mode === 'pre-meal-stop-confirm') {
         if (event.key === 'Escape') {
           event.preventDefault();

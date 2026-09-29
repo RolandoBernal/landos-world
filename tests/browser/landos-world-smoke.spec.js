@@ -1362,6 +1362,11 @@ async function chooseLeeLeeSection(page, name) {
   await nav.getByRole('button', { name }).click();
 }
 
+async function openFoodLibraryAccordion(page, section) {
+  const panel = page.locator(`[data-food-library-accordion="${section}"]`);
+  if (await panel.getAttribute('open') === null) await panel.locator('summary').click();
+}
+
 test('Lee-Lee top-level navigation omits the standalone Export section', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await openProtectedLeeLeeTracker(page);
@@ -2312,12 +2317,12 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await calculator.getByLabel('Carbs per serving').fill('17');
   await calculator.getByRole('button', { name: 'Add Item' }).click();
   await expect(calculator.getByLabel('Meal Total')).toHaveText('34 g');
-  await expect(calculator.getByText('Manual Amount')).toBeVisible();
+  await expect(calculator.getByText('Manual Amount', { exact: true })).toBeVisible();
   await expect(calculator.getByText('No foods added yet.')).toHaveCount(0);
 
   const picker = calculator.locator('[data-carb-picker]');
   await foodLibrarySelect.selectOption('favorites');
-  await expect(picker.getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await expect(picker).toHaveAttribute('aria-label', 'Favorites');
   await expect(picker.getByRole('button', { name: /Banana 27 g carbs/ })).toBeVisible();
   await expect(picker.getByRole('button', { name: /Pasta 15 g carbs/ })).toBeVisible();
   await expect(picker.getByRole('button', { name: /Mark favorite|Remove favorite/ })).toHaveCount(0);
@@ -2326,7 +2331,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByLabel('Meal Total')).toHaveText('61 g');
   await expect(calculator.locator('[data-carb-calculator-row]').filter({ hasText: 'Banana' })).toBeVisible();
   await foodLibrarySelect.selectOption('favorites');
-  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Favorites' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveAttribute('aria-label', 'Favorites');
   await picker.getByRole('button', { name: /Pasta 15 g carbs/ }).click();
   await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
   await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
@@ -2336,7 +2341,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByRole('button', { name: 'Save as My Meal' })).toBeVisible();
 
   await foodLibrarySelect.selectOption('recent');
-  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'Recent' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveAttribute('aria-label', 'Recent');
   await expect(foodLibrarySelect).toHaveValue('recent');
   await foodLibrarySelect.selectOption('');
   await expect(foodLibrarySelect).toHaveValue('');
@@ -2344,11 +2349,11 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await expect(calculator.getByLabel('Meal Total')).toHaveText('76 g');
 
   await foodLibrarySelect.selectOption('meals');
-  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Meals' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveAttribute('aria-label', 'My Meals');
   await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: /Lunch Combo/ })).toBeVisible();
 
   await foodLibrarySelect.selectOption('foods');
-  await expect(calculator.locator('[data-carb-picker]').getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  await expect(calculator.locator('[data-carb-picker]')).toHaveAttribute('aria-label', 'My Foods');
   await expect(calculator.locator('[data-carb-picker]').getByRole('button', { name: '+ Add New Food' })).toBeVisible();
   await expect(calculator.getByRole('button', { name: 'Search', exact: true })).toHaveCount(0);
   await calculator.getByRole('button', { name: 'Search foods...' }).click();
@@ -2360,7 +2365,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
     }, query);
     await expect(foodSearch).toHaveValue(query);
   };
-  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Food Search' })).toBeVisible();
+  await expect(calculator.getByRole('heading', { name: 'Food Search' })).toBeVisible();
   await expect(foodSearch).toBeFocused();
   await foodSearch.pressSequentially('c');
   await expect(foodSearch).toHaveValue('c');
@@ -2369,7 +2374,7 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await foodSearch.pressSequentially('hicken nugget');
   await expect(foodSearch).toHaveValue('chicken nugget');
   await expect(foodSearch).toBeFocused();
-  await expect(calculator.locator('[data-carb-picker="search"]').getByRole('heading', { name: 'Food Search' })).toBeVisible();
+  await expect(calculator.getByRole('heading', { name: 'Food Search' })).toBeVisible();
   const chickenResult = calculator.locator('[data-carb-picker="search"]').getByRole('button', { name: /Chicken Nuggets \/ Tenders 15 g carbs/ }).first();
   await expect(chickenResult).toBeVisible();
   await foodSearch.press('Enter');
@@ -2434,6 +2439,588 @@ test('Lee-Lee Food Library builds carb totals and saves historical snapshots', a
   await chooseLeeLeeSection(page, 'History');
   await page.getByRole('button', { name: /1 entry/ }).click();
   await expect(page.getByText(/Manual Amount · .*Banana · .*Pasta · 2× Ketchup/)).toBeVisible();
+});
+
+test('Lee-Lee Foods screen keeps My Foods and My Meals in one-at-a-time accordions', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: Array.from({ length: 120 }, (_, index) => ({
+        id: `accordion-food-${index}`,
+        name: `Accordion Food ${index}`,
+        carbs: 3,
+        createdAt: '2026-09-01T12:00:00Z',
+        updatedAt: '2026-09-01T12:00:00Z',
+      })),
+      savedMeals: [{
+        id: 'accordion-sample-meal',
+        name: 'Accordion Sample Meal',
+        components: [],
+        totalCarbs: 12,
+        createdAt: '2026-09-01T12:00:00Z',
+        updatedAt: '2026-09-01T12:00:00Z',
+      }],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  const foods = page.locator('[data-food-library-accordion="foods"]');
+  const meals = page.locator('[data-food-library-accordion="meals"]');
+  await expect(foods).not.toHaveAttribute('open', '');
+  await expect(meals).toHaveAttribute('open', '');
+  await expect(foods.locator('summary')).toBeInViewport();
+  await expect(meals.locator('summary')).toBeInViewport();
+  await expect(foods.getByRole('searchbox', { name: 'Search Foods' })).toBeHidden();
+  await expect(meals.getByRole('searchbox', { name: 'Search Meals' })).toBeVisible();
+  await expect(page.locator('[data-food-library-accordion][open]')).toHaveCount(1);
+  const panelOrder = (panel) => panel.locator('.lee_lee_diabetes_settings_accordion_body').evaluate((body) => [...body.children].map((child) => {
+    if (child.matches('.lee_lee_diabetes_field')) return 'search';
+    if (child.matches('.lee_lee_diabetes_food_library_actions')) return 'add';
+    if (child.matches('.lee_lee_diabetes_food_list')) return 'list';
+    return 'other';
+  }));
+  expect(await panelOrder(foods)).toEqual(['search', 'add', 'list']);
+  await page.evaluate(() => {
+    const calls = { focus: 0, scrollIntoView: 0, scrollTo: 0 };
+    const originalFocus = HTMLElement.prototype.focus;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollTo = window.scrollTo.bind(window);
+    HTMLElement.prototype.focus = function (...args) {
+      calls.focus += 1;
+      return originalFocus.apply(this, args);
+    };
+    Element.prototype.scrollIntoView = function (...args) {
+      calls.scrollIntoView += 1;
+      return originalScrollIntoView?.apply(this, args);
+    };
+    window.scrollTo = (...args) => {
+      calls.scrollTo += 1;
+      return originalScrollTo(...args);
+    };
+    window.__foodAccordionSideEffects = calls;
+  });
+  const initialScrollY = await page.evaluate(() => window.scrollY);
+  const beforeFoodToggle = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects }));
+  await foods.locator('summary').click();
+  await expect(foods).toHaveAttribute('open', '');
+  await expect(meals).not.toHaveAttribute('open', '');
+  await expect(foods.getByRole('searchbox', { name: 'Search Foods' })).toBeVisible();
+  const foodButtonGeometry = await foods.getByRole('button', { name: '+ Add New Food' }).evaluate((button) => {
+    const rect = button.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+  const afterFoodToggle = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects, scrollY: window.scrollY }));
+  expect(afterFoodToggle).toEqual({ ...beforeFoodToggle, scrollY: initialScrollY });
+  const firstFood = foods.locator('[data-food-library-list] article').first();
+  await firstFood.getByRole('button', { name: 'Mark favorite' }).click();
+  await expect(firstFood.getByRole('button', { name: 'Remove favorite' })).toBeVisible();
+  await expect(foods).toHaveAttribute('open', '');
+  await expect(meals).not.toHaveAttribute('open', '');
+  await foods.getByRole('searchbox', { name: 'Search Foods' }).fill('Accordion Food 1');
+  await expect(foods.locator('[data-food-library-list] article').first()).toContainText('Accordion Food 1');
+  await expect(foods).toHaveAttribute('open', '');
+
+  const beforeMealToggle = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects }));
+  await meals.locator('summary').click();
+  await expect(meals).toHaveAttribute('open', '');
+  await expect(foods).not.toHaveAttribute('open', '');
+  await expect(meals.getByRole('searchbox', { name: 'Search Meals' })).toBeVisible();
+  const addMealButton = meals.getByRole('button', { name: '+ Add New Meal' });
+  await expect(addMealButton).toBeVisible();
+  await expect(foods.getByRole('searchbox', { name: 'Search Foods' })).toBeHidden();
+  await expect(page.locator('[data-food-library-accordion][open]')).toHaveCount(1);
+  const afterMealToggle = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects }));
+  expect(afterMealToggle).toEqual(beforeMealToggle);
+  await expect(addMealButton).toBeInViewport();
+  expect(await panelOrder(meals)).toEqual(['search', 'add', 'list']);
+  const managementLayout = await page.evaluate(() => {
+    const foodsPanel = document.querySelector('[data-food-library-accordion="foods"]');
+    const mealsPanel = document.querySelector('[data-food-library-accordion="meals"]');
+    const mealsButton = mealsPanel.querySelector('[data-action="open-saved-meal-builder"]');
+    const shell = document.querySelector('.lee_lee_diabetes_shell');
+    return {
+      gap: parseFloat(getComputedStyle(mealsPanel).marginBlockStart),
+      expectedGap: parseFloat(getComputedStyle(shell).fontSize) * parseFloat(getComputedStyle(shell).getPropertyValue('--llt-field-group-gap')),
+      mealWidth: mealsButton.getBoundingClientRect().width,
+      mealHeight: mealsButton.getBoundingClientRect().height,
+    };
+  });
+  expect(managementLayout.gap).toBeGreaterThan(0);
+  expect(managementLayout.gap).toBe(managementLayout.expectedGap);
+  expect(managementLayout.mealWidth).toBe(foodButtonGeometry.width);
+  expect(managementLayout.mealHeight).toBe(foodButtonGeometry.height);
+  await meals.getByRole('searchbox', { name: 'Search Meals' }).fill('Accordion Sample');
+  await expect(page.locator('[data-saved-meals-list] article')).toContainText('Accordion Sample Meal');
+
+  const sampleMeal = page.locator('[data-saved-meals-list] article').filter({ hasText: 'Accordion Sample Meal' });
+  await sampleMeal.getByRole('button', { name: 'Favorite meal' }).click();
+  const mealFeedback = page.getByRole('status').filter({ hasText: 'Meal favorited.' });
+  await expect(mealFeedback).toBeVisible();
+  await page.waitForTimeout(4100);
+  await expect(page.locator('[data-food-library-feedback]')).toHaveCount(0);
+  await expect(meals).toHaveAttribute('open', '');
+  await expect(foods).not.toHaveAttribute('open', '');
+
+  const beforeReturnToFoods = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects }));
+  await foods.locator('summary').click();
+  await expect(foods).toHaveAttribute('open', '');
+  await expect(meals).not.toHaveAttribute('open', '');
+  await expect(page.locator('[data-food-library-accordion][open]')).toHaveCount(1);
+  const afterReturnToFoods = await page.evaluate(() => ({ ...window.__foodAccordionSideEffects }));
+  expect(afterReturnToFoods).toEqual(beforeReturnToFoods);
+
+  await chooseLeeLeeSection(page, 'Today');
+  await chooseLeeLeeSection(page, 'Foods');
+  await expect(page.locator('[data-food-library-accordion="foods"]')).not.toHaveAttribute('open', '');
+  await expect(page.locator('[data-food-library-accordion="meals"]')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-food-library-accordion][open]')).toHaveCount(1);
+});
+
+test('Lee-Lee My Meals builder creates, edits, favorites, quick-uses, and soft-deletes saved meals', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [
+        { id: 'builder-bread', name: 'Builder Bread', carbs: 20, servingLabel: 'slice', createdAt: '2026-09-01T12:00:00Z', updatedAt: '2026-09-01T12:00:00Z' },
+        { id: 'builder-cheese', name: 'Builder Cheese', carbs: 7, servingLabel: 'slice', createdAt: '2026-09-01T12:00:00Z', updatedAt: '2026-09-01T12:00:00Z' },
+      ],
+      savedMeals: [{
+        id: 'aardvark-meal',
+        name: 'Aardvark Meal',
+        components: [{ componentType: 'manual', nameSnapshot: 'Manual amount', quantity: 1, carbsPerServing: 1, carbTotal: 1 }],
+        totalCarbs: 1,
+        favorite: false,
+        createdAt: '2026-09-01T12:00:00Z',
+        updatedAt: '2026-09-01T12:00:00Z',
+      }],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  const builder = page.locator('[data-meal-builder]');
+  await expect(builder.getByRole('heading', { name: 'Add Meal' })).toBeVisible();
+  await expect(builder.getByText('Enter a total you already know, or add food items and LLT will calculate it.')).toBeVisible();
+  await builder.getByLabel('Meal Name').focus();
+  const mealNameFocus = await builder.getByLabel('Meal Name').evaluate((input) => {
+    const inputRect = input.getBoundingClientRect();
+    const bodyRect = input.closest('[data-meal-builder-body]').getBoundingClientRect();
+    const style = getComputedStyle(input);
+    return {
+      insetFocus: style.boxShadow.includes('inset'),
+      outlineWidth: style.outlineWidth,
+      leftContained: inputRect.left >= bodyRect.left,
+      rightContained: inputRect.right <= bodyRect.right,
+    };
+  });
+  expect(mealNameFocus).toEqual({ insetFocus: true, outlineWidth: '0px', leftContained: true, rightContained: true });
+  await builder.getByLabel('Meal Name').fill('Builder Sandwich');
+  await builder.getByLabel('Emoji').fill('🥪');
+  await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+  const foodSearch = builder.getByLabel('Search Foods');
+  await foodSearch.fill('Builder Bread');
+  await builder.getByRole('button', { name: 'Add Builder Bread' }).click();
+  await expect(builder.getByLabel('Meal Carbs')).toBeHidden();
+  await expect(builder.getByLabel('Builder Bread carbs')).toHaveValue('20');
+  await builder.getByLabel('Builder Bread carbs').fill('17.5');
+  await expect(builder.locator('[data-meal-builder-total]')).toHaveText('17.5 g carbs');
+  await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+  await builder.getByLabel('Search Foods').fill('Builder Cheese');
+  await builder.getByRole('button', { name: 'Add Builder Cheese' }).click();
+  await builder.getByLabel('Builder Cheese carbs').fill('11');
+  await expect(builder.locator('[data-meal-builder-total]')).toHaveText('28.5 g carbs');
+  await expect(builder.getByText('Total carbs are calculated from the food items below.')).toBeVisible();
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+
+  const mealCard = page.locator('[data-saved-meals-list] article').filter({ hasText: 'Builder Sandwich' });
+  await expect(mealCard).toContainText('28.5 g');
+  await expect(mealCard).toContainText('🥪');
+  const cardActions = mealCard.locator('.lee_lee_diabetes_food_item_actions');
+  await expect(cardActions.locator('.lee_lee_diabetes_icon_button')).toBeVisible();
+  await expect(cardActions.locator('.lee_lee_diabetes_food_item_actions_right button')).toHaveCount(2);
+  const actionRowGeometry = await cardActions.evaluate((row) => {
+    const buttons = [...row.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
+    return { rowWidth: row.clientWidth, rowScrollWidth: row.scrollWidth, sameRow: buttons.every((rect) => Math.abs(rect.top - buttons[0].top) < 8) };
+  });
+  expect(actionRowGeometry.rowScrollWidth).toBeLessThanOrEqual(actionRowGeometry.rowWidth);
+  expect(actionRowGeometry.sameRow).toBe(true);
+  const initialMeal = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals.find((meal) => meal.name === 'Builder Sandwich'));
+  expect(initialMeal.components.map((component) => component.nameSnapshot)).toEqual(['Builder Bread', 'Builder Cheese']);
+  expect(initialMeal.components[0].carbTotal).toBe(17.5);
+  expect(initialMeal.emoji).toBe('🥪');
+  expect(initialMeal.totalCarbs).toBe(28.5);
+  expect(await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().foodLibrary.find((food) => food.id === 'builder-bread').carbs)).toBe(20);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: current.foodLibrary.map((food) => food.id === 'builder-bread'
+        ? { ...food, name: 'Renamed Source Bread', carbs: 99, deletedAt: '2026-09-02T12:00:00Z' }
+        : food),
+    }));
+  });
+  const savedSnapshotAfterSourceChange = await page.evaluate((mealId) => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals.find((meal) => meal.id === mealId), initialMeal.id);
+  expect(savedSnapshotAfterSourceChange.components[0].nameSnapshot).toBe('Builder Bread');
+  expect(savedSnapshotAfterSourceChange.components[0].carbsPerServing).toBe(17.5);
+  expect(savedSnapshotAfterSourceChange.totalCarbs).toBe(28.5);
+
+  await chooseLeeLeeSection(page, 'Log Entry');
+  const entryForm = page.locator('[data-lee-lee-editor]');
+  await entryForm.getByLabel('Context').selectOption('Dinner');
+  await entryForm.getByLabel('Blood Sugar').fill('150');
+  await entryForm.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  const calculator = page.locator('[data-carb-calculator]');
+  await calculator.getByLabel('Food Library').selectOption('meals');
+  const mealPicker = calculator.locator('[data-carb-picker="meals"]');
+  await mealPicker.getByRole('button', { name: /Builder Sandwich/ }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('28.5 g');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(2);
+  await calculator.getByRole('button', { name: 'Use 28.5 grams' }).click();
+  await entryForm.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Not Now' }).click();
+
+  const historicalBeforeEdit = await page.evaluate(() => {
+    const data = window.LeeLeeTrackerStorage.loadTrackerData();
+    const record = data.records.find((item) => item.type === 'Dinner');
+    return { mealCarbs: record.mealCarbs, components: record.mealComponents };
+  });
+  expect(historicalBeforeEdit.mealCarbs).toBe(28.5);
+
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+  await page.getByLabel('Search Meals').fill('Builder Sandwich');
+  const searchedCard = page.locator('[data-saved-meals-list] article').filter({ hasText: 'Builder Sandwich' });
+  await searchedCard.getByRole('button', { name: 'Edit' }).click();
+  const editBuilder = page.locator('[data-meal-builder]');
+  await editBuilder.getByLabel('Meal Name').fill('Updated Sandwich');
+  await editBuilder.getByLabel('Builder Bread carbs').fill('20');
+  await editBuilder.getByRole('button', { name: 'Remove Builder Cheese' }).click();
+  await editBuilder.getByRole('button', { name: '+ Add Food Item' }).click();
+  const editSearch = editBuilder.getByLabel('Search Foods');
+  await editSearch.fill('Builder Cheese');
+  await editBuilder.getByRole('button', { name: 'Add Builder Cheese' }).click();
+  await editBuilder.getByLabel('Builder Cheese carbs').fill('21');
+  await expect(editBuilder.locator('[data-meal-builder-total]')).toHaveText('41 g carbs');
+  await editBuilder.getByRole('button', { name: 'Save Meal' }).click();
+
+  await page.getByLabel('Search Meals').fill('Updated');
+  const stateAfterEdit = await page.evaluate((mealId) => {
+    const data = window.LeeLeeTrackerStorage.loadTrackerData();
+    const meal = data.savedMeals.find((item) => item.id === mealId);
+    const record = data.records.find((item) => item.type === 'Dinner');
+    return { meal, activeMeals: data.savedMeals.filter((item) => !item.deletedAt), record };
+  }, initialMeal.id);
+  expect(stateAfterEdit.meal.id).toBe(initialMeal.id);
+  expect(stateAfterEdit.meal.createdAt).toBe(initialMeal.createdAt);
+  expect(stateAfterEdit.meal.name).toBe('Updated Sandwich');
+  expect(stateAfterEdit.meal.totalCarbs).toBe(41);
+  expect(stateAfterEdit.activeMeals.filter((meal) => meal.id === initialMeal.id)).toHaveLength(1);
+  expect(stateAfterEdit.record.mealCarbs).toBe(historicalBeforeEdit.mealCarbs);
+  expect(stateAfterEdit.record.mealComponents).toEqual(historicalBeforeEdit.components);
+
+  const updatedCard = page.locator('[data-saved-meals-list] article').filter({ hasText: 'Updated Sandwich' });
+  await updatedCard.getByRole('button', { name: 'Edit' }).click();
+  const cancelBuilder = page.locator('[data-meal-builder]');
+  await cancelBuilder.getByLabel('Meal Name').fill('Uncommitted rename');
+  await cancelBuilder.getByLabel('Builder Bread carbs').fill('0.25');
+  await cancelBuilder.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+  const afterCancel = await page.evaluate((mealId) => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals.find((meal) => meal.id === mealId), initialMeal.id);
+  expect(afterCancel.name).toBe('Updated Sandwich');
+  expect(afterCancel.totalCarbs).toBe(41);
+
+  await page.getByLabel('Search Meals').fill('');
+  const updatedCardAfterCancel = page.locator('[data-saved-meals-list] article').filter({ hasText: 'Updated Sandwich' });
+  await updatedCardAfterCancel.getByRole('button', { name: 'Favorite meal' }).click();
+  await expect(updatedCardAfterCancel.getByRole('button', { name: 'Remove meal favorite' })).toHaveAttribute('aria-pressed', 'true');
+  const orderedNames = await page.locator('[data-saved-meals-list] article strong').allTextContents();
+  expect(orderedNames.slice(0, 2)).toEqual(['🥪Updated Sandwich', 'Aardvark Meal']);
+  await page.getByLabel('Search Meals').fill('Updated');
+  await expect(page.locator('[data-saved-meals-list] article')).toHaveCount(1);
+
+  await page.on('dialog', (dialog) => dialog.accept());
+  await page.locator('[data-saved-meals-list] article').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('[data-saved-meals-list]').getByText('No My Meals yet.')).toBeVisible();
+  const afterDelete = await page.evaluate((mealId) => {
+    const data = window.LeeLeeTrackerStorage.loadTrackerData();
+    return {
+      meal: data.savedMeals.find((item) => item.id === mealId),
+      record: data.records.find((item) => item.type === 'Dinner'),
+    };
+  }, initialMeal.id);
+  expect(afterDelete.meal.deletedAt).toBeTruthy();
+  expect(afterDelete.meal.deletedBy).toBeTruthy();
+  expect(afterDelete.record.mealCarbs).toBe(historicalBeforeEdit.mealCarbs);
+  expect(afterDelete.record.mealComponents).toEqual(historicalBeforeEdit.components);
+});
+
+test('Lee-Lee Meal Builder controls keep stable dimensions from zero through ten food items', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    const now = '2026-09-01T12:00:00Z';
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: Array.from({ length: 10 }, (_, index) => ({
+        id: `meal-builder-sizing-${index + 1}`,
+        name: `Sizing Food ${index + 1}`,
+        carbs: index + 1,
+        servingLabel: 'serving',
+        createdAt: now,
+        updatedAt: now,
+      })),
+      savedMeals: [],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+
+  const builder = page.locator('[data-meal-builder]');
+  const measureStableControls = () => builder.evaluate((dialog) => {
+    const controls = {
+      name: dialog.querySelector('[name="mealBuilderName"]'),
+      emoji: dialog.querySelector('[name="mealBuilderEmoji"]'),
+      addFood: dialog.querySelector('[data-action="open-meal-builder-food-picker"]'),
+      cancel: [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Cancel'),
+      save: [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Save Meal'),
+    };
+    return Object.fromEntries(Object.entries(controls).map(([key, control]) => {
+      const rect = control.getBoundingClientRect();
+      return [key, { width: rect.width, height: rect.height }];
+    }));
+  });
+  const baseline = await measureStableControls();
+  const assertAddButtonBeforeItems = async (expectedCount) => {
+    const placement = await builder.evaluate((dialog) => {
+      const body = dialog.querySelector('[data-meal-builder-body]');
+      const addButton = body.querySelector('[data-action="open-meal-builder-food-picker"]');
+      const list = body.querySelector('[data-meal-builder-components]');
+      const firstFood = list?.querySelector('[data-meal-builder-component]');
+      return {
+        buttonCount: body.querySelectorAll('[data-action="open-meal-builder-food-picker"]').length,
+        itemCount: list?.querySelectorAll('[data-meal-builder-component]').length ?? 0,
+        buttonPrecedesList: Boolean(list && (addButton.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        buttonPrecedesFirstFood: Boolean(firstFood && (addButton.compareDocumentPosition(firstFood) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      };
+    });
+    expect(placement.buttonCount).toBe(1);
+    expect(placement.itemCount).toBe(expectedCount);
+    if (expectedCount > 0) {
+      expect(placement.buttonPrecedesList).toBe(true);
+      expect(placement.buttonPrecedesFirstFood).toBe(true);
+    }
+  };
+  await assertAddButtonBeforeItems(0);
+  const mealCarbsStyle = await builder.getByLabel('Meal Carbs').evaluate((input) => {
+    const style = getComputedStyle(input);
+    return { minHeight: style.minHeight, padding: style.padding, borderRadius: style.borderRadius };
+  });
+  const standardInputStyle = await builder.getByLabel('Meal Name').evaluate((input) => {
+    const style = getComputedStyle(input);
+    return { minHeight: style.minHeight, padding: style.padding, borderRadius: style.borderRadius };
+  });
+  expect(mealCarbsStyle).toEqual(standardInputStyle);
+
+  for (let count = 1; count <= 10; count += 1) {
+    await assertAddButtonBeforeItems(count - 1);
+    await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+    await builder.getByLabel('Search Foods').fill(`Sizing Food ${count}`);
+    await builder.getByRole('button', { name: `Add Sizing Food ${count}`, exact: true }).click();
+    await assertAddButtonBeforeItems(count);
+    if ([1, 5, 10].includes(count)) {
+      const current = await measureStableControls();
+      for (const key of Object.keys(baseline)) {
+        expect(Math.abs(current[key].height - baseline[key].height), `${key} height at ${count} items`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(current[key].width - baseline[key].width), `${key} width at ${count} items`).toBeLessThanOrEqual(0.5);
+      }
+      expect(await builder.locator('[data-meal-builder-components] [data-meal-builder-component]').count()).toBe(count);
+    }
+  }
+  await expect(builder.locator('[data-meal-builder-total]')).toHaveText('55 g carbs');
+  await expect(builder.getByRole('button', { name: 'Save Meal' })).toBeVisible();
+});
+
+test('Lee-Lee Meal Builder keeps long content in its internal scroll owner through keyboard viewport changes', async ({ page }) => {
+  const initialViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  await page.addInitScript((initialFrame) => {
+    const listeners = new Map();
+    const frame = { ...initialFrame, offsetLeft: 0, offsetTop: 0 };
+    const visualViewport = {
+      get width() { return frame.width; },
+      get height() { return frame.height; },
+      get offsetLeft() { return frame.offsetLeft; },
+      get offsetTop() { return frame.offsetTop; },
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(listener);
+      },
+      removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+      setFrame(nextFrame) {
+        Object.assign(frame, nextFrame);
+        for (const type of ['resize', 'scroll']) {
+          const event = new Event(type);
+          listeners.get(type)?.forEach((listener) => listener.call(visualViewport, event));
+        }
+      },
+    };
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: visualViewport });
+    window.__setMealBuilderVisualViewport = (nextFrame) => visualViewport.setFrame(nextFrame);
+  }, initialViewport);
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    const components = Array.from({ length: 24 }, (_, index) => ({
+      id: `long-meal-component-${index}`,
+      componentType: 'food',
+      foodId: `food-${index}`,
+      nameSnapshot: `Long Meal Food ${index + 1}`,
+      servingLabelSnapshot: 'serving',
+      quantity: 1,
+      carbsPerServing: 4,
+      carbTotal: 4,
+    }));
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      savedMeals: [{ id: 'long-builder-meal', name: 'Long Builder Meal', components, createdAt: '2026-09-01T12:00:00Z', updatedAt: '2026-09-01T12:00:00Z' }],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+  await page.locator('[data-saved-meals-list]').getByRole('button', { name: 'Edit' }).click();
+  const geometry = await page.locator('[data-meal-builder]').evaluate((dialog) => {
+    const owner = dialog.querySelector('[data-modal-scroll-container]');
+    const scrollableDescendants = [...dialog.querySelectorAll('*')].filter((element) => {
+      const overflowY = getComputedStyle(element).overflowY;
+      return /^(auto|scroll|overlay)$/.test(overflowY) && element.scrollHeight > element.clientHeight + 1;
+    });
+    return {
+      ownerFound: Boolean(owner),
+      ownerOverflows: owner.scrollHeight > owner.clientHeight,
+      ownerIsOnlyScrollableDescendant: scrollableDescendants.length === 1 && scrollableDescendants[0] === owner,
+      componentCount: dialog.querySelectorAll('[data-meal-builder-component]').length,
+    };
+  });
+  expect(geometry).toEqual({ ownerFound: true, ownerOverflows: true, ownerIsOnlyScrollableDescendant: true, componentCount: 24 });
+
+  await page.evaluate(() => window.__setMealBuilderVisualViewport({ width: window.innerWidth, height: 430, offsetLeft: 0, offsetTop: 120 }));
+  await expect.poll(() => page.locator('[data-meal-builder-viewport]').evaluate((frame) => getComputedStyle(frame).top)).toBe('120px');
+  const constrainedGeometry = await page.locator('[data-meal-builder-layer]').evaluate((layer) => {
+    const viewport = layer.querySelector('[data-meal-builder-viewport]').getBoundingClientRect();
+    const dialog = layer.querySelector('[data-meal-builder]').getBoundingClientRect();
+    const backdrop = layer.querySelector('.lee_lee_diabetes_carb_calc_backdrop').getBoundingClientRect();
+    return {
+      layoutViewportHeight: window.innerHeight,
+      viewportTop: viewport.top,
+      viewportBottom: viewport.bottom,
+      dialogTop: dialog.top,
+      dialogBottom: dialog.bottom,
+      backdropTop: backdrop.top,
+      backdropBottom: backdrop.bottom,
+    };
+  });
+  expect(constrainedGeometry.viewportTop).toBe(120);
+  expect(constrainedGeometry.dialogTop).toBeGreaterThanOrEqual(120);
+  expect(constrainedGeometry.dialogBottom).toBeLessThanOrEqual(550);
+  expect(constrainedGeometry.backdropTop).toBe(0);
+  expect(constrainedGeometry.backdropBottom).toBe(constrainedGeometry.layoutViewportHeight);
+  await page.locator('[data-meal-builder-component-carbs]').last().focus();
+  await page.evaluate(() => window.LandosWorldModalUtils.ensureFocusedElementVisible(document.activeElement, 16));
+  const focusScroll = await page.locator('[data-meal-builder-body]').evaluate((body) => ({
+    scrollTop: body.scrollTop,
+    focusedInside: body.contains(document.activeElement),
+    documentScrollY: window.scrollY,
+    bodyPosition: getComputedStyle(document.body).position,
+  }));
+  expect(focusScroll.scrollTop).toBeGreaterThan(0);
+  expect(focusScroll.focusedInside).toBe(true);
+  expect(focusScroll.documentScrollY).toBe(0);
+  expect(focusScroll.bodyPosition).toBe('fixed');
+});
+
+test('Lee-Lee Meal Builder rejects incomplete drafts and permits duplicate names', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current,
+      foodLibrary: [{ id: 'invalid-quantity-food', name: 'Invalid Quantity Food', carbs: 5, createdAt: '2026-09-01T12:00:00Z', updatedAt: '2026-09-01T12:00:00Z' }],
+      savedMeals: [],
+    }));
+  });
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  let builder = page.locator('[data-meal-builder]');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(builder.getByRole('alert')).toHaveText('Enter a meal name.');
+  await builder.getByLabel('Meal Name').fill('   ');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(builder.getByRole('alert')).toHaveText('Enter a meal name.');
+  await builder.getByLabel('Meal Name').fill('Repeatable Meal');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(builder.getByRole('alert')).toHaveText('Enter meal carbs or add at least one food item.');
+  await builder.getByLabel('Meal Carbs').fill('-1');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(builder.getByRole('alert')).toHaveText('Enter meal carbs or add at least one food item.');
+  await builder.getByLabel('Meal Carbs').fill('62');
+  await expect(builder.locator('[data-meal-builder-total]')).toHaveText('62 g carbs');
+  await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+  await builder.getByLabel('Search Foods').fill('Invalid Quantity Food');
+  await builder.getByRole('button', { name: 'Add Invalid Quantity Food' }).click();
+  await expect(builder.getByLabel('Meal Carbs')).toBeHidden();
+  await expect(builder.locator('[data-meal-builder-total]')).toHaveText('5 g carbs');
+  await builder.getByRole('button', { name: 'Remove Invalid Quantity Food' }).click();
+  await expect(builder.getByLabel('Meal Carbs')).toHaveValue('');
+  await builder.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  builder = page.locator('[data-meal-builder]');
+  await builder.getByLabel('Meal Name').fill('Repeatable Meal');
+  await builder.getByLabel('Meal Carbs').fill('62');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  const totalOnly = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals.find((meal) => meal.name === 'Repeatable Meal'));
+  expect(totalOnly.components).toEqual([]);
+  expect(totalOnly.totalCarbs).toBe(62);
+  expect(totalOnly.emoji).toBe('');
+
+  await chooseLeeLeeSection(page, 'Log Entry');
+  const entryForm = page.locator('[data-lee-lee-editor]');
+  await entryForm.getByLabel('Context').selectOption('Dinner');
+  await entryForm.getByLabel('Blood Sugar').fill('150');
+  await entryForm.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  const calculator = page.locator('[data-carb-calculator]');
+  await calculator.getByLabel('Food Library').selectOption('meals');
+  await calculator.locator('[data-carb-picker="meals"]').getByRole('button', { name: /Repeatable Meal/ }).click();
+  await expect(calculator.getByLabel('Meal Total')).toHaveText('62 g');
+  await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(1);
+  await calculator.getByRole('button', { name: 'Cancel Carb Calculator' }).click();
+  await entryForm.getByRole('button', { name: 'Cancel' }).click();
+
+  await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'meals');
+
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  builder = page.locator('[data-meal-builder]');
+  await builder.getByLabel('Meal Name').fill('Itemized Meal');
+  await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+  await builder.getByLabel('Search Foods').fill('Invalid Quantity Food');
+  await expect(builder.getByRole('button', { name: /Edit|Favorite|Delete/ })).toHaveCount(0);
+  await builder.getByRole('button', { name: 'Add Invalid Quantity Food' }).click();
+  await builder.getByLabel('Invalid Quantity Food carbs').fill('-2');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await expect(builder.getByRole('alert')).toContainText('non-negative carb amount');
+  expect(await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals)).toHaveLength(1);
+  await builder.getByLabel('Invalid Quantity Food carbs').fill('5');
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  builder = page.locator('[data-meal-builder]');
+  await builder.getByLabel('Meal Name').fill('Itemized Meal');
+  await builder.getByRole('button', { name: '+ Add Food Item' }).click();
+  await builder.getByLabel('Search Foods').fill('Invalid Quantity Food');
+  await builder.getByRole('button', { name: 'Add Invalid Quantity Food' }).click();
+  await builder.getByRole('button', { name: 'Save Meal' }).click();
+
+  const duplicateMeals = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals.filter((meal) => meal.name === 'Itemized Meal'));
+  expect(duplicateMeals).toHaveLength(2);
+  expect(new Set(duplicateMeals.map((meal) => meal.id)).size).toBe(2);
+  expect(duplicateMeals.every((meal) => meal.totalCarbs === 5)).toBe(true);
 });
 
 test('Food Library focus treatment remains inset within the calculator at desktop and mobile widths', async ({ page }) => {
@@ -2830,6 +3417,7 @@ test('Lee-Lee Food Library search keeps focus while filtering', async ({ page })
     }));
   });
   await chooseLeeLeeSection(page, 'Foods');
+  await openFoodLibraryAccordion(page, 'foods');
 
   const searchInput = page.getByLabel('Search Foods');
   await searchInput.focus();
@@ -2870,7 +3458,8 @@ test('Lee-Lee Food Library search keeps focus while filtering', async ({ page })
   await chickenCard.getByRole('button', { name: 'Mark favorite' }).click();
   await expect(chickenCard.getByRole('button', { name: 'Remove favorite' })).toBeVisible();
 
-  const mealSearchInput = page.getByLabel('Search My Meals');
+  await openFoodLibraryAccordion(page, 'meals');
+  const mealSearchInput = page.getByLabel('Search Meals');
   await mealSearchInput.focus();
   const mealSearchHandle = await mealSearchInput.elementHandle();
   expect(mealSearchHandle).not.toBeNull();
@@ -2917,7 +3506,7 @@ test('Lee-Lee My Foods cards keep footer actions on one row', async ({ page }) =
     }));
   });
   await chooseLeeLeeSection(page, 'Foods');
-  await expect(page.getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  await expect(page.locator('[data-food-library-accordion="foods"] > summary')).toContainText('My Foods');
   const allFoodCards = page.locator('.lee_lee_diabetes_food_item--library');
   const seededFoodCardSelector = [
     'article.lee_lee_diabetes_food_item--library:has([data-id="55555555-5555-4555-8555-555555555555"])',
@@ -3014,7 +3603,7 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
   await page.evaluate(() => window.LandosTheme?.setPreference?.('dark'));
   await chooseLeeLeeSection(page, 'Foods');
 
-  await expect(page.getByRole('heading', { name: 'My Foods' })).toBeVisible();
+  await expect(page.locator('[data-food-library-accordion="foods"] > summary')).toContainText('My Foods');
   await expect(page.locator('[data-food-library-editor]')).toHaveCount(0);
   const addFoodButton = page.locator('.lee_lee_diabetes_food_library_actions [data-action="open-food-library-editor"]');
   const addFoodButtonMetrics = await addFoodButton.evaluate((button) => {
