@@ -466,6 +466,70 @@ test('saved meal totals and entry components are derived from snapshots', () => 
   assert.equal(meal.totalCarbs, 35);
 });
 
+test('saved meal builder component snapshots preserve fractional quantities and manual labels', () => {
+  const { storage } = createTracker();
+  const helpers = storage.helpers;
+  const food = helpers.normalizeFoodLibraryItem({
+    id: 'builder-food',
+    name: 'Builder Bread',
+    carbs: 20,
+    servingLabel: 'slice',
+    brand: 'Kitchen',
+    favorite: true,
+  });
+  const fractionalBread = helpers.normalizeMealComponent({
+    componentType: 'food',
+    foodId: food.id,
+    nameSnapshot: food.name,
+    emojiSnapshot: food.emoji,
+    servingLabelSnapshot: food.servingLabel,
+    brandSnapshot: food.brand,
+    sourceTypeSnapshot: food.sourceType,
+    sourceNameSnapshot: food.sourceName,
+    quantity: 0.5,
+    carbsPerServing: food.carbs,
+  });
+  const manual = helpers.normalizeMealComponent({
+    componentType: 'manual',
+    nameSnapshot: 'House sauce',
+    carbsPerServing: 4.5,
+  });
+  const fallbackManual = helpers.normalizeMealComponent({ componentType: 'manual', carbsPerServing: 0 });
+  const meal = helpers.normalizeSavedMeal({
+    id: 'builder-meal',
+    name: 'Builder Sandwich',
+    components: [fractionalBread, manual],
+  });
+
+  assert.equal(fractionalBread.quantity, 0.5);
+  assert.equal(fractionalBread.carbTotal, 10);
+  assert.equal(fractionalBread.foodId, 'builder-food');
+  assert.equal(fractionalBread.nameSnapshot, 'Builder Bread');
+  assert.equal(manual.nameSnapshot, 'House sauce');
+  assert.equal(manual.carbTotal, 4.5);
+  assert.equal(fallbackManual.nameSnapshot, 'Manual amount');
+  assert.equal(fallbackManual.carbTotal, 0);
+  assert.equal(meal.totalCarbs, 14.5);
+});
+
+test('saved meals support standalone totals and optional emoji without changing legacy meal snapshots', () => {
+  const { storage } = createTracker();
+  const normalizeMeal = storage.helpers.normalizeSavedMeal;
+  const totalOnly = normalizeMeal({ id: 'total-only', name: 'Soup and bread', emoji: '🍲', components: [], totalCarbs: 62 });
+  const legacy = normalizeMeal({
+    id: 'legacy-no-emoji',
+    name: 'Legacy meal',
+    components: [{ componentType: 'manual', nameSnapshot: 'Old manual amount', carbsPerServing: 14, carbTotal: 14 }],
+  });
+
+  assert.deepEqual(totalOnly.components, []);
+  assert.equal(totalOnly.totalCarbs, 62);
+  assert.equal(totalOnly.emoji, '🍲');
+  assert.equal(legacy.totalCarbs, 14);
+  assert.equal(legacy.emoji, '');
+  assert.equal(legacy.components[0].nameSnapshot, 'Old manual amount');
+});
+
 test('tracker document preserves food library, saved meals, and historical meal components', () => {
   const localStorage = createLocalStorage({
     [storageKey]: JSON.stringify({

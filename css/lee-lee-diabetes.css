@@ -1224,6 +1224,182 @@
   gap: 0.65rem;
 }
 
+.lee_lee_diabetes_meal_builder_layer {
+  touch-action: none;
+}
+
+.lee_lee_diabetes_meal_builder_viewport {
+  position: absolute;
+  inset-block-start: var(--lee-lee-meal-builder-viewport-top, 0px);
+  inset-inline-start: var(--lee-lee-meal-builder-viewport-left, 0px);
+  display: grid;
+  place-items: center;
+  inline-size: var(--lee-lee-meal-builder-viewport-width, 100%);
+  block-size: var(--lee-lee-meal-builder-viewport-height, 100dvh);
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  box-sizing: border-box;
+  overflow: hidden;
+  touch-action: auto;
+}
+
+.lee_lee_diabetes_meal_builder {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 30rem);
+  max-height: 100%;
+  padding: 1rem;
+}
+
+.lee_lee_diabetes_meal_builder_header,
+.lee_lee_diabetes_meal_builder_footer {
+  position: relative;
+  z-index: 1;
+  background: var(--lee-lee-meal-builder-surface, #06142b);
+}
+
+.lee_lee_diabetes_meal_builder_header {
+  padding-block-end: var(--llt-field-support-gap);
+}
+
+.lee_lee_diabetes_meal_builder_body {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  gap: var(--llt-field-group-gap);
+  padding: 0.35rem 10px 0.55rem 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lee_lee_diabetes_meal_builder_carbs_group {
+  display: grid;
+  gap: var(--llt-field-support-gap);
+}
+
+.lee_lee_diabetes_meal_builder_items {
+  display: grid;
+  gap: var(--llt-field-group-gap);
+}
+
+.lee_lee_diabetes_meal_builder_items_intro {
+  display: grid;
+  gap: var(--llt-field-support-gap);
+}
+
+.lee_lee_diabetes_meal_builder [hidden] {
+  display: none !important;
+}
+
+.lee_lee_diabetes_meal_builder_items h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lee_lee_diabetes_meal_builder_help {
+  margin: 0;
+  color: var(--lee-lee-muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.lee_lee_diabetes_meal_builder_component {
+  grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 6rem) auto;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: visible;
+}
+
+.lee_lee_diabetes_meal_builder_component_info {
+  min-width: 0;
+}
+
+.lee_lee_diabetes_meal_builder_component_carbs {
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.lee_lee_diabetes_meal_builder_component_amount {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.lee_lee_diabetes_meal_builder_component_amount .lee_lee_diabetes_input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0.4rem;
+}
+
+.lee_lee_diabetes_meal_builder_component_amount small {
+  color: var(--lee-lee-muted);
+  font-size: 0.8rem;
+}
+
+.lee_lee_diabetes_meal_builder_add_food {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
+  border-color: var(--lee-lee-border-strong);
+  background: rgb(255 255 255 / 4%);
+  text-align: left;
+}
+
+.lee_lee_diabetes_meal_builder_add_food:focus-visible,
+.lee_lee_diabetes_meal_builder .lee_lee_diabetes_input:focus,
+.lee_lee_diabetes_meal_builder .lee_lee_diabetes_input:focus-visible {
+  border-color: var(--lee-lee-soft);
+  outline: 0;
+  box-shadow: inset 0 0 0 1px var(--lee-lee-soft);
+}
+
+.lee_lee_diabetes_meal_builder_picker_body {
+  align-content: start;
+}
+
+.lee_lee_diabetes_meal_builder_food_result {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.lee_lee_diabetes_meal_builder_food_result > div {
+  min-width: 0;
+}
+
+.lee_lee_diabetes_meal_builder_total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--lee-lee-border-strong);
+  color: var(--lee-lee-text);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.lee_lee_diabetes_meal_builder_total strong {
+  font-size: 1.35rem;
+}
+
+.lee_lee_diabetes_meal_builder_footer .lee_lee_diabetes_food_editor_actions {
+  margin-top: 0;
+}
+
+.lee_lee_diabetes_meal_builder_footer {
+  display: grid;
+  gap: var(--llt-field-support-gap);
+}
+
+.lee_lee_diabetes_meal_builder [data-meal-builder-error]:not([hidden]) {
+  margin: 0;
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_meal_builder_header,
+:root[data-theme="light"] .lee_lee_diabetes_meal_builder_footer {
+  --lee-lee-meal-builder-surface: #f4f9ff;
+}
+
 .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus,
 .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus-visible {
   border-color: var(--lee-lee-soft);
@@ -1872,6 +2048,13 @@
       max(1rem, env(safe-area-inset-left));
   }
 
+  .lee_lee_diabetes_meal_builder {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 18px;
+  }
+
   .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_carb_calculator_header {
     align-items: center;
     gap: 0.75rem;
@@ -1894,6 +2077,17 @@
     margin-top: auto;
     padding-top: 0.3rem;
     background: #06142b;
+  }
+
+  .lee_lee_diabetes_meal_builder_component {
+    grid-template-columns: minmax(0, 1fr) minmax(4rem, 5rem) auto;
+    gap: 0.35rem;
+    padding: 0.5rem;
+  }
+
+  .lee_lee_diabetes_meal_builder_component > .lee_lee_diabetes_timeline_edit {
+    min-width: 48px;
+    padding-inline: 0.3rem;
   }
 }
 
@@ -1961,6 +2155,33 @@
   font-weight: 700;
   cursor: pointer;
   list-style: none;
+}
+
+.lee_lee_diabetes_food_library_accordion {
+  gap: 0;
+}
+
+.lee_lee_diabetes_food_library_accordion + .lee_lee_diabetes_food_library_accordion {
+  margin-block-start: var(--llt-field-group-gap);
+}
+
+.lee_lee_diabetes_food_library_accordion > summary {
+  min-height: 44px;
+  gap: 0.75rem;
+}
+
+.lee_lee_diabetes_food_library_accordion > summary .lee_lee_diabetes_section_title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.lee_lee_diabetes_food_library_accordion > summary .lee_lee_diabetes_accordion_chevron {
+  color: var(--lee-lee-muted);
+  font-size: 1.25rem;
+}
+
+.lee_lee_diabetes_food_library_accordion .lee_lee_diabetes_settings_accordion_body {
+  padding-top: 0.85rem;
 }
 
 .lee_lee_diabetes_settings_accordion > summary::-webkit-details-marker {
