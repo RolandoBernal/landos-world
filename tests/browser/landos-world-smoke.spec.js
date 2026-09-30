@@ -1399,6 +1399,70 @@ async function seedLeeLeeRecords(page, records) {
   }, records);
 }
 
+function historicalEditPlan(overrides = {}) {
+  return {
+    id: 'issue85-plan-a', name: 'Historical Plan A', effectiveFrom: '2026-07-31', effectiveTo: null,
+    mealBaseUnitsByType: { Breakfast: 2, Lunch: 3, Dinner: 4, Snack: 0 }, mealBaseUnits: 2,
+    bedtimeBaseUnits: 17, bedtimeBaseUnitsMigratedTo17: true, insulinCarbRatioGrams: 10,
+    doseRoundingMode: 'down', doseIncrementUnits: 0.5, minimumAllowableDoseUnits: 0.5,
+    temporaryEatingAdjustment: { enabled: false, units: 0.5, startsAt: '', endsAt: '', contexts: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks'] },
+    targetGlucoseMin: 70, targetGlucoseMax: 180, supportedMealTypes: ['Breakfast', 'Lunch', 'Dinner', 'Snack'],
+    correctionRanges: [{ minGlucose: null, maxGlucose: 179, correctionUnits: 0 }, { minGlucose: 180, maxGlucose: null, correctionUnits: 1 }],
+    createdAt: '2026-07-31T00:00:00.000Z', updatedAt: '2026-07-31T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+async function seedHistoricalEdit(page, snapshot = historicalEditPlan()) {
+  return page.evaluate(({ plan, snapshot }) => {
+    const timestamp = new Date(2026, 7, 25, 12).toISOString();
+    const currentPlan = { ...plan, id: 'issue85-plan-b', name: 'Current Plan B', insulinCarbRatioGrams: 2, mealBaseUnitsByType: { Breakfast: 20, Lunch: 30, Dinner: 40, Snack: 0 } };
+    const record = {
+      id: 'issue85-entry', eventType: 'check-insulin', type: 'Breakfast', bloodSugar: 120,
+      mealCarbs: 30, totalCarbs: 30, mealComponents: [],
+      insulinPlanId: snapshot?.id || null, insulinPlanSnapshot: snapshot,
+      suggestedBaseUnits: null, suggestedCarbDoseUnits: 3, suggestedCorrectionUnits: 0, suggestedTotalUnits: 3,
+      administeredInsulinUnits: 5, insulinUnits: 5, doseCalculationStatus: 'calculated',
+      date: '2026-08-25', time: '12:00', recordTimestamp: timestamp,
+      createdAt: timestamp, updatedAt: timestamp, version: 3, enteredBy: 'Rolando', notes: '',
+    };
+    window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+      ...current, records: [record], insulinPlans: [currentPlan], activeInsulinPlanId: currentPlan.id,
+      foodLibrary: [{ id: 'issue85-food', name: 'Issue 8.5 Food', carbs: 20, servingLabel: '1 serving', favorite: true, createdAt: timestamp, updatedAt: timestamp }],
+    }));
+    return window.LeeLeeTrackerStorage.loadTrackerData().records[0];
+  }, { plan: historicalEditPlan(), snapshot });
+}
+
+test('LLT component-backed historical factual edits preserve calculations through calculator cancel and confirmation return', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await seedHistoricalEdit(page, null);
+  await page.evaluate(() => window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+    ...current,
+    records: current.records.map((record) => ({ ...record, mealComponents: [{
+      id: 'original-component', componentType: 'food', foodId: 'issue85-food', nameSnapshot: 'Issue 8.5 Food', quantity: 1.5, carbsPerServing: 20, carbTotal: 30,
+    }] })),
+  })));
+  const original = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Notes').fill('Component entry note');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  await page.locator('[data-carb-calculator]').getByRole('button', { name: 'Cancel Carb Calculator', exact: true }).click();
+  await form.getByLabel('Insulin Actually Given').fill('4');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Go Back', exact: true }).click();
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  await page.locator('[data-carb-calculator]').getByRole('button', { name: 'Use 30 g' }).click();
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+  const saved = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
+  expect(saved).toMatchObject({ notes: 'Component entry note', administeredInsulinUnits: 4, mealCarbs: 30, suggestedTotalUnits: 3, insulinPlanSnapshot: null });
+  expect(saved.calculationAudit.kind).toBe('administered-dose-corrected');
+  expect(saved.mealComponents.map(({ id, ...component }) => component)).toEqual(original.mealComponents.map(({ id, ...component }) => component));
+});
+
 async function openLeeLeePreMealTimerTest(page, { enabled = true, durationMinutes = 3 } = {}) {
   await page.addInitScript(({ enabled: isEnabled, duration }) => {
     localStorage.setItem('lando-world:lee-lees-tracker:pre-meal-timer-settings:v1', JSON.stringify({
@@ -1758,6 +1822,13 @@ test('LLT fresh Log Entry has independent scroll state and restores Today across
       await expect(insulinInput).toBeFocused();
       expect(await page.evaluate(() => window.visualViewport.height)).toBe(320);
 
+      // Let the newly focused field's permitted visibility correction finish
+      // before measuring whether keyboard dismissal changes document scrolling.
+      await expect.poll(() => page.evaluate(() => {
+        const input = document.querySelector('[name="insulinUnits"]').getBoundingClientRect();
+        return input.top >= window.visualViewport.offsetTop
+          && input.bottom <= window.visualViewport.offsetTop + window.visualViewport.height;
+      })).toBe(true);
       const scrollBeforeKeyboardDismiss = await page.evaluate(() => window.scrollY);
       await page.evaluate((height) => window.__setBug6VisualViewportFrame({
         width: window.innerWidth,
@@ -1979,6 +2050,175 @@ test('Lee-Lee Reports summarizes stored records and renders trend charts', async
   expect(await reportView.evaluate((node) => node.getBoundingClientRect().width)).toBeGreaterThan(0);
 });
 
+test('LLT historical edits preserve Plan A across sequential context and Carb Calculator rerenders', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  const original = await seedHistoricalEdit(page);
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Context').selectOption('Lunch');
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('3 units total');
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  const calculator = page.locator('[data-carb-calculator]');
+  await calculator.getByLabel('Food Library').selectOption('favorites');
+  await calculator.getByRole('button', { name: /Issue 8.5 Food 20 g carbs/ }).click();
+  await calculator.getByRole('button', { name: 'Use 20 g' }).click();
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('2 units total');
+  await form.getByLabel('Blood Sugar').fill('190');
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('3 units total');
+  await form.getByLabel('Context').selectOption('Dinner');
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('3 units total');
+  // Applying the same component total again must not redefine the original baseline.
+  await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+  await calculator.getByRole('button', { name: 'Use 20 g' }).click();
+  await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('60');
+  await form.getByLabel('Date', { exact: true }).fill('2026-08-26');
+  await form.getByLabel('Time', { exact: true }).fill('13:15');
+  await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText('7 units total');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+  const saved = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
+  expect(saved).toMatchObject({ id: original.id, type: 'Dinner', bloodSugar: 190, mealCarbs: 60, date: '2026-08-26', time: '13:15', suggestedTotalUnits: 7, suggestedBaseUnits: null, suggestedCorrectionUnits: 1, insulinCarbRatioGrams: 10, doseCalculationStatus: 'calculated', administeredInsulinUnits: 5 });
+  expect(saved.insulinPlanSnapshot).toEqual(original.insulinPlanSnapshot);
+  expect(saved.calculationAudit.before).toMatchObject({ type: 'Breakfast', mealCarbs: 30, suggestedTotalUnits: 3 });
+  expect(saved.calculationAudit.after).toMatchObject({ type: 'Dinner', mealCarbs: 60, suggestedTotalUnits: 7 });
+  expect(saved.calculationAudit.source).toBe('historical-record-plan');
+  expect(await page.evaluate(() => window.LeeLeeTrackerStorage.getActiveInsulinPlan().id)).toBe('issue85-plan-b');
+});
+
+test('LLT historical individual dose-field saves retain the historical snapshot and consistent guidance', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  const cases = [
+    { label: 'Blood Sugar', value: '190', total: 4 },
+    { label: 'Total Carbs', value: '60', total: 6 },
+    { label: 'Context', value: 'Lunch', total: 3 },
+    { label: 'Date', value: '2026-08-26', total: 3 },
+    { label: 'Time', value: '13:15', total: 3 },
+    { label: 'Carb Calculator', total: 2 },
+  ];
+  for (const change of cases) {
+    const original = await seedHistoricalEdit(page);
+    await openSeededLeeLeeHistoryDay(page);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const form = page.locator('[data-lee-lee-editor]');
+    if (change.label === 'Context') await form.getByLabel('Context').selectOption(change.value);
+    else if (change.label === 'Carb Calculator') {
+      await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+      const calculator = page.locator('[data-carb-calculator]');
+      await calculator.getByLabel('Food Library').selectOption('favorites');
+      await calculator.getByRole('button', { name: /Issue 8.5 Food 20 g carbs/ }).click();
+      await calculator.getByRole('button', { name: 'Use 20 g' }).click();
+    } else if (change.label === 'Total Carbs') await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill(change.value);
+    else await form.getByLabel(change.label, { exact: true }).fill(change.value);
+    await expect(form.locator('.lee_lee_diabetes_dose_total')).toHaveText(`${change.total} units total`);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm and Save' }).click();
+    const saved = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
+    expect(saved.suggestedTotalUnits, change.label).toBe(change.total);
+    expect(saved.doseCalculationStatus).toBe('calculated');
+    expect(saved.insulinPlanSnapshot).toEqual(original.insulinPlanSnapshot);
+    expect(saved.calculationAudit.before.suggestedTotalUnits).toBe(3);
+    expect(saved.calculationAudit.after.suggestedTotalUnits).toBe(change.total);
+    if (change.label === 'Carb Calculator') expect(saved.mealComponents[0]).toMatchObject({ foodId: 'issue85-food', carbTotal: 20 });
+  }
+});
+
+test('LLT genuinely missing historical snapshots allow factual edits and block all dose-field paths', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await seedHistoricalEdit(page, null);
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  let form = page.locator('[data-lee-lee-editor]');
+  await form.getByLabel('Notes').fill('Corrected note');
+  await form.getByLabel('Insulin Actually Given').fill('4');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm and Save' }).click();
+  const factual = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
+  expect(factual).toMatchObject({ notes: 'Corrected note', administeredInsulinUnits: 4, suggestedTotalUnits: 3, insulinPlanSnapshot: null });
+  expect(factual.calculationAudit.kind).toBe('administered-dose-corrected');
+  for (const change of ['Blood Sugar', 'Total Carbs', 'Context', 'Date', 'Time', 'Carb Calculator']) {
+    await openSeededLeeLeeHistoryDay(page);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    form = page.locator('[data-lee-lee-editor]');
+    if (change === 'Context') await form.getByLabel('Context').selectOption('Lunch');
+    else if (change === 'Carb Calculator') {
+      await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+      const calculator = page.locator('[data-carb-calculator]');
+      await calculator.getByLabel('Food Library').selectOption('favorites');
+      await calculator.getByRole('button', { name: /Issue 8.5 Food 20 g carbs/ }).click();
+      await calculator.getByRole('button', { name: 'Use 20 g' }).click();
+    } else if (change === 'Total Carbs') await form.getByRole('spinbutton', { name: 'Total Carbs' }).fill('60');
+    else await form.getByLabel(change, { exact: true }).fill({ 'Blood Sugar': '190', Date: '2026-08-26', Time: '13:15' }[change]);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(form.locator('[data-editor-error]')).toContainText('This historical entry cannot safely recalculate');
+    expect(await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]), change).toEqual(factual);
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  }
+});
+
+test('LLT Edit Entry preserves deliberate keyboard-open document scrolling until focus changes', async ({ page }) => {
+  await page.addInitScript(() => {
+    let frame = { height: window.innerHeight, offsetTop: 0 };
+    const listeners = new Map();
+    const viewport = {
+      get width() { return window.innerWidth; }, get height() { return frame.height; },
+      get offsetTop() { return frame.offsetTop; }, offsetLeft: 0, scale: 1,
+      addEventListener(type, callback) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(callback); },
+      removeEventListener(type, callback) { listeners.get(type)?.delete(callback); },
+    };
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+    window.__settleEditKeyboardViewport = (next) => {
+      Object.assign(frame, next);
+      for (const type of ['resize', 'scroll']) listeners.get(type)?.forEach((callback) => callback(new Event(type)));
+      window.dispatchEvent(new Event('resize'));
+    };
+  });
+  await openProtectedLeeLeeTracker(page);
+  await seedHistoricalEdit(page);
+  await openSeededLeeLeeHistoryDay(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.addStyleTag({ content: '#lee-lee-diabetes-root::after { content: ""; display: block; height: 1600px; }' });
+  const form = page.locator('[data-lee-lee-editor]');
+  await expect(form).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
+  const bloodSugar = form.getByLabel('Blood Sugar');
+  await bloodSugar.focus();
+  await page.evaluate(() => window.__settleEditKeyboardViewport({ height: 320, offsetTop: 60 }));
+  const focusedFieldVisible = (name) => page.evaluate((field) => {
+    const rect = document.querySelector(`[name="${field}"]`).getBoundingClientRect();
+    return rect.top >= visualViewport.offsetTop && rect.bottom <= visualViewport.offsetTop + visualViewport.height;
+  }, name);
+  await expect.poll(() => focusedFieldVisible('bloodSugar')).toBe(true);
+  const userScrollY = await form.evaluate((node) => {
+    const target = node.querySelector('[name="bloodSugar"]');
+    const touch = (type, y) => { const event = new Event(type, { bubbles: true }); Object.defineProperty(event, 'touches', { value: [{ clientX: 120, clientY: y }] }); node.dispatchEvent(event); };
+    touch('touchstart', 460); touch('touchmove', 350); touch('touchend', 350);
+    window.scrollTo(0, window.scrollY + target.getBoundingClientRect().bottom + 160);
+    return window.scrollY;
+  });
+  for (const offsetTop of [75, 60]) {
+    await page.evaluate((offset) => window.__settleEditKeyboardViewport({ height: 320, offsetTop: offset }), offsetTop);
+    await page.waitForTimeout(1200);
+    expect(await page.evaluate(() => window.scrollY)).toBe(userScrollY);
+    await expect(bloodSugar).toBeFocused();
+  }
+  const insulin = form.getByLabel('Insulin Actually Given');
+  await insulin.focus();
+  await expect.poll(() => focusedFieldVisible('insulinUnits')).toBe(true);
+  await expect(insulin).toBeFocused();
+  expect(await page.evaluate(() => window.visualViewport.height)).toBe(320);
+  const insulinUserScrollY = await form.evaluate((node) => {
+    node.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 200 }));
+    window.scrollTo(0, window.scrollY + 200);
+    return window.scrollY;
+  });
+  await page.evaluate(() => window.__settleEditKeyboardViewport({ height: 320, offsetTop: 60 }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(insulinUserScrollY);
+  await expect(insulin).toBeFocused();
+  await page.evaluate(() => window.__settleEditKeyboardViewport({ height: window.innerHeight, offsetTop: 0 }));
+  await expect(insulin).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(insulinUserScrollY);
+});
+
 test('Lee-Lee editing context updates the same record after confirmation', async ({ page }) => {
   await openProtectedLeeLeeTracker(page);
   await seedLeeLeeRecords(page, [{
@@ -1991,6 +2231,8 @@ test('Lee-Lee editing context updates the same record after confirmation', async
     administeredInsulinUnits: 6,
     insulinUnits: 6,
     suggestedTotalUnits: 6,
+    insulinPlanId: historicalEditPlan().id,
+    insulinPlanSnapshot: historicalEditPlan(),
     recordTimestamp: '2026-08-25T12:30:00.000Z',
     createdAt: '2026-08-25T12:35:00.000Z',
     updatedAt: '2026-08-25T12:35:00.000Z',
@@ -2045,6 +2287,8 @@ test('Lee-Lee repeated edits preserve record identity and count', async ({ page 
     administeredInsulinUnits: null,
     insulinUnits: null,
     suggestedTotalUnits: 5,
+    insulinPlanId: historicalEditPlan().id,
+    insulinPlanSnapshot: historicalEditPlan(),
     recordTimestamp: '2026-08-25T23:30:00.000Z',
     createdAt: '2026-08-25T23:35:00.000Z',
     updatedAt: '2026-08-25T23:35:00.000Z',
@@ -2678,6 +2922,8 @@ test('Lee-Lee My Meals builder creates, edits, favorites, quick-uses, and soft-d
   await expect(calculator.locator('[data-carb-calculator-row]')).toHaveCount(2);
   await calculator.getByRole('button', { name: 'Use 28.5 grams' }).click();
   await entryForm.getByRole('button', { name: 'Save' }).click();
+  const confirmation = page.getByRole('button', { name: 'Confirm and Save', exact: true });
+  if (await confirmation.isVisible()) await confirmation.click();
   await page.getByRole('button', { name: 'Not Now' }).click();
 
   const historicalBeforeEdit = await page.evaluate(() => {
@@ -4209,6 +4455,67 @@ test('Lee-Lee Carb Calc keeps the modal open across field taps and restores scro
   expect(consoleErrorCount).toBeLessThanOrEqual(1);
 });
 
+test('LLT normal calculator contains outward focus rings with short and vertically overflowing content', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 820, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    for (const count of [0, 1, 2, 3, 12, 40]) {
+      await seedHistoricalEdit(page);
+      await page.evaluate((count) => window.LeeLeeTrackerStorage.updateTrackerData((current) => ({
+        ...current, records: current.records.map((record) => ({ ...record,
+          mealComponents: Array.from({ length: count }, (_, index) => ({ id: `focus-food-${index}`, componentType: 'food', foodId: `food-${index}`, nameSnapshot: `Focus Food ${index}`, quantity: 1, carbsPerServing: 10, carbTotal: 10, servingLabelSnapshot: '1 serving' })),
+          mealCarbs: count * 10, totalCarbs: count * 10,
+        })),
+      })), count);
+      await openSeededLeeLeeHistoryDay(page);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByRole('button', { name: 'Open Carb Calculator' }).click();
+      const calculator = page.locator('[data-carb-calculator]');
+      const body = calculator.locator('[data-carb-calculator-body]');
+      const panelBefore = await calculator.boundingBox();
+      await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
+      await page.keyboard.press('Tab');
+      for (const selector of ['[data-action="open-carb-calculator-item-editor"]', '[data-carb-library-view]', '[data-action="use-carb-calculator-total"]']) {
+        const control = calculator.locator(selector);
+        const metrics = await control.evaluate((node) => {
+          const body = node.closest('[data-carb-calculator-body]');
+          node.focus({ preventScroll: true });
+          // Reach the control using the one designated scroll owner, without
+          // scrolling the overlay or underlying document.
+          const before = node.getBoundingClientRect();
+          const port = body.getBoundingClientRect();
+          body.scrollTop += before.top - port.top - (body.clientHeight - before.height) / 2;
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          const extension = style.outlineStyle === 'none' ? 0 : Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+          const left = port.left + body.clientLeft;
+          const top = port.top + body.clientTop;
+          return { left: rect.left - extension, right: rect.right + extension, top: rect.top - extension, bottom: rect.bottom + extension,
+            portLeft: left, portRight: left + body.clientWidth, portTop: top, portBottom: top + body.clientHeight,
+            scrollWidth: body.scrollWidth, clientWidth: body.clientWidth, overflowing: body.scrollHeight > body.clientHeight,
+            bodyOverflowX: getComputedStyle(body).overflowX,
+            ring: style.outlineStyle, disabled: node.disabled, panelScroll: body.parentElement.scrollTop,
+          };
+        });
+        if (!metrics.disabled) expect(metrics.ring).not.toBe('none');
+        expect(metrics.left).toBeGreaterThanOrEqual(metrics.portLeft - 0.5);
+        expect(metrics.right).toBeLessThanOrEqual(metrics.portRight + 0.5);
+        expect(metrics.top).toBeGreaterThanOrEqual(metrics.portTop - 0.5);
+        expect(metrics.bottom).toBeLessThanOrEqual(metrics.portBottom + 0.5);
+        expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+        expect(metrics.panelScroll).toBe(0);
+        if (count === 40) expect(metrics.overflowing).toBe(true);
+      }
+      await expect(body.locator('[data-modal-scroll-container]')).toHaveCount(0);
+      const nestedOverflow = await body.evaluate((node) => [...node.querySelectorAll('*')].filter((child) => /auto|scroll/.test(getComputedStyle(child).overflowY) && child.scrollHeight > child.clientHeight).length);
+      expect(nestedOverflow).toBe(0);
+      expect(await calculator.boundingBox()).toEqual(panelBefore);
+      await calculator.getByRole('button', { name: 'Cancel Carb Calculator' }).click();
+      await page.locator('[data-lee-lee-editor] [data-action="cancel"]').click();
+    }
+  }
+});
+
 test('Lee-Lee Carb Calculator uses one body scroll owner across modes and viewport sizes', async ({ page }) => {
   const viewportSizes = [
     { width: 390, height: 640 },
@@ -4250,7 +4557,10 @@ test('Lee-Lee Carb Calculator uses one body scroll owner across modes and viewpo
     let calculator = page.locator('[data-carb-calculator]');
     let body = calculator.locator('[data-carb-calculator-body]');
     await expect(body).toHaveAttribute('data-modal-scroll-container', '');
-    await expect(body).toHaveCSS('padding-right', '10px');
+    expect(await body.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return parseFloat(style.paddingInlineEnd) - parseFloat(style.paddingInlineStart);
+    })).toBeCloseTo(10);
     await expect(calculator.locator('[data-modal-scroll-container]')).toHaveCount(1);
     await expect(calculator.locator('[data-carb-picker]')).toHaveCount(0);
 

@@ -56,10 +56,20 @@ function createTrackerRuntime(seed = {}, options = {}) {
       },
     },
     window: null,
+    LandoWorldBuildMetadata: options.buildMetadata,
   };
   context.window = context;
   context.globalThis = context;
-  vm.runInNewContext(trackerSource, context);
+  const source = options.editorAccess ? trackerSource.replace('  window.LeeLeeTrackerVerification = {', `
+    window.editorTestAccess = {
+      setOriginal(record) {
+        currentEditor = { id: record.id, originalRecord: record, mealComponents: [], carbCalculatorRows: [], userEditedInsulin: true };
+      },
+      getEditorDoseResult,
+      buildRecordFromForm,
+    };
+    window.LeeLeeTrackerVerification = {`) : trackerSource;
+  vm.runInNewContext(source, context);
   return context;
 }
 
@@ -1955,6 +1965,117 @@ test('historical edits select only a complete stored plan snapshot', () => {
   assert.equal(verification.getHistoricalPlanForRecord({}), null);
 });
 
+test('historical save construction uses the event baseline and records consistent recalculation metadata', () => {
+  const runtime = createTrackerRuntime({}, { editorAccess: true });
+  const plan = completeVerificationPlan({ id: 'plan-a', insulinCarbRatioGrams: 15 });
+  installPlans(runtime, [completeVerificationPlan({ id: 'plan-b', insulinCarbRatioGrams: 2 })], 'plan-b');
+  const original = {
+    id: 'historical-edit', eventType: 'check-insulin', type: 'Lunch', bloodSugar: 120,
+    mealCarbs: 30, date: '2026-08-25', time: '12:00', mealComponents: [],
+    insulinPlanId: plan.id, insulinPlanSnapshot: plan, suggestedTotalUnits: 8,
+    administeredInsulinUnits: 8, insulinUnits: 8, doseCalculationStatus: 'calculated',
+    createdAt: '2026-08-25T12:00:00.000Z', version: 3,
+  };
+  runtime.editorTestAccess.setOriginal(original);
+  const values = { eventType: 'check-insulin', type: 'Lunch', bloodSugar: '190', mealCarbs: '60', date: original.date, time: '12:15', insulinUnits: '8', notes: 'Correction' };
+  const form = { elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])), dataset: {}, querySelector: () => null, querySelectorAll: () => [] };
+  const saved = runtime.editorTestAccess.buildRecordFromForm(form);
+  const expected = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({ bloodSugar: 190, totalCarbs: 60, entryType: 'Lunch', recordTimestamp: Date.parse(saved.recordTimestamp), insulinPlan: plan });
+  assert.equal(saved.insulinPlanId, 'plan-a');
+  assert.equal(saved.suggestedTotalUnits, expected.suggestedTotalUnits);
+  assert.equal(saved.insulinCarbRatioGrams, 15);
+  assert.equal(saved.doseCalculationStatus, 'calculated');
+  assert.equal(saved.version, 3);
+  assert.equal(saved.calculationAudit.source, 'historical-record-plan');
+  assert.equal(saved.calculationAudit.before.mealCarbs, 30);
+  assert.equal(saved.calculationAudit.after.mealCarbs, 60);
+  assert.equal(saved.calculationAudit.after.suggestedTotalUnits, saved.suggestedTotalUnits);
+  assert.equal(original.mealCarbs, 30);
+  assert.equal(original.insulinPlanSnapshot.insulinCarbRatioGrams, 15);
+});
+
+test('explicit local-device authority saves complete provenance and historical edits continue using Plan A', () => {
+  const runtime = createTrackerRuntime({}, { editorAccess: true, buildMetadata: { environment: 'local-device' } });
+  const plan = completeVerificationPlan({ id: 'local-plan-a' });
+  installPlans(runtime, [plan], plan.id);
+  const now = new Date();
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const values = { eventType: 'check-insulin', type: 'Breakfast', bloodSugar: '112', mealCarbs: '57', date, time: '08:00', insulinUnits: '5', notes: '' };
+  const form = { elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])), dataset: {}, querySelector: () => null, querySelectorAll: () => [] };
+  const saved = runtime.editorTestAccess.buildRecordFromForm(form);
+  assert.equal(saved.insulinPlanId, plan.id);
+  assert.equal(saved.doseCalculationStatus, 'local-development-calculated');
+  assert.equal(runtime.LeeLeeTrackerVerification.getHistoricalPlanForRecord(saved).id, plan.id);
+  runtime.LeeLeeTrackerStorage.updateTrackerData((current) => ({ ...current, records: [saved] }));
+  const reloaded = runtime.LeeLeeTrackerStorage.loadTrackerData().records[0];
+  assert.equal(reloaded.doseCalculationStatus, 'local-development-calculated');
+  const immutableSnapshot = JSON.stringify(reloaded.insulinPlanSnapshot);
+  runtime.editorTestAccess.setOriginal({ ...reloaded, insulinPlanSnapshot: null });
+  form.elements.type.value = 'Dinner';
+  assert.equal(runtime.editorTestAccess.getEditorDoseResult(form).status, 'historical-plan-unavailable');
+  assert.equal(reloaded.insulinPlanSnapshot.id, plan.id);
+  installPlans(runtime, [completeVerificationPlan({ id: 'plan-b', insulinCarbRatioGrams: 2 })], 'plan-b');
+  runtime.editorTestAccess.setOriginal(reloaded);
+  for (const type of ['Dinner', 'Lunch', 'Snacks']) {
+    form.elements.type.value = type;
+    form.elements.bloodSugar.value = '190';
+    form.elements.mealCarbs.value = '60';
+    const edited = runtime.editorTestAccess.buildRecordFromForm(form);
+    const expected = runtime.LeeLeeTrackerDoseHelper.calculateMealInsulinDose({ entryType: type, bloodSugar: 190, totalCarbs: 60, insulinPlan: reloaded.insulinPlanSnapshot, recordTimestamp: Date.parse(edited.recordTimestamp) });
+    assert.equal(edited.suggestedTotalUnits, expected.suggestedTotalUnits);
+    assert.equal(edited.suggestedCorrectionUnits, expected.correctionUnits);
+    assert.equal(edited.administeredInsulinUnits, 5);
+    assert.equal(edited.doseCalculationStatus, 'local-development-calculated');
+    assert.equal(JSON.stringify(edited.insulinPlanSnapshot), immutableSnapshot);
+  }
+});
+
+test('local-development snapshot captures the date-selected plan rather than the active pointer', () => {
+  const runtime = createTrackerRuntime({}, { editorAccess: true, buildMetadata: { environment: 'local-device' } });
+  const older = completeVerificationPlan({ id: 'older-local-plan', effectiveFrom: '2026-07-31', effectiveTo: '2026-08-31', insulinCarbRatioGrams: 10 });
+  const current = completeVerificationPlan({ id: 'current-local-plan', effectiveFrom: '2026-08-31', insulinCarbRatioGrams: 2 });
+  installPlans(runtime, [older, current], current.id);
+  const values = { eventType: 'check-insulin', type: 'Lunch', bloodSugar: '190', mealCarbs: '60', date: '2026-08-25', time: '12:00', insulinUnits: '5' };
+  const form = { elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])), dataset: {}, querySelector: () => null, querySelectorAll: () => [] };
+  const saved = runtime.editorTestAccess.buildRecordFromForm(form);
+  assert.equal(saved.insulinPlanId, older.id);
+  assert.equal(saved.insulinPlanSnapshot.insulinCarbRatioGrams, 10);
+  assert.equal(saved.suggestedTotalUnits, 7);
+  assert.equal(saved.doseCalculationStatus, 'local-development-calculated');
+});
+
+test('local development authority fails closed for non-explicit environments and incomplete plans', () => {
+  for (const environment of [undefined, 'production', 'local', 'local-device']) {
+    const runtime = createTrackerRuntime({}, { editorAccess: true, location: { hostname: '127.0.0.1' }, buildMetadata: environment ? { environment } : undefined });
+    const plan = environment === 'local-device' ? { id: 'incomplete', effectiveFrom: '2026-07-31' } : completeVerificationPlan();
+    installPlans(runtime, [plan], plan.id);
+    const values = { eventType: 'check-insulin', type: 'Breakfast', bloodSugar: '112', mealCarbs: '57', date: '2026-09-29', time: '08:00', insulinUnits: '5' };
+    const form = { elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])), dataset: {}, querySelector: () => null, querySelectorAll: () => [] };
+    assert.equal(runtime.editorTestAccess.getEditorDoseResult(form).status, 'insulin-plan-unverified');
+    const saved = runtime.editorTestAccess.buildRecordFromForm(form);
+    assert.equal(saved.insulinPlanSnapshot, null);
+    assert.notEqual(saved.doseCalculationStatus, 'local-development-calculated');
+  }
+});
+
+test('incomplete historical snapshots permit factual corrections but never resolve through the current plan', () => {
+  const runtime = createTrackerRuntime({}, { editorAccess: true });
+  installPlans(runtime, [completeVerificationPlan({ id: 'plan-b' })], 'plan-b');
+  for (const snapshot of [null, { id: 'incomplete-plan' }]) {
+    const original = { id: 'legacy-edit', eventType: 'check-insulin', type: 'Lunch', bloodSugar: 120, mealCarbs: 30, date: '2026-08-25', time: '12:00', mealComponents: [], insulinPlanSnapshot: snapshot, suggestedTotalUnits: 8, administeredInsulinUnits: 8, insulinUnits: 8, doseCalculationStatus: 'manual' };
+    runtime.editorTestAccess.setOriginal(original);
+    const values = { eventType: 'check-insulin', type: 'Lunch', bloodSugar: '120', mealCarbs: '30', date: original.date, time: original.time, insulinUnits: '7', notes: 'Factual correction' };
+    const form = { elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])), dataset: {}, querySelector: () => null, querySelectorAll: () => [] };
+    const saved = runtime.editorTestAccess.buildRecordFromForm(form);
+    assert.equal(saved.suggestedTotalUnits, 8);
+    assert.equal(saved.administeredInsulinUnits, 7);
+    assert.equal(saved.notes, 'Factual correction');
+    assert.equal(saved.calculationAudit.kind, 'administered-dose-corrected');
+    form.elements.mealCarbs.value = '60';
+    assert.equal(runtime.editorTestAccess.getEditorDoseResult(form).status, 'historical-plan-unavailable');
+  }
+});
+
 test('recalculation audit state preserves manual provenance and null suggestions', () => {
   const verification = createTrackerRuntime().LeeLeeTrackerVerification;
   const historicalPlan = completeVerificationPlan({ id: 'historical-plan' });
@@ -2367,10 +2488,11 @@ test('verification is recomputed for changed plans and authoritative revisions i
 
 test('dose guidance keeps the fail-closed gate and refresh hook wired to shared-plan application', () => {
   assert.match(trackerSource, /const currentVerification = getInsulinPlanVerification\(\{ localPlan: currentPlan \}\)/);
-  assert.match(trackerSource, /if \(!existingRecord && currentVerification\.status !== INSULIN_PLAN_VERIFICATION_STATUSES\.VERIFIED\)/);
+  assert.match(trackerSource, /if \(!existingRecord && !localDevelopmentAuthority && currentVerification\.status !== INSULIN_PLAN_VERIFICATION_STATUSES\.VERIFIED\)/);
   assert.match(trackerSource, /function invalidateOpenDoseGuidance\(\)/);
   assert.match(trackerSource, /applySharedSettingsToLocal\(settings\);\s*invalidateOpenDoseGuidance\(\);/);
-  assert.match(trackerSource, /const insulinPlan = historicalPlan \|\| getEditorInsulinPlan\(form, recordTimestamp\)/);
+  assert.match(trackerSource, /const selectedPlan = historicalPlan \|\| getEditorInsulinPlan\(form, recordTimestamp\)/);
+  assert.match(trackerSource, /const insulinPlan = selectedPlan/);
   assert.match(trackerSource, /status: 'historical-plan-unavailable'/);
   assert.match(trackerSource, /calculationAudit: preserveOriginalCalculation \? existing\.calculationAudit \|\| null/);
   assert.doesNotMatch(trackerSource, /Recalculate Using Current Plan/);

@@ -1710,6 +1710,7 @@
   function normalizeDoseStatus(value) {
     return [
       'calculated',
+      'local-development-calculated',
       'unsupported-entry-type',
       'outside-configured-range',
       'manual',
@@ -5927,7 +5928,11 @@
       id: record.id || null,
       eventType: normalizeEventType(record.eventType || options.eventType, record),
       type: record.type || options.type || DEFAULT_ENTRY_TYPE,
-      originalRecord: record.id ? { ...record } : null,
+      // Form drafts describe the displayed values; rerenders must retain the saved
+      // record that established this session's historical calculation authority.
+      originalRecord: record.id
+        ? (sameEditorSession ? previousEditor.originalRecord : JSON.parse(JSON.stringify(record)))
+        : null,
       returnTo: options.returnTo || null,
       returnDateKey: options.returnDateKey || null,
       returnScrollY: Number.isFinite(options.returnScrollY)
@@ -6136,8 +6141,11 @@
     return recordTimestamp ? getActiveInsulinPlan(recordTimestamp) : null;
   }
 
+  function getDoseAffectingMealComponents(components = []) {
+    return components.map(normalizeMealComponent).filter(Boolean).map(({ id, ...component }) => component);
+  }
+
   function getEditorDoseAffectingSnapshot(form) {
-    const rows = collectEditableCarbCalculatorRowsFromForm(form);
     return {
       eventType: getEditorEventType(form),
       type: getEditorType(form),
@@ -6145,7 +6153,8 @@
       mealCarbs: normalizeNumber(form.elements.mealCarbs?.value),
       date: form.elements.date?.value || '',
       time: form.elements.time?.value || '',
-      mealComponents: rows,
+      // Calculator rows are a separate draft until Use applies them to the entry.
+      mealComponents: getDoseAffectingMealComponents(currentEditor?.mealComponents || []),
     };
   }
 
@@ -6157,7 +6166,7 @@
       mealCarbs: normalizeNumber(record.mealCarbs ?? record.totalCarbs),
       date: record.date || getLocalDateKey(new Date(getRecordTimestamp(record))),
       time: record.time || getLocalTimeKey(new Date(getRecordTimestamp(record))),
-      mealComponents: Array.isArray(record.mealComponents) ? record.mealComponents.map(normalizeMealComponent).filter(Boolean) : [],
+      mealComponents: getDoseAffectingMealComponents(Array.isArray(record.mealComponents) ? record.mealComponents : []),
     };
   }
 
@@ -6242,7 +6251,12 @@
     }
     const currentPlan = getActiveInsulinPlan();
     const currentVerification = getInsulinPlanVerification({ localPlan: currentPlan });
-    if (!existingRecord && currentVerification.status !== INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) {
+    const selectedPlan = historicalPlan || getEditorInsulinPlan(form, recordTimestamp);
+    // Development authority is separate from remote verification and applies only
+    // to the complete plan actually selected for a new, isolated local entry.
+    const localDevelopmentAuthority = !existingRecord && isLocalDeviceDevelopment()
+      && selectedPlan && getInsulinPlanCompleteness(selectedPlan).complete;
+    if (!existingRecord && !localDevelopmentAuthority && currentVerification.status !== INSULIN_PLAN_VERIFICATION_STATUSES.VERIFIED) {
       return {
         status: 'insulin-plan-unverified',
         baseUnits: null,
@@ -6259,7 +6273,7 @@
     // Historical corrections use the snapshot captured with the event. The edited
     // timestamp only determines when the corrected event occurred; it never makes
     // the current active plan authoritative for an older record.
-    const insulinPlan = historicalPlan || getEditorInsulinPlan(form, recordTimestamp);
+    const insulinPlan = selectedPlan;
     if (!insulinPlan) {
       return {
         status: 'unavailable',
@@ -6281,6 +6295,7 @@
     });
     return {
       ...result,
+      calculationAuthority: localDevelopmentAuthority ? 'local-development' : null,
       insulinPlanSnapshot: result.insulinPlanId ? clonePlanSnapshot(insulinPlan) : null,
     };
   }
@@ -7303,9 +7318,7 @@
 
   function buildRecordFromForm(form) {
     const now = new Date();
-    const existing = currentEditor?.id
-      ? records.find((record) => record.id === currentEditor.id)
-      : null;
+    const existing = currentEditor?.originalRecord || null;
     const observedContext = getObservedEntryContext(form);
     const recordTimestamp = observedContext.recordTimestamp;
     if (!recordTimestamp) {
@@ -7317,7 +7330,7 @@
     const actualAction = getActualRecordedAction(form, calculatedGuidance);
     const preserveOriginalCalculation = Boolean(existing && !hasDoseAffectingEditorChanges(form, existing));
     const calculationSource = preserveOriginalCalculation ? existing : calculatedGuidance;
-    return {
+    const nextRecord = {
       id: existing?.id || createId(),
       date: getLocalDateKey(new Date(recordTimestamp)),
       time: getLocalTimeKey(new Date(recordTimestamp)),
@@ -7355,7 +7368,11 @@
       suggestedTotalUnits: calculationSource.status === 'calculated' ? calculationSource.suggestedTotalUnits : (preserveOriginalCalculation ? existing.suggestedTotalUnits : null),
       insulinPlanId: preserveOriginalCalculation ? existing.insulinPlanId || null : calculatedGuidance.insulinPlanId || null,
       insulinPlanSnapshot: preserveOriginalCalculation ? existing.insulinPlanSnapshot || null : calculatedGuidance.insulinPlanSnapshot || null,
-      doseCalculationStatus: preserveOriginalCalculation ? existing.doseCalculationStatus : calculatedGuidance.status,
+      doseCalculationStatus: preserveOriginalCalculation ? existing.doseCalculationStatus
+        : (calculatedGuidance.status === 'calculated'
+          && (calculatedGuidance.calculationAuthority === 'local-development'
+            || existing?.doseCalculationStatus === 'local-development-calculated')
+          ? 'local-development-calculated' : calculatedGuidance.status),
       calculationAudit: preserveOriginalCalculation ? existing.calculationAudit || null : existing?.calculationAudit || null,
       notes: observedContext.notes,
       recordTimestamp: new Date(recordTimestamp).toISOString(),
@@ -8181,12 +8198,22 @@
 
   function renderSyncStatusSection() {
     if (isLocalDeviceDevelopment()) {
+      const recent = [...records].sort((a, b) => (parseTimestamp(b.updatedAt) || 0) - (parseTimestamp(a.updatedAt) || 0))[0];
+      const snapshot = recent?.insulinPlanSnapshot;
       return `
         <h2 class="lee_lee_diabetes_visually_hidden">Sync Status</h2>
         <details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="sync-status" aria-labelledby="lee-lee-sync-title">
           <summary id="lee-lee-sync-title">Sync Status <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
           <div class="lee_lee_diabetes_settings_accordion_body">
             <p class="lee_lee_diabetes_save_status" role="status">LOCAL DEV — Supabase authentication and production sync are disabled.</p>
+            <h3>Recent Entry Plan Provenance — Local Dev Only</h3>
+            ${renderStatusGrid([
+              ['Plan ID', recent?.insulinPlanId ? 'PRESENT' : 'MISSING'],
+              ['Plan snapshot', snapshot ? 'PRESENT' : 'MISSING'],
+              ['Snapshot completeness', snapshot && getInsulinPlanCompleteness(snapshot).complete ? 'COMPLETE' : 'UNAVAILABLE / INCOMPLETE'],
+              ['Calculation status', recent?.doseCalculationStatus || 'No saved entry'],
+              ['Plan authority', recent?.doseCalculationStatus === 'local-development-calculated' ? 'LOCAL DEVELOPMENT — not Supabase verified' : 'No local-development calculation provenance'],
+            ])}
           </div>
         </details>
       `;
@@ -9296,6 +9323,7 @@
       record,
       returnTo,
       returnDateKey,
+      preserveDocumentScrollOnViewportPan: true,
     });
   }
 
