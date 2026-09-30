@@ -1163,6 +1163,16 @@
   display: block;
 }
 
+/* Normal content keeps its outward 2px outline + 3px offset inside the
+   scrollport, including the final action at the bottom scroll limit.
+   Preserve the existing extra scrollbar clearance without changing subviews. */
+.lee_lee_diabetes_carb_calculator_body:not(.lee_lee_diabetes_carb_calculator_body--search):not(.lee_lee_diabetes_carb_item_editor_body) {
+  box-sizing: border-box;
+  padding-block: var(--llt-field-support-gap);
+  padding-inline-start: var(--llt-field-support-gap);
+  padding-inline-end: calc(10px + var(--llt-field-support-gap));
+}
+
 .lee_lee_diabetes_carb_calculator [data-carb-library-view]:focus,
 .lee_lee_diabetes_carb_calculator [data-carb-library-view]:focus-visible {
   outline: 2px solid var(--lee-lee-soft);
