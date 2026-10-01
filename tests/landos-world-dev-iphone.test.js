@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import test from 'node:test';
 import {
   createIPhoneDevServer,
+  readAuthenticationPreviewConfig,
   isSameSubnetIPv4,
   selectLanInterfaceAddress,
 } from '../scripts/dev-iphone.mjs';
@@ -26,10 +27,11 @@ function request(server, path, method = 'GET') {
   });
 }
 
-async function withServer(run) {
+async function withServer(run, options = {}) {
   const server = createIPhoneDevServer({
     bindAddress: { address: '127.0.0.1', netmask: '255.0.0.0' },
     getMetadata: async () => ({ environment: 'local-device', commit: 'test-sha' }),
+    ...options,
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -41,6 +43,32 @@ async function withServer(run) {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 }
+
+test('auth preview requires valid configuration and serves restrictive policy and trusted identity only', async () => {
+  assert.match(await readAuthenticationPreviewConfig(), /^https:\/\/.+\.supabase\.co$/);
+  await assert.rejects(readAuthenticationPreviewConfig('/nonexistent-preview-root'));
+  await withServer(async (server) => {
+    const shell = await request(server, '/?local-device=true&auth-preview=false');
+    assert.equal(shell.status, 200);
+    assert.match(shell.body, /AUTH PREVIEW/);
+    assert.match(shell.body, /Production data access disabled/);
+    assert.match(shell.body, /environment.*local-auth-preview/);
+    assert.doesNotMatch(shell.body, /<script src="js\/landos-world-build-metadata/);
+    assert.equal(shell.headers['content-security-policy'], "connect-src 'self' https://example.supabase.co/auth/v1/; form-action 'self'; worker-src 'none'");
+    assert.equal(shell.headers['cache-control'], 'no-store');
+    assert.equal((await request(server, '/rest/v1/canary')).status, 404);
+    assert.equal((await request(server, '/.local/landos-world-build-metadata.js')).status, 200);
+  }, { authOrigin: 'https://example.supabase.co', getMetadata: async () => ({ environment: 'local-auth-preview' }) });
+});
+
+test('auth preview missing or wrong metadata fails closed, never serves a production fallback', async () => {
+  for (const getMetadata of [async () => null, async () => ({ environment: 'local-device' }), async () => { throw new Error('Unavailable'); }]) {
+    await withServer(async (server) => {
+      assert.equal((await request(server, '/')).status, 500);
+      assert.equal((await request(server, '/.local/landos-world-build-metadata.js')).status, 503);
+    }, { authOrigin: 'https://example.supabase.co', getMetadata });
+  }
+});
 
 test('iPhone dev mode selects exactly one private IPv4 address on the default interface', () => {
   const selected = selectLanInterfaceAddress({

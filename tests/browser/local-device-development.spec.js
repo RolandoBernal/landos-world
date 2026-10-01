@@ -53,6 +53,13 @@ test('local-device environment shows its badge, bypasses LLT sign-in locally, an
   await expect(page.getByRole('heading', { name: 'Log Entry' })).toBeVisible();
   await page.getByRole('button', { name: /Carb Calculator/ }).click();
   await expect(page.getByRole('dialog', { name: 'Carb Calculator' })).toBeVisible();
+  await page.context().setOffline(true);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('pageshow'));
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  expect(await page.evaluate(() => window.LeeLeeTrackerAccess.getState())).toBe('local-development-authorized');
+  await expect(page.getByRole('dialog', { name: 'Carb Calculator' })).toBeVisible();
 
   registrationCalls.push(...await page.evaluate(() => window.__iphoneDevServiceWorkerCalls));
   expect(registrationCalls).toEqual([]);

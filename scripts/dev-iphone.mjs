@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generateMetadata } from './dev-local.mjs';
 import { PAGES_RUNTIME_FILES } from './pages-runtime-allowlist.mjs';
+import vm from 'node:vm';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_PORT = 8000;
@@ -104,11 +105,29 @@ function createMetadataScript(metadata) {
   return `window.LandoWorldBuildMetadata = Object.freeze(${JSON.stringify(metadata)});\n`;
 }
 
-function addLocalDeviceMarkup(html) {
+function addLocalDeviceMarkup(html, authMetadata = null) {
   const metadataScript = `<script src="${METADATA_PATH}?v=local-device"></script>`;
   const badge = `<style id="lws-local-dev-style">#lws-local-dev-badge{position:fixed;z-index:2147483000;inset-block-start:calc(env(safe-area-inset-top,0px) + 6px);inset-inline-end:8px;padding:3px 7px;border:1px solid #ffd166;border-radius:999px;background:#332600;color:#fff3c4;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.08em;pointer-events:none;user-select:none}</style><div id="lws-local-dev-badge" role="status" aria-label="Local development environment">LOCAL DEV</div>`;
   if (!html.includes('</head>') || !html.includes('</body>')) throw new Error('The Lando’s World shell could not be marked as local-device development.');
+  if (authMetadata) {
+    // Inline trusted metadata prevents a failed auxiliary request from reverting to production.
+    const previewScript = `<script>${createMetadataScript(authMetadata).replaceAll('<', '\\u003c')}</script>`;
+    const previewBadge = badge.replaceAll('LOCAL DEV', 'AUTH PREVIEW').replace('Local development environment', 'Authentication preview — Production data access disabled');
+    const warning = '<div role="status" style="position:fixed;bottom:0;left:0;right:0;z-index:2147483000;background:#332600;color:#fff3c4;text-align:center;font:12px system-ui;padding:6px">Production data access disabled. HTTPS required before credential testing.</div>';
+    return html.replace(/<script src="js\/landos-world-build-metadata\.js[^\"]*"><\/script>/, '')
+      .replace('</head>', `${previewScript}</head>`).replace('</body>', `${previewBadge}${warning}</body>`);
+  }
   return html.replace('</head>', `${metadataScript}</head>`).replace('</body>', `${badge}</body>`);
+}
+
+export async function readAuthenticationPreviewConfig(root = REPO_ROOT) {
+  const context = { window: {} };
+  vm.runInNewContext(await readFile(join(root, 'js/lee-lees-tracker-config.js'), 'utf8'), context, { timeout: 1000 });
+  const config = context.window.LEE_LEE_TRACKER_SUPABASE_CONFIG;
+  if (!config?.publishableKey?.startsWith('sb_publishable_') || new URL(config.url).protocol !== 'https:') {
+    throw new Error('Authentication preview requires HTTPS Supabase configuration with a browser publishable key.');
+  }
+  return new URL(config.url).origin;
 }
 
 function responseHeaders(filePath) {
@@ -120,7 +139,10 @@ function responseHeaders(filePath) {
   };
 }
 
-export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetadata }) {
+export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetadata, authOrigin = null }) {
+  if (authOrigin && (new URL(authOrigin).protocol !== 'https:' || new URL(authOrigin).origin !== authOrigin)) {
+    throw new Error('A valid HTTPS authentication origin is required.');
+  }
   if (!bindAddress || (!isPrivateIPv4(bindAddress.address) && !isLoopbackIPv4(bindAddress.address))) {
     throw new Error('The iPhone development server requires an explicitly selected private IPv4 interface.');
   }
@@ -154,6 +176,7 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
     if (requestPath === METADATA_PATH) {
       try {
         const metadata = await getMetadata();
+        if (authOrigin && metadata?.environment !== 'local-auth-preview') throw new Error('Preview metadata missing');
         response.writeHead(200, responseHeaders(METADATA_FILE));
         response.end(request.method === 'HEAD' ? undefined : createMetadataScript(metadata));
       } catch {
@@ -180,13 +203,21 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
     }
 
     try {
-      response.writeHead(200, responseHeaders(filePath));
+      let previewMetadata = null;
+      if (authOrigin && relativePath === 'index.html') {
+        previewMetadata = await getMetadata();
+        if (previewMetadata?.environment !== 'local-auth-preview') throw new Error('Preview metadata missing');
+      }
+      response.writeHead(200, {
+        ...responseHeaders(filePath),
+        ...(authOrigin ? { 'Content-Security-Policy': `connect-src 'self' ${authOrigin}/auth/v1/; form-action 'self'; worker-src 'none'` } : {}),
+      });
       if (request.method === 'HEAD') {
         response.end();
         return;
       }
       if (relativePath === 'index.html') {
-        const html = addLocalDeviceMarkup(await readFile(filePath, 'utf8'));
+        const html = addLocalDeviceMarkup(await readFile(filePath, 'utf8'), previewMetadata);
         response.end(html);
         return;
       }
@@ -201,17 +232,22 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
 function parseArgs() {
   const args = process.argv.slice(2);
   const portIndex = args.indexOf('--port');
-  return { port: portIndex >= 0 ? Number(args[portIndex + 1]) : DEFAULT_PORT };
+  const authPreview = args.includes('--auth-preview');
+  return { port: portIndex >= 0 ? Number(args[portIndex + 1]) : authPreview ? 8769 : DEFAULT_PORT, authPreview };
 }
 
 async function main() {
-  const { port } = parseArgs();
+  const { port, authPreview } = parseArgs();
+  if (authPreview && port === DEFAULT_PORT) throw new Error('Authentication preview must use a separate port from local-device development.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port: ${port}`);
   const lan = getMacLanInterfaceAddress();
-  const metadata = await generateMetadata({ environment: 'local-device', includeUntracked: false });
+  const environment = authPreview ? 'local-auth-preview' : 'local-device';
+  const authOrigin = authPreview ? await readAuthenticationPreviewConfig() : null;
+  const metadata = await generateMetadata({ environment, includeUntracked: false, write: !authPreview });
   const server = createIPhoneDevServer({
     bindAddress: lan,
-    getMetadata: () => generateMetadata({ environment: 'local-device', includeUntracked: false }),
+    authOrigin,
+    getMetadata: () => generateMetadata({ environment, includeUntracked: false, write: !authPreview }),
   });
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
@@ -220,6 +256,10 @@ async function main() {
     process.exitCode = 1;
   });
   server.listen(port, lan.address, () => {
+    if (authPreview) {
+      console.log(`Lando’s World — AUTH PREVIEW\nURL: http://${lan.address}:${port}/#/lee-lees-tracker\nBranch: ${metadata.branch}\nProduction data access disabled.\nHTTP is for structural inspection only: DO NOT enter real credentials. HTTPS is required before credential testing.\nNo certificates, trust settings, production data or service workers are changed.\nStop with Ctrl-C.`);
+      return;
+    }
     console.log(`Lando’s World — Local iPhone Development\n\nURL:       http://${lan.address}:${port}/\nNetwork:   ${lan.interfaceName} (private IPv4; same-subnet clients only)\nBranch:    ${metadata.branch}\nCommit:    ${metadata.commit}\nSource:    ${metadata.dirty ? 'Modified' : 'Clean'}\n\nUse Safari on the iPhone and keep both devices on the same trusted local network.\nmacOS Firewall may ask you to allow incoming connections for Node.js; do not disable the firewall.\nPWA installation, service workers, offline behavior, and deployed-release updates are disabled/not representative.\nLLT authentication and Supabase/production sync are disabled; local changes stay in this browser origin.\nStop the server with Ctrl-C.`);
   });
   const stop = () => server.close(() => process.exit(0));

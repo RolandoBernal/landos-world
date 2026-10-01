@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { generateMetadata } from '../scripts/dev-local.mjs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+
+test('authentication preview metadata generation does not overwrite ordinary development identity', async () => {
+  const before = await read('.local/landos-world-build-metadata.js').catch(() => null);
+  const metadata = await generateMetadata({ environment: 'local-auth-preview', includeUntracked: false, write: false });
+  assert.equal(metadata.environment, 'local-auth-preview');
+  assert.equal(await read('.local/landos-world-build-metadata.js').catch(() => null), before);
+  const packageData = JSON.parse(await read('package.json'));
+  assert.equal(packageData.scripts['dev:iphone:auth'], 'node scripts/dev-iphone.mjs --auth-preview');
+});
 
 test('canonical local development contract is explicit', async () => {
   const [server, packageJson, readme, playwright] = await Promise.all([

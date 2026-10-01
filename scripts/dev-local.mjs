@@ -61,7 +61,7 @@ async function fingerprintDirtySource(status, stagedDiff, workingDiff, untracked
   return hash.digest('hex').slice(0, 8);
 }
 
-export async function generateMetadata({ environment = 'local', includeUntracked = true } = {}) {
+export async function generateMetadata({ environment = 'local', includeUntracked = true, write = true } = {}) {
   const status = git(['status', '--porcelain', '--untracked-files=all']);
   const dirty = Boolean(status);
   const commitFull = git(['rev-parse', 'HEAD'], 'unavailable');
@@ -84,8 +84,10 @@ export async function generateMetadata({ environment = 'local', includeUntracked
     sourceId,
     generatedAt: new Date().toISOString(),
   };
-  await mkdir(LOCAL_DIR, { recursive: true });
-  await writeFile(METADATA_PATH, `window.LandoWorldBuildMetadata = Object.freeze(${JSON.stringify(metadata)});\n`, 'utf8');
+  if (write) {
+    await mkdir(LOCAL_DIR, { recursive: true });
+    await writeFile(METADATA_PATH, `window.LandoWorldBuildMetadata = Object.freeze(${JSON.stringify(metadata)});\n`, 'utf8');
+  }
   return metadata;
 }
 

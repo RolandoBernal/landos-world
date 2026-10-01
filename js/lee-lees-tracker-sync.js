@@ -1,6 +1,31 @@
 (() => {
   const CONFIG_GLOBAL = 'LEE_LEE_TRACKER_SUPABASE_CONFIG';
   const SUPABASE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  function isUsableSession(session, now = Date.now()) {
+    return Boolean(session?.user?.id) && Number.isFinite(session.expires_at)
+      && session.expires_at * 1000 > now;
+  }
+
+  function resolveAccessState({ environment, authResolved, configured, signedIn } = {}) {
+    if (environment === 'local-device') return 'local-development-authorized';
+    if (!authResolved) return 'resolving';
+    return configured && signedIn ? 'production-authorized' : 'denied';
+  }
+
+  function describeSignInError(error) {
+    const code = String(error?.code || '');
+    const status = Number(error?.status);
+    if (status === 429 || code.includes('rate_limit')) return 'Too many sign-in attempts. Please wait and try again.';
+    if (code === 'invalid_credentials' || status === 400 && /invalid.*(login|credential)/i.test(error?.message || '')) {
+      return "The email or password wasn't accepted. Check your information and try again.";
+    }
+    if (status >= 500 || error?.name === 'AuthRetryableFetchError' || error instanceof TypeError
+      || /network|failed to fetch|fetch failed|connection/i.test(error?.message || '')) {
+      return 'Unable to connect. Check your connection and try again.';
+    }
+    return 'Unable to sign in right now. Please try again.';
+  }
   const DEVICE_IDENTITY_KEY = 'lando-world:lee-lees-tracker:device-identity:v1';
   const DEVICE_INSTALLATION_ID_KEY = 'lando-world:lee-lees-tracker:device-installation-id:v1';
   const SETTINGS_AUDIT_CACHE_KEY = 'lando-world:lee-lees-tracker:settings-audit-cache:v1';
@@ -172,6 +197,39 @@
 
   function isLocalDeviceDevelopment() {
     return globalThis.LandoWorldBuildMetadata?.environment === 'local-device';
+  }
+
+  function isAuthenticationPreview() {
+    return globalThis.LandoWorldBuildMetadata?.environment === 'local-auth-preview';
+  }
+
+  // Preview policy is restrictive, never an authorization grant. Auth still owns access.
+  function createAuthenticationPreviewTransport(url, fetchImplementation) {
+    const origin = new URL(url).origin;
+    if (!origin.startsWith('https:') || typeof fetchImplementation !== 'function') {
+      throw new Error('Authentication preview transport unavailable.');
+    }
+    return async (input, options) => {
+      const target = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+      if (target.origin !== origin || target.username || target.password
+        || !['/auth/v1/token', '/auth/v1/user', '/auth/v1/logout', '/auth/v1/settings'].includes(target.pathname)) {
+        throw new Error('Production data access disabled.');
+      }
+      // Do not permit a redirect from an Auth endpoint into a data endpoint.
+      return fetchImplementation(input, { ...options, redirect: 'error' });
+    };
+  }
+
+  function restrictAuthenticationPreviewClient(client) {
+    const denied = () => { throw new Error('Production data access disabled.'); };
+    return new Proxy(client, {
+      get(target, property) {
+        if (['realtime', 'storage', 'functions'].includes(property)) throw new Error('Production data access disabled.');
+        if (['from', 'rpc', 'channel'].includes(property)) return denied;
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
   }
 
   function getAppVersion() {
@@ -1037,6 +1095,9 @@
     const listeners = new Set();
     let supabaseClient = null;
     let session = null;
+    let authResolved = false;
+    let sessionExpiryTimer = null;
+    let sessionRevision = 0;
     let initialized = false;
     let processing = false;
     let processingSharedSettings = false;
@@ -1048,6 +1109,17 @@
 
     function emit() {
       listeners.forEach((listener) => listener(getSyncStatus()));
+    }
+
+    function acceptSession(nextSession) {
+      session = nextSession || null;
+      sessionRevision += 1;
+      authResolved = true;
+      globalThis.clearTimeout?.(sessionExpiryTimer);
+      sessionExpiryTimer = null;
+      if (isUsableSession(session)) {
+        sessionExpiryTimer = globalThis.setTimeout?.(() => emit(), Math.min(2147483647, session.expires_at * 1000 - Date.now() + 1));
+      }
     }
 
     function getSharedSettingsStatus() {
@@ -1071,14 +1143,14 @@
         message = 'Shared settings synced';
       }
       return {
-        state,
-        message,
-        hasRemote: Boolean(cache.version),
-        version: cache.version,
+        state: isAuthenticationPreview() ? 'auth-preview' : state,
+        message: isAuthenticationPreview() ? 'Production data access disabled; shared settings are not verified.' : message,
+        hasRemote: !isAuthenticationPreview() && Boolean(cache.version),
+        version: isAuthenticationPreview() ? null : cache.version,
         updatedAt: cache.updatedAt,
         conflictCount: conflicts.length,
         pendingCount: queue.length,
-        lastFetchedAt: getMetadata().sharedSettingsLastFetchedAt || null,
+        lastFetchedAt: isAuthenticationPreview() ? null : getMetadata().sharedSettingsLastFetchedAt || null,
         lastFetchError: getMetadata().sharedSettingsLastFetchError || '',
         lastFetchErrorCategory: getMetadata().sharedSettingsLastFetchErrorCategory || '',
         lastFetchErrorCode: getMetadata().sharedSettingsLastFetchErrorCode || '',
@@ -1104,10 +1176,13 @@
       if (localOnly) {
         state = 'local-only';
         message = 'Local-device development — Supabase authentication and sync are disabled.';
+      } else if (isAuthenticationPreview()) {
+        state = 'auth-preview';
+        message = 'Authentication preview — Production data access disabled.';
       } else if (!config.configured) {
         state = 'config-needed';
         message = 'Supabase setup needed';
-      } else if (!session) {
+      } else if (!isUsableSession(session)) {
         state = 'signed-out';
         message = 'Sign in to sync';
       } else if (conflicts.length) {
@@ -1143,7 +1218,9 @@
       return {
         configured: config.configured && !localOnly,
         localOnly,
-        signedIn: Boolean(session),
+        productionDataDisabled: isAuthenticationPreview(),
+        signedIn: isUsableSession(session),
+        authResolved,
         deviceIdentity: getDeviceIdentity(),
         pendingCount: totalPendingCount,
         recordPendingCount: pendingCount,
@@ -1283,25 +1360,34 @@
 
     async function ensureClient() {
       if (isLocalDeviceDevelopment()) return null;
+      if (isAuthenticationPreview() && globalThis.isSecureContext !== true) {
+        throw new Error('HTTPS required before credential testing.');
+      }
       const config = getConfig();
       if (!config.configured) return null;
       if (!supabaseClient) {
         const createClient = await loadSupabaseFactory();
-        supabaseClient = createClient(config.url, config.publishableKey, {
+        const preview = isAuthenticationPreview();
+        const transport = preview ? createAuthenticationPreviewTransport(config.url, globalThis.fetch?.bind(globalThis)) : null;
+        const client = createClient(config.url, config.publishableKey, {
+          ...(preview ? { global: { fetch: transport } } : {}),
           auth: {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
           },
         });
+        supabaseClient = preview ? restrictAuthenticationPreviewClient(client) : client;
       }
       return supabaseClient;
     }
 
     async function refreshSession(client) {
+      const revision = sessionRevision;
       const { data, error } = await client.auth.getSession();
       if (error) throw error;
-      session = data?.session || null;
+      if (revision === sessionRevision) acceptSession(data?.session);
+      emit();
       return session;
     }
 
@@ -1309,18 +1395,18 @@
       if (initialized) return getSyncStatus();
       initialized = true;
       if (isLocalDeviceDevelopment()) {
+        authResolved = true;
         emit();
         return getSyncStatus();
       }
-      pruneDefaultSeedFoodQueue();
+      if (!isAuthenticationPreview()) pruneDefaultSeedFoodQueue();
       try {
         const client = await ensureClient();
         if (client) {
-          const { data } = await client.auth.getSession();
-          session = data?.session || null;
           client.auth.onAuthStateChange((_event, nextSession) => {
-            session = nextSession || null;
-            if (session) {
+            acceptSession(nextSession);
+            emit();
+            if (session && !isAuthenticationPreview()) {
               reconcile().catch(() => {});
               reconcileSharedSettings().catch(() => {});
               reconcileFoodLibrary().catch(() => {});
@@ -1330,9 +1416,12 @@
               unsubscribeRealtime();
               unsubscribeSharedSettingsRealtime();
             }
-            emit();
           });
-      if (session) {
+          const revision = sessionRevision;
+          const { data, error } = await client.auth.getSession();
+          if (error) throw error;
+          if (revision === sessionRevision) acceptSession(data?.session);
+      if (session && !isAuthenticationPreview()) {
         subscribeRealtime();
         subscribeSharedSettingsRealtime();
         await reconcile();
@@ -1344,21 +1433,32 @@
       } catch (error) {
         setMetadata({ lastError: 'Supabase could not be reached.' });
       }
+      authResolved = true;
       emit();
       return getSyncStatus();
     }
 
     async function signIn(email, password) {
       if (isLocalDeviceDevelopment()) return { error: 'Authentication is disabled in local-device development.' };
-      const client = await ensureClient();
+      if (isAuthenticationPreview() && globalThis.isSecureContext !== true) return { error: 'HTTPS required before credential testing.' };
+      let client;
+      try { client = await ensureClient(); } catch (error) { return { error: describeSignInError(error) }; }
       if (!client) return { error: 'Supabase setup is missing.' };
-      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      let result;
+      try {
+        result = await client.auth.signInWithPassword({ email, password });
+      } catch (error) {
+        return { error: describeSignInError(error) };
+      }
+      const { data, error } = result;
       if (error) {
         setMetadata({ lastError: error.message || 'Sign-in failed.' });
         emit();
-        return { error: 'Sign-in failed. Check the email and password.' };
+        return { error: describeSignInError(error) };
       }
-      session = data?.session || null;
+      acceptSession(data?.session);
+      emit();
+      if (isAuthenticationPreview()) return { ok: true };
       await reconcile();
       await reconcileSharedSettings();
       await reconcileFoodLibrary();
@@ -1370,8 +1470,11 @@
 
     async function signOut() {
       const client = await ensureClient();
-      if (client) await client.auth.signOut({ scope: 'local' });
-      session = null;
+      if (client) {
+        const { error } = await client.auth.signOut({ scope: 'local' });
+        if (error) throw error;
+      }
+      acceptSession(null);
       latestFetchedSharedSettings = null;
       unsubscribeRealtime();
       unsubscribeSharedSettingsRealtime();
@@ -1389,6 +1492,7 @@
     }
 
     async function sendPasswordReset(email) {
+      if (isAuthenticationPreview()) return { error: 'Password reset is not available in authentication preview.' };
       if (isLocalDeviceDevelopment()) return { error: 'Password reset is disabled in local-device development.' };
       const client = await ensureClient();
       if (!client) return { error: 'Supabase setup is missing.' };
@@ -1426,6 +1530,7 @@
     }
 
     function queueOperation(type, record, baseVersion = null) {
+      if (isAuthenticationPreview()) return null;
       const operation = createOperation(type, record, baseVersion);
       setQueue([...getQueue(), operation]);
       markLocalRecord(record, navigator.onLine ? 'waiting' : 'offline');
@@ -1484,6 +1589,7 @@
     }
 
     async function processQueueInternal(options = {}) {
+      if (isAuthenticationPreview()) return getSyncStatus();
       if (processing || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client) return getSyncStatus();
@@ -1716,6 +1822,7 @@
     }
 
     async function reconcile(options = {}) {
+      if (isAuthenticationPreview()) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       const { data, error } = await client
@@ -1735,6 +1842,7 @@
     }
 
     async function fetchSharedSettings() {
+      if (isAuthenticationPreview()) return null;
       const client = await ensureClient();
       if (!client || !session?.user?.id) return null;
       const { data, error } = await client
@@ -1778,6 +1886,7 @@
     }
 
     async function reconcileSharedSettings() {
+      if (isAuthenticationPreview()) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       try {
@@ -1853,6 +1962,7 @@
     }
 
     function saveSharedSettings(settings) {
+      if (isAuthenticationPreview()) return null;
       const previousSettings = getSharedSettingsCache();
       const cachedVersion = previousSettings.version || null;
       const pendingBaseVersion = getSharedSettingsQueue().find((operation) => operation.baseVersion != null)?.baseVersion ?? null;
@@ -1894,6 +2004,7 @@
     }
 
     async function appendSettingsAuditEvent(event, status) {
+      if (isAuthenticationPreview()) return;
       const client = await ensureClient();
       if (!client || !session?.user?.id || !event?.eventId) return;
       await client.rpc('append_lee_lee_settings_audit_event', {
@@ -1903,6 +2014,7 @@
     }
 
     async function reconcileSettingsAudit() {
+      if (isAuthenticationPreview()) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSettingsAuditHistory();
       const { data, error } = await client
@@ -1965,6 +2077,7 @@
     }
 
     async function processSharedSettingsQueueInternal() {
+      if (isAuthenticationPreview()) return getSyncStatus();
       if (processingSharedSettings || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
@@ -2104,6 +2217,7 @@
     }
 
     function queueLibraryUpsert(entityType, item, existingItem = null) {
+      if (isAuthenticationPreview()) return null;
       const operation = createLibraryOperation(entityType, item, existingItem?.version || null);
       if (isDefaultSeedFoodOperation(operation)) {
         pruneDefaultSeedFoodQueue();
@@ -2125,6 +2239,7 @@
     }
 
     async function reconcileFoodLibrary() {
+      if (isAuthenticationPreview()) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
       try {
@@ -2153,6 +2268,7 @@
     }
 
     async function processFoodLibraryQueueInternal() {
+      if (isAuthenticationPreview()) return getSyncStatus();
       if (processingFoodLibrary || !navigator.onLine) return getSyncStatus();
       const client = await ensureClient();
       if (!client || !session?.user?.id) return getSyncStatus();
@@ -2199,6 +2315,7 @@
     }
 
     function subscribeRealtime() {
+      if (isAuthenticationPreview()) return;
       if (!supabaseClient || !session?.user?.id || realtimeChannel) return;
       setMetadata({ realtimeStatus: 'connecting' });
       realtimeChannel = supabaseClient
@@ -2224,6 +2341,7 @@
     }
 
     function subscribeSharedSettingsRealtime() {
+      if (isAuthenticationPreview()) return;
       if (!supabaseClient || !session?.user?.id || sharedSettingsChannel) return;
       sharedSettingsChannel = supabaseClient
         .channel('lee-lee-shared-settings')
@@ -2271,6 +2389,7 @@
     }
 
     async function keepSharedVersion(recordId) {
+      if (isAuthenticationPreview()) return;
       const conflicts = getConflicts();
       const conflict = conflicts.find((item) => item.recordId === recordId);
       if (!conflict) return;
@@ -2288,6 +2407,7 @@
     }
 
     async function useLocalVersion(recordId) {
+      if (isAuthenticationPreview()) return;
       const conflicts = getConflicts();
       const conflict = conflicts.find((item) => item.recordId === recordId);
       if (!conflict) return;
@@ -2321,6 +2441,7 @@
     }
 
     function cleanupIdenticalConflicts() {
+      if (isAuthenticationPreview()) return 0;
       const conflicts = getConflicts();
       const remaining = [];
       const resolvedIds = new Set();
@@ -2373,6 +2494,7 @@
     }
 
     function syncAll(options = {}) {
+      if (isAuthenticationPreview()) return Promise.resolve(getSyncStatus());
       if (fullSyncPromise) return fullSyncPromise;
       fullSyncPromise = (async () => {
         setMetadata({ lastFullSyncAttemptAt: nowIso() });
@@ -2516,27 +2638,29 @@
         .join('\n');
     }
 
-    globalThis.addEventListener?.('online', () => {
-      processQueue().catch(() => {});
-      processSharedSettingsQueue().catch(() => {});
-      processFoodLibraryQueue().catch(() => {});
-    });
-    globalThis.addEventListener?.('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        reconcile().catch(() => {});
-      reconcileSharedSettings().catch(() => {});
-      reconcileSettingsAudit().catch(() => {});
-      reconcileFoodLibrary().catch(() => {});
-      }
-    });
-    globalThis.setInterval?.(() => {
-      if (session) {
-        reconcile().catch(() => {});
-        reconcileSharedSettings().catch(() => {});
-        reconcileSettingsAudit().catch(() => {});
-        reconcileFoodLibrary().catch(() => {});
-      }
-    }, 5 * 60 * 1000);
+    if (!isAuthenticationPreview()) {
+      globalThis.addEventListener?.('online', () => {
+        processQueue().catch(() => {});
+        processSharedSettingsQueue().catch(() => {});
+        processFoodLibraryQueue().catch(() => {});
+      });
+      globalThis.addEventListener?.('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          reconcile().catch(() => {});
+          reconcileSharedSettings().catch(() => {});
+          reconcileSettingsAudit().catch(() => {});
+          reconcileFoodLibrary().catch(() => {});
+        }
+      });
+      globalThis.setInterval?.(() => {
+        if (session) {
+          reconcile().catch(() => {});
+          reconcileSharedSettings().catch(() => {});
+          reconcileSettingsAudit().catch(() => {});
+          reconcileFoodLibrary().catch(() => {});
+        }
+      }, 5 * 60 * 1000);
+    }
 
     return {
       initialize,
@@ -2597,6 +2721,11 @@
   }
 
   globalThis.LeeLeeTrackerSync = {
+    createAuthenticationPreviewTransport,
+    restrictAuthenticationPreviewClient,
+    isUsableSession,
+    resolveAccessState,
+    describeSignInError,
     createRepository,
     getConfig,
     getDeviceIdentity,
