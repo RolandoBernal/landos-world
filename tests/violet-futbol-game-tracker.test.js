@@ -835,7 +835,7 @@ test('launcher and VFGT setup use the approved icon and dark form controls', () 
 });
 
 test('saved games and live headers separate team names from score and VS labels', () => {
-  assert.match(source, /class="vfgt_history_matchup"/);
+  assert.match(source, /class="vfgt_history_matchup vfgt_copy_score"/);
   assert.match(source, /class="vfgt_history_score"/);
   assert.match(source, /class="vfgt_history_team vfgt_history_team--home"/);
   assert.match(source, /class="vfgt_history_team vfgt_history_team--away"/);
@@ -853,7 +853,7 @@ test('saved games and live headers separate team names from score and VS labels'
   assert.match(css, /--vfgt-score-control-height: 60px/);
   assert.match(css, /\.vfgt_score_button,\n\.vfgt_score_input \{[\s\S]*min-height: var\(--vfgt-score-control-height\)/);
   assert.match(css, /\.vfgt_vs \{[\s\S]*min-height: var\(--vfgt-score-control-height\)/);
-  assert.match(css, /\.vfgt_live \.vfgt_scoreboard \+ \.vfgt_actions[\s\S]*margin-top: 1\.25rem/);
+  assert.match(css, /\.vfgt_live \.vfgt_live_action_rail[\s\S]*margin-top: 1\.25rem/);
   assert.match(css, /\.vfgt_summary_grid \+ \.vfgt_actions[\s\S]*margin-top: var\(--vfgt-section-gap\)/);
 });
 
@@ -1030,4 +1030,43 @@ test('VFGT settings exposes the current season half-duration control', () => {
   assert.match(source, /data-vfgt-duration-form/);
   assert.match(source, /halfDurationMinutes/);
   assert.match(source, /Half Duration/);
+});
+
+
+test('match update formatter snapshots scores and configurable soccer minutes', () => {
+  const { api, now } = createRuntime();
+  const game = api.createGame({ team1: 'North School', team2: 'South School', teamSide: 1, halfDurationMinutes: 40 });
+  api.startFirstHalf(game, now());
+  const cases = [[0, '1'], [59, '1'], [60, '2'], [1500, '26'], [2399, '40'], [2400, '40+1'], [2460, '40+2']];
+  for (const [elapsed, expected] of cases) assert.equal(api.formatSoccerMinute(game, elapsed), expected);
+  api.adjustScore(game, 1, 1);
+  const text = api.formatMatchUpdate('goal', game, 1, now() + 1500000);
+  assert.equal(text, '⚽️ Goal North School!\nNorth School 1 - 0 South School\nFirst Half: Minute 26');
+  api.adjustScore(game, 2, 1);
+  assert.equal(api.formatMatchUpdate('goal', game, 2, now()), '⚽️ Goal South School\nNorth School 1 - 1 South School\nFirst Half: Minute 1');
+  assert.equal(text, '⚽️ Goal North School!\nNorth School 1 - 0 South School\nFirst Half: Minute 26');
+  api.endFirstHalf(game, now());
+  assert.equal(api.formatMatchUpdate('halftime', game), 'End of First Half:\nNorth School 1 - 1 South School');
+  api.startSecondHalf(game, now());
+  assert.equal(api.formatMatchUpdate('second', game), 'Second Half Starting Now...\nNorth School 1 - 1 South School');
+  for (const [elapsed, expected] of [[0, '41'], [300, '46'], [2399, '80'], [2400, '80+1'], [2460, '80+2']]) assert.equal(api.formatSoccerMinute(game, elapsed), expected);
+  game.halfDurationMinutes = 30;
+  assert.equal(api.formatSoccerMinute(game, 0), '31');
+  assert.equal(api.formatSoccerMinute(game, 1800), '60+1');
+  api.endSecondHalf(game, now());
+  const saved = api.serializeCompletedGame(game);
+  assert.equal(api.formatMatchUpdate('final', saved), 'Final Score:\nNorth School 1 - 1 South School');
+  assert.equal(api.formatMatchUpdate('goal', saved, 1), '');
+});
+
+
+test('goal celebration follows tracked teamSide including team two ownership', () => {
+  const { api, now } = createRuntime();
+  const game = api.startFirstHalf(api.createGame({ team1: 'Opponent', team2: 'Tracked School', teamSide: 2 }), now());
+  api.adjustScore(game, 2, 1);
+  assert.equal(api.formatMatchUpdate('goal', game, 2, now()), '⚽️ Goal Tracked School!\nOpponent 0 - 1 Tracked School\nFirst Half: Minute 1');
+  api.adjustScore(game, 1, 1);
+  assert.equal(api.formatMatchUpdate('goal', game, 1, now()), '⚽️ Goal Opponent\nOpponent 1 - 1 Tracked School\nFirst Half: Minute 1');
+  game.teamSide = '';
+  assert.equal(api.formatMatchUpdate('goal', game, 2, now()).split('\n')[0], '⚽️ Goal Tracked School');
 });

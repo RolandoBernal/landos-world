@@ -52,6 +52,9 @@
     9: ['top', 'upper-left', 'upper-right', 'middle', 'lower-right', 'bottom'],
   };
 
+  let latestMatchUpdate = null;
+  let copyFeedback = '';
+  let copyFeedbackTimer = null;
   let state = null;
   let savedGames = [];
   let teams = [];
@@ -346,6 +349,87 @@
       team1: clampScore(game.firstHalfGoalsTeam1) + clampScore(game.secondHalfGoalsTeam1),
       team2: clampScore(game.firstHalfGoalsTeam2) + clampScore(game.secondHalfGoalsTeam2),
     };
+  }
+
+  function formatScoreLine(game) {
+    const score = finalScores(game);
+    return `${game.team1} ${score.team1} - ${score.team2} ${game.team2}`;
+  }
+
+  function formatSoccerMinute(game, elapsedSeconds) {
+    const halfMinutes = normalizeHalfDurationMinutes(game.halfDurationMinutes);
+    const minute = Math.floor(Math.max(0, elapsedSeconds) / 60) + 1;
+    const offset = game.phase === 'second_half' ? halfMinutes : 0;
+    return minute > halfMinutes ? `${offset + halfMinutes}+${minute - halfMinutes}` : String(offset + minute);
+  }
+
+  function formatMatchUpdate(kind, game, teamIndex, now = Date.now()) {
+    const score = formatScoreLine(game);
+    if (kind === 'goal') {
+      if (!isRunningHalf(game)) return '';
+      const name = teamIndex === 1 ? game.team1 : game.team2;
+      return `⚽️ Goal ${name}${teamIndex === game.teamSide ? '!' : ''}\n${score}\n${phaseLabel(game.phase)}: Minute ${formatSoccerMinute(game, elapsedForHalf(game, game.phase, now))}`;
+    }
+    const title = { halftime: 'End of First Half:', second: 'Second Half Starting Now...', final: 'Final Score:' }[kind];
+    return title ? `${title}\n${score}` : '';
+  }
+
+  function recordMatchUpdate(kind, game, teamIndex, now) {
+    const text = formatMatchUpdate(kind, game, teamIndex, now);
+    if (text) latestMatchUpdate = Object.freeze({ gameId: game.id, text });
+    copyFeedback = '';
+  }
+
+  function copyUpdateMarkup(game) {
+    if (latestMatchUpdate?.gameId !== game.id) return '';
+    return `<button type="button" class="vfgt_match_update" data-vfgt-copy="${escapeHtml(latestMatchUpdate.text)}" aria-label="Copy match update"><span class="vfgt_match_update_text">${escapeHtml(latestMatchUpdate.text)}</span><span class="vfgt_copy_hint">Tap to copy</span></button>`;
+  }
+
+  function copyStatusMarkup() {
+    return `<span class="vfgt_copy_status" role="status" aria-live="polite">${escapeHtml(copyFeedback)}</span>`;
+  }
+
+  function fallbackCopyText(text) {
+    const previousFocus = document.activeElement;
+    const selection = window.getSelection?.();
+    const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.readOnly = true;
+    field.setAttribute('aria-hidden', 'true');
+    field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;pointer-events:none;';
+    document.body.appendChild(field);
+    try {
+      field.focus({ preventScroll: true });
+      field.select();
+      field.setSelectionRange(0, text.length);
+      return document.execCommand?.('copy') === true;
+    } catch { return false; }
+    finally {
+      field.remove();
+      previousFocus?.focus?.({ preventScroll: true });
+      if (selection) { selection.removeAllRanges(); ranges.forEach((range) => selection.addRange(range)); }
+    }
+  }
+
+  async function copyMatchText(text) {
+    let copied = false;
+    try {
+      if (window.navigator?.clipboard?.writeText) {
+        await window.navigator.clipboard.writeText(text);
+        copied = true;
+      } else copied = fallbackCopyText(text);
+    } catch { copied = fallbackCopyText(text); }
+    copyFeedback = copied ? 'Copied!' : 'Could not copy. Tap to retry.';
+    const status = getRoot()?.querySelector('.vfgt_copy_status');
+    if (status) status.textContent = copyFeedback;
+    window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = window.setTimeout(() => {
+      copyFeedback = '';
+      const current = getRoot()?.querySelector('.vfgt_copy_status');
+      if (current) current.textContent = '';
+    }, 2500);
+    return copied;
   }
 
   function normalizeGameType(value) {
@@ -997,6 +1081,8 @@
   }
 
   function clearActiveGame() {
+    latestMatchUpdate = null;
+    copyFeedback = '';
     state = null;
     localStorage.removeItem(ACTIVE_GAME_KEY);
     stopRefreshTimer();
@@ -1260,9 +1346,10 @@
     refreshTimer = null;
   }
 
-  function showVfgtConfirmation({ title, message, confirmLabel }) {
+  function showVfgtConfirmation({ title, message, confirmLabel, returnFocusAction = '' }) {
     return new Promise((resolve) => {
       const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const previousAction = returnFocusAction || previousFocus?.dataset?.vfgtAction;
       const titleId = `vfgt-confirm-title-${createId()}`;
       const messageId = `vfgt-confirm-message-${createId()}`;
       const dialog = document.createElement('div');
@@ -1286,7 +1373,9 @@
         window.LandosWorldModalUtils?.unlockBackgroundScroll?.(scrollLockToken);
         document.removeEventListener('keydown', handleKeydown);
         dialog.remove();
-        if (previousFocus?.isConnected) previousFocus.focus();
+        const focusTarget = previousAction ? getRoot()?.querySelector(`[data-vfgt-action="${previousAction}"]`)
+          : previousFocus?.isConnected ? previousFocus : null;
+        focusTarget?.focus({ preventScroll: true });
         resolve(confirmed);
       }
 
@@ -1317,7 +1406,7 @@
       });
       document.body.appendChild(dialog);
       document.addEventListener('keydown', handleKeydown);
-      dialog.querySelector('[data-vfgt-confirm="cancel"]')?.focus();
+      dialog.querySelector('[data-vfgt-confirm="cancel"]')?.focus({ preventScroll: true });
     });
   }
 
@@ -1329,22 +1418,25 @@
         : { phase: 'second_half', title: 'End Second Half?', message: 'This will stop the second-half timer and finish the game.', confirmLabel: 'End Second Half' };
     if (state?.phase !== details.phase) return;
     const gameAtRequest = state;
-    void showVfgtConfirmation(details).then((confirmed) => {
+    void showVfgtConfirmation({ ...details, returnFocusAction: action }).then((confirmed) => {
       if (!confirmed || state !== gameAtRequest || state.phase !== details.phase) return;
       if (action === 'end-first') {
         endFirstHalf(state);
+        recordMatchUpdate('halftime', state);
         playEndHalfWhistle();
         saveActiveGame();
         syncScreenWakeLock(state);
         renderLive();
       } else if (action === 'start-second') {
         startSecondHalf(state);
+        recordMatchUpdate('second', state);
         playNormalBeep();
         saveActiveGame();
         syncScreenWakeLock(state);
         renderLive();
       } else {
         endSecondHalf(state);
+        recordMatchUpdate('final', state);
         playEndHalfWhistle();
         saveActiveGame();
         syncScreenWakeLock(state);
@@ -1706,12 +1798,12 @@
                 <button type="button" class="vfgt_card_summary" data-vfgt-action="details" data-id="${escapeHtml(game.id)}" aria-label="Open summary for ${escapeHtml(game.team1)} versus ${escapeHtml(game.team2)}">
                   <span class="vfgt_scheduled_badge">Completed</span>
                   <span class="vfgt_history_date">${escapeHtml(formatDateTimeLabel(game.date, game.startTime))}</span>
-                  <span class="vfgt_history_matchup">
+                  <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
+                </button>
+                <button type="button" class="vfgt_history_matchup vfgt_copy_score" data-vfgt-copy="${escapeHtml(formatMatchUpdate('final', game))}" aria-label="Copy final score">
                     <strong class="vfgt_history_team vfgt_history_team--home">${escapeHtml(game.team1)}</strong>
                     <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
                     <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
-                  </span>
-                  <span class="vfgt_history_game_type">${escapeHtml(gameTypeLabel(game.gameType))}</span>
                 </button>
                 ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--card')}
               </div>
@@ -1754,7 +1846,7 @@
         </section>` : ''}
         <section class="vfgt_section" aria-label="Saved Games">
           ${seasonRecordMarkup(currentGames)}
-          ${futureSection}
+          ${copyStatusMarkup()}${futureSection}
           ${pastSection}
         </section>
       </section>`;
@@ -1873,6 +1965,8 @@
       renderHome();
       return;
     }
+    const copyFocused = getRoot()?.querySelector('[data-vfgt-copy]') === document.activeElement;
+    const focusedAction = getRoot()?.contains(document.activeElement) ? document.activeElement?.dataset?.vfgtAction : null;
     const now = Date.now();
     reconcileTimerState();
     const phase = state.phase;
@@ -1905,8 +1999,12 @@
           ${phase === 'halftime' && remaining === 0 ? '<span class="vfgt_stoppage">Halftime complete</span>' : ''}
         </section>
         ${renderScoreboard(state)}
+        ${copyUpdateMarkup(state)}
+        ${copyStatusMarkup()}
         <div class="vfgt_actions vfgt_live_action_rail">${action}</div>
       </section>`;
+    if (copyFocused) getRoot().querySelector('[data-vfgt-copy]')?.focus({ preventScroll: true });
+    else if (focusedAction) getRoot().querySelector(`[data-vfgt-action="${focusedAction}"]`)?.focus({ preventScroll: true });
     startRefreshTimer();
   }
 
@@ -1923,11 +2021,14 @@
         ${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--detail') ? `<p>${mapLinkMarkup(game, 'vfgt_map_link vfgt_map_link--detail')}</p>` : ''}
         <p>Half Duration: ${normalizeHalfDurationMinutes(game.halfDurationMinutes)} minutes</p>
       </header>
-      <section class="vfgt_final_score">
+      <button type="button" class="vfgt_final_score vfgt_copy_score" data-vfgt-copy="${escapeHtml(formatMatchUpdate('final', game))}" aria-label="${includeSave ? 'Copy match update' : 'Copy final score'}">
+        <span class="vfgt_final_label">Final Score:</span>
         <strong>${escapeHtml(game.team1)}</strong>
         <span>${score.team1} - ${score.team2}</span>
         <strong>${escapeHtml(game.team2)}</strong>
-      </section>
+        <small class="vfgt_copy_hint">Tap to copy</small>
+      </button>
+      ${copyStatusMarkup()}
       <div class="vfgt_summary_grid">
         <section>
           <h2>First Half</h2>
@@ -2197,6 +2298,15 @@
       }
       return;
     }
+    const copyButton = event.target.closest('[data-vfgt-copy]');
+    if (copyButton) {
+      if (event.type === 'click') {
+        event.preventDefault();
+        event.stopPropagation();
+        void copyMatchText(copyButton.dataset.vfgtCopy);
+      }
+      return;
+    }
     const button = event.target.closest('[data-vfgt-action], [data-vfgt-score], [data-vfgt-manual-score]');
     const now = Date.now();
     if (!button) return;
@@ -2218,7 +2328,11 @@
       return;
     }
     if (button.dataset.vfgtScore && state) {
-      adjustScore(state, Number(button.dataset.vfgtScore), Number(button.dataset.delta));
+      const teamIndex = Number(button.dataset.vfgtScore);
+      const delta = Number(button.dataset.delta);
+      const before = scoreForPhase(state, teamIndex);
+      adjustScore(state, teamIndex, delta);
+      if (delta > 0 && scoreForPhase(state, teamIndex) > before) recordMatchUpdate('goal', state, teamIndex, now);
       playNormalBeep();
       saveActiveGame();
       renderLive();
@@ -2452,6 +2566,9 @@
     SEASONS_KEY,
     SETTINGS_KEY,
     TEAMS_KEY,
+    formatScoreLine,
+    formatSoccerMinute,
+    formatMatchUpdate,
     adjustScore,
     clampScore,
     calculateSeasonRecord,
