@@ -2961,7 +2961,7 @@ test('today UI uses one log-entry CTA and responsive navigation contracts', () =
 });
 
 test('LLT sign-in returns failed auth and sync promises to the form', () => {
-  assert.match(trackerSource, /Sign-in could not be completed\. Check your connection and try again\./);
+  assert.match(trackerSource, /authError = window\.LeeLeeTrackerSync\.describeSignInError\(error\)/);
   assert.match(trackerSource, /\.catch\(\(error\) => \{/);
   assert.match(trackerSource, /authMessage = '';/);
   assert.match(trackerSource, /renderSignIn\(\);/);

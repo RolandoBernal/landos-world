@@ -2579,6 +2579,14 @@
   font-size: 1rem;
 }
 
+[data-auth-form] a.lee_lee_diabetes_button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+}
+
 .lee_lee_diabetes_button[disabled] {
   opacity: 0.45;
   cursor: not-allowed;

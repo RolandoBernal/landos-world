@@ -829,9 +829,13 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       return route || 'home';
     }
 
-    function navigateToRoute(route) {
+    function navigateToRoute(route, { replace = false } = {}) {
       pendingEcosystemScrollReset = true;
-      window.location.hash = route === 'home' ? '#/' : `#/${route}`;
+      const hash = route === 'home' ? '#/' : `#/${route}`;
+      if (replace) {
+        window.history.replaceState(null, '', hash);
+        handleRouteChange();
+      } else window.location.hash = hash;
     }
 
     function immediateScrollToTop(target) {
@@ -884,6 +888,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       const shouldResetScroll = shouldResetForInitialRoute(route);
       let activeView;
       if (LANDO_ACTIVE_ROUTES.has(route)) {
+        if (route === 'lee-lees-tracker') window.LeeLeeTrackerAccess?.enter?.();
         if (route === 'violet-sprints') {
           document.getElementById('open-sprints')?.click();
           activeView = document.getElementById('sprints-view');
@@ -931,7 +936,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       window.addEventListener('scroll', updateEcosystemNavState, { passive: true });
       window.LandosWorld = {
         setActiveView,
-        navigateHome: () => navigateToRoute('home'),
+        navigateHome: (options) => navigateToRoute('home', options),
         navigateToRoute,
       };
       handleRouteChange();

@@ -291,7 +291,9 @@ test('opening the checklist route resets the checklist view to the top without c
   assert.match(html, /window\.requestAnimationFrame\?\.\(\(\) => \{/);
   assert.match(html, /updateEcosystemNavState\(\)/);
   assert.match(html, /'road-bike-checklist',/);
-  assert.match(html, /window\.location\.hash = route === 'home' \? '#\/' : `#\/\$\{route\}`;/);
+  assert.match(html, /const hash = route === 'home' \? '#\/' : `#\/\$\{route\}`;/);
+  assert.match(html, /window\.history\.replaceState\(null, '', hash\)/);
+  assert.match(html, /else window\.location\.hash = hash/);
 });
 
 test('renders all checklist sections and items', () => {

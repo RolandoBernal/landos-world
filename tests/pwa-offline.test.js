@@ -276,6 +276,18 @@ test('explicit local-device mode skips service-worker registration and deployed-
   assert.equal(elements['pwa-network-status'].textContent, 'Online');
 });
 
+test('auth preview never registers, unregisters, clears caches or fetches deployment metadata', async () => {
+  const forbidden = () => { throw new Error('Preview must not touch PWA infrastructure'); };
+  const { elements } = createPwaContext({
+    buildMetadata: { environment: 'local-auth-preview', appVersion: '1.0.0' },
+    serviceWorker: { register: forbidden, getRegistrations: forbidden, addEventListener() {}, controller: null },
+    caches: { keys: forbidden, delete: forbidden },
+    fetchImplementation: forbidden,
+  });
+  await flushAsync();
+  assert.equal(elements['pwa-toast'].innerHTML, '');
+});
+
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260917-1/],

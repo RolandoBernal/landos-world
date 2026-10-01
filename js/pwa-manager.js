@@ -30,7 +30,7 @@
   let updateBlockedReason = '';
   let latestRelease = null;
   let releaseCheckSequence = 0;
-  let releaseStatus = (buildMetadata.environment === 'local' || buildMetadata.environment === 'local-device') ? 'local' : 'unverified';
+  let releaseStatus = ['local', 'local-device', 'local-auth-preview'].includes(buildMetadata.environment) ? 'local' : 'unverified';
   const updateBlockers = new Map();
   let controllerBuildMismatch = '';
   let controllerReloadPending = false;
@@ -47,7 +47,7 @@
   }
 
   function isLocalBuild() {
-    return buildMetadata.environment === 'local' || isLocalDeviceDevelopment();
+    return buildMetadata.environment === 'local' || isLocalDeviceDevelopment() || buildMetadata.environment === 'local-auth-preview';
   }
 
   async function disableLocalPreviewServiceWorkers() {
@@ -567,6 +567,11 @@
   }
 
   async function registerServiceWorker() {
+    if (buildMetadata.environment === 'local-auth-preview') {
+      offlineReadiness = 'unavailable';
+      updateUi();
+      return;
+    }
     if (isLocalPreview()) {
       offlineReadiness = 'unavailable';
       updateUi();

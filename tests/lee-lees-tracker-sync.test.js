@@ -63,6 +63,8 @@ function createSyncContext({
   config = null,
   location = { hostname: 'localhost', protocol: 'http:' },
   buildMetadata = { environment: 'unknown' },
+  isSecureContext = true,
+  fetchImplementation = async () => ({ ok: true }),
 } = {}) {
   const context = {
     Date,
@@ -87,6 +89,8 @@ function createSyncContext({
     location,
     window: null,
     globalThis: null,
+    isSecureContext,
+    fetch: fetchImplementation,
   };
   context.window = context;
   context.globalThis = context;
@@ -96,6 +100,87 @@ function createSyncContext({
   vm.runInNewContext(syncSource, context);
   return context;
 }
+
+test('auth preview transport allows only Auth and refuses REST, RPC, Storage, realtime, redirects and other origins', async () => {
+  const calls = [];
+  const context = createSyncContext();
+  const transport = context.LeeLeeTrackerSync.createAuthenticationPreviewTransport('https://example.supabase.co', async (...args) => { calls.push(args); return { ok: true }; });
+  for (const path of ['token?grant_type=password', 'token?grant_type=refresh_token', 'user', 'logout?scope=local']) {
+    await transport(`https://example.supabase.co/auth/v1/${path}`, { method: 'POST' });
+  }
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(([, options]) => options.redirect === 'error'));
+  for (const path of ['/rest/v1/records', '/rest/v1/rpc/test', '/storage/v1/object/test', '/realtime/v1/websocket', '/functions/v1/test', '/auth/v1/admin/users']) {
+    await assert.rejects(transport(`https://example.supabase.co${path}`), /Production data access disabled/);
+  }
+  await assert.rejects(transport('https://other.supabase.co/auth/v1/token'), /Production data access disabled/);
+  assert.equal(calls.length, 4);
+  assert.throws(() => context.LeeLeeTrackerSync.createAuthenticationPreviewTransport('https://example.supabase.co', null), /unavailable/);
+  const raw = { auth: {}, from() { throw new Error('CANARY REACHED'); }, rpc() { throw new Error('CANARY REACHED'); }, channel() { throw new Error('CANARY REACHED'); } };
+  const client = context.LeeLeeTrackerSync.restrictAuthenticationPreviewClient(raw);
+  assert.equal(client.auth, raw.auth);
+  for (const method of ['from', 'rpc', 'channel']) assert.throws(() => client[method]('canary'), /Production data access disabled/);
+  for (const property of ['storage', 'realtime', 'functions']) assert.throws(() => client[property], /Production data access disabled/);
+});
+
+test('auth preview real auth lifecycle stays gated and leaves pending queues and documents untouched', async () => {
+  const supabase = createMockSupabase();
+  let listener;
+  let sdkOptions;
+  let signOutOptions;
+  supabase.client.auth.onAuthStateChange = (callback) => { listener = callback; return {}; };
+  supabase.client.auth.signOut = async (options) => { signOutOptions = options; return {}; };
+  supabase.createClient = (_url, _key, options) => { sdkOptions = options; return supabase.client; };
+  supabase.client.from = () => { throw new Error('PRODUCTION DATA CANARY'); };
+  supabase.client.rpc = () => { throw new Error('PRODUCTION RPC CANARY'); };
+  supabase.client.channel = () => { throw new Error('PRODUCTION REALTIME CANARY'); };
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' }, buildMetadata: { environment: 'local-auth-preview' } });
+  const store = createDocumentStore({ records: [record()] });
+  const repository = context.LeeLeeTrackerSync.createRepository(store);
+  for (const key of [repository.keys.queue, repository.keys.sharedSettingsQueue, repository.keys.foodLibraryQueue]) context.localStorage.setItem(key, JSON.stringify([{ id: 'pending-canary', state: 'pending', type: 'upsert', recordId: 'seed-canary', attempts: 3 }]));
+  const before = context.localStorage.dump();
+  const documentBefore = JSON.stringify(store.getDocument());
+  const resolve = () => context.LeeLeeTrackerSync.resolveAccessState({ environment: 'local-auth-preview', ...repository.getSyncStatus() });
+  assert.equal(resolve(), 'resolving');
+  await repository.initialize();
+  assert.equal(resolve(), 'production-authorized');
+  assert.equal(repository.getSyncStatus().lastError, '');
+  assert.equal(sdkOptions.auth.persistSession, true);
+  assert.equal(sdkOptions.auth.autoRefreshToken, true);
+  assert.equal(typeof sdkOptions.global.fetch, 'function');
+  assert.equal(repository.getSyncStatus().productionDataDisabled, true);
+  assert.equal(repository.getSharedSettingsStatus().hasRemote, false);
+  for (const method of ['syncNow', 'syncSharedSettings', 'syncSettingsAudit', 'syncFoodLibrary', 'processQueue', 'processSharedSettingsQueue', 'processFoodLibraryQueue']) await repository[method]();
+  assert.equal(repository.queueUpsert(record()), null);
+  assert.equal(repository.queueFoodUpsert({ id: 'local-only' }), null);
+  assert.equal(repository.queueSavedMealUpsert({ id: 'local-only' }), null);
+  assert.equal(repository.saveSharedSettings({}), null);
+  await repository.keepSharedVersion('pending-canary');
+  await repository.useLocalVersion('pending-canary');
+  assert.equal(repository.cleanupIdenticalConflicts(), 0);
+  listener('SIGNED_OUT', null);
+  assert.equal(resolve(), 'denied');
+  assert.equal((await repository.signIn('synthetic@example.test', 'synthetic')).ok, true);
+  assert.equal(resolve(), 'production-authorized');
+  listener('TOKEN_REFRESHED', { user: { id: 'synthetic' }, expires_at: 1 });
+  assert.equal(resolve(), 'denied');
+  await repository.signOut();
+  assert.equal(signOutOptions.scope, 'local');
+  for (const [key, value] of Object.entries(before)) assert.equal(context.localStorage.getItem(key), value);
+  assert.equal(JSON.stringify(store.getDocument()), documentBefore);
+});
+
+test('auth preview missing config, insecure context and unavailable transport fail closed without SDK or data calls', async () => {
+  for (const scenario of [{ config: null }, { isSecureContext: false }, { fetchImplementation: null }]) {
+    let calls = 0;
+    const context = createSyncContext({ config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' }, ...scenario, supabase: { createClient() { calls += 1; throw new Error('must not create client'); } }, buildMetadata: { environment: 'local-auth-preview' } });
+    const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+    await repository.initialize();
+    assert.equal(repository.getSyncStatus().signedIn, false);
+    assert.ok((await repository.signIn('synthetic@example.test', 'synthetic')).error);
+    assert.equal(calls, 0);
+  }
+});
 
 function record(overrides = {}) {
   return {
@@ -147,9 +232,9 @@ function createMockSupabase(remoteRows = [], options = {}) {
   const userId = options.userId || 'user-1';
   const client = {
     auth: {
-      getSession: () => Promise.resolve({ data: { session: { user: { id: userId } } } }),
+      getSession: () => Promise.resolve({ data: { session: { user: { id: userId }, expires_at: Math.floor(Date.now() / 1000) + 3600 } } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
-      signInWithPassword: () => Promise.resolve({ data: { session: { user: { id: userId } } } }),
+      signInWithPassword: () => Promise.resolve({ data: { session: { user: { id: userId }, expires_at: Math.floor(Date.now() / 1000) + 3600 } } }),
       signOut: () => Promise.resolve({}),
       resetPasswordForEmail: () => Promise.resolve({}),
     },
@@ -352,6 +437,66 @@ function createMockSupabase(remoteRows = [], options = {}) {
   };
   return { createClient: () => client, client };
 }
+
+test('LLT access authority distinguishes resolving, usable production, denied, and explicit Local Dev', () => {
+  const { resolveAccessState, isUsableSession } = createSyncContext().LeeLeeTrackerSync;
+  assert.equal(resolveAccessState({ configured: true, signedIn: true }), 'resolving');
+  assert.equal(resolveAccessState({ authResolved: true, configured: true, signedIn: true }), 'production-authorized');
+  assert.equal(resolveAccessState({ authResolved: true, configured: true, signedIn: false }), 'denied');
+  for (const environment of ['production', 'local', 'unknown']) {
+    assert.equal(resolveAccessState({ environment, authResolved: true, configured: false }), 'denied');
+  }
+  assert.equal(resolveAccessState({ environment: 'local-device' }), 'local-development-authorized');
+  const session = { user: { id: 'synthetic-user' }, expires_at: 100 };
+  assert.equal(isUsableSession(session, 99999), true);
+  assert.equal(isUsableSession(session, 100000), false);
+  assert.equal(isUsableSession({ user: { id: 'synthetic-user' } }), false);
+  assert.equal(isUsableSession(null), false);
+});
+
+test('LLT sign-in failures use safe credential, network, rate-limit, and generic messages', () => {
+  const { describeSignInError } = createSyncContext().LeeLeeTrackerSync;
+  assert.match(describeSignInError({ code: 'invalid_credentials', status: 400 }), /wasn't accepted/);
+  assert.match(describeSignInError({ name: 'AuthRetryableFetchError' }), /Unable to connect/);
+  assert.match(describeSignInError({ status: 503 }), /Unable to connect/);
+  assert.match(describeSignInError({ status: 429 }), /Please wait/);
+  assert.equal(describeSignInError({ message: 'PRIVATE BACKEND DETAIL' }), 'Unable to sign in right now. Please try again.');
+});
+
+test('LLT session listener revokes access while retaining local data and rejects expired sessions', async () => {
+  const supabase = createMockSupabase();
+  let authListener;
+  supabase.client.auth.onAuthStateChange = (listener) => { authListener = listener; return {}; };
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  assert.equal(repository.getSyncStatus().authResolved, false);
+  await repository.initialize();
+  assert.equal(repository.getSyncStatus().signedIn, true);
+  const retained = { 'synthetic-tracker-data': 'records/foods/meals', 'synthetic-timer': 'absolute timestamps', 'synthetic-queue': 'pending operations' };
+  for (const [key, value] of Object.entries(retained)) context.localStorage.setItem(key, value);
+  authListener('SIGNED_OUT', null);
+  assert.equal(repository.getSyncStatus().signedIn, false);
+  for (const [key, value] of Object.entries(retained)) assert.equal(context.localStorage.getItem(key), value);
+  authListener('TOKEN_REFRESHED', { user: { id: 'user-1' }, expires_at: 1 });
+  assert.equal(repository.getSyncStatus().signedIn, false);
+});
+
+test('LLT auth loss wins over a delayed initialization session response', async () => {
+  const supabase = createMockSupabase();
+  const deferred = createDeferred();
+  let authListener;
+  supabase.client.auth.getSession = () => deferred.promise;
+  supabase.client.auth.onAuthStateChange = (listener) => { authListener = listener; return {}; };
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const initializing = repository.initialize();
+  for (let index = 0; index < 10 && !authListener; index += 1) await Promise.resolve();
+  assert.equal(typeof authListener, 'function');
+  authListener('SIGNED_OUT', null);
+  deferred.resolve({ data: { session: { user: { id: 'user-1' }, expires_at: Math.floor(Date.now() / 1000) + 3600 } } });
+  await initializing;
+  assert.equal(repository.getSyncStatus().signedIn, false);
+});
 
 function sharedInsulinPlan(overrides = {}) {
   return {

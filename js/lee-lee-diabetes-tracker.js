@@ -343,11 +343,13 @@
   let carbCalculatorScrollLock = null;
   let carbCalculatorViewportListenerCleanup = null;
   let syncRepository = null;
+  let accessState = 'resolving';
   let insulinPlanDiagnosticsMessage = '';
   let settingsDiagnosticsMessage = '';
   let lastVerifiedPlanSignature = '';
   let lastSuccessfulInsulinPlanVerificationAt = null;
   let syncStatus = {
+    authResolved: false,
     configured: false,
     signedIn: false,
     deviceIdentity: '',
@@ -435,7 +437,58 @@
   }
 
   function getRoot() {
+    // All private renderers acquire their presentation root here, including
+    // storage/timer/reconciliation callbacks. Public gates use a separate root.
+    return shouldShowProtectedApp() ? getGateRoot() : null;
+  }
+
+  function getGateRoot() {
     return document.getElementById('lee-lee-diabetes-root');
+  }
+
+  function resolveAccess() {
+    const status = syncRepository?.getSyncStatus?.() || syncStatus;
+    return window.LeeLeeTrackerSync?.resolveAccessState?.({
+      environment: window.LandoWorldBuildMetadata?.environment,
+      ...status,
+    }) || (isLocalDeviceDevelopment() ? 'local-development-authorized' : 'denied');
+  }
+
+  function clearPrivatePresentation() {
+    const root = getGateRoot();
+    if (root?.contains(document.activeElement)) document.activeElement?.blur?.();
+    window.clearInterval(preMealTimerRefresh);
+    window.clearTimeout(migrationRetryTimer);
+    window.clearTimeout(foodLibraryMessageTimer);
+    disableCarbCalculatorModalViewport();
+    closeSavedMealBuilder();
+    historyFilterSheetOpen = false;
+    lastFocusedElement = null;
+    currentEditor = null;
+    pendingCarbCalculatorFocusRowId = '';
+    pendingCarbCalculatorFocusFieldName = '';
+    if (root) root.replaceChildren();
+  }
+
+  function updateAccessBoundary(nextStatus = syncStatus) {
+    const wasAuthorized = ['production-authorized', 'local-development-authorized'].includes(accessState);
+    syncStatus = nextStatus;
+    accessState = resolveAccess();
+    const authorized = ['production-authorized', 'local-development-authorized'].includes(accessState);
+    const headerToggle = document.getElementById('lee_lee_settings_toggle');
+    if (headerToggle) headerToggle.hidden = !authorized || !shouldShowProtectedApp();
+    if (wasAuthorized && !authorized) {
+      clearPrivatePresentation();
+      renderInitialRoute();
+      if (window.location.hash.replace(/^#\/?/, '') === 'lee-lees-tracker') {
+        window.LandosWorld?.navigateHome?.({ replace: true });
+      }
+    }
+  }
+
+  function renderAccessLoading() {
+    const root = getGateRoot();
+    if (root) root.innerHTML = '<section class="lee_lee_diabetes_editor" data-access-gate aria-live="polite"><h1 class="lee_lee_diabetes_editor_title">Checking access…</h1><a href="#/">Back to Lando’s World</a></section>';
   }
 
   function getLocalDateKey(date = new Date()) {
@@ -2521,7 +2574,7 @@
   }
 
   function renderConfigurationNeeded() {
-    const root = getRoot();
+    const root = getGateRoot();
     if (!root) return;
     root.innerHTML = `
       <section class="lee_lee_diabetes_editor" aria-labelledby="lee-lee-diabetes-title">
@@ -2533,8 +2586,12 @@
   }
 
   function renderSignIn() {
-    const root = getRoot();
+    const root = getGateRoot();
     if (!root) return;
+    if (window.LandoWorldBuildMetadata?.environment === 'local-auth-preview' && window.isSecureContext !== true) {
+      root.innerHTML = '<section class="lee_lee_diabetes_editor"><h1>Authentication Preview</h1><p>Production data access disabled.</p><p>HTTPS required before credential testing. Do not enter real credentials over this HTTP connection.</p><a class="lee_lee_diabetes_button" href="#/">Back to Lando’s World</a></section>';
+      return;
+    }
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-auth-form aria-labelledby="lee-lee-diabetes-title">
         <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">Sign In</h1>
@@ -2551,15 +2608,15 @@
         </label>
         <div class="lee_lee_diabetes_actions">
           <button type="submit" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary">Sign In</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="reset-password">Reset Password</button>
+          <a class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" href="#/">Back to Lando’s World</a>
         </div>
       </form>
     `;
-    root.querySelector('[name="email"]')?.focus();
+    if (!document.getElementById('lee-lees-tracker-view')?.hidden) root.querySelector('[name="email"]')?.focus();
   }
 
   function renderDeviceIdentitySetup(errorMessage = '') {
-    const root = getRoot();
+    const root = resolveAccess() === 'production-authorized' ? getGateRoot() : null;
     if (!root) return;
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor" data-device-identity-form aria-labelledby="lee-lee-diabetes-title">
@@ -8338,9 +8395,10 @@
 
   function renderAppInformation() {
     const metadata = getBuildMetadata();
-    const isLocal = metadata.environment === 'local';
+    const isLocal = ['local', 'local-device', 'local-auth-preview'].includes(metadata.environment);
     const hasSourceIdentity = Boolean(metadata.commit || metadata.sourceId || metadata.branch);
-    const environment = isLocal ? 'Local Development' : 'Build information unavailable';
+    const environment = metadata.environment === 'local-auth-preview' ? 'Authentication Preview — Production data access disabled'
+      : isLocal ? 'Local Development' : metadata.environment === 'production' ? 'Production' : 'Build information unavailable';
     const sourceState = metadata.dirty === true ? 'Modified' : metadata.dirty === false ? 'Clean' : '';
     return renderSettingsAccordion('App Information', 'lee-lee-app-information-title', `
       <p class="lee_lee_diabetes_help">Read-only source and runtime information. This section is not part of tracker settings, sync, or the Settings Change Log.</p>
@@ -8354,7 +8412,7 @@
         ${metadata.sourceId ? `<div><dt>Source ID</dt><dd><code>${escapeHtml(metadata.sourceId)}</code></dd></div>` : ''}
         ${metadata.generatedAt ? `<div><dt>Generated</dt><dd>${escapeHtml(formatBuildMetadataDate(metadata.generatedAt) || 'Unavailable')}</dd></div>` : ''}
       </dl>
-      ${isLocal && hasSourceIdentity ? `<p class="lee_lee_diabetes_app_information_marker" aria-label="Local source identity">LOCAL · ${escapeHtml(metadata.commit || 'unknown')} · ${escapeHtml(sourceState.toUpperCase() || 'UNKNOWN')}</p>` : '<p class="lee_lee_diabetes_help">Build information is unavailable in this runtime.</p>'}
+      ${isLocal && hasSourceIdentity ? `<p class="lee_lee_diabetes_app_information_marker" aria-label="Local source identity">${metadata.environment === 'local-auth-preview' ? 'AUTH PREVIEW' : 'LOCAL'} · ${escapeHtml(metadata.commit || 'unknown')} · ${escapeHtml(sourceState.toUpperCase() || 'UNKNOWN')}</p>` : metadata.environment === 'production' ? '' : '<p class="lee_lee_diabetes_help">Build information is unavailable in this runtime.</p>'}
     `, false);
   }
 
@@ -9590,8 +9648,9 @@
   }
 
   function shouldShowProtectedApp() {
-    return isLocalDeviceDevelopment()
-      || (syncStatus.configured && syncStatus.signedIn && Boolean(syncStatus.deviceIdentity));
+    const state = resolveAccess();
+    return state === 'local-development-authorized'
+      || (state === 'production-authorized' && Boolean(syncStatus.deviceIdentity));
   }
 
   function isLocalDeviceDevelopment() {
@@ -9599,6 +9658,10 @@
   }
 
   function renderInitialRoute() {
+    if (resolveAccess() === 'resolving') {
+      renderAccessLoading();
+      return;
+    }
     if (isLocalDeviceDevelopment()) {
       renderHome();
       return;
@@ -9607,12 +9670,16 @@
       renderConfigurationNeeded();
       return;
     }
-    if (!syncStatus.signedIn) {
+    if (resolveAccess() !== 'production-authorized') {
       renderSignIn();
       return;
     }
     if (!syncStatus.deviceIdentity) {
       renderDeviceIdentitySetup();
+      return;
+    }
+    if (window.LandoWorldBuildMetadata?.environment === 'local-auth-preview') {
+      renderHome();
       return;
     }
     if (shouldShowSharedSettingsMigrationPrompt()) {
@@ -9715,7 +9782,7 @@
   }
 
   async function init() {
-    const root = getRoot();
+    const root = getGateRoot();
     if (!root) return;
     window.addEventListener?.('scroll', saveSettingsUiState, { passive: true });
     document.addEventListener?.('visibilitychange', saveSettingsUiState);
@@ -9727,12 +9794,23 @@
     syncRepository = createSyncRepository();
     if (syncRepository) {
       syncRepository.subscribe((nextStatus) => {
-        syncStatus = nextStatus;
+        updateAccessBoundary(nextStatus);
         refreshCurrentViewForSync();
       });
       await syncRepository.initialize();
       syncStatus = syncRepository.getSyncStatus();
     }
+    if (!syncRepository) syncStatus.authResolved = true;
+    updateAccessBoundary(syncStatus);
+    const recheckAccess = () => {
+      updateAccessBoundary(syncRepository?.getSyncStatus?.() || syncStatus);
+      if (!shouldShowProtectedApp()) renderInitialRoute();
+    };
+    window.addEventListener('hashchange', recheckAccess);
+    window.addEventListener('pageshow', recheckAccess);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') recheckAccess();
+    });
     root.addEventListener('pointerdown', (event) => {
       const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
       focusCarbCalculatorInputOnPointer(event);
@@ -10393,8 +10471,11 @@
       }
       if (action === 'sign-out') {
         syncRepository?.signOut?.().then(() => {
-          syncStatus = syncRepository.getSyncStatus();
-          renderSignIn();
+          updateAccessBoundary(syncRepository.getSyncStatus());
+          window.LandosWorld?.navigateHome?.({ replace: true });
+        }).catch(() => {
+          patientSettingsError = 'Unable to sign out right now. Please try again.';
+          refreshCurrentViewForSync();
         });
       }
       if (action === 'print-report') {
@@ -10449,9 +10530,8 @@
             renderInitialRoute();
           })
           .catch((error) => {
-            console.warn('[LLT] Sign-in failed before a response was returned.', error);
             authMessage = '';
-            authError = 'Sign-in could not be completed. Check your connection and try again.';
+            authError = window.LeeLeeTrackerSync.describeSignInError(error);
             syncStatus = syncRepository?.getSyncStatus?.() || syncStatus;
             renderSignIn();
           });
@@ -10486,6 +10566,7 @@
       }
     }, true);
     root.addEventListener('input', (event) => {
+      if (!shouldShowProtectedApp()) return;
       if (mealBuilderState && event.target.name === 'mealBuilderName') {
         mealBuilderState.name = event.target.value;
         mealBuilderState.error = '';
@@ -10668,6 +10749,7 @@
       }
     });
     root.addEventListener('keydown', (event) => {
+      if (!shouldShowProtectedApp()) return;
       if (mealBuilderState && event.key === 'Escape') {
         event.preventDefault();
         if (mealBuilderState.view === 'picker') {
@@ -10789,6 +10871,7 @@
     });
     window.addEventListener('storage', handleExternalStorageUpdate);
     window.addEventListener('online', () => {
+      if (window.LandoWorldBuildMetadata?.environment === 'local-auth-preview') return;
       if (shouldAutomaticallyContinueMigration()) scheduleMigrationContinuation(250);
     });
     requestPersistentStorage();
@@ -10887,5 +10970,12 @@
     reportRegistry: REPORT_REGISTRY.map(({ id, title, description, printLayout }) => ({ id, title, description, printLayout })),
   };
 
+  window.LeeLeeTrackerAccess = {
+    getState: resolveAccess,
+    enter() {
+      updateAccessBoundary(syncRepository?.getSyncStatus?.() || syncStatus);
+      if (!shouldShowProtectedApp() || getGateRoot()?.querySelector('[data-auth-form], [data-access-gate]')) renderInitialRoute();
+    },
+  };
   document.addEventListener('DOMContentLoaded', init);
 })();

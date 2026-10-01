@@ -141,7 +141,7 @@ function relativeLocalDateKey(deltaDays) {
   return formatLocalDateKey(date);
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   const consoleErrors = [];
   const weatherRequests = [];
   page.on('console', (message) => {
@@ -153,6 +153,13 @@ test.beforeEach(async ({ page }) => {
   page.on('request', (request) => {
     if (WEATHER_API_PATTERN.test(request.url())) weatherRequests.push(request.url());
   });
+  if (testInfo.title.startsWith('Issue #10')) {
+    // Authentication does not depend on other apps' external font imports.
+    // Keep provider/offline fixtures deterministic without ignoring errors.
+    await page.route('https://fonts.googleapis.com/**', route => route.fulfill({
+      status: 200, contentType: 'text/css', body: '',
+    }));
+  }
   await page.route(GEOCODING_API_PATTERN, async (route) => {
     const location = new URL(route.request().url()).searchParams.get('name') || 'Nashville, Tennessee';
     const isAustin = location.toLowerCase().includes('austin');
@@ -1320,18 +1327,41 @@ test('Lee-Lee print media hides app shell chrome around the report body', async 
   await expect(page.getByText('0 units')).toBeVisible();
 });
 
-async function openProtectedLeeLeeTracker(page) {
-  await page.addInitScript(() => {
+async function openProtectedLeeLeeTracker(page, { authMode = 'authorized', deviceIdentity = true, signInError = null } = {}) {
+  await page.addInitScript(({ authMode, deviceIdentity, signInError }) => {
     window.LEE_LEE_TRACKER_SUPABASE_CONFIG = {
       url: 'https://example.supabase.co',
       publishableKey: 'publishable-key-for-browser-smoke-tests',
     };
-    localStorage.setItem('lando-world:lee-lees-tracker:device-identity:v1', 'Rolando');
+    if (deviceIdentity) localStorage.setItem('lando-world:lee-lees-tracker:device-identity:v1', 'Rolando');
+    else localStorage.removeItem('lando-world:lee-lees-tracker:device-identity:v1');
+    const usableSession = { user: { id: 'browser-smoke-user' }, expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    let session = authMode === 'authorized' ? usableSession : authMode === 'expired' ? { ...usableSession, expires_at: 1 } : null;
+    let listener;
+    let releaseInitial;
+    const initialGate = authMode === 'resolving' ? new Promise(resolve => { releaseInitial = resolve; }) : Promise.resolve();
+    window.__lltAuth = {
+      emit(next = null) { session = next; listener?.(next ? 'TOKEN_REFRESHED' : 'SIGNED_OUT', next); },
+      restore() { this.emit(usableSession); },
+      releaseInitial() { releaseInitial?.(); },
+      allowSignIn() { signInError = null; },
+    };
     window.supabase = {
       createClient: () => ({
         auth: {
-          getSession: async () => ({ data: { session: { user: { id: 'browser-smoke-user' } } } }),
-          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          getSession: async () => {
+            await initialGate;
+            if (authMode === 'initial-error') throw new TypeError('Synthetic unavailable network');
+            return { data: { session } };
+          },
+          onAuthStateChange: (callback) => { listener = callback; return { data: { subscription: { unsubscribe() {} } } }; },
+          signInWithPassword: async () => {
+            if (signInError?.throws) throw new TypeError('Failed to fetch');
+            if (signInError) return { error: signInError };
+            window.__lltAuth.restore();
+            return { data: { session } };
+          },
+          signOut: async () => { window.__lltAuth.emit(); return {}; },
         },
         channel: () => ({
           on() { return this; },
@@ -1349,9 +1379,10 @@ async function openProtectedLeeLeeTracker(page) {
         rpc: async () => ({ data: null, error: { message: 'offline test client' } }),
       }),
     };
-  });
+  }, { authMode, deviceIdentity, signInError });
   await page.goto('/#/lee-lees-tracker');
-  await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+  expect(await page.evaluate(() => window.LandoWorldBuildMetadata.environment)).not.toBe('local-device');
+  await expect(page.getByRole('heading', { name: authMode === 'resolving' ? 'Checking access…' : authMode !== 'authorized' ? 'Sign In' : deviceIdentity ? /Lee-Lee.s Tracker/ : 'Who Uses This Device?' })).toBeVisible();
 }
 
 async function chooseLeeLeeSection(page, name) {
@@ -1361,6 +1392,213 @@ async function chooseLeeLeeSection(page, name) {
     : page.getByLabel("Lee-Lee’s Tracker sections");
   await nav.getByRole('button', { name }).click();
 }
+
+async function expectNoPrivateLLTDom(page) {
+  const root = page.locator('#lee-lee-diabetes-root');
+  await expect(root.locator('[data-plan-editor], [data-lee-lee-editor], [data-carb-calculator], [data-meal-builder], .lee_lee_diabetes_timeline, .lee_lee_diabetes_report, .lee_lee_diabetes_pre_meal_timer_modal, [data-food-library-accordion]')).toHaveCount(0);
+  await expect(root.locator('[name="patientName"], [name="clinicName"], [name="insulinCarbRatioGrams"]')).toHaveCount(0);
+  await expect(page.locator('#lee_lee_settings_toggle')).toBeHidden();
+}
+
+test('Issue #10 resolving and logged-out gates contain no private DOM and Settings cannot bypass them', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page, { authMode: 'resolving' });
+  await expectNoPrivateLLTDom(page);
+  await page.evaluate(() => document.querySelector('#lee_lee_settings_toggle').click());
+  await expect(page.getByRole('heading', { name: 'Checking access…' })).toBeVisible();
+  await page.evaluate(() => window.__lltAuth.releaseInitial());
+  await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+  await page.evaluate(() => document.querySelector('#lee_lee_settings_toggle').click());
+  await expectNoPrivateLLTDom(page);
+  await page.getByRole('link', { name: 'Back to Lando’s World', exact: true }).click();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Lee-Lee’s Tracker' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Checking access…' })).toBeVisible();
+  await expectNoPrivateLLTDom(page);
+});
+
+for (const [name, error, message] of [
+  ['credentials', { code: 'invalid_credentials', status: 400 }, /wasn't accepted/],
+  ['network', { throws: true }, /Unable to connect/],
+  ['unexpected', { message: 'PRIVATE BACKEND DETAILS', status: 422 }, /Unable to sign in right now/],
+  ['rate limit', { status: 429 }, /Too many sign-in attempts/],
+]) {
+  test(`Issue #10 ${name} failure stays on safe gate and permits successful retry`, async ({ page }) => {
+    await openProtectedLeeLeeTracker(page, { authMode: 'denied', signInError: error });
+    await page.getByLabel('Email', { exact: true }).fill('synthetic@example.invalid');
+    await page.getByLabel('Password', { exact: true }).fill('synthetic-test-password');
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+    await expect(page.getByText(message)).toBeVisible();
+    await expectNoPrivateLLTDom(page);
+    await expect(page.getByText('PRIVATE BACKEND DETAILS')).toHaveCount(0);
+    await page.evaluate(() => window.__lltAuth.allowSignIn());
+    await page.getByLabel('Email', { exact: true }).fill('synthetic@example.invalid');
+    await page.getByLabel('Password', { exact: true }).fill('synthetic-test-password');
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+  });
+}
+
+test('Issue #10 sign-in gate actions have matching button treatment', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page, { authMode: 'denied' });
+  const signIn = page.getByRole('button', { name: 'Sign In', exact: true });
+  const back = page.getByRole('link', { name: 'Back to Lando’s World', exact: true });
+  const treatment = element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundImage, color: style.color, border: style.border, padding: style.padding, font: style.font, height: element.getBoundingClientRect().height };
+  };
+  expect(await back.evaluate(treatment)).toEqual(await signIn.evaluate(treatment));
+  expect(await back.evaluate(element => getComputedStyle(element).textDecorationLine)).toBe('none');
+  await back.click();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+});
+
+test('Issue #10 successful authentication honors required device setup', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page, { authMode: 'denied', deviceIdentity: false });
+  await page.getByLabel('Email', { exact: true }).fill('synthetic@example.invalid');
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-test-password');
+  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Who Uses This Device?' })).toBeVisible();
+  await page.getByLabel('This device is used by').selectOption('Unknown');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+});
+
+for (const surface of ['Today', 'History', 'Reports', 'Foods', 'Settings', 'New Entry', 'Edit Entry', 'Calculator', 'Food Search', 'Manual Amount', 'My Meal Builder', 'Timer Detail']) {
+  test(`Issue #10 auth loss removes ${surface}, releases UI resources, and retains data`, async ({ page }) => {
+    await openProtectedLeeLeeTracker(page);
+    await seedHistoricalEdit(page);
+    await page.evaluate(() => {
+      window.LeeLeeTrackerStorage.updateTrackerData(current => ({ ...current, settings: { ...current.settings, patientName: 'Synthetic private patient' } }));
+      window.LeeLeePreMealTimer.start({ durationMinutes: 1, sourceEntryId: 'synthetic-timer-source', sourceEntry: { type: 'Breakfast', mealCarbs: 10, administeredInsulinUnits: 1 } });
+      // Refresh the current view using the same storage-notification path as another tab.
+      const key = window.LeeLeeTrackerStorage.storageKey;
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: localStorage.getItem(key) }));
+    });
+    if (['History', 'Reports', 'Foods'].includes(surface)) await chooseLeeLeeSection(page, surface);
+    if (surface === 'Settings') await page.locator('#lee_lee_settings_toggle').click();
+    if (surface === 'My Meal Builder') {
+      await chooseLeeLeeSection(page, 'Foods');
+      await page.getByRole('button', { name: '+ Add New Meal' }).click();
+      await expect(page.locator('[data-meal-builder]')).toBeVisible();
+    }
+    if (surface === 'Edit Entry') {
+      await openSeededLeeLeeHistoryDay(page);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Edit Entry' })).toBeVisible();
+    }
+    if (['New Entry', 'Calculator', 'Food Search', 'Manual Amount'].includes(surface)) {
+      await chooseLeeLeeSection(page, 'Log Entry');
+      if (surface !== 'New Entry') await page.getByRole('button', { name: 'Open Carb Calculator' }).click();
+      if (surface === 'Food Search') await page.getByRole('button', { name: 'Search foods...' }).click();
+      if (surface === 'Manual Amount') await page.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    }
+    if (surface === 'Timer Detail') await page.locator('[data-action="open-pre-meal-timer"]').click();
+    const stored = await page.evaluate(() => ({ tracker: localStorage.getItem(window.LeeLeeTrackerStorage.storageKey), timer: localStorage.getItem(window.LeeLeePreMealTimer.STORAGE_KEY) }));
+    await page.evaluate(() => window.__lltAuth.emit());
+    await expect(page).toHaveURL(/#\/$/);
+    await expectNoPrivateLLTDom(page);
+    expect(await page.evaluate(() => document.body.style.position)).not.toBe('fixed');
+    expect(await page.evaluate(() => ({ tracker: localStorage.getItem(window.LeeLeeTrackerStorage.storageKey), timer: localStorage.getItem(window.LeeLeePreMealTimer.STORAGE_KEY) }))).toEqual(stored);
+    await page.evaluate(() => {
+      const key = window.LeeLeeTrackerStorage.storageKey;
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: localStorage.getItem(key) }));
+      window.visualViewport.dispatchEvent(new Event('resize'));
+      window.visualViewport.dispatchEvent(new Event('scroll'));
+      document.querySelector('#lee_lee_settings_toggle').click();
+    });
+    await expectNoPrivateLLTDom(page);
+    await page.getByRole('button', { name: 'Open Lee-Lee’s Tracker' }).click();
+    await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+    await expectNoPrivateLLTDom(page);
+  });
+}
+
+test('Issue #10 explicit sign-out replaces the route and history cannot reveal private DOM', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => { window.location.hash = '#/'; });
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Lee-Lee’s Tracker' }).click();
+  await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+  await page.locator('#lee_lee_settings_toggle').click();
+  await page.getByRole('button', { name: 'Sign Out This Device' }).click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expectNoPrivateLLTDom(page);
+  await page.goBack();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+  await expectNoPrivateLLTDom(page);
+  await page.goForward();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#lando-home-view')).toBeVisible();
+  await expectNoPrivateLLTDom(page);
+  await page.evaluate(() => { window.location.hash = '#/lee-lees-tracker'; });
+  await expect(page.getByRole('heading', { name: 'Sign In', exact: true })).toBeVisible();
+  await expectNoPrivateLLTDom(page);
+});
+
+test('Issue #10 a usable session expiring while open revokes private rendering', async ({ page }) => {
+  await page.clock.install();
+  await openProtectedLeeLeeTracker(page);
+  await page.clock.fastForward(3600001);
+  await expect(page).toHaveURL(/#\/$/);
+  await expectNoPrivateLLTDom(page);
+  expect(await page.evaluate(() => window.LeeLeeTrackerAccess.getState())).toBe('denied');
+});
+
+test('Issue #10 delayed reconciliation cannot restore private DOM after simulated cross-tab logout', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.__lltSyncReadGate = new Promise(resolve => { window.__releaseLLTReads = resolve; });
+    window.__lltAuth.restore();
+    window.__lltAuth.emit();
+    window.__releaseLLTReads();
+  });
+  await expect(page).toHaveURL(/#\/$/);
+  await expectNoPrivateLLTDom(page);
+  await expect.poll(() => page.evaluate(() => window.LeeLeeTrackerAccess.getState())).toBe('denied');
+});
+
+for (const authMode of ['authorized', 'denied', 'expired', 'initial-error']) {
+  test(`Issue #10 offline ${authMode} session obeys the access boundary`, async ({ page, context }) => {
+    await openProtectedLeeLeeTracker(page, { authMode });
+    await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('pageshow')));
+    if (authMode === 'authorized') {
+      await expect(page.getByRole('heading', { name: /Lee-Lee.s Tracker/ })).toBeVisible();
+    } else await expectNoPrivateLLTDom(page);
+    // This isolated context is disposed after the offline assertions. Avoid an
+    // unrelated shell/network refresh while tearing down the offline fixture.
+  });
+}
+
+test('Issue #10 timer completion after auth loss remains private and resumes after authorization', async ({ page }) => {
+  await page.clock.install();
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeePreMealTimer.start({ durationMinutes: 1, sourceEntryId: 'synthetic-source', sourceEntry: { type: 'Breakfast', mealCarbs: 10 } });
+    window.__lltAuth.emit();
+  });
+  const timestamps = await page.evaluate(() => JSON.parse(localStorage.getItem(window.LeeLeePreMealTimer.STORAGE_KEY)));
+  await page.clock.fastForward(61000);
+  await expectNoPrivateLLTDom(page);
+  const retained = await page.evaluate(() => JSON.parse(localStorage.getItem(window.LeeLeePreMealTimer.STORAGE_KEY)));
+  expect(retained.startedAt).toBe(timestamps.startedAt);
+  expect(retained.endsAt).toBe(timestamps.endsAt);
+  await page.evaluate(() => window.__lltAuth.restore());
+  await page.getByRole('button', { name: 'Open Lee-Lee’s Tracker' }).click();
+  // Reauthorization follows the normal initial destination, where the saved
+  // absolute timer is normalized and its completed detail can be presented.
+  await page.reload();
+  await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toBeVisible();
+});
 
 async function openFoodLibraryAccordion(page, section) {
   const panel = page.locator(`[data-food-library-accordion="${section}"]`);
