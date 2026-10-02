@@ -1303,6 +1303,56 @@
       .map(({ game }) => game);
   }
 
+  // Read-only presentation of the same selected-season collections used by VFGT.
+  function deriveLandingSummary(completedGames, scheduledGames, team, season) {
+    const completed = completedGames.filter(game => season && game.seasonId === season.id && game.status === 'completed' && game.phase === 'final');
+    const scheduled = scheduledGames.filter(game => season && game.seasonId === season.id && game.status === 'scheduled');
+    return {
+      lastGame: sortedGames(completed)[0] || null,
+      nextGame: [...scheduled].sort((a, b) => gameSortTime(a) - gameSortTime(b))[0] || null,
+      record: calculateSeasonRecords(completed, team?.name || HUME_FOGG_TEAM, team?.id || '').overallSeason,
+    };
+  }
+
+  function landingScoreParts(game) {
+    const score = finalScores(game);
+    const pk = game.completionDecision === 'penalties' ? penaltyScores(game) : null;
+    return {
+      team1: game.team1,
+      score: pk ? `${score.team1} (${pk.team1}) – (${pk.team2}) ${score.team2}` : `${score.team1} – ${score.team2}`,
+      team2: game.team2,
+    };
+  }
+
+  function landingSummaryMarkup(summary) {
+    const { lastGame, nextGame, record } = summary;
+    const section = (label, content) => `<div class="vfgt_launcher_section"><h3>${label}</h3>${content}</div>`;
+    let markup = '';
+    if (lastGame) {
+      const parts = landingScoreParts(lastGame);
+      const metadata = [lastGame.gameType ? gameTypeLabel(lastGame.gameType) : '',
+        lastGame.overtimePlayed && lastGame.completionDecision !== 'penalties' ? 'After Overtime' : ''].filter(Boolean).join(' · ');
+      markup += section('Last Game', `<p class="vfgt_launcher_score"><span>${escapeHtml(parts.team1)}</span> <span class="vfgt_launcher_score_numbers">${parts.score}</span> <span>${escapeHtml(parts.team2)}</span></p>${metadata ? `<p class="vfgt_launcher_detail">${escapeHtml(metadata)}</p>` : ''}`);
+    }
+    if (nextGame) {
+      const opponent = nextGame.teamSide === 2 ? nextGame.team1 : nextGame.team2;
+      markup += section('Next Game', `<p class="vfgt_launcher_value">vs. ${escapeHtml(opponent)}</p><p class="vfgt_launcher_detail">${escapeHtml(formatDateTimeLabel(nextGame.date, nextGame.startTime))}</p>`);
+    }
+    if (!lastGame || !nextGame) {
+      markup += section(lastGame ? 'Final Record' : 'Current Record', `<p class="vfgt_launcher_value">${record.wins}–${record.losses}–${record.draws}</p>`);
+    }
+    return markup;
+  }
+
+  function refreshLandingSummary() {
+    const element = document.querySelector('[data-launcher-vfgt-summary]');
+    if (!element) return;
+    const settings = readJson(SETTINGS_KEY, {});
+    const season = readCollection(SEASONS_KEY, normalizeSeason).find(item => item.id === settings.currentSeasonId);
+    const team = readCollection(TEAMS_KEY, normalizeTeam).find(item => item.id === (season?.teamId || settings.currentTeamId));
+    element.innerHTML = landingSummaryMarkup(deriveLandingSummary(readSavedGames(), readScheduledGames(), team, season));
+  }
+
   function escapeHtml(text) {
     return String(text ?? '')
       .replace(/&/g, '&amp;')
@@ -1458,12 +1508,8 @@
     tone(1720, ctx.currentTime + 0.24, 0.2, 0.22, 'square');
   }
 
-  function playEndHalfWhistle() {
-    const ctx = getAudioContext();
-    if (!ctx || ctx.state !== 'running') return;
-    tone(1320, ctx.currentTime, 0.22, 0.24, 'square');
-    tone(1320, ctx.currentTime + 0.3, 0.22, 0.24, 'square');
-    tone(1640, ctx.currentTime + 0.6, 0.32, 0.28, 'square');
+  function playEndTransitionCue() {
+    playNormalBeep();
   }
 
   function startRefreshTimer() {
@@ -1573,7 +1619,7 @@
       enterTournamentBreak(game);
       recordMatchUpdate(overtime ? 'end_overtime' : 'end_regulation', game);
     }
-    playEndHalfWhistle();
+    playEndTransitionCue();
     saveActiveGame();
     syncScreenWakeLock(state);
     render();
@@ -1595,7 +1641,7 @@
       if (!confirmed || state !== game || game.phase !== phase) return;
       if (phase === 'ot_first_half') { endOvertimeFirstHalf(game); recordMatchUpdate('ot_halftime', game); }
       else { finishMatch(game, 'overtime'); recordMatchUpdate('final', game); }
-      playEndHalfWhistle();
+      playEndTransitionCue();
     } else if ((action === 'start-pk' && phase === 'penalty_break') || (action === 'change-pk-first' && phase === 'penalties' && !game.penaltyAttempts.length)) {
       const first = await showVfgtConfirmation({ title: 'Who kicks first?', message: 'Select the team taking the first penalty.', cancelLabel: 'Go Back', confirmLabel: game.team1, alternativeLabel: game.team2, confirmClass: 'vfgt_button--success', alternativeClass: 'vfgt_button--success', confirmFirst: true, actionsClass: 'vfgt_confirm__actions--playoff-decision vfgt_confirm__actions--team-choice' });
       if (!first || state !== game || game.phase !== phase) return;
@@ -1637,7 +1683,7 @@
       if (action === 'end-first') {
         endFirstHalf(state);
         recordMatchUpdate('halftime', state);
-        playEndHalfWhistle();
+        playEndTransitionCue();
         saveActiveGame();
         syncScreenWakeLock(state);
         renderLive();
@@ -1651,7 +1697,7 @@
       } else {
         endSecondHalf(state);
         recordMatchUpdate('final', state);
-        playEndHalfWhistle();
+        playEndTransitionCue();
         saveActiveGame();
         syncScreenWakeLock(state);
         renderSummary();
@@ -2771,6 +2817,16 @@
     if (!root) return;
     initializeContext();
     savedGames = sortedGames(readSavedGames());
+    refreshLandingSummary();
+    window.addEventListener('hashchange', refreshLandingSummary);
+    window.addEventListener('focus', refreshLandingSummary);
+    window.addEventListener('pageshow', refreshLandingSummary);
+    window.addEventListener('storage', (event) => {
+      if (event.key === null || [SAVED_GAMES_KEY, TEAMS_KEY, SEASONS_KEY, SETTINGS_KEY].includes(event.key)) refreshLandingSummary();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshLandingSummary();
+    });
     document.getElementById('vfgt_settings_toggle')?.addEventListener('click', () => {
       if (screen === 'settings') {
         screen = 'home';
@@ -2811,6 +2867,10 @@
 
   window.VioletFutbolGameTracker = {
     PLAYOFF_RULES,
+    deriveLandingSummary,
+    landingScoreParts,
+    landingSummaryMarkup,
+    refreshLandingSummary,
     isPlayoff,
     tiedMatch,
     finishMatch,

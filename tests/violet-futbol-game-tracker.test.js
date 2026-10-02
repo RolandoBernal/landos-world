@@ -1232,3 +1232,57 @@ test('explicit abandonment returns the same scheduled game without carrying OT o
   assert.equal(future.overtimePlayed, false);
   assert.equal(game.penaltyAttempts.length, 1);
 });
+
+
+test('landing summary derives all lifecycle states, ordering, updates and authoritative record without mutation', () => {
+  const { api } = createRuntime();
+  const team = { id: 'team', name: 'Hume-Fogg' };
+  const season = { id: 'season' };
+  const game = (id, date, status = 'completed') => ({ ...api.createManualGame({ team1: 'Hume-Fogg', team2: id, date, time: '18:00', gameType: 'regularSeason' }), id, seasonId: season.id, teamId: team.id, status, phase: status === 'completed' ? 'final' : 'pregame', firstHalfGoalsTeam1: 3, firstHalfGoalsTeam2: 1 });
+  const old = game('old', '2026-09-01');
+  const recent = game('recent', '2026-09-29');
+  const next = game('next', '2026-10-06', 'scheduled');
+  const later = game('later', '2026-10-08', 'scheduled');
+  const derive = (past = [], future = []) => api.deriveLandingSummary(past, future, team, season);
+  const markup = summary => api.landingSummaryMarkup(summary);
+  assert.match(markup(derive()), /Current Record/);
+  assert.doesNotMatch(markup(derive()), /Last Game|Next Game/);
+  assert.match(markup(derive([], [next])), /Next Game/);
+  assert.match(markup(derive([], [next])), /Current Record/);
+  assert.doesNotMatch(markup(derive([], [next])), /Last Game/);
+  const past = [old, recent];
+  const future = [later, next];
+  const before = JSON.stringify([past, future]);
+  const summary = derive(past, future);
+  assert.equal(summary.lastGame.id, 'recent');
+  assert.equal(summary.nextGame.id, 'next');
+  assert.doesNotMatch(markup(summary), /Record/);
+  assert.deepEqual(summary.record, api.calculateSeasonRecords(past, team.name, team.id).overallSeason);
+  assert.equal(JSON.stringify([past, future]), before);
+  assert.match(markup(derive(past)), /Final Record/);
+  assert.doesNotMatch(markup(derive(past)), /Next Game|No upcoming/);
+  assert.equal(derive(past, [{ ...next, date: '2026-10-10' }, later]).nextGame.id, 'later');
+  assert.equal(derive(past, [later]).nextGame.id, 'later');
+  const finished = { ...next, status: 'completed', phase: 'final' };
+  assert.equal(derive([...past, finished], [later]).lastGame.id, 'next');
+  assert.match(markup(derive([...past, finished])), /Final Record/);
+  assert.equal(derive([{ ...recent, seasonId: 'other' }], [{ ...next, seasonId: 'other' }]).lastGame, null);
+  assert.equal(derive([next], [recent]).nextGame, null);
+});
+
+test('landing scores keep match, overtime and penalty goals distinct and escape names', () => {
+  const { api } = createRuntime();
+  const game = { team1: 'Hume-Fogg', team2: 'MLK', firstHalfGoalsTeam1: 2, firstHalfGoalsTeam2: 2, completionDecision: 'penalties', gameType: 'districtTournament' };
+  const notation = game => { const parts = api.landingScoreParts(game); return `${parts.team1} ${parts.score} ${parts.team2}`; };
+  const attempts = (one, two) => [...Array.from({ length: one }, () => ({ team: 1, scored: true })), ...Array.from({ length: two }, () => ({ team: 2, scored: true }))];
+  game.penaltyAttempts = attempts(4, 3);
+  assert.equal(notation(game), 'Hume-Fogg 2 (4) – (3) 2 MLK');
+  assert.equal(notation({ ...game, firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 1, penaltyAttempts: attempts(3, 4) }), 'Hume-Fogg 1 (3) – (4) 1 MLK');
+  assert.equal(notation({ ...game, completionDecision: 'regulation', firstHalfGoalsTeam1: 3, firstHalfGoalsTeam2: 1 }), 'Hume-Fogg 3 – 1 MLK');
+  const ot = { ...game, completionDecision: 'overtime', overtimePlayed: true, firstHalfGoalsTeam1: 1, firstHalfGoalsTeam2: 1, otGoalsTeam1: 1 };
+  assert.equal(notation(ot), 'Hume-Fogg 2 – 1 MLK');
+  const render = lastGame => api.landingSummaryMarkup({ lastGame, nextGame: null, record: api.calculateSeasonRecord([lastGame]) });
+  assert.match(render(ot), /After Overtime/);
+  assert.doesNotMatch(render(game), /After Overtime/);
+  assert.match(render({ ...game, team2: '<script>bad</script>' }), /&lt;script&gt;/);
+});
