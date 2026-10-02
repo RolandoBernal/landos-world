@@ -1070,3 +1070,165 @@ test('goal celebration follows tracked teamSide including team two ownership', (
   game.teamSide = '';
   assert.equal(api.formatMatchUpdate('goal', game, 2, now()).split('\n')[0], '⚽️ Goal Tracked School');
 });
+
+function playoff(api) {
+  const game = api.createGame({ team1: 'Hume-Fogg', team2: 'RePublic', teamSide: 1, gameType: 'districtTournament' });
+  api.startFirstHalf(game);
+  api.endFirstHalf(game);
+  api.startSecondHalf(game);
+  return game;
+}
+
+test('playoff overtime uses timestamp timers, independent whistles and untimed breaks', () => {
+  const { api, advance, now } = createRuntime();
+  const game = playoff(api);
+  api.adjustScore(game, 1, 1); api.adjustScore(game, 2, 1);
+  assert.equal(api.isPlayoff(game), true);
+  api.enterTournamentBreak(game, now());
+  assert.equal(game.phase, 'overtime_break');
+  assert.equal(api.deriveTimerState(game).isRunning, false);
+  api.startOvertimeHalf(game, now());
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 0);
+  assert.equal(api.regulationSecondsForGame(game), 600);
+  advance(600);
+  assert.equal(api.maybeMarkRegulation(game, now()), true);
+  assert.equal(api.maybeMarkRegulation(game, now()), false);
+  advance(65);
+  const recovered = api.normalizeGame(JSON.parse(JSON.stringify(game)));
+  assert.equal(api.deriveTimerState(recovered, now()).elapsedSeconds, 665);
+  assert.equal(api.deriveTimerState(recovered, now()).stoppageSeconds, 65);
+  assert.equal(api.formatSoccerMinute(game, 240), '5');
+  assert.equal(api.formatSoccerMinute(game, 600), '10+1');
+  api.adjustScore(game, 1, 1);
+  assert.equal(api.formatMatchUpdate('goal', game, 1, now()), '⚽️ Goal Hume-Fogg!\nHume-Fogg 2 - 1 RePublic\nOvertime 1st Half: Minute 10+2');
+  api.endOvertimeFirstHalf(game, now());
+  assert.equal(game.phase, 'ot_halftime');
+  assert.equal(api.deriveTimerState(game).isRunning, false);
+  api.startOvertimeHalf(game, now());
+  assert.equal(game.phase, 'ot_second_half');
+  assert.equal(api.deriveTimerState(game, now()).elapsedSeconds, 0);
+  api.adjustScore(game, 2, 1);
+  assert.match(api.formatMatchUpdate('goal', game, 2, now()), /^⚽️ Goal RePublic\n/);
+  api.enterTournamentBreak(game, now());
+  assert.equal(game.phase, 'penalty_break');
+  assert.equal(api.finalScores(game).team1, 2);
+});
+
+for (const first of [1, 2]) {
+  test(`penalty history alternates from team ${first}, survives recovery, undo and sudden death`, () => {
+    const { api } = createRuntime();
+    let game = playoff(api);
+    api.enterTournamentBreak(game); api.startOvertimeHalf(game); api.endOvertimeFirstHalf(game); api.startOvertimeHalf(game); api.enterTournamentBreak(game);
+    api.initializePenalties(game, first);
+    for (let i = 0; i < 12; i++) {
+      assert.equal(api.nextPenaltyTeam(game), i % 2 ? 3 - first : first);
+      api.recordPenalty(game, true);
+      game = api.normalizeGame(JSON.parse(JSON.stringify(game)));
+    }
+    assert.equal(game.phase, 'penalties');
+    assert.equal(api.penaltyScores(game).team1, 6);
+    assert.equal(api.penaltyScores(game).team2, 6);
+    assert.equal(api.finalScores(game).team1, 0);
+    assert.equal(api.clinchedPenaltyTeam(game), null);
+    assert.equal(api.nextPenaltyTeam(game), first);
+    api.undoPenalty(game);
+    assert.equal(game.penaltyAttempts.length, 11);
+    assert.equal(api.nextPenaltyTeam(game), 3 - first);
+    api.recordPenalty(game, false);
+    assert.equal(api.clinchedPenaltyTeam(game), first);
+    assert.equal(game.phase, 'penalties');
+    api.finishMatch(game, 'penalties');
+    const saved = api.serializeCompletedGame(game);
+    assert.match(api.formatMatchUpdate('final', saved), /wins 6 - 5 on penalties$/);
+    assert.equal(api.finalScores(saved).team2, 0);
+  });
+}
+
+test('exact penalty messages derive shootout scores without changing match totals', () => {
+  const { api } = createRuntime();
+  const game = playoff(api);
+  api.adjustScore(game, 1, 2); api.adjustScore(game, 2, 2);
+  api.enterTournamentBreak(game); api.startOvertimeHalf(game); api.endOvertimeFirstHalf(game); api.startOvertimeHalf(game); api.enterTournamentBreak(game); api.initializePenalties(game, 1);
+  const expected = [
+    '🟢 Penalty Scored — Hume-Fogg!\nHume-Fogg 1 - 0 RePublic\nPenalty Kicks',
+    '🟢 Penalty Scored — RePublic\nHume-Fogg 1 - 1 RePublic\nPenalty Kicks',
+    '🔴 Penalty Missed — Hume-Fogg\nHume-Fogg 1 - 1 RePublic\nPenalty Kicks',
+    '🔴 Penalty Missed — RePublic\nHume-Fogg 1 - 1 RePublic\nPenalty Kicks',
+  ];
+  for (let i = 0; i < 4; i++) {
+    api.recordPenalty(game, i < 2);
+    assert.equal(api.formatMatchUpdate('penalty', game), expected[i]);
+    assert.equal(api.finalScores(game).team1, 2);
+  }
+  api.finishMatch(game, 'penalties');
+  assert.match(api.formatMatchUpdate('final', game), /Penalty kicks tied 1 - 1/);
+});
+
+test('clinch is advisory for early five-kick and equal-round sudden-death cases', () => {
+  const { api } = createRuntime();
+  const game = { phase: 'penalties', penaltyFirstTeam: 1, penaltyAttempts: [] };
+  for (let i = 0; i < 6; i++) api.recordPenalty(game, i % 2 === 0);
+  assert.equal(api.clinchedPenaltyTeam(game), 1);
+  assert.equal(game.phase, 'penalties');
+  api.undoPenalty(game);
+  assert.equal(api.clinchedPenaltyTeam(game), null);
+  const sudden = { phase: 'penalties', penaltyFirstTeam: 2, penaltyAttempts: [] };
+  for (let i = 0; i < 10; i++) api.recordPenalty(sudden, true);
+  api.recordPenalty(sudden, true);
+  assert.equal(api.clinchedPenaltyTeam(sudden), null);
+  api.recordPenalty(sudden, false);
+  assert.equal(api.clinchedPenaltyTeam(sudden), 2);
+});
+
+test('old games, regulation final, OT final and explicit tie remain factual', () => {
+  const { api } = createRuntime();
+  const old = api.normalizeGame({ team1: 'Hume-Fogg', team2: 'RePublic', phase: 'final', firstHalfGoalsTeam1: 1 });
+  assert.equal(api.formatMatchUpdate('final', old), 'Final Score:\nHume-Fogg 1 - 0 RePublic');
+  const game = playoff(api);
+  api.enterTournamentBreak(game); api.startOvertimeHalf(game); api.adjustScore(game, 1, 1);
+  api.finishMatch(game, 'overtime');
+  assert.equal(api.formatMatchUpdate('final', api.serializeCompletedGame(game)), 'Final Score:\nHume-Fogg 1 - 0 RePublic\nAfter Overtime');
+  const tie = playoff(api); api.finishMatch(tie, 'tie_override');
+  assert.equal(api.formatMatchUpdate('final', tie), 'Final Score:\nHume-Fogg 0 - 0 RePublic');
+  assert.equal(api.isPlayoff({ gameType: 'specialTournament' }), false);
+});
+
+test('every tournament break and active phase round-trips without losing existing game fields', () => {
+  const { api } = createRuntime();
+  for (const phase of ['overtime_break', 'ot_first_half', 'ot_halftime', 'ot_second_half', 'penalty_break', 'penalties']) {
+    const game = { ...playoff(api), phase, notes: 'Keep my notes', id: 'existing-id', penaltyFirstTeam: 2, penaltyAttempts: [{ team: 2, scored: true }] };
+    const recovered = api.normalizeGame(JSON.parse(JSON.stringify(game)));
+    assert.equal(recovered.phase, phase);
+    assert.equal(recovered.id, 'existing-id');
+    assert.equal(recovered.notes, 'Keep my notes');
+    assert.equal(api.nextPenaltyTeam(recovered), 1);
+    assert.equal(api.penaltyScores(recovered).team2, 1);
+    assert.equal(api.formatMatchUpdate('penalty', recovered), '🟢 Penalty Scored — RePublic\nHume-Fogg 0 - 1 RePublic\nPenalty Kicks');
+  }
+});
+
+test('penalty winners count in the season record and score setters cannot mutate a shootout', () => {
+  const { api } = createRuntime();
+  const game = { ...playoff(api), phase: 'penalties', penaltyFirstTeam: 1, penaltyAttempts: [] };
+  api.recordPenalty(game, true); api.recordPenalty(game, false);
+  api.adjustScore(game, 1, 1);
+  assert.equal(api.finalScores(game).team1, 0);
+  api.finishMatch(game, 'penalties');
+  assert.equal(api.calculateSeasonRecord([game]).wins, 1);
+  game.penaltyAttempts = [{ team: 1, scored: false }, { team: 2, scored: true }];
+  assert.equal(api.calculateSeasonRecord([game]).losses, 1);
+});
+
+test('explicit abandonment returns the same scheduled game without carrying OT or PK into replay', () => {
+  const { api } = createRuntime();
+  const game = { ...playoff(api), phase: 'penalties', overtimePlayed: true, otGoalsTeam1: 2, otFirstHalfStartedAt: 1000, penaltyFirstTeam: 1, penaltyAttempts: [{ team: 1, scored: true }] };
+  const future = api.abandonedFutureGame(game);
+  assert.equal(future.id, game.id);
+  assert.equal(future.team2, game.team2);
+  assert.equal(future.phase, 'pregame');
+  assert.equal(future.otGoalsTeam1, 0);
+  assert.equal(future.otFirstHalfStartedAt, null);
+  assert.equal(future.penaltyAttempts.length, 0);
+  assert.equal(future.overtimePlayed, false);
+  assert.equal(game.penaltyAttempts.length, 1);
+});
