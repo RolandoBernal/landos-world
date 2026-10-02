@@ -53,6 +53,8 @@
   --lee-lee-green: #9dffcf;
   --llt-ui-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --llt-field-label-size: 0.92rem;
+  --llt-field-label-weight: 500;
   --llt-field-label-gap: 0.55rem;
   --llt-field-group-gap: 0.9rem;
   --llt-field-support-gap: 0.4rem;
@@ -164,6 +166,7 @@
   transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
 .lee_lee_diabetes_pre_meal_timer_card:hover { border-color: var(--lee-lee-accent); box-shadow: 0 .7rem 1.5rem rgb(0 0 0 / 16%); transform: translateY(-1px); }
+.lee_lee_diabetes_shell .lee_lee_diabetes_pre_meal_timer_card { font: inherit; }
 .lee_lee_diabetes_pre_meal_timer_card:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 3px; }
 .lee_lee_diabetes_pre_meal_timer_card strong,
 .lee_lee_diabetes_pre_meal_timer_card small { display: block; }
@@ -192,7 +195,7 @@
 .lee_lee_diabetes_pre_meal_timer_ring_inner { display: grid; place-items: center; align-content: center; inline-size: 100%; block-size: 100%; border-radius: 50%; background: var(--lee-lee-panel-strong); }
 .lee_lee_diabetes_pre_meal_timer_large { font-size: clamp(2.8rem, 14vw, 4.5rem); line-height: 1; }
 .lee_lee_diabetes_pre_meal_timer_ring_inner span,
-.lee_lee_diabetes_pre_meal_timer_conflict_time span { margin-top: .35rem; color: var(--lee-lee-muted); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+.lee_lee_diabetes_pre_meal_timer_conflict_time span { margin-top: .35rem; color: var(--lee-lee-muted); font-family: var(--llt-ui-font); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
 .lee_lee_diabetes_pre_meal_timer_message { margin: .35rem auto; color: var(--lee-lee-text); font-size: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_background_note { max-width: 25rem; margin: .75rem auto 1rem; color: var(--lee-lee-muted); font-size: .8rem; }
 .lee_lee_diabetes_pre_meal_timer_source { display: grid; gap: .55rem; margin: 1rem 0; padding: .9rem 1rem; border: 1px solid var(--lee-lee-border); border-radius: 1rem; background: var(--lee-lee-panel); text-align: left; }
@@ -883,8 +886,8 @@
   display: grid;
   gap: var(--llt-field-label-gap);
   color: var(--lee-lee-soft);
-  font-size: 0.92rem;
-  font-weight: 500;
+  font-size: var(--llt-field-label-size);
+  font-weight: var(--llt-field-label-weight);
 }
 
 .lee_lee_diabetes_input,
@@ -2267,8 +2270,8 @@
 
 .lee_lee_diabetes_field_label {
   color: var(--lee-lee-soft);
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--llt-field-label-size);
+  font-weight: var(--llt-field-label-weight);
 }
 
 .lee_lee_diabetes_target_range .lee_lee_diabetes_inline_control {

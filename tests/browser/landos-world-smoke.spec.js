@@ -1400,6 +1400,131 @@ async function expectNoPrivateLLTDom(page) {
   await expect(page.locator('#lee_lee_settings_toggle')).toBeHidden();
 }
 
+test('LLT Issue #11 equivalent Settings labels and native timer card share UI typography', async ({ page }) => {
+  await openProtectedLeeLeeTracker(page);
+  await page.evaluate(() => {
+    window.LeeLeePreMealTimer.start({ durationMinutes: 3, sourceEntryId: 'typography-fixture', sourceEntry: { type: 'Breakfast', mealCarbs: 10, administeredInsulinUnits: 1 } });
+    const key = window.LeeLeeTrackerStorage.storageKey;
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: localStorage.getItem(key) }));
+  });
+  const typography = node => {
+    const style = getComputedStyle(node);
+    return { family: style.fontFamily, size: style.fontSize, weight: style.fontWeight, lineHeight: style.lineHeight };
+  };
+  const root = page.locator('.lee_lee_diabetes_shell');
+  const card = page.locator('.lee_lee_diabetes_pre_meal_timer_card');
+  await expect(card).toBeVisible();
+  expect(await card.evaluate(typography)).toEqual(await root.evaluate(typography));
+  expect(await card.locator('[data-pre-meal-timer-value]').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+  await page.locator('#lee_lee_settings_toggle').click();
+  await page.locator('[data-settings-accordion]').evaluateAll(nodes => nodes.forEach(node => { node.open = true; }));
+  expect(await page.locator('.lee_lee_diabetes_field_label').evaluate(typography)).toEqual(
+    await page.locator('[name="bedtimeBaseUnits"]').locator('..').evaluate(typography),
+  );
+  const statusValue = label => page.locator('.lee_lee_diabetes_status_grid > div').filter({ has: page.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }) }).first().locator('dd');
+  await expect(statusValue('Pending total').locator('.lee_lee_diabetes_numeric')).toHaveText('0');
+  expect(await statusValue('Pending total').locator('span').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+  expect(await statusValue('Device').evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
+  expect(await statusValue('Local records').locator('span').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+});
+
+test('LLT Issue #11 UI and data fonts remain distinct across responsive surfaces', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await openProtectedLeeLeeTracker(page);
+  await seedHistoricalEdit(page);
+  await page.evaluate(() => {
+    const date = new Date();
+    const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    window.LeeLeeTrackerStorage.updateTrackerData(current => ({ ...current, records: [...current.records, {
+      ...current.records[0], id: 'typography-today', date: today, recordTimestamp: date.toISOString(),
+      notes: 'Synthetic note: a longer ordinary prose entry should wrap comfortably without using the data font.',
+    }] }));
+    const key = window.LeeLeeTrackerStorage.storageKey;
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: localStorage.getItem(key) }));
+  });
+  await page.evaluate(() => document.fonts.ready);
+  expect(await page.evaluate(() => document.fonts.check('16px "DM Sans"') && document.fonts.check('16px "Roboto Mono"'))).toBe(true);
+  const storedBefore = await page.evaluate(() => localStorage.getItem(window.LeeLeeTrackerStorage.storageKey));
+  const capture = async name => {
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true });
+  };
+  for (const [width, height] of [[320, 900], [393, 900], [768, 900], [1280, 900], [852, 393]]) {
+    await page.setViewportSize({ width, height });
+    for (const section of ['Today', 'History', 'Reports', 'Foods']) {
+      await chooseLeeLeeSection(page, section);
+      await page.evaluate(() => document.fonts.ready);
+      const fonts = await page.locator('.lee_lee_diabetes_shell').evaluate(root => {
+        const visible = node => node.getClientRects().length > 0;
+        return {
+          root: getComputedStyle(root).fontFamily,
+          ui: [...root.querySelectorAll('button, select, textarea, input[type="search"], input[type="text"]:not([inputmode])')].filter(visible).map(node => getComputedStyle(node).fontFamily),
+          data: [...root.querySelectorAll('.lee_lee_diabetes_numeric, input[type="number"], input[inputmode="decimal"]')].filter(visible).map(node => getComputedStyle(node).fontFamily),
+          overflow: document.documentElement.scrollWidth > window.innerWidth,
+        };
+      });
+      expect(fonts.root).toContain('DM Sans');
+      expect(fonts.ui.every(font => font.includes('DM Sans'))).toBe(true);
+      expect(fonts.data.every(font => font.includes('Roboto Mono'))).toBe(true);
+      expect(fonts.overflow, `${section} at ${width}px`).toBe(false);
+      await capture(`${section}-${width}`);
+      if (section === 'Reports') {
+        await page.locator('[name="range"]').selectOption('custom');
+        await page.locator('[name="startDate"]').fill('2026-08-01');
+        await page.locator('[name="endDate"]').fill('2026-08-31');
+        for (const view of ['summary', 'trends', 'averages', 'detailed-log']) {
+          await page.locator('[name="view"]').selectOption(view);
+          await capture(`Reports-${view}-${width}`);
+        }
+      }
+      if (section === 'Foods') {
+        await page.getByRole('button', { name: '+ Add New Meal' }).click();
+        await capture(`Meal-builder-${width}`);
+        await page.locator('[data-action="cancel-saved-meal-builder"]').last().click();
+        await page.locator('[data-food-library-accordion="foods"] summary').click();
+        await page.getByRole('button', { name: '+ Add New Food' }).click();
+        await capture(`Food-editor-${width}`);
+        await page.locator('button[data-action="cancel-food-library-editor"]').last().click();
+      }
+    }
+    await openSeededLeeLeeHistoryDay(page);
+    await capture(`History-day-${width}`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await capture(`Edit-entry-${width}`);
+    await page.locator('[data-lee-lee-editor]').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await chooseLeeLeeSection(page, 'Log Entry');
+    const form = page.locator('[data-lee-lee-editor]');
+    await expect(form).toBeVisible();
+    for (const name of ['bloodSugar', 'insulinUnits', 'date', 'time']) {
+      expect(await form.locator(`[name="${name}"]`).evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+    }
+    expect(await form.locator('textarea').evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
+    expect(await form.locator('select').first().evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
+    await capture(`Entry-${width}`);
+    await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
+    await expect(page.locator('[data-carb-calculator]')).toBeVisible();
+    await capture(`Calculator-${width}`);
+    for (const category of ['favorites', 'recent', 'foods', 'meals']) {
+      await page.locator('[data-carb-library-view]').selectOption(category);
+      await capture(`Calculator-${category}-${width}`);
+    }
+    await page.getByRole('button', { name: 'Search foods...' }).click();
+    await capture(`Food-search-${width}`);
+    await page.getByRole('button', { name: 'Back to Carb Calculator', exact: true }).click();
+    await page.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await capture(`Manual-amount-${width}`);
+    await page.getByRole('button', { name: 'Back to Carb Calculator', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel Carb Calculator', exact: true }).click();
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.locator('#lee_lee_settings_toggle').click();
+    await page.locator('[data-settings-accordion]').evaluateAll(nodes => nodes.forEach(node => { node.open = true; }));
+    await capture(`Settings-${width}`);
+    await page.locator('#lee_lee_settings_toggle').click();
+  }
+  expect(await page.evaluate(() => localStorage.getItem(window.LeeLeeTrackerStorage.storageKey))).toBe(storedBefore);
+});
+
 test('Issue #10 resolving and logged-out gates contain no private DOM and Settings cannot bypass them', async ({ page }) => {
   await openProtectedLeeLeeTracker(page, { authMode: 'resolving' });
   await expectNoPrivateLLTDom(page);
@@ -5643,6 +5768,8 @@ test('LLT defers an existing-timer conflict until explicit start and preserves a
   await second.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
   const conflictKeep = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
   await expect(conflictKeep.getByRole('heading', { name: 'Timer Already Running' })).toBeVisible();
+  expect(await conflictKeep.locator('.lee_lee_diabetes_pre_meal_timer_conflict_time').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+  expect(await conflictKeep.locator('.lee_lee_diabetes_pre_meal_timer_conflict_time span').evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
   await conflictKeep.getByRole('button', { name: 'Keep Current Timer' }).click();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')).sourceEntryId)).toBe(timerA.sourceEntryId);
   await page.locator('.lee_lee_diabetes_pre_meal_timer_modal').getByRole('button', { name: 'Back to Today' }).click();
