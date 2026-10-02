@@ -1574,7 +1574,53 @@
   color: var(--vfgt-summary-text);
 }
 
+
+/* Only the tied-regulation/OT decisions use this three-choice layout. */
+.vfgt_confirm__dialog:has(> .vfgt_confirm__actions--playoff-decision) {
+  width: min(100%, 42rem);
+}
+.vfgt_confirm__actions--playoff-decision {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.vfgt_confirm__actions--playoff-decision .vfgt_button { width: 100%; }
+
+
+/* Playoff start/result semantics; legacy confirmation variants are unchanged. */
+:root[data-theme="light"] .vfgt_button.vfgt_button--success,
+.vfgt_button.vfgt_button--success,
+.vfgt_confirm .vfgt_button.vfgt_button--success {
+  color: #ffffff;
+  background: #146c43;
+  border-color: #66c796;
+}
+:root[data-theme="light"] .vfgt_button.vfgt_button--miss,
+.vfgt_button.vfgt_button--miss {
+  color: #ffffff;
+  background: #9d1d3b;
+  border-color: #ff8aa2;
+}
+.vfgt_confirm__actions--team-choice {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: 1fr;
+}
+.vfgt_confirm__dialog:has(> .vfgt_confirm__actions--team-choice) { width: min(100%, 28rem); }
+.vfgt_confirm__actions--team-choice .vfgt_button { overflow-wrap: anywhere; }
+.vfgt_penalties .vfgt_actions.vfgt_pk_record_actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.vfgt_penalties .vfgt_actions.vfgt_pk_utility_actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.vfgt_penalties .vfgt_pk_record_actions .vfgt_button,
+.vfgt_penalties .vfgt_pk_utility_actions .vfgt_button { width: 100%; min-height: 52px; }
+
 @media (max-width: 680px) {
+  .vfgt_confirm__actions--playoff-decision { grid-template-columns: minmax(0, 1fr); }
+
   .vfgt_hero {
     align-items: start;
   }
@@ -1888,3 +1934,39 @@
 .vfgt_final_score .vfgt_final_label, .vfgt_final_score .vfgt_copy_hint { grid-column: 1 / -1; font-size: .85rem; }
 .vfgt_past_card .vfgt_card_summary { min-height: 44px; }
 .vfgt_copy_status:empty { display: none; }
+
+/* Tournament controls keep attempts inside their own scroll region. */
+.vfgt_penalties { min-width: 0; width: 100%; }
+.vfgt_pk_history { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.vfgt_pk_history table {
+  --vfgt-pk-attempt-width: 2rem;
+  --vfgt-pk-team-width: 9rem;
+  --vfgt-pk-total-width: 3rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: calc(var(--vfgt-pk-team-width) + var(--vfgt-pk-attempt-count) * var(--vfgt-pk-attempt-width) + var(--vfgt-pk-total-width));
+  font: inherit;
+}
+.vfgt_pk_team_column { width: var(--vfgt-pk-team-width); }
+.vfgt_pk_attempt_column { width: var(--vfgt-pk-attempt-width); }
+.vfgt_pk_total_column { width: var(--vfgt-pk-total-width); }
+.vfgt_pk_history th, .vfgt_pk_history td { padding: .65rem; text-align: center; }
+.vfgt_pk_history .vfgt_pk_attempt_cell { padding-inline: .25rem; }
+.vfgt_pk_history th[scope="row"] { text-align: left; min-width: 7rem; max-width: 11rem; overflow-wrap: anywhere; }
+.vfgt_pk_next { text-align: center; overflow-wrap: anywhere; }
+.vfgt_penalties .vfgt_actions { display: flex; flex-wrap: wrap; }
+.vfgt_penalties .vfgt_button { min-height: 48px; flex: 1 1 8rem; }
+.vfgt_readonly_score { display: block; text-align: center; font-size: 2rem; }
+.vfgt_result_context { font-size: 1rem; font-weight: 400; overflow-wrap: anywhere; }
+.vfgt_final_score .vfgt_result_context {
+  grid-column: 1 / -1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 400;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.vfgt_history_matchup .vfgt_result_context { grid-column: 1 / -1; order: 4; }
+.vfgt_live:has(.vfgt_penalties) .vfgt_matchup_title { font-size: 1.1rem; gap: .5rem; }
+.vfgt_live:has(.vfgt_penalties) .vfgt_readonly_score { display: block; text-align: center; }
+.vfgt_pk_total { text-align: center; font-size: 1.25rem; }

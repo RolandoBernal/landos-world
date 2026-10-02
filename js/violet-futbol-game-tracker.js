@@ -26,6 +26,7 @@
   const DEFAULT_HALF_DURATION_MINUTES = 40;
   const REGULATION_SECONDS = 40 * 60;
   const HALFTIME_SECONDS = 10 * 60;
+  const PLAYOFF_RULES = Object.freeze({ overtimeHalfMinutes: 10 });
   const ACTION_GUARD_MS = 350;
   const HUME_FOGG_TEAM = 'Hume-Fogg';
   const DEFAULT_SEASON_NAME = '2026 Fall';
@@ -322,12 +323,18 @@
   function scoreForPhase(game, teamIndex) {
     const first = teamIndex === 1 ? game.firstHalfGoalsTeam1 : game.firstHalfGoalsTeam2;
     const second = teamIndex === 1 ? game.secondHalfGoalsTeam1 : game.secondHalfGoalsTeam2;
-    if (game.phase === 'second_half' || game.phase === 'final') return first + second;
+    if (!['pregame', 'first_half', 'halftime'].includes(game.phase)) return first + second + clampScore(game[`otGoalsTeam${teamIndex}`]);
     return first;
   }
 
   function setScoreForPhase(game, teamIndex, cumulativeValue) {
     const value = clampScore(cumulativeValue);
+    if (['overtime_break', 'ot_halftime', 'penalty_break', 'penalties'].includes(game.phase)) return game;
+    if (['ot_first_half', 'ot_second_half'].includes(game.phase)) {
+      const base = clampScore(game[`firstHalfGoalsTeam${teamIndex}`]) + clampScore(game[`secondHalfGoalsTeam${teamIndex}`]);
+      game[`otGoalsTeam${teamIndex}`] = Math.max(0, value - base);
+      return game;
+    }
     if (game.phase === 'second_half' || game.phase === 'final') {
       const firstKey = teamIndex === 1 ? 'firstHalfGoalsTeam1' : 'firstHalfGoalsTeam2';
       const secondKey = teamIndex === 1 ? 'secondHalfGoalsTeam1' : 'secondHalfGoalsTeam2';
@@ -346,8 +353,8 @@
 
   function finalScores(game) {
     return {
-      team1: clampScore(game.firstHalfGoalsTeam1) + clampScore(game.secondHalfGoalsTeam1),
-      team2: clampScore(game.firstHalfGoalsTeam2) + clampScore(game.secondHalfGoalsTeam2),
+      team1: clampScore(game.firstHalfGoalsTeam1) + clampScore(game.secondHalfGoalsTeam1) + clampScore(game.otGoalsTeam1),
+      team2: clampScore(game.firstHalfGoalsTeam2) + clampScore(game.secondHalfGoalsTeam2) + clampScore(game.otGoalsTeam2),
     };
   }
 
@@ -357,7 +364,7 @@
   }
 
   function formatSoccerMinute(game, elapsedSeconds) {
-    const halfMinutes = normalizeHalfDurationMinutes(game.halfDurationMinutes);
+    const halfMinutes = isOvertimeHalf(game.phase) ? PLAYOFF_RULES.overtimeHalfMinutes : normalizeHalfDurationMinutes(game.halfDurationMinutes);
     const minute = Math.floor(Math.max(0, elapsedSeconds) / 60) + 1;
     const offset = game.phase === 'second_half' ? halfMinutes : 0;
     return minute > halfMinutes ? `${offset + halfMinutes}+${minute - halfMinutes}` : String(offset + minute);
@@ -370,7 +377,15 @@
       const name = teamIndex === 1 ? game.team1 : game.team2;
       return `⚽️ Goal ${name}${teamIndex === game.teamSide ? '!' : ''}\n${score}\n${phaseLabel(game.phase)}: Minute ${formatSoccerMinute(game, elapsedForHalf(game, game.phase, now))}`;
     }
-    const title = { halftime: 'End of First Half:', second: 'Second Half Starting Now...', final: 'Final Score:' }[kind];
+    if (kind === 'penalty') {
+      const attempt = game.penaltyAttempts?.at(-1);
+      if (!attempt) return '';
+      const pk = penaltyScores(game);
+      const name = attempt.team === 1 ? game.team1 : game.team2;
+      return `${attempt.scored ? '🟢 Penalty Scored' : '🔴 Penalty Missed'} — ${name}${attempt.scored && attempt.team === game.teamSide ? '!' : ''}\n${game.team1} ${pk.team1} - ${pk.team2} ${game.team2}\nPenalty Kicks`;
+    }
+    if (kind === 'final') return `Final Score:\n${score}${finalResultLine(game) ? `\n${finalResultLine(game)}` : ''}`;
+    const title = { end_regulation: 'End of Regulation:', overtime: 'Overtime Starting Now...', ot_halftime: 'End of Overtime First Half:', ot_second: 'Overtime Second Half Starting Now...', end_overtime: 'End of Overtime:', penalties: 'Penalty Kicks Starting Now...', halftime: 'End of First Half:', second: 'Second Half Starting Now...', final: 'Final Score:' }[kind];
     return title ? `${title}\n${score}` : '';
   }
 
@@ -471,7 +486,12 @@
       } else {
         return record;
       }
-      if (teamScore > opponentScore) record.wins += 1;
+      if (teamScore === opponentScore && game.completionDecision === 'penalties' && penaltyLeader(game)) {
+        const winnerName = String(penaltyLeader(game) === 1 ? game.team1 : game.team2).trim().toLowerCase();
+        const trackedWinner = winnerName === trackedTeam || (trackedTeamId && game.teamId === trackedTeamId && penaltyLeader(game) === game.teamSide);
+        if (trackedWinner) record.wins += 1;
+        else record.losses += 1;
+      } else if (teamScore > opponentScore) record.wins += 1;
       else if (teamScore < opponentScore) record.losses += 1;
       else record.draws += 1;
       return record;
@@ -486,7 +506,7 @@
   }
 
   function regulationSecondsForGame(game) {
-    return normalizeHalfDurationMinutes(game?.halfDurationMinutes) * 60;
+    return (isOvertimeHalf(game?.phase) ? PLAYOFF_RULES.overtimeHalfMinutes : normalizeHalfDurationMinutes(game?.halfDurationMinutes)) * 60;
   }
 
   function pluralizeResult(count, singular, plural) {
@@ -505,29 +525,122 @@
     </div>`;
   }
 
-  function elapsedForHalf(game, phase, now = Date.now()) {
-    const durationKey = phase === 'first_half' ? 'firstHalfDurationSeconds' : 'secondHalfDurationSeconds';
-    const startKey = phase === 'first_half' ? 'firstHalfStartedAt' : 'secondHalfStartedAt';
-    if (game.phase !== phase || !game[startKey]) return Math.max(0, Math.floor(game[durationKey] || 0));
-    return Math.max(0, Math.floor((now - game[startKey]) / 1000));
+  function isOvertimeHalf(phase) {
+    return phase === 'ot_first_half' || phase === 'ot_second_half';
   }
 
   function isRunningHalf(game) {
-    return game?.phase === 'first_half' || game?.phase === 'second_half';
+    return ['first_half', 'second_half', 'ot_first_half', 'ot_second_half'].includes(game?.phase);
   }
 
   function activeHalfKeys(phase) {
-    return phase === 'first_half'
-      ? {
-          durationKey: 'firstHalfDurationSeconds',
-          regulationFlag: 'firstHalfRegulationWhistlePlayed',
-          startedAtKey: 'firstHalfStartedAt',
-        }
-      : {
-          durationKey: 'secondHalfDurationSeconds',
-          regulationFlag: 'secondHalfRegulationWhistlePlayed',
-          startedAtKey: 'secondHalfStartedAt',
-        };
+    const prefix = { first_half: 'firstHalf', second_half: 'secondHalf', ot_first_half: 'otFirstHalf', ot_second_half: 'otSecondHalf' }[phase];
+    return { durationKey: `${prefix}DurationSeconds`, startedAtKey: `${prefix}StartedAt`, regulationFlag: `${prefix}RegulationWhistlePlayed` };
+  }
+
+  function elapsedForHalf(game, phase, now = Date.now()) {
+    const { durationKey, startedAtKey } = activeHalfKeys(phase);
+    if (game.phase !== phase || !game[startedAtKey]) return Math.max(0, Math.floor(game[durationKey] || 0));
+    return Math.max(0, Math.floor((now - game[startedAtKey]) / 1000));
+  }
+
+  function isPlayoff(game) {
+    return normalizeGameType(game?.gameType) === 'districtTournament';
+  }
+
+  function tiedMatch(game) {
+    const score = finalScores(game);
+    return score.team1 === score.team2;
+  }
+
+  function finishMatch(game, decision, now = Date.now()) {
+    if (isRunningHalf(game)) game[activeHalfKeys(game.phase).durationKey] = elapsedForHalf(game, game.phase, now);
+    game.completionDecision = decision;
+    game.phase = 'final';
+    game.status = 'completed';
+    game.completedAt = new Date(now).toISOString();
+    return game;
+  }
+
+  function enterTournamentBreak(game, now = Date.now()) {
+    if (!isPlayoff(game) || !tiedMatch(game) || !['second_half', 'ot_second_half'].includes(game.phase)) return game;
+    game[activeHalfKeys(game.phase).durationKey] = elapsedForHalf(game, game.phase, now);
+    game.phase = game.phase === 'second_half' ? 'overtime_break' : 'penalty_break';
+    return game;
+  }
+
+  function startOvertimeHalf(game, now = Date.now()) {
+    if (!['overtime_break', 'ot_halftime'].includes(game.phase)) return game;
+    game.overtimePlayed = true;
+    game.phase = game.phase === 'overtime_break' ? 'ot_first_half' : 'ot_second_half';
+    game[activeHalfKeys(game.phase).startedAtKey] = now;
+    return game;
+  }
+
+  function endOvertimeFirstHalf(game, now = Date.now()) {
+    if (game.phase !== 'ot_first_half') return game;
+    game.otFirstHalfDurationSeconds = elapsedForHalf(game, game.phase, now);
+    game.phase = 'ot_halftime';
+    return game;
+  }
+
+  function initializePenalties(game, firstTeam) {
+    if (game.phase !== 'penalty_break' || ![1, 2].includes(firstTeam)) return game;
+    game.penaltyFirstTeam = firstTeam;
+    game.penaltyAttempts = [];
+    game.phase = 'penalties';
+    return game;
+  }
+
+  function penaltyScores(game) {
+    return (game.penaltyAttempts || []).reduce((score, attempt) => {
+      if (attempt.scored) score[`team${attempt.team}`] += 1;
+      return score;
+    }, { team1: 0, team2: 0 });
+  }
+
+  function nextPenaltyTeam(game) {
+    const last = game.penaltyAttempts?.at(-1);
+    return last ? 3 - last.team : game.penaltyFirstTeam;
+  }
+
+  function recordPenalty(game, scored) {
+    if (game.phase !== 'penalties' || ![1, 2].includes(nextPenaltyTeam(game))) return false;
+    game.penaltyAttempts.push({ team: nextPenaltyTeam(game), scored: scored === true });
+    return true;
+  }
+
+  function undoPenalty(game) {
+    if (game.phase !== 'penalties' || !game.penaltyAttempts.length) return false;
+    game.penaltyAttempts.pop();
+    latestMatchUpdate = null;
+    copyFeedback = '';
+    return true;
+  }
+
+  function penaltyLeader(game) {
+    const score = penaltyScores(game);
+    return score.team1 === score.team2 ? null : score.team1 > score.team2 ? 1 : 2;
+  }
+
+  function clinchedPenaltyTeam(game) {
+    const attempts = game.penaltyAttempts || [];
+    const counts = [1, 2].map(team => attempts.filter(attempt => attempt.team === team).length);
+    const score = penaltyScores(game);
+    if (counts.every(count => count <= 5)) {
+      if (score.team1 > score.team2 + 5 - counts[1]) return 1;
+      if (score.team2 > score.team1 + 5 - counts[0]) return 2;
+    } else if (counts[0] === counts[1]) return penaltyLeader(game);
+    return null;
+  }
+
+  function finalResultLine(game) {
+    if (game.completionDecision === 'penalties') {
+      const score = penaltyScores(game);
+      const winner = penaltyLeader(game);
+      return winner ? `${winner === 1 ? game.team1 : game.team2} wins ${Math.max(score.team1, score.team2)} - ${Math.min(score.team1, score.team2)} on penalties` : `Penalty kicks tied ${score.team1} - ${score.team2}; match ended by confirmation`;
+    }
+    return game.overtimePlayed ? 'After Overtime' : '';
   }
 
   function deriveTimerState(game, now = Date.now()) {
@@ -614,6 +727,12 @@
       date: date || defaults.date,
       startTime: time || defaults.time,
       actualStartedAt: null,
+      overtimePlayed: false,
+      otGoalsTeam1: 0,
+      otGoalsTeam2: 0,
+      penaltyFirstTeam: null,
+      penaltyAttempts: [],
+      completionDecision: null,
       firstHalfStartedAt: null,
       secondHalfStartedAt: null,
       halftimeStartedAt: null,
@@ -687,6 +806,7 @@
 
   function endSecondHalf(game, now = Date.now()) {
     game.secondHalfDurationSeconds = elapsedForHalf(game, 'second_half', now);
+    game.completionDecision = 'regulation';
     game.phase = 'final';
     game.status = 'completed';
     game.completedAt = new Date(now).toISOString();
@@ -714,21 +834,25 @@
       'firstHalfGoalsTeam2',
       'secondHalfGoalsTeam1',
       'secondHalfGoalsTeam2',
+      'otGoalsTeam1',
+      'otGoalsTeam2',
     ].forEach((key) => {
       normalized[key] = clampScore(normalized[key]);
     });
-    ['firstHalfDurationSeconds', 'secondHalfDurationSeconds'].forEach((key) => {
+    ['firstHalfDurationSeconds', 'secondHalfDurationSeconds', 'otFirstHalfDurationSeconds', 'otSecondHalfDurationSeconds'].forEach((key) => {
       normalized[key] = normalized[key] === null || normalized[key] === undefined || normalized[key] === ''
         ? null
         : clampScore(normalized[key]);
     });
-    ['firstHalfStartedAt', 'secondHalfStartedAt', 'halftimeStartedAt'].forEach((key) => {
+    ['firstHalfStartedAt', 'secondHalfStartedAt', 'halftimeStartedAt', 'otFirstHalfStartedAt', 'otSecondHalfStartedAt'].forEach((key) => {
       const timestamp = Number(normalized[key]);
       normalized[key] = Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
     });
-    ['firstHalfRegulationWhistlePlayed', 'secondHalfRegulationWhistlePlayed'].forEach((key) => {
+    ['firstHalfRegulationWhistlePlayed', 'secondHalfRegulationWhistlePlayed', 'otFirstHalfRegulationWhistlePlayed', 'otSecondHalfRegulationWhistlePlayed'].forEach((key) => {
       normalized[key] = normalized[key] === true;
     });
+    normalized.penaltyFirstTeam = [1, 2].includes(normalized.penaltyFirstTeam) ? normalized.penaltyFirstTeam : null;
+    normalized.penaltyAttempts = Array.isArray(game.penaltyAttempts) ? game.penaltyAttempts.filter(attempt => attempt && [1, 2].includes(attempt.team) && typeof attempt.scored === 'boolean').map(attempt => ({ team: attempt.team, scored: attempt.scored })) : [];
     return normalized.team1 && normalized.team2 ? normalized : null;
   }
 
@@ -1095,6 +1219,18 @@
       ...normalized,
       status: 'scheduled',
       phase: 'pregame',
+      overtimePlayed: false,
+      otGoalsTeam1: 0,
+      otGoalsTeam2: 0,
+      otFirstHalfStartedAt: null,
+      otSecondHalfStartedAt: null,
+      otFirstHalfDurationSeconds: null,
+      otSecondHalfDurationSeconds: null,
+      otFirstHalfRegulationWhistlePlayed: false,
+      otSecondHalfRegulationWhistlePlayed: false,
+      penaltyFirstTeam: null,
+      penaltyAttempts: [],
+      completionDecision: null,
       actualStartedAt: null,
       firstHalfStartedAt: null,
       secondHalfStartedAt: null,
@@ -1332,6 +1468,8 @@
 
   function startRefreshTimer() {
     stopRefreshTimer();
+    // Penalties have no clock. Replacing their DOM every second resets horizontal scrolling.
+    if (state?.phase === 'penalties') return;
     refreshTimer = window.setInterval(() => {
       if (!state) return;
       reconcileTimerState({
@@ -1346,7 +1484,7 @@
     refreshTimer = null;
   }
 
-  function showVfgtConfirmation({ title, message, confirmLabel, returnFocusAction = '' }) {
+  function showVfgtConfirmation({ title, message, confirmLabel, cancelLabel = 'Cancel', alternativeLabel = '', actionsClass = '', confirmClass = 'vfgt_button--danger', alternativeClass = 'vfgt_button--danger', confirmFirst = false, returnFocusAction = '' }) {
     return new Promise((resolve) => {
       const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const previousAction = returnFocusAction || previousFocus?.dataset?.vfgtAction;
@@ -1355,14 +1493,17 @@
       const dialog = document.createElement('div');
       const scrollLockToken = window.LandosWorldModalUtils?.lockBackgroundScroll?.('violet-futbol-confirm');
       dialog.className = 'vfgt_confirm';
+      const alternativeButton = alternativeLabel ? `<button type="button" class="vfgt_button ${escapeHtml(alternativeClass)}" data-vfgt-confirm="alternative">${escapeHtml(alternativeLabel)}</button>` : '';
+      const confirmButton = `<button type="button" class="vfgt_button ${escapeHtml(confirmClass)}" data-vfgt-confirm="confirm">${escapeHtml(confirmLabel)}</button>`;
       dialog.innerHTML = `
         <div class="vfgt_confirm__backdrop" aria-hidden="true"></div>
         <section class="vfgt_confirm__dialog" role="alertdialog" aria-modal="true" aria-labelledby="${titleId}" aria-describedby="${messageId}">
           <h2 class="vfgt_confirm__title" id="${titleId}">${escapeHtml(title)}</h2>
           <p class="vfgt_confirm__message" id="${messageId}">${escapeHtml(message)}</p>
-          <div class="vfgt_confirm__actions">
-            <button type="button" class="vfgt_button" data-vfgt-confirm="cancel">Cancel</button>
-            <button type="button" class="vfgt_button vfgt_button--danger" data-vfgt-confirm="confirm">${escapeHtml(confirmLabel)}</button>
+          <div class="vfgt_confirm__actions ${escapeHtml(actionsClass)}">
+            <button type="button" class="vfgt_button" data-vfgt-confirm="cancel">${escapeHtml(cancelLabel)}</button>
+            ${confirmFirst ? confirmButton : alternativeButton}
+            ${confirmFirst ? alternativeButton : confirmButton}
           </div>
         </section>`;
 
@@ -1402,7 +1543,7 @@
       dialog.addEventListener('click', (event) => {
         const button = event.target.closest('[data-vfgt-confirm]');
         if (!button) return;
-        close(button.dataset.vfgtConfirm === 'confirm');
+        close(button.dataset.vfgtConfirm === 'alternative' ? 'alternative' : button.dataset.vfgtConfirm === 'confirm');
       });
       document.body.appendChild(dialog);
       document.addEventListener('keydown', handleKeydown);
@@ -1410,7 +1551,80 @@
     });
   }
 
+  async function confirmTournamentEnd() {
+    const game = state;
+    const phase = game?.phase;
+    if (!['second_half', 'ot_second_half'].includes(phase)) return;
+    const overtime = phase === 'ot_second_half';
+    const decision = await showVfgtConfirmation({
+      title: overtime ? 'End Overtime?' : 'End Regulation?',
+      message: `${formatScoreLine(game)}\nThe match is tied. You can continue playing, proceed to ${overtime ? 'penalty kicks' : 'overtime'}, or finish the game as tied.`,
+      actionsClass: 'vfgt_confirm__actions--playoff-decision',
+      confirmClass: 'vfgt_button--success',
+      cancelLabel: 'Keep Playing', confirmLabel: overtime ? 'Start Penalty Kicks' : 'Start Overtime', alternativeLabel: 'End Game as Tie',
+    });
+    if (!decision || state !== game || state.phase !== phase) return;
+    if (decision === 'alternative') {
+      const confirmed = await showVfgtConfirmation({ title: 'Finish as a Tie?', message: 'District Tournament games normally require a winner. Are you sure you want to record this game as a tie?', cancelLabel: 'Go Back', confirmLabel: 'Finish as Tie' });
+      if (!confirmed || state !== game || state.phase !== phase) return;
+      finishMatch(game, 'tie_override');
+      recordMatchUpdate('final', game);
+    } else {
+      enterTournamentBreak(game);
+      recordMatchUpdate(overtime ? 'end_overtime' : 'end_regulation', game);
+    }
+    playEndHalfWhistle();
+    saveActiveGame();
+    syncScreenWakeLock(state);
+    render();
+  }
+
+  async function handleTournamentAction(action) {
+    const game = state;
+    const phase = game?.phase;
+    if (!game) return;
+    if (action === 'start-ot' && ['overtime_break', 'ot_halftime'].includes(phase)) {
+      const confirmed = await showVfgtConfirmation({ title: phase === 'overtime_break' ? 'Start Overtime?' : 'Start Overtime Second Half?', message: 'This will start the overtime clock.', confirmLabel: 'Start Half', confirmClass: 'vfgt_button--success' });
+      if (!confirmed || state !== game || game.phase !== phase) return;
+      startOvertimeHalf(game);
+      recordMatchUpdate(phase === 'overtime_break' ? 'overtime' : 'ot_second', game);
+      playNormalBeep();
+    } else if (action === 'end-ot' && isOvertimeHalf(phase)) {
+      if (phase === 'ot_second_half' && tiedMatch(game)) { void confirmTournamentEnd(); return; }
+      const confirmed = await showVfgtConfirmation({ title: `End ${phaseLabel(phase)}?`, message: phase === 'ot_first_half' ? 'This will stop the timer and begin an untimed overtime break.' : 'This will finish the match after overtime.', confirmLabel: 'End Half' });
+      if (!confirmed || state !== game || game.phase !== phase) return;
+      if (phase === 'ot_first_half') { endOvertimeFirstHalf(game); recordMatchUpdate('ot_halftime', game); }
+      else { finishMatch(game, 'overtime'); recordMatchUpdate('final', game); }
+      playEndHalfWhistle();
+    } else if ((action === 'start-pk' && phase === 'penalty_break') || (action === 'change-pk-first' && phase === 'penalties' && !game.penaltyAttempts.length)) {
+      const first = await showVfgtConfirmation({ title: 'Who kicks first?', message: 'Select the team taking the first penalty.', cancelLabel: 'Go Back', confirmLabel: game.team1, alternativeLabel: game.team2, confirmClass: 'vfgt_button--success', alternativeClass: 'vfgt_button--success', confirmFirst: true, actionsClass: 'vfgt_confirm__actions--playoff-decision vfgt_confirm__actions--team-choice' });
+      if (!first || state !== game || game.phase !== phase) return;
+      if (phase === 'penalty_break') {
+        initializePenalties(game, first === 'alternative' ? 2 : 1);
+        recordMatchUpdate('penalties', game);
+      } else {
+        game.penaltyFirstTeam = first === 'alternative' ? 2 : 1;
+        latestMatchUpdate = null;
+        copyFeedback = '';
+      }
+    } else if (['pk-scored', 'pk-missed'].includes(action) && phase === 'penalties') {
+      if (!recordPenalty(game, action === 'pk-scored')) return;
+      recordMatchUpdate('penalty', game);
+    } else if (action === 'undo-pk' && phase === 'penalties') {
+      if (!undoPenalty(game)) return;
+    } else if (action === 'finish-pk' && phase === 'penalties') {
+      const confirmed = await showVfgtConfirmation({ title: 'Finish Match?', message: `${formatScoreLine(game)}\nPenalty kicks: ${penaltyScores(game).team1} - ${penaltyScores(game).team2}. ${clinchedPenaltyTeam(game) ? 'Confirm the match has ended.' : 'The shootout may be tied or incomplete. Confirm that officials have ended the match.'}`, cancelLabel: 'Keep Shootout Open', confirmLabel: 'Finish Match' });
+      if (!confirmed || state !== game || game.phase !== phase) return;
+      finishMatch(game, 'penalties');
+      recordMatchUpdate('final', game);
+    } else return;
+    saveActiveGame();
+    syncScreenWakeLock(state);
+    render();
+  }
+
   function confirmPhaseEnd(action) {
+    if (action === 'end-second' && isPlayoff(state) && tiedMatch(state)) { void confirmTournamentEnd(); return; }
     const details = action === 'end-first'
       ? { phase: 'first_half', title: 'End First Half?', message: 'This will stop the first-half timer and begin halftime.', confirmLabel: 'End First Half' }
       : action === 'start-second'
@@ -1802,6 +2016,7 @@
                 </button>
                 <button type="button" class="vfgt_history_matchup vfgt_copy_score" data-vfgt-copy="${escapeHtml(formatMatchUpdate('final', game))}" aria-label="Copy final score">
                     <strong class="vfgt_history_team vfgt_history_team--home">${escapeHtml(game.team1)}</strong>
+                    ${finalResultLine(game) ? `<span class="vfgt_result_context">${escapeHtml(finalResultLine(game))}</span>` : ''}
                     <span class="vfgt_history_score" aria-label="Final score ${score.team1} to ${score.team2}">${score.team1} &ndash; ${score.team2}</span>
                     <strong class="vfgt_history_team vfgt_history_team--away">${escapeHtml(game.team2)}</strong>
                 </button>
@@ -1939,6 +2154,8 @@
     if (phase === 'first_half') return 'First Half';
     if (phase === 'halftime') return 'Halftime';
     if (phase === 'second_half') return 'Second Half';
+    const tournament = { overtime_break: 'End of Regulation · Overtime Break', ot_first_half: 'Overtime 1st Half', ot_halftime: 'Overtime Halftime', ot_second_half: 'Overtime 2nd Half', penalty_break: 'End of Overtime · Penalty Break', penalties: 'Penalty Kicks' };
+    if (tournament[phase]) return tournament[phase];
     if (phase === 'final') return 'Final';
     return 'Pregame';
   }
@@ -1950,13 +2167,35 @@
         const score = scoreForPhase(game, team);
         return `<div class="vfgt_team_score">
           <span class="vfgt_team_name">${escapeHtml(name)}</span>
-          <div class="vfgt_score_controls">
+          ${['overtime_break', 'ot_halftime', 'penalty_break', 'penalties'].includes(game.phase) ? `<strong class="vfgt_readonly_score">${score}</strong>` : `<div class="vfgt_score_controls">
             <button type="button" class="vfgt_score_button" data-vfgt-score="${team}" data-delta="-1" aria-label="Subtract one goal from ${escapeHtml(name)}">-</button>
             <input class="vfgt_score_input" inputmode="numeric" pattern="[0-9]*" value="${score}" aria-label="${escapeHtml(name)} score" data-vfgt-score-input="${team}">
             <button type="button" class="vfgt_score_button" data-vfgt-score="${team}" data-delta="1" aria-label="Add one goal to ${escapeHtml(name)}">+</button>
-          </div>
+          </div>`}
         </div>`;
       }).join('<span class="vfgt_vs">vs</span>')}
+    </section>`;
+  }
+
+  function penaltyMarkup(game) {
+    const score = penaltyScores(game);
+    const winner = clinchedPenaltyTeam(game);
+    const next = nextPenaltyTeam(game);
+    const count = Math.max(5, ...[1, 2].map(team => game.penaltyAttempts.filter(attempt => attempt.team === team).length));
+    return `<section class="vfgt_penalties" aria-label="Penalty shootout">
+      <p class="vfgt_pk_total" aria-label="Penalty score: ${escapeHtml(game.team1)} ${score.team1}, ${escapeHtml(game.team2)} ${score.team2}">PK: <strong>${score.team1} - ${score.team2}</strong></p>
+      <div class="vfgt_pk_history" data-game-id="${escapeHtml(game.id)}" tabindex="0" role="region" aria-label="Penalty attempt history; scroll for additional kicks"><table style="--vfgt-pk-attempt-count: ${count}">
+      <colgroup><col class="vfgt_pk_team_column">${Array.from({ length: count }, () => '<col class="vfgt_pk_attempt_column">').join('')}<col class="vfgt_pk_total_column"></colgroup>
+      <thead><tr><th scope="col">Team</th>${Array.from({ length: count }, (_, i) => `<th scope="col" class="vfgt_pk_attempt_cell">${i + 1}</th>`).join('')}<th scope="col">PK</th></tr></thead>
+      <tbody>${[1, 2].map(team => {
+        const attempts = game.penaltyAttempts.filter(attempt => attempt.team === team);
+        return `<tr><th scope="row">${escapeHtml(team === 1 ? game.team1 : game.team2)}</th>${Array.from({ length: count }, (_, i) => `<td class="vfgt_pk_attempt_cell" aria-label="Kick ${i + 1}: ${attempts[i] ? attempts[i].scored ? 'scored' : 'missed or saved' : 'not taken'}">${attempts[i] ? attempts[i].scored ? '🟢' : '🔴' : '—'}</td>`).join('')}<td>${score[`team${team}`]}</td></tr>`;
+      }).join('')}</tbody></table></div>
+      ${winner ? `<p role="status">${escapeHtml(winner === 1 ? game.team1 : game.team2)} has clinched the shootout. Confirm the match has ended, or keep the shootout open.</p>` : ''}
+      <p class="vfgt_pk_next">NEXT KICK<br><strong>${escapeHtml(next === 1 ? game.team1 : game.team2)}</strong></p>
+      <div class="vfgt_actions vfgt_pk_record_actions"><button type="button" class="vfgt_button vfgt_button--success" data-vfgt-action="pk-scored">🟢 Scored</button><button type="button" class="vfgt_button vfgt_button--miss" data-vfgt-action="pk-missed">🔴 Missed</button></div>
+      <div class="vfgt_actions vfgt_pk_utility_actions"><button type="button" class="vfgt_button" data-vfgt-action="undo-pk" ${game.penaltyAttempts.length ? '' : 'disabled'}>Undo Last Kick</button>
+      ${game.penaltyAttempts.length ? '' : '<button type="button" class="vfgt_button" data-vfgt-action="change-pk-first">Change First Kicker</button>'}</div>
     </section>`;
   }
 
@@ -1965,18 +2204,25 @@
       renderHome();
       return;
     }
+    const previousHistory = getRoot()?.querySelector('.vfgt_pk_history');
+    const penaltyScrollLeft = state.phase === 'penalties' && previousHistory?.dataset.gameId === state.id ? previousHistory.scrollLeft : 0;
     const copyFocused = getRoot()?.querySelector('[data-vfgt-copy]') === document.activeElement;
     const focusedAction = getRoot()?.contains(document.activeElement) ? document.activeElement?.dataset?.vfgtAction : null;
     const now = Date.now();
     reconcileTimerState();
     const phase = state.phase;
-    const halfPhase = phase === 'first_half' || phase === 'second_half';
+    const halfPhase = isRunningHalf(state);
     const timerState = deriveTimerState(state, now);
     const elapsed = halfPhase ? timerState.elapsedSeconds : 0;
     const stoppage = timerState.stoppageSeconds;
     const remaining = phase === 'halftime' ? timerState.remainingSeconds : halftimeRemaining(state, now);
     const clock = phase === 'halftime' ? formatClock(remaining) : formatClock(elapsed);
-    const action = phase === 'first_half'
+    const action = ['overtime_break', 'ot_halftime'].includes(phase)
+      ? `<button type="button" class="vfgt_button vfgt_button--success" data-vfgt-action="start-ot">${phase === 'overtime_break' ? 'Start Overtime' : 'Start Overtime Second Half'}</button>`
+      : isOvertimeHalf(phase) ? `<button type="button" class="vfgt_button vfgt_button--primary" data-vfgt-action="end-ot">End ${phaseLabel(phase)}</button>`
+      : phase === 'penalty_break' ? '<button type="button" class="vfgt_button vfgt_button--success" data-vfgt-action="start-pk">Start Penalty Kicks</button>'
+      : phase === 'penalties' ? '<button type="button" class="vfgt_button" data-vfgt-action="finish-pk">Finish Match</button>'
+      : phase === 'first_half'
       ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="end-first">End First Half</button>'
       : phase === 'halftime'
         ? '<button type="button" class="vfgt_button vfgt_button--primary vfgt_button--wide" data-vfgt-action="start-second">End Halftime</button>'
@@ -1994,15 +2240,19 @@
         </header>
         <section class="vfgt_clock_panel" aria-live="polite">
           <span class="vfgt_phase">${escapeHtml(phaseLabel(phase))}</span>
-          ${renderSevenSegmentDisplay(clock, accessibleClockLabel(phase, phase === 'halftime' ? remaining : elapsed))}
+          ${halfPhase || phase === 'halftime' ? renderSevenSegmentDisplay(clock, accessibleClockLabel(phase, phase === 'halftime' ? remaining : elapsed)) : '<p>No match clock running</p>'}
           ${halfPhase && stoppage > 0 ? `<span class="vfgt_stoppage">+${formatClock(stoppage)} stoppage</span>` : ''}
           ${phase === 'halftime' && remaining === 0 ? '<span class="vfgt_stoppage">Halftime complete</span>' : ''}
         </section>
         ${renderScoreboard(state)}
+        ${phase === 'penalties' ? penaltyMarkup(state) : ''}
         ${copyUpdateMarkup(state)}
         ${copyStatusMarkup()}
         <div class="vfgt_actions vfgt_live_action_rail">${action}</div>
       </section>`;
+    // Necessary action/lifecycle redraws preserve the current game's horizontal position synchronously.
+    const nextHistory = getRoot().querySelector('.vfgt_pk_history');
+    if (nextHistory) nextHistory.scrollLeft = penaltyScrollLeft;
     if (copyFocused) getRoot().querySelector('[data-vfgt-copy]')?.focus({ preventScroll: true });
     else if (focusedAction) getRoot().querySelector(`[data-vfgt-action="${focusedAction}"]`)?.focus({ preventScroll: true });
     startRefreshTimer();
@@ -2026,9 +2276,11 @@
         <strong>${escapeHtml(game.team1)}</strong>
         <span>${score.team1} - ${score.team2}</span>
         <strong>${escapeHtml(game.team2)}</strong>
+        ${finalResultLine(game) ? `<span class="vfgt_result_context">${escapeHtml(finalResultLine(game))}</span>` : ''}
         <small class="vfgt_copy_hint">Tap to copy</small>
       </button>
       ${copyStatusMarkup()}
+      ${game.overtimePlayed ? `<section><h2>Overtime</h2><p>${escapeHtml(game.team1)}: ${clampScore(game.otGoalsTeam1)} · ${escapeHtml(game.team2)}: ${clampScore(game.otGoalsTeam2)}</p>${summaryDurationMarkup('OT First Half', game.otFirstHalfDurationSeconds)}${summaryDurationMarkup('OT Second Half', game.otSecondHalfDurationSeconds)}</section>` : ''}
       <div class="vfgt_summary_grid">
         <section>
           <h2>First Half</h2>
@@ -2106,6 +2358,7 @@
             </div>
             <label>Duration <input name="secondHalfDuration" inputmode="numeric" value="${escapeHtml(formatDurationInput(game.secondHalfDurationSeconds))}" placeholder="Optional, e.g. 40 or 43:05"></label>
           </section>
+          ${game.overtimePlayed ? `<section class="vfgt_manual_half"><h2>Overtime Goals</h2><div class="vfgt_form_grid">${manualScoreEditor('otGoalsTeam1', 'Team 1 OT goals', game.otGoalsTeam1)}${manualScoreEditor('otGoalsTeam2', 'Team 2 OT goals', game.otGoalsTeam2)}</div></section>` : ''}
           <output class="vfgt_manual_total" data-vfgt-manual-final aria-live="polite">Final: ${score.team1} - ${score.team2}</output>
           <div class="vfgt_actions vfgt_actions--sticky">
             <button type="button" class="vfgt_button" data-vfgt-action="cancel-edit" data-id="${escapeHtml(id)}">Cancel</button>
@@ -2134,6 +2387,8 @@
       secondHalfGoalsTeam2: clampScore(data.get('secondHalfGoalsTeam2')),
       firstHalfDurationSeconds: parseOptionalDuration(data.get('firstHalfDuration')),
       secondHalfDurationSeconds: parseOptionalDuration(data.get('secondHalfDuration')),
+      otGoalsTeam1: original.overtimePlayed ? clampScore(data.get('otGoalsTeam1')) : clampScore(original.otGoalsTeam1),
+      otGoalsTeam2: original.overtimePlayed ? clampScore(data.get('otGoalsTeam2')) : clampScore(original.otGoalsTeam2),
       updatedAt: nowIso(),
     };
     if (!edited.team1 || !edited.team2) return null;
@@ -2188,8 +2443,8 @@
 
   function updateManualFinalPreview(form) {
     const data = new FormData(form);
-    const team1 = clampScore(data.get('firstHalfGoalsTeam1')) + clampScore(data.get('secondHalfGoalsTeam1'));
-    const team2 = clampScore(data.get('firstHalfGoalsTeam2')) + clampScore(data.get('secondHalfGoalsTeam2'));
+    const team1 = clampScore(data.get('firstHalfGoalsTeam1')) + clampScore(data.get('secondHalfGoalsTeam1')) + clampScore(data.get('otGoalsTeam1'));
+    const team2 = clampScore(data.get('firstHalfGoalsTeam2')) + clampScore(data.get('secondHalfGoalsTeam2')) + clampScore(data.get('otGoalsTeam2'));
     const output = form.querySelector('[data-vfgt-manual-final]');
     if (output) output.textContent = `Final: ${team1} - ${team2}`;
   }
@@ -2390,6 +2645,7 @@
     if (action === 'end-first' && state?.phase === 'first_half') confirmPhaseEnd(action);
     if (action === 'start-second' && state?.phase === 'halftime') confirmPhaseEnd(action);
     if (action === 'end-second' && state?.phase === 'second_half') confirmPhaseEnd(action);
+    if (['start-ot', 'end-ot', 'start-pk', 'change-pk-first', 'pk-scored', 'pk-missed', 'undo-pk', 'finish-pk'].includes(action)) void handleTournamentAction(action);
     if (action === 'save') saveCompletedGame();
     if (action === 'discard-final') requestReturnActiveGameToFuture();
     if (action === 'delete-saved') requestDeleteSavedGame(button.dataset.id);
@@ -2554,6 +2810,20 @@
   }
 
   window.VioletFutbolGameTracker = {
+    PLAYOFF_RULES,
+    isPlayoff,
+    tiedMatch,
+    finishMatch,
+    enterTournamentBreak,
+    startOvertimeHalf,
+    endOvertimeFirstHalf,
+    initializePenalties,
+    penaltyScores,
+    nextPenaltyTeam,
+    recordPenalty,
+    undoPenalty,
+    clinchedPenaltyTeam,
+    finalResultLine,
     ACTIVE_GAME_KEY,
     abandonedFutureGame,
     DEFAULT_SEASON_NAME,
