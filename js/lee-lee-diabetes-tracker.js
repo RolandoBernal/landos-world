@@ -7846,7 +7846,7 @@
         ${items.map(([label, value]) => `
           <div>
             <dt>${escapeHtml(label)}</dt>
-            <dd>${escapeHtml(value)}</dd>
+            <dd>${renderFormattedValue(value)}</dd>
           </div>
         `).join('')}
       </dl>
