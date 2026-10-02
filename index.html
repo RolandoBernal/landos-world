@@ -513,7 +513,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         iconAlt: '',
         iconClass: 'clock_utility_icon--exact',
         title: 'Violet Futbol Game Tracker',
-        description: 'A live match clock, scoreboard and saved game history for futbol game day.',
+        description: '',
         buttonId: 'open-vfgt',
         buttonLabel: 'Open Game Tracker',
         route: 'violet-futbol-game-tracker',
@@ -754,6 +754,12 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           date.dataset.launcherDigitalClockDate = 'true';
           localClock.append(time, date);
           card.appendChild(localClock);
+        }
+        if (app.id === 'violet-futbol-game-tracker') {
+          const summary = document.createElement('div');
+          summary.className = 'vfgt_launcher_summary';
+          summary.dataset.launcherVfgtSummary = 'true';
+          card.appendChild(summary);
         }
         if (app.id === 'road-bike-checklist') {
           const checklistSummary = document.createElement('div');

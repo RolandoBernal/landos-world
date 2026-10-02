@@ -1970,3 +1970,17 @@
 .vfgt_live:has(.vfgt_penalties) .vfgt_matchup_title { font-size: 1.1rem; gap: .5rem; }
 .vfgt_live:has(.vfgt_penalties) .vfgt_readonly_score { display: block; text-align: center; }
 .vfgt_pk_total { text-align: center; font-size: 1.25rem; }
+
+/* Glanceable launcher presentation; keep the complete score notation together. */
+#lando-launcher > .clock_utility_card--vfgt { aspect-ratio: auto; min-height: 0; }
+#lando-launcher .clock_utility_card--vfgt > * { flex-shrink: 0; }
+#lando-launcher .vfgt_launcher_summary { display: grid; flex: 1 0 auto; align-content: center; justify-items: center; gap: .8rem; min-width: 0; text-align: center; }
+#lando-launcher .vfgt_launcher_section { width: 100%; min-width: 0; }
+#lando-launcher .clock_utility_card--vfgt .clock_launch_btn { margin-top: 0; }
+#lando-launcher .vfgt_launcher_section h3 { margin: 0 0 .25rem; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--utility-accent-soft, #d9ecff); }
+#lando-launcher .vfgt_launcher_section p { margin: 0; line-height: 1.4; }
+#lando-launcher .vfgt_launcher_value,
+#lando-launcher .vfgt_launcher_score { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+#lando-launcher .vfgt_launcher_score { display: flex; flex-wrap: wrap; justify-content: center; text-align: center; align-items: baseline; column-gap: .35em; row-gap: .1em; }
+#lando-launcher .vfgt_launcher_score_numbers { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#lando-launcher .vfgt_launcher_section .vfgt_launcher_detail { margin-top: .2rem; font-size: .8rem; font-weight: 400; opacity: .8; overflow-wrap: anywhere; }
