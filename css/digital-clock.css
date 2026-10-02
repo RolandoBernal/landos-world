@@ -1032,6 +1032,25 @@ body.is-child-app-active .pwa_network_status {
   height: 100%;
 }
 
+#clock-view .digit_clock_time {
+  box-sizing: border-box;
+  padding: 0.9rem 0.25rem;
+}
+
+#clock-view .digit_clock_time,
+.clock_utility_local_time_value.digit_clock_time {
+  --vfgt-segment-glow: none;
+}
+
+#clock-view .digit_clock_time,
+.clock_utility_local_time {
+  border: 1px solid rgb(var(--app-accent-rgb, 102 255 153) / 28%);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgb(var(--app-accent-rgb, 102 255 153) / 16%), transparent 9rem),
+    rgb(var(--app-accent-rgb, 102 255 153) / 7%);
+}
+
 .clock_utility_local_time {
   display: grid;
   align-content: center;
@@ -1041,11 +1060,6 @@ body.is-child-app-active .pwa_network_status {
   box-sizing: border-box;
   margin: auto 0 0.85rem;
   padding: 0.9rem;
-  border: 1px solid rgb(var(--app-accent-rgb, 102 255 153) / 28%);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at top right, rgb(var(--app-accent-rgb, 102 255 153) / 16%), transparent 9rem),
-    rgb(var(--app-accent-rgb, 102 255 153) / 7%);
   min-width: 0;
 }
 
