@@ -1033,6 +1033,7 @@ body.is-child-app-active .pwa_network_status {
 }
 
 #clock-view .digit_clock_time {
+  --vfgt-segment-glow: none;
   box-sizing: border-box;
   padding: 0.9rem 0.25rem;
 }
