@@ -2512,7 +2512,8 @@ test('insulin-plan gate and diagnostic copy are explicit and read-only', () => {
 
 test('Pre-Meal Timer presentation states use generic accessible LLT styling without changing behavior', () => {
   assert.match(trackerSource, /startedFromSave = options\.startedFromSave === true/);
-  assert.match(trackerSource, /Entry Saved!/);
+  assert.match(trackerSource, /<h1 id="pre-meal-timer-title">Entry Saved<\/h1>/);
+  assert.doesNotMatch(trackerSource, /Entry Saved!/);
   assert.match(trackerSource, /Pre-meal timer started/);
   assert.match(trackerSource, /data-pre-meal-timer-value/);
   assert.match(trackerSource, /lee_lee_diabetes_pre_meal_timer_ring/);
@@ -2533,9 +2534,9 @@ test('Pre-Meal Timer presentation states use generic accessible LLT styling with
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--detail[\s\S]*width: 100vw[\s\S]*height: 100dvh/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_detail_inner[\s\S]*34rem/);
   assert.match(trackerSource, /renderPreMealTimerModal\(timer, \{ startedFromSave: true \}\)/);
-  assert.match(trackerSource, /After insulin has been given, start the \$\{duration\}-minute pre-meal timer/);
-  assert.match(trackerSource, /Insulin Given — Start \$\{duration\}-Min Timer/);
-  assert.match(trackerSource, /data-action="not-now-pre-meal-timer">Not Now/);
+  assert.doesNotMatch(trackerSource, /After insulin has been given, start the/);
+  assert.match(trackerSource, /Start \$\{duration\}-Min Timer/);
+  assert.match(trackerSource, /data-action="not-now-pre-meal-timer">Done/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_ring/);
   assert.match(cssSource, /env\(safe-area-inset-bottom\)/);
   assert.match(cssSource, /prefers-reduced-motion/);
@@ -2578,7 +2579,8 @@ test('Pre-Meal Timer source summaries cannot expose escaped generated markup', (
   assert.match(trackerSource, /<dt>Started<\/dt>/);
   assert.doesNotMatch(trackerSource, /Started from/);
   assert.doesNotMatch(trackerSource, /escapeHtml\(renderPreMealTimerSourceTimestamp\(source\.recordTimestamp\)\)/);
-  assert.match(trackerSource, /Entry Saved!/);
+  assert.match(trackerSource, /<h1 id="pre-meal-timer-title">Entry Saved<\/h1>/);
+  assert.doesNotMatch(trackerSource, /Entry Saved!/);
   assert.match(trackerSource, /data-action="close-pre-meal-timer">OK/);
   assert.match(trackerSource, /data-action="close-pre-meal-timer" aria-label="Back to Today"/);
   assert.match(trackerSource, /Timer continues while the app is backgrounded/);
@@ -2784,13 +2786,13 @@ test('canonical entry cards render check insulin dinner once in today and histor
   assert.match(historyHtml, /lee_lee_diabetes_timeline_footer[\s\S]*lee_lee_diabetes_timeline_actions[\s\S]*data-action="edit-record"[\s\S]*data-action="delete-record"/);
   assert.match(historyHtml, /lee_lee_diabetes_timeline_edit lee_lee_diabetes_timeline_edit--danger" data-action="delete-record"/);
   assert.doesNotMatch(historyHtml, /lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="edit-record"|lee_lee_diabetes_button lee_lee_diabetes_button--danger" data-action="delete-record"/);
-  assert.ok(todayHtml.includes(canonicalHtml));
+  assert.ok(todayHtml.includes(reports.renderEntryCardContent(dinner, { today: true }).trim()));
   assert.ok(historyHtml.includes(canonicalHtml));
 
   for (const html of [todayHtml, historyHtml]) {
     assert.equal(countOccurrences(stripHtml(html), '269 mg/dL'), 1);
     assert.equal(countOccurrences(html, 'Dinner'), 1);
-    assert.match(html, /<div class="lee_lee_diabetes_timeline_notes"><span class="lee_lee_diabetes_numeric">8<\/span> units<\/div>/);
+    assert.match(html, /<div class="lee_lee_diabetes_timeline_notes"><span class="lee_lee_diabetes_numeric">8<\/span> units(?: given)?<\/div>/);
     assert.equal(countOccurrences(stripHtml(html), 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
   }

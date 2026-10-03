@@ -3995,12 +3995,13 @@
     return renderBloodSugar(record.bloodSugar);
   }
 
-  function getRenderedRecordSecondaryLines(record) {
+  function getRenderedRecordSecondaryLines(record, { today = false } = {}) {
     if (!record) return [];
     if (record.eventType === 'meal') {
       return [
         escapeHtml(record.type),
         escapeHtml(record.mealDescription || ''),
+        today ? renderTodayFoodContributions(record) : '',
         escapeHtml(record.notes || ''),
       ].filter(Boolean);
     }
@@ -4014,12 +4015,13 @@
       const primary = getRecordPrimaryValue(record);
       const actualInsulin = formatInsulin(getRecordActualInsulin(record));
       const carbs = formatCarbs(record.mealCarbs);
-      const foodSummary = Array.isArray(record?.mealComponents)
-        ? record.mealComponents.map(renderMealComponentLabel).filter(Boolean).join(' · ')
-        : '';
+      const foodSummary = today ? renderTodayFoodContributions(record)
+        : (Array.isArray(record?.mealComponents)
+          ? record.mealComponents.map(renderMealComponentLabel).filter(Boolean).join(' · ')
+          : '');
       return [
         carbs && carbs !== primary ? renderCarbs(record.mealCarbs) : '',
-        actualInsulin && actualInsulin !== primary ? renderInsulin(getRecordActualInsulin(record)) : '',
+        actualInsulin && actualInsulin !== primary ? `${renderInsulin(getRecordActualInsulin(record))}${today ? ' given' : ''}` : '',
         foodSummary,
         renderMealDoseSummary(record),
         escapeHtml(record.notes || ''),
@@ -4115,10 +4117,68 @@
     };
   }
 
-  function renderEntryCardContent(record) {
+  function renderTodayFoodContributions(record) {
+    // Entry-local snapshots only: never resolve food/meal IDs against live libraries.
+    const components = Array.isArray(record.mealComponents) && record.mealComponents.length
+      ? record.mealComponents
+      : (Array.isArray(record.carbComponents) && record.carbComponents.length ? record.carbComponents : null);
+    const items = components || (Array.isArray(record.foods) ? record.foods : []);
+    const rows = items.map((item) => {
+      if (!item || typeof item !== 'object') return '';
+      const name = item.nameSnapshot || item.name;
+      if (!name) return '';
+      let carbs = normalizeNumber(components ? item.carbTotal ?? item.calculatedCarbs : item.calculatedCarbs);
+      if (carbs == null) {
+        // Match existing entry-local normalization precision, without defaults
+        // for missing food quantities or missing snapshot values.
+        if (components) {
+          const perServing = normalizeNumber(item.carbsPerServing ?? item.carbs ?? item.carbGrams);
+          const quantity = normalizeNumber(item.quantity ?? item.qty);
+          if (item.componentType === 'manual' || item.type === 'manual') carbs = perServing;
+          else if (perServing != null && quantity != null && quantity > 0) {
+            carbs = Math.round((quantity * perServing + Number.EPSILON) * 100) / 100;
+          }
+        } else carbs = calculateFoodCarbs(item);
+      }
+      const label = [normalizeFoodEmoji(item.emojiSnapshot || item.emoji), name].filter(Boolean).join(' ');
+      const contribution = carbs != null && carbs >= 0
+        ? `${renderNumeric(formatCarbAmount(carbs))} g`
+        : 'Carbs unavailable';
+      const quantity = components ? normalizeNumber(item.quantity ?? item.qty) : null;
+      const quantityLabel = quantity != null && quantity !== 1 && item.componentType !== 'manual' && item.type !== 'manual'
+        ? `${renderNumeric(formatCarbAmount(quantity))}× ` : '';
+      return `<div class="lee_lee_diabetes_food_contribution">${quantityLabel}${escapeHtml(label)} · ${contribution}</div>`;
+    }).filter(Boolean);
+    return rows.length ? `<div class="lee_lee_diabetes_food_contributions">${rows.join('')}</div>` : '';
+  }
+
+  // Presentation uses only the saved, unrounded carb component. Legacy rounded
+  // aliases cannot establish it, and current settings are never consulted.
+  function renderTodayCarbCoverage(record) {
+    if (record?.eventType !== 'check-insulin'
+      || ![...MEAL_TYPES, 'Snack', 'Snacks'].includes(record.type)
+      || !(Number(record.mealCarbs) > 0)) return '';
+    const raw = record.rawCarbDose;
+    if (raw == null || !Number.isFinite(Number(raw)) || Number(raw) < 0) {
+      return 'Suggested carb coverage unavailable';
+    }
+    const approximate = Number(formatDoseNumber(raw)) !== Number(raw);
+    return `Suggested carb coverage: ${approximate ? '≈ ' : ''}${renderInsulin(raw)}`;
+  }
+
+  function renderEntryCardContent(record, { today = false } = {}) {
     const content = getEntryCardContent(record);
-    const primary = getRenderedRecordPrimaryValue(record);
-    const secondary = getRenderedRecordSecondaryLines(record);
+    const renderedPrimary = getRenderedRecordPrimaryValue(record);
+    const primary = today && record.eventType === 'check-insulin'
+      && content.primary && content.primary === formatInsulin(getRecordActualInsulin(record))
+      ? `${renderedPrimary} given` : renderedPrimary;
+    const secondary = getRenderedRecordSecondaryLines(record, { today });
+    const coverage = today ? renderTodayCarbCoverage(record) : '';
+    if (coverage) {
+      const carbLineIndex = secondary.indexOf(renderCarbs(record.mealCarbs));
+      if (carbLineIndex >= 0) secondary[carbLineIndex] += ` · ${coverage}`;
+      else secondary.unshift(coverage);
+    }
     return `
       <div>
         <div class="lee_lee_diabetes_timeline_type">${escapeHtml(content.title)}</div>
@@ -4132,7 +4192,7 @@
     const timestamp = getRecordTimestamp(record);
     return `
       <article class="lee_lee_diabetes_timeline_item${variant ? ` lee_lee_diabetes_timeline_item--${escapeHtml(variant)}` : ''}">
-        ${renderEntryCardContent(record)}
+        ${renderEntryCardContent(record, { today: variant === 'today' })}
         <div class="lee_lee_diabetes_timeline_footer">
           <time class="lee_lee_diabetes_timeline_time" datetime="${escapeHtml(new Date(timestamp).toISOString())}">${renderNumeric(formatTime(timestamp))}</time>
           ${actions}
@@ -7265,7 +7325,7 @@
       </div>`;
     const successContent = `
         <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-success" aria-hidden="true">✓</div>
-        <h1 id="pre-meal-timer-title">Entry Saved!</h1>
+        <h1 id="pre-meal-timer-title">Entry Saved</h1>
         <p class="lee_lee_diabetes_pre_meal_timer_message">Pre-meal timer started.</p>
         <div class="lee_lee_diabetes_pre_meal_timer_success_countdown"><span class="lee_lee_diabetes_pre_meal_timer_success_icon" aria-hidden="true">⏱</span><strong class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${remaining}</strong></div>
         <p class="lee_lee_diabetes_pre_meal_timer_success_hint">Ready to eat when the timer reaches 0.</p>
@@ -7297,17 +7357,20 @@
     const root = getRoot();
     if (!root || !record) return;
     const duration = Math.max(1, Math.round(Number(durationMinutes) || 15));
+    const actualInsulin = getRecordActualInsulin(record);
+    const actualInsulinConfirmation = actualInsulin == null ? ''
+      : `<p class="lee_lee_diabetes_pre_meal_timer_message">Insulin given: ${renderInsulin(actualInsulin)}</p>`;
     currentEditor = { mode: 'pre-meal-timer-offer', pendingTimerRecord: record, timerDurationMinutes: duration };
     root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" role="dialog" aria-modal="true" aria-labelledby="pre-meal-timer-title">
       <div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div>
       <section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--saved">
         <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-success" aria-hidden="true">✓</div>
-        <h1 id="pre-meal-timer-title">Entry Saved!</h1>
-        <p class="lee_lee_diabetes_pre_meal_timer_message">After insulin has been given, start the ${duration}-minute pre-meal timer.</p>
+        <h1 id="pre-meal-timer-title">Entry Saved</h1>
+        ${actualInsulinConfirmation}
         ${errorMessage ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(errorMessage)}</p>` : ''}
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_success_actions">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="start-pre-meal-timer">Insulin Given — Start ${duration}-Min Timer</button>
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="not-now-pre-meal-timer">Not Now</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="start-pre-meal-timer">Start ${duration}-Min Timer</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="not-now-pre-meal-timer">Done</button>
         </div>
       </section>
     </div>`);
@@ -7335,7 +7398,7 @@
     }
     const timer = service.start({ durationMinutes: settings.durationMinutes, sourceEntryId: record.id, sourceEntry: record });
     if (timer) renderPreMealTimerModal(timer, { startedFromSave: true });
-    else renderPreMealTimerOffer(record, settings.durationMinutes, 'The timer could not be started. Your entry is saved; you can try again or choose Not Now.');
+    else renderPreMealTimerOffer(record, settings.durationMinutes, 'The timer could not be started. Your entry is saved; you can try again or choose Done.');
   }
 
   function renderPreMealTimerStopConfirmation(timer) {
