@@ -5692,9 +5692,10 @@ test('Lee-Lee food upload failures appear beside Sync Now and in food attempt di
 test('LLT starts the pre-meal timer only from the post-save Insulin Given action', async ({ page }) => {
   await openLeeLeePreMealTimerTest(page, { durationMinutes: 3 });
   const { offer, entry } = await saveLeeLeeTimerEligibleMeal(page);
-  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toBeVisible();
-  await expect(offer).toContainText('After insulin has been given, start the 3-minute pre-meal timer.');
-  const start = offer.getByRole('button', { name: 'Insulin Given — Start 3-Min Timer' });
+  await expect(page.getByRole('heading', { name: 'Entry Saved', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entry Saved!', exact: true })).toHaveCount(0);
+  await expect(offer).not.toContainText('After insulin has been given');
+  const start = offer.getByRole('button', { name: 'Start 3-Min Timer' });
   await expect(start).toBeVisible();
   const savedState = await page.evaluate(() => ({
     timer: localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'),
@@ -5736,7 +5737,7 @@ test('LLT Not Now, zero-carb entries, and disabled setting never create a pre-me
   await openLeeLeePreMealTimerTest(page, { durationMinutes: 4 });
   const first = await saveLeeLeeTimerEligibleMeal(page);
   await expect(first.offer).toBeVisible();
-  await first.offer.getByRole('button', { name: 'Not Now' }).click();
+  await first.offer.getByRole('button', { name: 'Done' }).click();
   await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toHaveCount(0);
   const afterNotNow = await page.evaluate(() => ({
     timer: localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'),
@@ -5758,14 +5759,14 @@ test('LLT Not Now, zero-carb entries, and disabled setting never create a pre-me
 test('LLT defers an existing-timer conflict until explicit start and preserves all three choices', async ({ page }) => {
   await openLeeLeePreMealTimerTest(page, { durationMinutes: 4 });
   const first = await saveLeeLeeTimerEligibleMeal(page);
-  await first.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  await first.offer.getByRole('button', { name: 'Start 4-Min Timer' }).click();
   await page.locator('.lee_lee_diabetes_pre_meal_timer_panel').getByRole('button', { name: 'OK' }).click();
   const timerA = await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')));
 
   const second = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-03' });
   await expect(second.offer).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')).sourceEntryId)).toBe(timerA.sourceEntryId);
-  await second.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  await second.offer.getByRole('button', { name: 'Start 4-Min Timer' }).click();
   const conflictKeep = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
   await expect(conflictKeep.getByRole('heading', { name: 'Timer Already Running' })).toBeVisible();
   expect(await conflictKeep.locator('.lee_lee_diabetes_pre_meal_timer_conflict_time').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
@@ -5775,7 +5776,7 @@ test('LLT defers an existing-timer conflict until explicit start and preserves a
   await page.locator('.lee_lee_diabetes_pre_meal_timer_modal').getByRole('button', { name: 'Back to Today' }).click();
 
   const third = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-04' });
-  await third.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  await third.offer.getByRole('button', { name: 'Start 4-Min Timer' }).click();
   const conflictRestart = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
   await expect(conflictRestart.getByRole('heading', { name: 'Timer Already Running' })).toBeVisible();
   await conflictRestart.getByRole('button', { name: 'Restart Timer' }).click();
@@ -5785,14 +5786,15 @@ test('LLT defers an existing-timer conflict until explicit start and preserves a
   await page.locator('.lee_lee_diabetes_pre_meal_timer_modal').getByRole('button', { name: 'Back to Today' }).click();
 
   const fourth = await saveLeeLeeTimerEligibleMeal(page, { date: '2020-01-05' });
-  await fourth.offer.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' }).click();
+  await fourth.offer.getByRole('button', { name: 'Start 4-Min Timer' }).click();
   const beforeCancel = await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'));
   const conflictCancel = page.locator('.lee_lee_diabetes_pre_meal_timer_modal');
   await conflictCancel.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Insulin Given — Start 4-Min Timer' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entry Saved', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entry Saved!', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start 4-Min Timer' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBe(beforeCancel);
-  await page.getByRole('button', { name: 'Not Now' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
   const finalState = await page.evaluate(() => ({
     timer: JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1')),
     records: window.LeeLeeTrackerStorage.loadTrackerData().records,
@@ -5808,14 +5810,14 @@ test('LLT editing an existing carb entry does not reopen the fresh timer offer o
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   });
   const saved = await saveLeeLeeTimerEligibleMeal(page, { date: today });
-  await saved.offer.getByRole('button', { name: 'Not Now' }).click();
+  await saved.offer.getByRole('button', { name: 'Done' }).click();
   const edit = page.locator(`[data-action="edit-today-record"][data-id="${saved.entry.id}"]`);
   await expect(edit).toBeVisible();
   await edit.click();
   const form = page.locator('[data-lee-lee-editor]');
   await form.locator('[name="mealCarbs"]').fill('48');
   await form.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entry Saved!' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Entry Saved' })).toHaveCount(0);
   await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBeNull();
 });

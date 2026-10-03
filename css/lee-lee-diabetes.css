@@ -3318,3 +3318,10 @@
     page-break-inside: avoid;
   }
 }
+
+/* Today food snapshots share the existing card typography and wrapping. */
+.lee_lee_diabetes_food_contributions {
+  display: grid;
+  gap: 0.22rem;
+  margin-block: 0.45rem;
+}

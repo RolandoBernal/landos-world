@@ -69,7 +69,7 @@ function createTracker({ localStorage = createLocalStorage() } = {}) {
   context.window = context;
   context.globalThis = context;
   vm.runInNewContext(trackerSource, context);
-  return { storage: context.LeeLeeTrackerStorage, localStorage };
+  return { storage: context.LeeLeeTrackerStorage, reports: context.LeeLeeTrackerReports, localStorage };
 }
 
 function sampleRecord(overrides = {}) {
@@ -590,4 +590,97 @@ test('an explicitly saved bedtime value of 15 is never automatically rewritten',
   const loaded = createTracker({ localStorage }).storage.loadTrackerData();
   assert.equal(loaded.insulinPlans[0].bedtimeBaseUnits, 15);
   assert.equal(loaded.insulinPlans[0].insulinCarbRatioGrams, 15);
+});
+
+test('Issue 13 Today carb coverage uses saved raw component and leaves History unchanged', () => {
+  const { reports } = createTracker();
+  const base = sampleRecord({ eventType: 'check-insulin', mealCarbs: 36, rawCarbDose: 3,
+    suggestedCarbDoseUnits: 9, suggestedTotalUnits: 8, administeredInsulinUnits: 7,
+    suggestedBaseUnits: 4, suggestedCorrectionUnits: 2, temporaryEatingAdjustmentUnits: 0.5,
+    temporaryEatingAdjustmentApplied: true, insulinCarbRatioGrams: 15,
+    insulinPlanSnapshot: { insulinCarbRatioGrams: 15 } });
+  const original = JSON.stringify(base);
+  const today = reports.renderTimelineItem(base);
+  assert.match(today, /Suggested carb coverage: <span[^>]*>3<\/span> units/);
+  assert.doesNotMatch(reports.renderHistoryRecord(base), /Suggested carb coverage/);
+  assert.equal(JSON.stringify(base), original);
+  for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']) {
+    assert.match(reports.renderTimelineItem({ ...base, type }), /Suggested carb coverage:/);
+  }
+  for (const patch of [{ mealCarbs: 0 }, { type: 'Correction' }, { type: 'Bedtime' }, { eventType: 'meal' }]) {
+    assert.doesNotMatch(reports.renderTimelineItem({ ...base, ...patch }), /Suggested carb coverage/);
+  }
+  for (const rawCarbDose of [null, undefined, NaN, -1]) {
+    assert.match(reports.renderTimelineItem({ ...base, rawCarbDose }), /Suggested carb coverage unavailable/);
+  }
+  assert.match(reports.renderTimelineItem({ ...base, mealCarbs: 20, rawCarbDose: 20 / 12 }), /≈ <span[^>]*>1.67<\/span> units/);
+  assert.match(reports.renderTimelineItem({ ...base, rawCarbDose: 0 }), /<span[^>]*>0<\/span> units/);
+});
+
+test('Issue 13 food rows preserve saved contributions, quantity, decimals, manual foods and meal snapshots', () => {
+  const { reports, storage } = createTracker();
+  const components = [
+    { componentType: 'food', foodId: 'my-food', nameSnapshot: 'Saved My Food', emojiSnapshot: '🥪', quantity: 2, carbsPerServing: 23, carbTotal: 46, sourceTypeSnapshot: 'user' },
+    { componentType: 'manual', nameSnapshot: 'Sports Drink', carbTotal: 18 },
+    { componentType: 'food', nameSnapshot: 'Decimal food', quantity: 1, carbsPerServing: 7.25, carbTotal: 7.25 },
+    { componentType: 'food', nameSnapshot: 'Lean Beef Jerky', quantity: 1, carbsPerServing: 0, carbTotal: 0 },
+    { componentType: 'manual', nameSnapshot: 'Saved standalone meal', carbTotal: 12.4999999997 },
+  ];
+  const record = sampleRecord({ eventType: 'check-insulin', mealCarbs: 83.75, rawCarbDose: 83.75 / 12, mealComponents: components });
+  storage.updateTrackerData(doc => ({ ...doc, foodLibrary: [{ id: 'my-food', name: 'Changed My Food', carbs: 1 }], savedMeals: [{ id: 'changed-meal', name: 'Changed Meal', totalCarbs: 1 }] }));
+  const before = JSON.stringify(record);
+  const html = reports.renderTimelineItem(record);
+  assert.equal((html.match(/class="lee_lee_diabetes_food_contribution"/g) || []).length, 5);
+  for (const [name, value] of [['Saved My Food', 46], ['Sports Drink', 18], ['Decimal food', 7.25], ['Lean Beef Jerky', 0], ['Saved standalone meal', 12.5]]) {
+    assert.ok(html.includes(`${name} · <span class="lee_lee_diabetes_numeric">${value}</span> g`));
+  }
+  assert.doesNotMatch(html, /Changed My Food|Changed Meal|12\.499999/);
+  assert.match(html, /Suggested carb coverage/);
+  assert.equal(JSON.stringify(record), before);
+  assert.doesNotMatch(reports.renderHistoryRecord(record), /food_contribution/);
+  assert.equal(components.reduce((sum, c) => sum + c.carbTotal, 0).toFixed(2), record.mealCarbs.toFixed(2));
+});
+
+test('Issue 13 food fallback uses only complete entry-local snapshots and never repairs totals', () => {
+  const { reports } = createTracker();
+  const record = sampleRecord({ eventType: 'check-insulin', mealCarbs: 999, rawCarbDose: null, mealComponents: [
+    { nameSnapshot: 'Two servings', quantity: 2, carbsPerServing: 23 },
+    { nameSnapshot: 'Missing amount', foodId: 'library-reference' },
+    { nameSnapshot: '<unsafe>', carbTotal: 7.25 },
+    { nameSnapshot: 'Missing quantity', carbsPerServing: 8 },
+  ] });
+  const html = reports.renderTimelineItem(record);
+  assert.match(html, /Two servings · <span[^>]*>46<\/span> g/);
+  assert.match(html, /Missing amount · Carbs unavailable/);
+  assert.match(html, /Missing quantity · Carbs unavailable/);
+  assert.match(html, /&lt;unsafe&gt; · <span[^>]*>7.25<\/span> g/);
+  assert.match(html, />999<\/span> g carbs/);
+  assert.doesNotMatch(reports.renderTimelineItem({ ...record, mealComponents: [] }), /food_contributions|Unknown food/);
+  assert.match(reports.renderTimelineItem({ ...record, mealCarbs: 0, mealComponents: [{ nameSnapshot: 'Zero food', carbTotal: 0 }] }), /Zero food · <span[^>]*>0<\/span> g/);
+});
+
+test('Issue 13 legacy saved foods retain direct/serving semantics without library lookup', () => {
+  const { reports } = createTracker();
+  const html = reports.renderTimelineItem(sampleRecord({ eventType: 'check-insulin', mealCarbs: 33, foods: [
+    { name: 'Legacy servings', inputMode: 'servings', servings: 2, carbsPerServing: 7.5 },
+    { name: 'Legacy direct', directCarbs: 18 },
+    { name: 'Legacy missing', savedFoodId: 'not-looked-up' },
+  ] }));
+  assert.match(html, /Legacy servings · <span[^>]*>15<\/span> g/);
+  assert.match(html, /Legacy direct · <span[^>]*>18<\/span> g/);
+  assert.match(html, /Legacy missing · Carbs unavailable/);
+});
+
+test('Issue 13 Today labels saved actual insulin as given, including zero and decimals', () => {
+  const { reports } = createTracker();
+  for (const value of [0, 0.5, 8.5, 11.5]) {
+    const record = sampleRecord({ eventType: 'check-insulin', mealCarbs: 142, rawCarbDose: 142 / 12,
+      administeredInsulinUnits: value, insulinUnits: 99, suggestedTotalUnits: 12 });
+    const html = reports.renderTimelineItem(record);
+    assert.match(html, new RegExp(`<span class="lee_lee_diabetes_numeric">${String(value).replace('.', '\\.')}<\\/span> units given`));
+    assert.match(html, /Suggested carb coverage: ≈ <span[^>]*>11.83<\/span> units/);
+    assert.doesNotMatch(reports.renderHistoryRecord(record), /units given/);
+  }
+  const fallback = reports.renderTimelineItem(sampleRecord({ eventType: 'check-insulin', bloodSugar: null, mealCarbs: null, administeredInsulinUnits: 1 }));
+  assert.match(fallback, /<span[^>]*>1<\/span> unit given/);
 });

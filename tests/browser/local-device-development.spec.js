@@ -86,7 +86,7 @@ for (const originalContext of ['Breakfast', 'Lunch']) {
     await form.getByLabel('Insulin Actually Given').fill('5');
     await form.getByRole('button', { name: 'Save', exact: true }).click();
     await page.getByRole('button', { name: 'Confirm and Save' }).click();
-    await page.getByRole('button', { name: 'Not Now', exact: true }).click();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
     const saved = await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().records[0]);
     expect(saved.doseCalculationStatus).toBe('local-development-calculated');
     expect(saved.insulinPlanId).toBeTruthy();
