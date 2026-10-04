@@ -4687,7 +4687,7 @@
   function renderSavedMealLibraryRow(meal) {
     const componentSummary = meal.components.map(renderMealComponentLabel).filter(Boolean).join(' · ');
     return `
-      <article class="lee_lee_diabetes_food_item">
+      <article class="lee_lee_diabetes_food_item lee_lee_diabetes_food_item--library">
         <div class="lee_lee_diabetes_food_item_content">
           <strong>${meal.emoji ? `<span class="lee_lee_diabetes_food_emoji" aria-hidden="true">${escapeHtml(meal.emoji)}</span>` : ''}${escapeHtml(meal.name)}</strong>
           <p>${renderCarbs(meal.totalCarbs)}</p>
