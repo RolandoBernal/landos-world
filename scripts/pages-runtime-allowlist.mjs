@@ -27,6 +27,11 @@ export const PAGES_RUNTIME_FILES = [
   'js/landos-world-modal-utils.js',
   'js/lee-lee-diabetes-tracker.js',
   'js/lee-lee-pre-meal-timer.js',
+  'js/lee-lee-dexcom-sensor.js',
+  'js/lee-lee-deadline-alerts.js',
+  'js/lee-lee-sensor-sync.js',
+  'js/lee-lee-sensor-ui.js',
+
   'js/lee-lees-tracker-config.js',
   'js/lee-lees-tracker-sync.js',
   'js/maintenance-total-v2.js',

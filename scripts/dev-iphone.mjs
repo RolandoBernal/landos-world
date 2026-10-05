@@ -2,6 +2,7 @@
 import { createReadStream } from 'node:fs';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import https from 'node:https';
 import { networkInterfaces } from 'node:os';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -112,8 +113,8 @@ function addLocalDeviceMarkup(html, authMetadata = null) {
   if (authMetadata) {
     // Inline trusted metadata prevents a failed auxiliary request from reverting to production.
     const previewScript = `<script>${createMetadataScript(authMetadata).replaceAll('<', '\\u003c')}</script>`;
-    const previewBadge = badge.replaceAll('LOCAL DEV', 'AUTH PREVIEW').replace('Local development environment', 'Authentication preview — Production data access disabled');
-    const warning = '<div role="status" style="position:fixed;bottom:0;left:0;right:0;z-index:2147483000;background:#332600;color:#fff3c4;text-align:center;font:12px system-ui;padding:6px">Production data access disabled. HTTPS required before credential testing.</div>';
+    const previewBadge = badge.replaceAll('LOCAL DEV', 'AUTH PREVIEW').replace('Local development environment', authMetadata.sensorPreview ? 'Authentication preview — Live sensor access enabled; clinical sync disabled' : 'Authentication preview — Production data access disabled');
+    const warning = '<div role="status" style="position:fixed;bottom:0;left:0;right:0;z-index:2147483000;background:#332600;color:#fff3c4;text-align:center;font:12px system-ui;padding:6px">' + (authMetadata.sensorPreview ? 'Live sensor access enabled for acceptance testing. Clinical sync remains disabled.' : 'Production data access disabled. HTTPS required before credential testing.') + '</div>';
     return html.replace(/<script src="js\/landos-world-build-metadata\.js[^\"]*"><\/script>/, '')
       .replace('</head>', `${previewScript}</head>`).replace('</body>', `${previewBadge}${warning}</body>`);
   }
@@ -139,7 +140,7 @@ function responseHeaders(filePath) {
   };
 }
 
-export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetadata, authOrigin = null }) {
+export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetadata, authOrigin = null, tls = null, sensorPreview = false }) {
   if (authOrigin && (new URL(authOrigin).protocol !== 'https:' || new URL(authOrigin).origin !== authOrigin)) {
     throw new Error('A valid HTTPS authentication origin is required.');
   }
@@ -150,9 +151,16 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
     throw new Error('A valid IPv4 subnet mask is required for LAN-only access.');
   }
   if (typeof getMetadata !== 'function') throw new Error('An explicit local-device metadata provider is required.');
+  if (sensorPreview && (!authOrigin || !tls?.cert || !tls?.key)) throw new Error('Sensor preview requires explicit HTTPS Auth Preview.');
+  if (tls && (!tls.cert || !tls.key)) throw new Error('HTTPS requires both TLS certificate and private key.');
+  const previewMetadata = async () => {
+    const metadata = await getMetadata();
+    if (authOrigin && metadata?.environment !== 'local-auth-preview') throw new Error('Preview metadata missing');
+    return authOrigin ? { ...metadata, previewHttps: Boolean(tls), sensorPreview } : metadata;
+  };
   const rootPath = resolve(root);
 
-  return createServer(async (request, response) => {
+  const handler = async (request, response) => {
     const remoteAddress = request.socket.remoteAddress || '';
     if (!isSameSubnetIPv4(remoteAddress, bindAddress.address, bindAddress.netmask)) {
       response.writeHead(403, { 'Cache-Control': 'no-store' });
@@ -175,8 +183,7 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
 
     if (requestPath === METADATA_PATH) {
       try {
-        const metadata = await getMetadata();
-        if (authOrigin && metadata?.environment !== 'local-auth-preview') throw new Error('Preview metadata missing');
+        const metadata = await previewMetadata();
         response.writeHead(200, responseHeaders(METADATA_FILE));
         response.end(request.method === 'HEAD' ? undefined : createMetadataScript(metadata));
       } catch {
@@ -203,21 +210,20 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
     }
 
     try {
-      let previewMetadata = null;
+      let shellMetadata = null;
       if (authOrigin && relativePath === 'index.html') {
-        previewMetadata = await getMetadata();
-        if (previewMetadata?.environment !== 'local-auth-preview') throw new Error('Preview metadata missing');
+        shellMetadata = await previewMetadata();
       }
       response.writeHead(200, {
         ...responseHeaders(filePath),
-        ...(authOrigin ? { 'Content-Security-Policy': `connect-src 'self' ${authOrigin}/auth/v1/; form-action 'self'; worker-src 'none'` } : {}),
+        ...(authOrigin ? { 'Content-Security-Policy': `connect-src 'self' ${authOrigin}/auth/v1/${sensorPreview ? ` ${authOrigin}/rest/v1/rpc/llt_get_sensor_snapshot ${authOrigin}/rest/v1/rpc/llt_mutate_sensor_cycle ${authOrigin.replace('https:', 'wss:')}/realtime/v1/websocket` : ''}; form-action 'self'; worker-src 'none'` } : {}),
       });
       if (request.method === 'HEAD') {
         response.end();
         return;
       }
       if (relativePath === 'index.html') {
-        const html = addLocalDeviceMarkup(await readFile(filePath, 'utf8'), previewMetadata);
+        const html = addLocalDeviceMarkup(await readFile(filePath, 'utf8'), shellMetadata);
         response.end(html);
         return;
       }
@@ -226,27 +232,52 @@ export function createIPhoneDevServer({ root = REPO_ROOT, bindAddress, getMetada
       if (!response.headersSent) response.writeHead(500, { 'Cache-Control': 'no-store' });
       response.end('Unable to serve approved runtime file');
     }
-  });
+  };
+  return tls ? https.createServer(tls, handler) : createServer(handler);
 }
 
-function parseArgs() {
-  const args = process.argv.slice(2);
+export async function readPreviewTls({ https, certPath, keyPath }) {
+  if (!https) {
+    if (certPath || keyPath) throw new Error('TLS paths require --https.');
+    return null;
+  }
+  if (!certPath || !keyPath) throw new Error('HTTPS requires --tls-cert and --tls-key.');
+  try {
+    const [cert, key] = await Promise.all([readFile(resolve(certPath)), readFile(resolve(keyPath))]);
+    return { cert, key };
+  } catch { throw new Error('Unable to read TLS certificate or private key; HTTPS was not started.'); }
+}
+
+export function parseArgs(args = process.argv.slice(2)) {
   const portIndex = args.indexOf('--port');
   const authPreview = args.includes('--auth-preview');
-  return { port: portIndex >= 0 ? Number(args[portIndex + 1]) : authPreview ? 8769 : DEFAULT_PORT, authPreview };
+  const https = args.includes('--https');
+  const sensorPreview = args.includes('--sensor-preview');
+  const value = (flag) => {
+    if (!args.includes(flag)) return null;
+    const result = args[args.indexOf(flag) + 1];
+    if (!result || result.startsWith('--')) throw new Error(`${flag} requires an explicit file path.`);
+    return result;
+  };
+  if (sensorPreview && (!authPreview || !https)) throw new Error('Sensor preview requires --auth-preview and --https.');
+  return { loopback: args.includes('--loopback'), https, sensorPreview, certPath: value('--tls-cert'), keyPath: value('--tls-key'), port: portIndex >= 0 ? Number(args[portIndex + 1]) : authPreview ? 8769 : DEFAULT_PORT, authPreview };
 }
 
 async function main() {
-  const { port, authPreview } = parseArgs();
+  const options = parseArgs();
+  const { port, authPreview, https, sensorPreview } = options;
+  const tls = await readPreviewTls(options);
   if (authPreview && port === DEFAULT_PORT) throw new Error('Authentication preview must use a separate port from local-device development.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port: ${port}`);
-  const lan = getMacLanInterfaceAddress();
+  const lan = options.loopback
+    ? { address: '127.0.0.1', netmask: '255.0.0.0', interfaceName: 'loopback' }
+    : getMacLanInterfaceAddress();
   const environment = authPreview ? 'local-auth-preview' : 'local-device';
   const authOrigin = authPreview ? await readAuthenticationPreviewConfig() : null;
   const metadata = await generateMetadata({ environment, includeUntracked: false, write: !authPreview });
   const server = createIPhoneDevServer({
     bindAddress: lan,
-    authOrigin,
+    authOrigin, tls, sensorPreview,
     getMetadata: () => generateMetadata({ environment, includeUntracked: false, write: !authPreview }),
   });
   server.on('error', (error) => {
@@ -257,10 +288,10 @@ async function main() {
   });
   server.listen(port, lan.address, () => {
     if (authPreview) {
-      console.log(`Lando’s World — AUTH PREVIEW\nURL: http://${lan.address}:${port}/#/lee-lees-tracker\nBranch: ${metadata.branch}\nProduction data access disabled.\nHTTP is for structural inspection only: DO NOT enter real credentials. HTTPS is required before credential testing.\nNo certificates, trust settings, production data or service workers are changed.\nStop with Ctrl-C.`);
+      console.log(`Lando’s World — AUTH PREVIEW\nURL: ${https ? 'https' : 'http'}://${lan.address}:${port}/#/lee-lees-tracker\nBranch: ${metadata.branch}\n${sensorPreview ? 'Live sensor access enabled for acceptance testing. Clinical sync remains disabled.' : 'Production data access disabled.'}\n${https ? 'Credentials require a certificate trusted by this device.' : 'HTTP is for structural inspection only: DO NOT enter real credentials. HTTPS is required before credential testing.'}\nNo certificates, trust settings, production data or service workers are changed.\nStop with Ctrl-C.`);
       return;
     }
-    console.log(`Lando’s World — Local iPhone Development\n\nURL:       http://${lan.address}:${port}/\nNetwork:   ${lan.interfaceName} (private IPv4; same-subnet clients only)\nBranch:    ${metadata.branch}\nCommit:    ${metadata.commit}\nSource:    ${metadata.dirty ? 'Modified' : 'Clean'}\n\nUse Safari on the iPhone and keep both devices on the same trusted local network.\nmacOS Firewall may ask you to allow incoming connections for Node.js; do not disable the firewall.\nPWA installation, service workers, offline behavior, and deployed-release updates are disabled/not representative.\nLLT authentication and Supabase/production sync are disabled; local changes stay in this browser origin.\nStop the server with Ctrl-C.`);
+    console.log(`Lando’s World — Local iPhone Development\n\nURL:       ${https ? 'https' : 'http'}://${lan.address}:${port}/\nNetwork:   ${lan.interfaceName} (private IPv4; same-subnet clients only)\nBranch:    ${metadata.branch}\nCommit:    ${metadata.commit}\nSource:    ${metadata.dirty ? 'Modified' : 'Clean'}\n\nUse Safari on the iPhone and keep both devices on the same trusted local network.\nmacOS Firewall may ask you to allow incoming connections for Node.js; do not disable the firewall.\nPWA installation, service workers, offline behavior, and deployed-release updates are disabled/not representative.\nLLT authentication and Supabase/production sync are disabled; local changes stay in this browser origin.\nStop the server with Ctrl-C.`);
   });
   const stop = () => server.close(() => process.exit(0));
   process.once('SIGINT', stop);

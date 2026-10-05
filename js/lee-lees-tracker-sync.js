@@ -203,6 +203,12 @@
     return globalThis.LandoWorldBuildMetadata?.environment === 'local-auth-preview';
   }
 
+  function isSensorAuthenticationPreview() {
+    const metadata = globalThis.LandoWorldBuildMetadata;
+    return isAuthenticationPreview() && metadata.sensorPreview === true
+      && metadata.previewHttps === true && globalThis.isSecureContext === true;
+  }
+
   // Preview policy is restrictive, never an authorization grant. Auth still owns access.
   function createAuthenticationPreviewTransport(url, fetchImplementation) {
     const origin = new URL(url).origin;
@@ -211,23 +217,74 @@
     }
     return async (input, options) => {
       const target = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
-      if (target.origin !== origin || target.username || target.password
-        || !['/auth/v1/token', '/auth/v1/user', '/auth/v1/logout', '/auth/v1/settings'].includes(target.pathname)) {
+      const auth = ['/auth/v1/token', '/auth/v1/user', '/auth/v1/logout', '/auth/v1/settings'].includes(target.pathname);
+      const sensor = isSensorAuthenticationPreview() && !target.search
+        && ['/rest/v1/rpc/llt_get_sensor_snapshot', '/rest/v1/rpc/llt_mutate_sensor_cycle'].includes(target.pathname)
+        && String(options?.method || input?.method || 'GET').toUpperCase() === 'POST';
+      if (target.origin !== origin || target.username || target.password || (!auth && !sensor)) {
         throw new Error('Production data access disabled.');
       }
-      // Do not permit a redirect from an Auth endpoint into a data endpoint.
       return fetchImplementation(input, { ...options, redirect: 'error' });
     };
   }
 
-  function restrictAuthenticationPreviewClient(client) {
+  function restrictAuthenticationPreviewClient(client, getSession = () => null) {
     const denied = () => { throw new Error('Production data access disabled.'); };
-    return new Proxy(client, {
+    const channels = new Map();
+    const uid = () => isSensorAuthenticationPreview() && isUsableSession(getSession()) ? getSession().user.id : null;
+    const facade = {
+      auth: client.auth,
+      rpc(name, parameters, options) {
+        if (!uid() || !['llt_get_sensor_snapshot', 'llt_mutate_sensor_cycle'].includes(name) || options !== undefined) return denied();
+        return client.rpc(name, parameters);
+      },
+      channel(name, options) {
+        const owner = uid();
+        if (!owner || name !== `llt-sensor-${owner}` || options !== undefined) return denied();
+        const raw = client.channel(name);
+        let registered = false;
+        let closed = false;
+        const current = () => { if (closed || uid() !== owner) denied(); };
+        const channel = Object.freeze({
+          on(type, filter, callback) {
+            current();
+            if (registered || type !== 'postgres_changes' || typeof callback !== 'function'
+              || Object.keys(filter || {}).sort().join(',') !== 'event,filter,schema,table'
+              || filter.event !== '*' || filter.schema !== 'public' || filter.table !== 'llt_sensor_contexts'
+              || filter.filter !== `user_id=eq.${owner}`) return denied();
+            registered = true;
+            raw.on(type, { event: '*', schema: 'public', table: 'llt_sensor_contexts', filter: `user_id=eq.${owner}` }, (...args) => { if (!closed && uid() === owner) callback(...args); });
+            return channel;
+          },
+          subscribe(callback) {
+            current();
+            if (!registered) return denied();
+            raw.subscribe((...args) => { if (!closed && uid() === owner) callback?.(...args); });
+            return channel;
+          },
+          unsubscribe() {
+            if (closed) return denied();
+            closed = true;
+            channels.delete(channel);
+            return raw.unsubscribe();
+          },
+        });
+        channels.set(channel, () => { closed = true; return client.removeChannel(raw); });
+        return channel;
+      },
+      removeChannel(channel) {
+        const remove = channels.get(channel);
+        if (!remove) return denied();
+        channels.delete(channel);
+        return remove();
+      },
+    };
+    return new Proxy(Object.freeze(facade), {
       get(target, property) {
-        if (['realtime', 'storage', 'functions'].includes(property)) throw new Error('Production data access disabled.');
-        if (['from', 'rpc', 'channel'].includes(property)) return denied;
-        const value = Reflect.get(target, property, target);
-        return typeof value === 'function' ? value.bind(target) : value;
+        if (property === 'then') return undefined;
+        if (Object.hasOwn(target, property)) return target[property];
+        if (['realtime', 'storage', 'functions'].includes(property)) return denied();
+        return denied;
       },
     });
   }
@@ -1144,7 +1201,7 @@
       }
       return {
         state: isAuthenticationPreview() ? 'auth-preview' : state,
-        message: isAuthenticationPreview() ? 'Production data access disabled; shared settings are not verified.' : message,
+        message: isAuthenticationPreview() ? (isSensorAuthenticationPreview() ? 'Clinical sync disabled; shared settings are not verified.' : 'Production data access disabled; shared settings are not verified.') : message,
         hasRemote: !isAuthenticationPreview() && Boolean(cache.version),
         version: isAuthenticationPreview() ? null : cache.version,
         updatedAt: cache.updatedAt,
@@ -1178,7 +1235,7 @@
         message = 'Local-device development — Supabase authentication and sync are disabled.';
       } else if (isAuthenticationPreview()) {
         state = 'auth-preview';
-        message = 'Authentication preview — Production data access disabled.';
+        message = isSensorAuthenticationPreview() ? 'Sensor acceptance preview — Live sensor access enabled; clinical sync disabled.' : 'Authentication preview — Production data access disabled.';
       } else if (!config.configured) {
         state = 'config-needed';
         message = 'Supabase setup needed';
@@ -1219,6 +1276,7 @@
         configured: config.configured && !localOnly,
         localOnly,
         productionDataDisabled: isAuthenticationPreview(),
+        sensorPreviewEnabled: isSensorAuthenticationPreview(),
         signedIn: isUsableSession(session),
         authResolved,
         deviceIdentity: getDeviceIdentity(),
@@ -1377,7 +1435,7 @@
             detectSessionInUrl: true,
           },
         });
-        supabaseClient = preview ? restrictAuthenticationPreviewClient(client) : client;
+        supabaseClient = preview ? restrictAuthenticationPreviewClient(client, () => session) : client;
       }
       return supabaseClient;
     }
@@ -2663,6 +2721,10 @@
     }
 
     return {
+      getSensorConnection() {
+        if (isLocalDeviceDevelopment() || (isAuthenticationPreview() && !isSensorAuthenticationPreview()) || !isUsableSession(session) || !supabaseClient) return null;
+        return { uid: session.user.id, client: supabaseClient };
+      },
       initialize,
       signIn,
       signOut,

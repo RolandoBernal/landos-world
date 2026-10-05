@@ -2286,3 +2286,102 @@ test('explicit local-device mode exposes local-only LLT state without constructi
   assert.equal(clientCreations, 0);
   assert.equal(remoteRequests, 0);
 });
+
+
+test('sensor preview permits only POST sensor transport and exact authenticated channel capabilities', async () => {
+  const context = createSyncContext({ buildMetadata: { environment: 'local-auth-preview', previewHttps: true, sensorPreview: true } });
+  const api = context.LeeLeeTrackerSync;
+  const calls = [];
+  const transport = api.createAuthenticationPreviewTransport('https://example.supabase.co', async (...args) => { calls.push(args); return {}; });
+  for (const name of ['llt_get_sensor_snapshot', 'llt_mutate_sensor_cycle']) await transport(`https://example.supabase.co/rest/v1/rpc/${name}`, { method: 'POST' });
+  for (const [path, method] of [['/rest/v1/rpc/other', 'POST'], ['/rest/v1/records', 'POST'], ['/rest/v1/rpc/llt_get_sensor_snapshot', 'GET'], ['/rest/v1/rpc/llt_get_sensor_snapshot?override=1', 'POST']]) {
+    await assert.rejects(transport(`https://example.supabase.co${path}`, { method }), /disabled/);
+  }
+  assert.equal(calls.length, 2);
+  let session = null;
+  const raw = { auth: {}, rpc: (name) => name, channel: () => ({ on() {}, subscribe() {}, unsubscribe() { return 'closed'; } }), removeChannel: () => 'removed' };
+  const client = api.restrictAuthenticationPreviewClient(raw, () => session);
+  assert.throws(() => client.rpc('llt_get_sensor_snapshot'), /disabled/);
+  session = { user: { id: 'user-a' }, expires_at: Date.now() / 1000 + 3600 };
+  assert.equal(client.rpc('llt_get_sensor_snapshot'), 'llt_get_sensor_snapshot');
+  assert.equal(client.rpc('llt_mutate_sensor_cycle', {}), 'llt_mutate_sensor_cycle');
+  for (const method of ['from', 'schema', 'removeAllChannels']) assert.throws(() => client[method]('anything'), /disabled/);
+  for (const prop of ['storage', 'functions', 'realtime']) assert.throws(() => client[prop], /disabled/);
+  assert.throws(() => client.rpc('other'), /disabled/);
+  assert.throws(() => client.rpc('llt_get_sensor_snapshot', {}, { head: true }), /disabled/);
+  for (const name of ['llt-sensor-user-b', 'other']) assert.throws(() => client.channel(name), /disabled/);
+  const filter = { event: '*', schema: 'public', table: 'llt_sensor_contexts', filter: 'user_id=eq.user-a' };
+  for (const invalid of [{ ...filter, schema: 'other' }, { ...filter, table: 'records' }, { ...filter, filter: 'user_id=eq.user-b' }, { ...filter, event: 'INSERT' }]) {
+    const channel = client.channel('llt-sensor-user-a');
+    assert.throws(() => channel.on('postgres_changes', invalid, () => {}), /disabled/);
+    client.removeChannel(channel);
+  }
+  for (const type of ['broadcast', 'presence']) {
+    const channel = client.channel('llt-sensor-user-a');
+    assert.throws(() => channel.on(type, filter, () => {}), /disabled/);
+    client.removeChannel(channel);
+  }
+  const channel = client.channel('llt-sensor-user-a').on('postgres_changes', filter, () => {}).subscribe(() => {});
+  assert.equal(channel.send, undefined);
+  assert.equal(channel.track, undefined);
+  assert.throws(() => client.removeChannel({}), /disabled/);
+  session = { user: { id: 'user-b' }, expires_at: Date.now() / 1000 + 3600 };
+  assert.throws(() => channel.subscribe(), /disabled/);
+  assert.equal(client.removeChannel(channel), 'removed');
+  assert.throws(() => channel.unsubscribe(), /disabled/);
+  client.channel('llt-sensor-user-b').on('postgres_changes', { ...filter, filter: 'user_id=eq.user-b' }, () => {}).subscribe();
+  session = null;
+  assert.throws(() => client.rpc('llt_get_sensor_snapshot'), /disabled/);
+});
+
+test('sensor connection requires usable authentication and preserves all clinical queue guards', async () => {
+  const supabase = createMockSupabase();
+  let listener;
+  supabase.client.auth.onAuthStateChange = (callback) => { listener = callback; return {}; };
+  supabase.client.from = () => { throw new Error('CLINICAL CANARY'); };
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' }, buildMetadata: { environment: 'local-auth-preview', sensorPreview: true, previewHttps: true } });
+  const repo = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  assert.equal(repo.getSensorConnection(), null);
+  await repo.initialize();
+  assert.ok(repo.getSensorConnection());
+  for (const method of ['syncNow', 'syncSharedSettings', 'syncFoodLibrary', 'syncSettingsAudit', 'processQueue', 'processSharedSettingsQueue', 'processFoodLibraryQueue']) await repo[method]();
+  assert.equal(repo.queueUpsert(record()), null);
+  listener('SIGNED_IN', { user: { id: 'changed' }, expires_at: Date.now() / 1000 + 3600 });
+  assert.equal(repo.getSensorConnection().uid, 'changed');
+  listener('TOKEN_REFRESHED', { user: { id: 'changed' }, expires_at: 1 });
+  assert.equal(repo.getSensorConnection(), null);
+  listener('SIGNED_OUT', null);
+  assert.equal(repo.getSensorConnection(), null);
+});
+
+
+test('sensor opt-in requires every secure metadata condition and cannot broaden Realtime through mutable filters', async () => {
+  for (const scenario of [
+    { buildMetadata: { environment: 'local-auth-preview', previewHttps: true } },
+    { buildMetadata: { environment: 'local-auth-preview', sensorPreview: true } },
+    { buildMetadata: { environment: 'local-device', sensorPreview: true, previewHttps: true } },
+    { buildMetadata: { environment: 'local-auth-preview', sensorPreview: true, previewHttps: true }, isSecureContext: false },
+  ]) {
+    const context = createSyncContext(scenario);
+    const transport = context.LeeLeeTrackerSync.createAuthenticationPreviewTransport('https://example.supabase.co', () => { throw new Error('CANARY'); });
+    await assert.rejects(transport('https://example.supabase.co/rest/v1/rpc/llt_get_sensor_snapshot', { method: 'POST' }), /disabled/);
+  }
+  const context = createSyncContext({ buildMetadata: { environment: 'local-auth-preview', sensorPreview: true, previewHttps: true } });
+  let session = { user: { id: 'owner' }, expires_at: Date.now() / 1000 + 3600 };
+  let registeredFilter, eventCallback, statusCallback, events = 0;
+  const raw = { auth: {}, channel: () => ({ on(_type, filter, callback) { registeredFilter = filter; eventCallback = callback; }, subscribe(callback) { statusCallback = callback; }, unsubscribe() {} }), removeChannel() {} };
+  const client = context.LeeLeeTrackerSync.restrictAuthenticationPreviewClient(raw, () => session);
+  const otherClient = context.LeeLeeTrackerSync.restrictAuthenticationPreviewClient(raw, () => session);
+  const filter = { event: '*', schema: 'public', table: 'llt_sensor_contexts', filter: 'user_id=eq.owner' };
+  const channel = client.channel('llt-sensor-owner').on('postgres_changes', filter, () => { events++; }).subscribe(() => { events++; });
+  filter.table = 'records';
+  assert.equal(registeredFilter.table, 'llt_sensor_contexts');
+  assert.throws(() => otherClient.removeChannel(channel), /disabled/);
+  eventCallback(); statusCallback('SUBSCRIBED');
+  assert.equal(events, 2);
+  session = null;
+  eventCallback(); statusCallback('SUBSCRIBED');
+  assert.equal(events, 2);
+  channel.unsubscribe();
+  assert.throws(() => client.removeChannel(channel), /disabled/);
+});
