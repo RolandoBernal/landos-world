@@ -64,11 +64,15 @@
 }
 
 .app_theme--landos-world-settings .digit_clock_menu_toggle.lando_settings_link {
-  color: #ffffff;
+  color: var(--app-accent-soft);
 }
 
 #lando-home-view .lando_settings_link.digit_clock_menu_toggle {
   color: #ffffff;
+}
+
+:root[data-theme="light"] #lando-home-view .lando_settings_link.digit_clock_menu_toggle {
+  color: var(--color-text);
 }
 
 #lando-settings-view {
