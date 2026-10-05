@@ -790,3 +790,72 @@ GitHub preflight reports main unprotected with zero required check contexts; exi
 Recovery: rollback risk MEDIUM (shared sensor UI/new cache release). Revert the feature merge through a new reviewed PR, retain production sensor schema and all sensor/clinical data, and allow existing Pages workflow to redeploy the revert commit with a fresh SHA identity. Do not drop tables, replay the migration, reset browser storage or modify the real sensor. Previous known-good main is 25b360affe2fcdd0f157eafd55323f4e5155705b.
 
 Physical-iPhone acceptance remains PENDING after this controlled deployment. No final acceptance claim is authorized yet.
+
+
+## 2026-10-05 — Controlled deployment verified; live physical-iPhone acceptance PENDING
+
+Release feature commit: `5a7d079379f188b32a6d91afe3dc6c6cc37adc2c` on `feature/llt-alerts-dexcom-tracker`. Push succeeded. PR [#140](https://github.com/RolandoBernal/landos-world/pull/140) attached to this chat and merged through the normal merge-commit process under Rolando's explicit authorization. Exact head/base checked before merge; mergeability MERGEABLE/CLEAN. Required PR CI: none configured (zero required contexts, zero check runs/statuses); no failed check was bypassed. Local static, 455 unit and 74 browser checks passed as recorded above.
+
+Merge commit: `ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0`. Local main and origin/main synchronized to that SHA while preserving the feature checkout and unrelated files. Merge tree equals the validated feature tree byte-for-byte. No direct-to-main push, branch deletion or manually triggered deployment.
+
+Automatic Pages [run 37342665188](https://github.com/RolandoBernal/landos-world/actions/runs/37342665188), run number 23: build SUCCESS, deploy SUCCESS, overall SUCCESS. Release label `2026-10-05-23`; built at `2026-10-05T16:40:49.000Z`. Service-worker/cache identity is the full merge SHA. Production metadata environment remains production with no sensor-preview capability flags.
+
+Live served proof: HTML, LLT CSS, tracker/sync and all four new sensor/alert JavaScript modules exactly match merge-commit bytes. Service worker exactly matches the SHA/release/build-time/run substitutions in the committed template. Runtime metadata exactly matches deployment-version.json. This is asset identity evidence, not merely HTTP 200.
+
+- `index.html` SHA-256 `acc400c667e9a504c648a41cafd36731d704da2d1c1de3a8448196239cc30dfb` — MATCH
+- `css/lee-lee-diabetes.css` SHA-256 `e4b18d1bc644c0507f357675edc326919b3b92e5b32098161c91f21ce96466fb` — MATCH
+- `js/lee-lee-diabetes-tracker.js` SHA-256 `81e7b1a6500f3b75ea7581e126cf0231df5f9cb650acaea6a9a64d2426f8e8a9` — MATCH
+- `js/lee-lees-tracker-sync.js` SHA-256 `b4264f99a1215c2bc8b58ce61445b0b9f8d876061beaa398a47dca4ad1a59e44` — MATCH
+- `js/lee-lee-dexcom-sensor.js` SHA-256 `97f9362a8092b2f33ac73625704da2c7cd3c8ba77f9166e996aac74ef369b553` — MATCH
+- `js/lee-lee-deadline-alerts.js` SHA-256 `0d94c276bfc9185e6b3317731ff7431498dfd9fc0a5a69a3bf3bb3fc2a9353b0` — MATCH
+- `js/lee-lee-sensor-sync.js` SHA-256 `582a4130e620a076e444c753ad5339cbdc8b2ba73008ad7d32c92e0bbbd58726` — MATCH
+- `js/lee-lee-sensor-ui.js` SHA-256 `1a5b8937427f3bf917c85e2e002e98a4272916cd6b6fa37358ddd3a2fa920f83` — MATCH
+- service-worker.js SHA-256 `323658bcf122f80cb4020618a768ac2f2e0bd0bad42e430b876682513c29ac4c` — MATCH
+
+Fresh unauthenticated live Chromium sanity PASS: Lando's World loaded, launcher button navigated to LLT, Sign In visible, current production build identity, zero page errors and zero sensor-mutation requests. Mutation RPC was explicitly blocked in that fresh context. Initial automation used an incorrect link selector; corrected to the existing launcher button with no app modification. No real-session login or clinical/sensor interaction was performed.
+
+Production sensor backend changed during shipping: NO. Existing real sensor modified during shipping: NO. Nothing unrelated shipped: YES. Secret/certificate audit PASS; no certificates/trust material committed. Clinical calculations/settings changes NONE. All thirteen excluded untracked entries remain preserved. Local fixture preview on port 8000 remains available; it is not the acceptance environment. This post-deployment evidence is a local report append only, not a second shipped change.
+
+Primary acceptance now uses Rolando's existing installed live production PWA, not LAN preview/mkcert/other family devices. Use Settings → Application Status and the normal update control to verify running/latest release 2026-10-05-23 (ab8f9bf); close/reopen once if needed. Do not clear caches/user data or reinstall.
+
+Confirm the actual current sensor: October 3 10:00 PM CDT start, October 13 10:00 PM CDT standard expiration, October 14 10:00 AM CDT grace end. Open/close Sensor Details & History, reopen LLT, verify same sensor/sync. After syncing, briefly go offline while loaded, confirm last-known state without mutations, reconnect and confirm convergence. Use normal pre-meal timer workflow, optionally existing supported 1-minute setting; keep LLT foregrounded, verify visual completion and one chime, restore preferred duration. Check portrait/landscape, safe areas, modal scroll and bottom navigation. No edit/replace/undo merely to test; no locked/background/Focus/silent-mode guarantee.
+
+#14.5 remains NOT COMPLETE. Wait for Rolando's physical-iPhone PASS or feature-specific regression report before freezing the implementation. No shipping blocker or scope deviation. The only workflow qualification is that the existing repository has no required PR CI; established local gates and automatic Pages build/deploy passed. No additional feature work is authorized during this acceptance wait.
+
+LLT #14.5 DEPLOYED — AWAITING LIVE PHYSICAL-IPHONE ACCEPTANCE
+
+## 2026-10-05 — Physical acceptance PASS; post-release accordion polish
+
+Rolando explicitly reported live physical-iPhone acceptance PASS for production release 2026-10-05-23 / ab8f9bf (PR #140). The released #14.5 implementation is accepted COMPLETE. This separate presentation polish is implemented locally only and has not shipped.
+
+Fresh branch `fix/llt-dexcom-card-accordion` from clean synchronized main `ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0`; prior local deployment-report append restored byte-for-byte and all unrelated untracked work preserved. UI scope: `js/lee-lee-sensor-ui.js`, `css/lee-lee-diabetes.css`, `tests/browser/llt-sensor-tracker.spec.js`, plus this short report append.
+
+Tracked sensors use native details/summary, collapsed by default: label/status/chevron only; secondary timestamps/actions are revealed on user activation. No duplicated header, persisted disclosure state or automatic expansion. Open state and disclosure focus survive periodic rendering. Native keyboard semantics, accurate aria-expanded/aria-controls, visible focus and hidden-action exclusion verified. No-sensor/loading-without-current workflow remains a visible ordinary card with its existing Start action. Card-only mobile actions stack full width at existing 640px breakpoint; wider actions remain natural width. Modal content/handlers, sensor/domain/sync/database/offline/alerts/timer/clinical calculations/settings unchanged.
+
+Final validation: static PASS; full unit suite 455/455 PASS; final desktop/mobile Chromium browser suite 62/62 PASS (20 sensor/accordion, 42 Issue #13/#14). Initial new keyboard test attempted role lookup for a correctly accessibility-hidden action; corrected to inspect the hidden DOM node, with final full browser run passing. Collapsed/expanded screenshots reviewed at 320/393/768/1280 and 852x393 landscape; no horizontal overflow/clipped labels, narrow full-width buttons and >=44px targets. Landscape scroll additionally verified action bottom 219.44px above bottom-nav top 312.81px. git diff --check PASS; staged diff empty.
+
+Safe fixture preview remains running at `http://127.0.0.1:8000/#/lee-lees-tracker` on the fresh branch; no production authentication or sensor mutation. This polish has not been physically accepted or released. Nothing committed/pushed/PRed/merged/deployed this phase. No blocker or scope deviation. STOP for Rolando's review.
+
+## 2026-10-05 — Combined UI polish: modal action hierarchy
+
+Rolando approved the local Today accordion visually and explicitly extended the same unshipped branch with presentation-only Sensor Details & History polish. The approved Today card remains intact. Refresh now sits beside the unchanged dynamic sync status and calls the exact existing resume/details handler. After unchanged sensor dates, Sensor Management presents a filled Replace Sensor action with “Start tracking a new Dexcom G7.” A native Manage Sensor disclosure defaults collapsed and reveals Edit Start Time / Undo Current Sensor with the exact approved explanatory copy. No-sensor retains its existing Start New Sensor flow; inappropriate correction/replacement controls are absent. History and reminder limitation copy are unchanged.
+
+Accessibility includes aria-expanded/content relationships, visible focus, native Enter/Space interaction, >=44px controls, and modal containment excluding collapsed correction controls. Closing restores the current copy of the original card action if periodic rendering replaced its DOM node. All code from form/review/confirmation through action handlers, fixture transport, client initialization and alert integration is byte-identical to HEAD. No sensor/domain/sync/database/cache/offline/timer/alert/clinical behavior or settings changed.
+
+Final validation: JS/static PASS; full unit suite 455/455 PASS; desktop/mobile Chromium regression set 66/66 PASS (24 sensor/accordion/modal, 42 #13/#14); authentication-preview isolation 14/14 PASS. Responsive geometry and screenshots reviewed at 320/393/768/1280 and 852x393 landscape: contained modal, scrollable content/reachable Close, wrapping sync row and microcopy, full-width narrow management controls, unchanged contained desktop width and no horizontal overflow. Initial checks exposed and resolved collapsed-control focus exclusion, accessible Replace Sensor naming and focus restoration; test setup/screenshot timing corrected. A premature fixture-server stop caused explained connection-refused failures in one intermediate run; the uninterrupted final 66-test run passed. No unexplained regression remains.
+
+Diff review and git diff --check PASS; staged diff empty. Same branch/HEAD: fix/llt-dexcom-card-accordion / ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0. Only the sensor UI, LLT CSS, focused browser test and this report changed; preexisting unrelated reports/untracked work preserved. Safe fixture preview remains at http://127.0.0.1:8000/#/lee-lees-tracker with production authentication/sync disabled. No production data changes. Nothing committed/pushed/PRed/merged/deployed. No scope deviation or blocker. Await Rolando's combined UI review before shipping.
+
+## 2026-10-05 — Final visual-hierarchy refinement (local review only)
+
+Preserved all approved Today/disclosure/modal behavior. Replace Sensor now reuses LLT's established primary button class, contains only its action label, fills the mobile management width and uses natural width on wider screens. Its separate noninteractive secondary description remains associated through aria-describedby. Edit Start Time now explains: “Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.” Undo explanation unchanged. Matching existing 1px sensor-divider styling begins Sensor Management and Sensor History; first history record no longer has a border beneath the heading, while later record separators remain intact. Refresh placement, Manage Sensor disclosure, focus/disabled states and all existing handlers/confirmations preserved.
+
+This refinement changes only details() markup/copy, focused CSS, focused test assertions and this concise note. Every function outside details() is byte-identical to the prior reviewed implementation. No sensor/domain/sync/database/history semantics, offline/cache, timer/alerts, authentication/PWA or clinical behavior changed. Final checks: static PASS; units 455/455; desktop/mobile Chromium sensor/Today/modal/#13/#14 browsers 66/66; Auth Preview 14/14; git diff --check PASS. Responsive screenshots/geometry reviewed at 320/393/768/1280 and 852x393 landscape; no horizontal overflow, proper button/description separation and section grouping, >=44px targets, scrolling/Close preserved. No failures, deviations or blockers this iteration.
+
+Branch/HEAD remain fix/llt-dexcom-card-accordion / ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0. Four cumulative modified files; staged diff empty and unrelated work preserved. Safe local fixture preview restored on port 8000. Nothing committed/pushed/PRed/merged/deployed. Await final visual review before shipping.
+
+## 2026-10-05 — Authorized final polish release candidate
+
+Rolando reported final combined visual review PASS and explicitly authorized commit/push/PR, merge after release checks, automatic Pages deployment verification and safe local-main synchronization. Fresh fetch confirms starting HEAD/local main/origin main all ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0. Exact reviewed UI/assets unchanged during shipping. Static checks PASS; 455/455 units, 66/66 responsive/accessibility sensor/Today/#13/#14 browsers, 14/14 Auth Preview regressions PASS. git diff --check and candidate secret audit PASS. Only the four approved UI/CSS/test/report files will be staged; unrelated work, local Supabase files, screenshots and ignored TLS/CA material excluded. All forms/domain/action handlers and sync/alert integration remain byte-identical to the production baseline. No database or real-sensor changes.
+
+Existing Pages workflow generates the next commit-date/run-number release label and full merge-SHA service-worker/cache identity automatically. No source version bump or workflow change is needed. Main is unprotected with no rulesets/required PR checks configured. Deployment and live served-byte evidence will be appended after the authorized merge; previous known-good main is ab8f9bf41ca5044d5c4bdf22aba5c78a391a7dd0. Rollback risk LOW: revert this polish merge through a new PR and let normal Pages deploy the revert; retain all sensor/clinical data and database objects.

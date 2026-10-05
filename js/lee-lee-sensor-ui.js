@@ -70,12 +70,24 @@
     const state = client.get(),
       c = D.current(state.snapshot),
       s = status(c);
-    const markup = `<section class="llt_sensor_card" data-state="${escape(s.kind || "none")}" aria-label="Dexcom G7 sensor tracker"><strong>Dexcom G7</strong><p class="llt_sensor_status">${state.snapshot ? escape(s.label) : "Sensor tracking unavailable"}</p>${state.snapshot ? `<p class="llt_sensor_time">${escape(s.detail)}</p>` : ""}<p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p><div class="llt_sensor_actions">${button("details", "Sensor Details & History")}${button("start", c ? "Replace Sensor" : "Start New Sensor", !state.snapshot || !!state.pending)}</div><p class="llt_sensor_notice" aria-live="polite"></p></section>`;
+    const expanded = slot.querySelector(".llt_sensor_card[open]") !== null;
+    const statusTag = c ? "span" : "p";
+    const heading = `<strong>Dexcom G7</strong><${statusTag} class="llt_sensor_status">${state.snapshot ? escape(s.label) : "Sensor tracking unavailable"}</${statusTag}>`;
+    const secondary = `${state.snapshot ? `<p class="llt_sensor_time">${escape(s.detail)}</p>` : ""}<p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p><div class="llt_sensor_actions">${button("details", "Sensor Details & History")}${button("start", c ? "Replace Sensor" : "Start New Sensor", !state.snapshot || !!state.pending)}</div><p class="llt_sensor_notice" aria-live="polite"></p>`;
+    const markup = c
+      ? `<details class="llt_sensor_card" data-state="${escape(s.kind)}"${expanded ? " open" : ""}><summary class="llt_sensor_disclosure" aria-expanded="${expanded}" aria-controls="llt-sensor-card-content"><span>${heading}</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary><div id="llt-sensor-card-content" class="llt_sensor_content">${secondary}</div></details>`
+      : `<section class="llt_sensor_card" data-state="none" aria-label="Dexcom G7 sensor tracker">${heading}${secondary}</section>`;
     if (slot._sensorMarkup !== markup) {
       slot._sensorMarkup = markup;
       const action = document.activeElement?.dataset?.sensorAction;
+      const disclosureFocused = document.activeElement === slot.querySelector(".llt_sensor_disclosure");
       slot.innerHTML = markup;
-      if (action)
+      const disclosure = slot.querySelector(".llt_sensor_disclosure");
+      disclosure?.parentElement.addEventListener("toggle", () => {
+        disclosure.setAttribute("aria-expanded", String(disclosure.parentElement.open));
+      });
+      if (disclosureFocused) disclosure?.focus();
+      else if (action)
         slot.querySelector(`[data-sensor-action="${action}"]`)?.focus();
     }
   }
@@ -83,7 +95,11 @@
     dialog?.close();
     dialog?.remove();
     dialog = null;
-    returnFocus?.focus();
+    const action = returnFocus?.dataset?.sensorAction;
+    const target = returnFocus?.isConnected
+      ? returnFocus
+      : action && document.querySelector(`.llt_sensor_card [data-sensor-action="${action}"]`);
+    target?.focus();
   }
   function open(html) {
     close();
@@ -118,8 +134,9 @@
     dialog.addEventListener("keydown", (e) => {
       if (e.key !== "Tab") return;
       const nodes = [
-        ...dialog.querySelectorAll("button:not(:disabled),input,select"),
-      ];
+        ...dialog.querySelectorAll("button:not(:disabled),input,select,summary"),
+      ].filter((node) => node.getClientRects().length &&
+        (!node.closest("details:not([open])") || node.matches("summary")));
       const first = nodes[0],
         last = nodes.at(-1);
       if (e.shiftKey && document.activeElement === first) {
@@ -130,6 +147,10 @@
         first?.focus();
       }
     });
+    const management = dialog.querySelector(".llt_sensor_manage");
+    management?.addEventListener("toggle", () => {
+      management.querySelector("summary").setAttribute("aria-expanded", String(management.open));
+    });
     dialog.showModal();
     dialog.querySelector("input,button")?.focus();
   }
@@ -139,14 +160,14 @@
       s = status(c),
       d = c ? D.lifecycle(c) : null;
     open(
-      `<p>${escape(state.snapshot ? s.label : "Sensor tracking unavailable")}</p><p class="llt_sensor_sync">${escape(syncNote(state))}</p>${c ? `<dl class="llt_sensor_facts"><dt>Sensor Start</dt><dd>${escape(date(d.start))}</dd><dt>Standard expiration</dt><dd>${escape(date(d.expires))}</dd><dt>Grace period ends</dt><dd>${escape(date(d.graceEnd))}</dd></dl><div class="llt_sensor_actions">${button("edit", "Edit Start", !!state.pending)}${button("start", "Replace Sensor", !!state.pending)}${button("undo", "Undo Current Sensor", !!state.pending)}</div>` : button("start", "Start New Sensor", !state.snapshot || !!state.pending)}${button("refresh", "Refresh sensor state")}<h3>Sensor History</h3>${
+      `<p>${escape(state.snapshot ? s.label : "Sensor tracking unavailable")}</p><div class="llt_sensor_sync_row"><p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p>${button("refresh", "Refresh")}</div>${c ? `<dl class="llt_sensor_facts"><dt>Sensor Start</dt><dd>${escape(date(d.start))}</dd><dt>Standard expiration</dt><dd>${escape(date(d.expires))}</dd><dt>Grace period ends</dt><dd>${escape(date(d.graceEnd))}</dd></dl><section class="llt_sensor_management" aria-labelledby="llt-sensor-management-title"><h3 id="llt-sensor-management-title">Sensor Management</h3><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-sensor-action="start" aria-describedby="llt-sensor-replace-description" ${state.pending ? "disabled" : ""}>Replace Sensor</button><p id="llt-sensor-replace-description" class="llt_sensor_help">Start tracking a new Dexcom G7.</p><details class="llt_sensor_manage"><summary class="llt_sensor_disclosure" aria-expanded="false" aria-controls="llt-sensor-corrections"><span>Manage Sensor</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary><div id="llt-sensor-corrections" class="llt_sensor_corrections"><div>${button("edit", "Edit Start Time", !!state.pending)}<p>Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.</p></div><div>${button("undo", "Undo Current Sensor", !!state.pending)}<p>Remove a sensor that was added by mistake and restore the previous sensor when possible.</p></div></div></details></section>` : `<div class="llt_sensor_start">${button("start", "Start New Sensor", !state.snapshot || !!state.pending)}</div>`}<section class="llt_sensor_history_section" aria-labelledby="llt-sensor-history-title"><h3 id="llt-sensor-history-title">Sensor History</h3>${
         (state.snapshot?.cycles || [])
           .map((x) => {
             const life = D.lifecycle({ ...x, state: "current" });
             return `<article class="llt_sensor_history"><strong>${escape(x.state === "cancelled" ? "Cancelled — retained in history" : x.state === "current" ? "Currently tracked" : Date.parse(x.ended_at) < life.expires ? "Replaced early" : "Replaced")}</strong><p>Started <span>${escape(date(x.started_at))}</span></p>${x.ended_at ? `<p>Replaced <span>${escape(date(x.ended_at))}</span></p>` : ""}${x.cancelled_at ? `<p>Cancelled <span>${escape(date(x.cancelled_at))}</span></p>` : ""}</article>`;
           })
           .join("") || "<p>No tracked sensor history.</p>"
-      }<p class="llt_sensor_sync">Reminders work while LLT is open. Alerts cannot be guaranteed while the iPhone is locked.</p>`,
+      }</section><p class="llt_sensor_sync">Reminders work while LLT is open. Alerts cannot be guaranteed while the iPhone is locked.</p>`,
     );
   }
   function form(action) {

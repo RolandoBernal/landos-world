@@ -3349,3 +3349,36 @@
 .llt_sensor_dialog [role="alert"] { color: #f2a6a6; }
 
 .llt_sensor_dialog input[type="date"], .llt_sensor_dialog input[type="time"] { font-family: var(--llt-numeric-font); color-scheme: inherit; }
+
+/* The tracked-sensor disclosure keeps secondary detail below its compact header. */
+.llt_sensor_disclosure { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 44px; cursor: pointer; list-style: none; }
+.llt_sensor_disclosure > span:first-child { min-width: 0; }
+.llt_sensor_disclosure::-webkit-details-marker { display: none; }
+.llt_sensor_disclosure .llt_sensor_status { display: block; margin: .2rem 0 0; overflow-wrap: anywhere; }
+.llt_sensor_disclosure .lee_lee_diabetes_accordion_chevron { flex: none; color: var(--lee-lee-muted); font-size: 1.25rem; }
+.llt_sensor_card[open] > .llt_sensor_disclosure .lee_lee_diabetes_accordion_chevron { transform: rotate(180deg); }
+.llt_sensor_disclosure:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 3px; border-radius: .25rem; }
+.llt_sensor_content { padding-top: .5rem; }
+@media (max-width: 640px) {
+  .llt_sensor_card .llt_sensor_actions { flex-direction: column; }
+  .llt_sensor_card .llt_sensor_actions > button { width: 100%; }
+}
+
+/* Sensor management separates the normal lifecycle action from corrections. */
+.llt_sensor_sync_row { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .75rem; }
+.llt_sensor_sync_row .llt_sensor_sync { flex: 1 1 12rem; margin: 0; }
+.llt_sensor_sync_row button { min-height: 44px; font-size: .85rem; }
+.llt_sensor_management, .llt_sensor_history_section { margin-top: 1rem; border-top: 1px solid #465166; padding-top: .75rem; }
+.llt_sensor_management h3, .llt_sensor_history_section h3 { margin-top: 0; }
+.llt_sensor_management > button { min-height: 44px; white-space: normal; }
+.llt_sensor_help { margin: .35rem 0 0; color: var(--lee-lee-muted); }
+.llt_sensor_history_section > .llt_sensor_history:first-of-type { border-top: 0; padding-top: 0; }
+.llt_sensor_manage { margin-top: .75rem; border: 1px solid var(--lee-lee-border); border-radius: .75rem; padding: .5rem .75rem; }
+.llt_sensor_manage[open] > summary .lee_lee_diabetes_accordion_chevron { transform: rotate(180deg); }
+.llt_sensor_corrections { display: grid; gap: 1rem; padding-top: .75rem; }
+.llt_sensor_corrections button, .llt_sensor_start button { min-height: 44px; white-space: normal; }
+.llt_sensor_corrections p { margin: .35rem 0 0; color: var(--lee-lee-muted); }
+.llt_sensor_start { margin-block: 1rem; }
+@media (max-width: 640px) {
+  .llt_sensor_management > button, .llt_sensor_corrections button, .llt_sensor_start button { width: 100%; }
+}
