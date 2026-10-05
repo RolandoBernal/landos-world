@@ -975,7 +975,7 @@ test('appearance setting reflects the preference and applies immediately', async
   await page.goto('/#/settings');
   const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
   await expect(settingsToggle).toBeVisible();
-  await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(settingsToggle).toHaveCSS('color', await page.locator('html').getAttribute('data-theme') === 'light' ? 'rgb(23, 32, 51)' : 'rgb(255, 255, 255)');
 
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-appearance-preference', 'system');
@@ -998,16 +998,16 @@ test('appearance setting reflects the preference and applies immediately', async
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f8fb');
 });
 
-test('LsW settings cog stays white and keeps its top-right position', async ({ page }) => {
+test('LsW settings cog follows appearance and keeps its top-right position', async ({ page }) => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     await page.setViewportSize(viewport);
     await page.goto('#/');
     const homeToggle = page.getByRole('button', { name: 'Lando\'s World Settings' });
-    await expect(homeToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(homeToggle).toHaveCSS('color', await page.locator('html').getAttribute('data-theme') === 'light' ? 'rgb(23, 32, 51)' : 'rgb(255, 255, 255)');
     const homeBox = await homeToggle.boundingBox();
     await homeToggle.click();
     const settingsToggle = page.getByRole('button', { name: 'Close Lando\'s World Settings' });
-    await expect(settingsToggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(settingsToggle).toHaveCSS('color', await page.locator('html').getAttribute('data-theme') === 'light' ? 'rgb(23, 32, 51)' : 'rgb(255, 255, 255)');
     const settingsBox = await settingsToggle.boundingBox();
     expect(homeBox).not.toBeNull();
     expect(settingsBox).not.toBeNull();
@@ -1499,7 +1499,7 @@ test('LLT Issue #11 UI and data fonts remain distinct across responsive surfaces
     for (const name of ['bloodSugar', 'insulinUnits', 'date', 'time']) {
       expect(await form.locator(`[name="${name}"]`).evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
     }
-    expect(await form.locator('textarea').evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
+    expect(await form.locator('textarea[name=notes]').evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
     expect(await form.locator('select').first().evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
     await capture(`Entry-${width}`);
     await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
@@ -5820,4 +5820,65 @@ test('LLT editing an existing carb entry does not reopen the fresh timer offer o
   await expect(page.getByRole('heading', { name: 'Entry Saved' })).toHaveCount(0);
   await expect(page.locator('.lee_lee_diabetes_pre_meal_timer_modal')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lando-world:lee-lees-tracker:pre-meal-timer:v1'))).toBeNull();
+});
+
+for (const [preference, system, effective] of [
+  ['light', 'dark', 'light'], ['dark', 'light', 'dark'],
+  ['system', 'light', 'light'], ['system', 'dark', 'dark'],
+]) test(`icon foreground regression: ${preference} with system ${system}`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: system });
+  await page.addInitScript(value => localStorage.setItem('landos_world_appearance_preference_v1', value), preference);
+  await openProtectedLeeLeeTracker(page);
+  for (const [width,height] of [[320,740],[393,852],[768,1024],[1280,800],[852,393]]) {
+    await page.setViewportSize({width,height});
+    await page.goto('/#/');
+    const homeCog = page.getByRole('button', { name: "Lando's World Settings", exact: true });
+    await expect(homeCog.locator('svg')).toHaveCSS('stroke', effective === 'light' ? 'rgb(23, 32, 51)' : 'rgb(255, 255, 255)');
+    await page.keyboard.press('Tab');
+    await homeCog.focus();
+    expect(await homeCog.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
+    await page.screenshot({path:`/tmp/lsw-home-cog-${preference}-${system}-${width}.png`});
+    await homeCog.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', effective);
+    const cog = page.getByRole('button', { name: "Close Lando's World Settings" });
+    await expect(cog.locator('svg')).toHaveCSS('stroke', effective === 'light' ? 'rgb(23, 32, 51)' : 'rgb(255, 255, 255)');
+    await page.keyboard.press("Tab");
+    await cog.focus();
+    expect(await cog.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
+    await page.screenshot({path:`/tmp/lsw-cog-${preference}-${system}-${width}.png`});
+    await page.goto('/#/lee-lees-tracker');
+    const add = page.locator('.lee_lee_diabetes_bottom_nav_button--primary');
+    await expect(add).toBeVisible();
+    await expect(add.locator('svg')).toHaveCSS('stroke', 'rgb(255, 255, 255)');
+    await expect(add).toHaveCSS('background-color', effective === 'light' ? 'rgb(9, 104, 195)' : 'rgb(58, 160, 255)');
+    const before = await add.boundingBox();
+    expect(before.width).toBeGreaterThanOrEqual(44);
+    expect(before.height).toBeGreaterThanOrEqual(44);
+    if (effective === 'light') {
+      await add.hover();
+      await expect(add.locator('svg')).toHaveCSS('stroke', 'rgb(255, 255, 255)');
+    }
+    await page.screenshot({path:`/tmp/llt-plus-${preference}-${system}-${width}.png`});
+    await add.click();
+    await expect(page.getByRole('heading', {name:'Log Entry',exact:true})).toBeVisible();
+    const insulin = page.getByRole('spinbutton', {name:'Insulin Actually Given',exact:true});
+    await expect(insulin).toBeVisible();
+    const baseline = await insulin.evaluate(node => { const s=getComputedStyle(node); return [node.value,s.fontFamily,s.fontSize,s.fontWeight,s.lineHeight,s.letterSpacing,s.color]; });
+    const notes = page.locator('[data-lee-lee-editor] textarea[name=notes]');
+    const sample = '15 g of carbs administered to increase glucose that was at 53. 0 units of insulin given.';
+    await notes.fill(sample);
+    await expect(notes).toHaveValue(sample);
+    expect(await notes.evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+    expect(await insulin.evaluate(node => getComputedStyle(node).fontFamily)).toContain('Roboto Mono');
+    expect(await page.locator('[data-lee-lee-editor] select').first().evaluate(node => getComputedStyle(node).fontFamily)).toContain('DM Sans');
+    await notes.focus();
+    await notes.evaluate(node => node.setSelectionRange(node.value.length,node.value.length));
+    await page.keyboard.type(' Editable');
+    await expect(notes).toHaveValue(sample + ' Editable');
+    expect(await insulin.evaluate(node => { const s=getComputedStyle(node); return [node.value,s.fontFamily,s.fontSize,s.fontWeight,s.lineHeight,s.letterSpacing,s.color]; })).toEqual(baseline);
+    expect(await notes.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    await notes.scrollIntoViewIfNeeded();
+    await page.screenshot({path:`/tmp/llt-notes-${preference}-${system}-${width}.png`});
+    await page.locator("[data-lee-lee-editor]").getByRole("button",{name:"Cancel",exact:true}).click();
+  }
 });

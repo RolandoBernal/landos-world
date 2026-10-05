@@ -3382,3 +3382,14 @@
 @media (max-width: 640px) {
   .llt_sensor_management > button, .llt_sensor_corrections button, .llt_sensor_start button { width: 100%; }
 }
+
+/* Keep the center primary action's foreground above ordinary light nav colors. */
+:root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button--primary,
+:root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon {
+  color: var(--app-accent-contrast, #ffffff);
+}
+
+/* Entry Notes mixes prose and numbers; the bundled data font has a distinctive zero. */
+.lee_lee_diabetes_shell [data-lee-lee-editor] textarea[name="notes"] {
+  font-family: var(--llt-numeric-font);
+}
