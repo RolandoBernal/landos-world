@@ -4311,6 +4311,7 @@
       ${renderTrackerTop({ active: 'today' })}
       ${renderTrackerNav('today')}
       ${renderPreMealTimerCard()}
+      <div data-dexcom-card></div>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
         ${timeline.length ? `<div class="lee_lee_diabetes_timeline">${timeline.map(renderTimelineItem).join('')}</div>` : '<p class="lee_lee_diabetes_empty">No entries today.</p>'}
@@ -4321,6 +4322,7 @@
       root.getBoundingClientRect();
       window.scrollTo?.(0, restoreScrollY);
     }
+    window.LeeLeeSensorUI?.mount();
     if (initialTimer?.status === 'completed') renderPreMealTimerModal(initialTimer);
   }
 
@@ -7385,6 +7387,7 @@
   }
 
   function startPreMealTimerFromOffer() {
+    window.LeeLeeDeadlineAlerts?.unlock();
     const service = window.LeeLeePreMealTimer;
     const record = currentEditor?.mode === 'pre-meal-timer-offer' ? currentEditor.pendingTimerRecord : null;
     const settings = service?.getSettings() || null;
@@ -8460,7 +8463,7 @@
     const metadata = getBuildMetadata();
     const isLocal = ['local', 'local-device', 'local-auth-preview'].includes(metadata.environment);
     const hasSourceIdentity = Boolean(metadata.commit || metadata.sourceId || metadata.branch);
-    const environment = metadata.environment === 'local-auth-preview' ? 'Authentication Preview — Production data access disabled'
+    const environment = metadata.environment === 'local-auth-preview' ? (metadata.sensorPreview === true && metadata.previewHttps === true && window.isSecureContext === true ? 'Authentication Preview — Live sensor access enabled; clinical sync disabled' : 'Authentication Preview — Production data access disabled')
       : isLocal ? 'Local Development' : metadata.environment === 'production' ? 'Production' : 'Build information unavailable';
     const sourceState = metadata.dirty === true ? 'Modified' : metadata.dirty === false ? 'Clean' : '';
     return renderSettingsAccordion('App Information', 'lee-lee-app-information-title', `
@@ -9855,6 +9858,7 @@
       else renderSettings();
     });
     syncRepository = createSyncRepository();
+    window.LeeLeeSensorUI?.init(syncRepository);
     if (syncRepository) {
       syncRepository.subscribe((nextStatus) => {
         updateAccessBoundary(nextStatus);
@@ -9901,6 +9905,7 @@
       pendingCarbCalculatorUsePointerId = null;
     }, true);
     root.addEventListener('click', (event) => {
+      if (event.target.closest?.('[data-action="start-pre-meal-timer"], [data-action="restart-pre-meal-timer"]')) window.LeeLeeDeadlineAlerts?.unlock();
       focusCarbCalculatorInputOnPointer(event);
     }, true);
     document.addEventListener('keydown', (event) => {

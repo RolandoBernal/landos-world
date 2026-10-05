@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import test from 'node:test';
+import https from 'node:https';
+import { createServer } from 'node:http';
 import {
   createIPhoneDevServer,
+  parseArgs,
+  readPreviewTls,
   readAuthenticationPreviewConfig,
   isSameSubnetIPv4,
   selectLanInterfaceAddress,
@@ -132,4 +136,48 @@ test('iPhone dev network access is limited to the selected interface subnet', ()
   assert.equal(isSameSubnetIPv4('192.168.1.90', '192.168.1.24', '255.255.255.0'), true);
   assert.equal(isSameSubnetIPv4('192.168.2.90', '192.168.1.24', '255.255.255.0'), false);
   assert.equal(isSameSubnetIPv4('::ffff:192.168.1.90', '192.168.1.24', '255.255.255.0'), true);
+});
+
+
+test('HTTPS explicit configuration and sensor activation fail closed', async () => {
+  assert.equal(parseArgs([]).https, false);
+  assert.equal(parseArgs([]).loopback, false);
+  assert.equal(parseArgs(['--auth-preview', '--https', '--sensor-preview', '--loopback']).loopback, true);
+  for (const args of [['--sensor-preview'], ['--auth-preview', '--sensor-preview'], ['--https', '--sensor-preview']]) {
+    assert.throws(() => parseArgs(args), /requires/);
+  }
+  for (const options of [{ https: true }, { https: true, certPath: 'missing' }, { https: true, keyPath: 'missing' },
+    { https: true, certPath: '/missing-cert', keyPath: '/missing-key' }, { certPath: 'unexpected' }]) {
+    await assert.rejects(readPreviewTls(options), /requires|Unable|require/);
+  }
+  const options = { bindAddress: { address: '127.0.0.1', netmask: '255.0.0.0' }, getMetadata: () => ({ environment: 'local-auth-preview' }) };
+  assert.throws(() => createIPhoneDevServer({ ...options, authOrigin: 'https://example.supabase.co', sensorPreview: true }), /requires/);
+  assert.throws(() => createIPhoneDevServer({ ...options, tls: { cert: 'invalid', key: 'invalid' } }));
+});
+
+test('HTTPS handler exposes only explicit sensor metadata and narrow CSP; TLS material stays server-side', async (t) => {
+  // Mock only TLS construction: no certificate generation, trust change or verification bypass.
+  t.mock.method(https, 'createServer', (_tls, handler) => createServer(handler));
+  for (const sensorPreview of [false, true]) {
+    await withServer(async (server) => {
+      const shell = await request(server, '/');
+      assert.equal(shell.status, 200);
+      assert.match(shell.body, /"previewHttps":true/);
+      assert.match(shell.body, new RegExp(`"sensorPreview":${sensorPreview}`));
+      assert.doesNotMatch(shell.body, /synthetic-private-material|synthetic-cert-material/);
+      const csp = shell.headers['content-security-policy'];
+      assert.equal(csp.includes('/rest/v1/rpc/llt_get_sensor_snapshot'), sensorPreview);
+      assert.equal(csp.includes('/rest/v1/rpc/llt_mutate_sensor_cycle'), sensorPreview);
+      assert.equal(csp.includes('wss://example.supabase.co/realtime/v1/websocket'), sensorPreview);
+      assert.match(csp, /worker-src 'none'/);
+      assert.doesNotMatch(csp, /connect-src \*/);
+      for (const path of ['/.local/llt-auth-preview-tls/key.pem', '/.local/llt-auth-preview-tls/cert.pem']) assert.equal((await request(server, path)).status, 404);
+    }, { authOrigin: 'https://example.supabase.co', tls: { cert: 'synthetic-cert-material', key: 'synthetic-private-material' }, sensorPreview,
+      getMetadata: () => ({ environment: 'local-auth-preview', sensorPreview: !sensorPreview }) });
+  }
+  await withServer(async (server) => {
+    const shell = await request(server, '/');
+    assert.match(shell.body, /"sensorPreview":false/);
+    assert.match(shell.body, /"previewHttps":false/);
+  }, { authOrigin: 'https://example.supabase.co', getMetadata: () => ({ environment: 'local-auth-preview', sensorPreview: true, previewHttps: true }) });
 });

@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { createIPhoneDevServer, readAuthenticationPreviewConfig } from '../../scripts/dev-iphone.mjs';
 
+import https from 'node:https';
+import { createServer } from 'node:http';
+let sensorServer, sensorURL;
 let server;
 let baseURL;
 let authOrigin;
@@ -14,23 +17,40 @@ test.beforeAll(async () => {
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   baseURL = `http://127.0.0.1:${server.address().port}`;
+  // Synthetic TLS constructor fixture, not a certificate or trust-store change.
+  const original = https.createServer;
+  try {
+    https.createServer = (_tls, handler) => createServer(handler);
+    sensorServer = createIPhoneDevServer({
+      bindAddress: { address: '127.0.0.1', netmask: '255.0.0.0' }, authOrigin,
+      tls: { cert: 'synthetic', key: 'synthetic' }, sensorPreview: true,
+      getMetadata: () => ({ environment: 'local-auth-preview', branch: 'synthetic', commit: 'synthetic' }),
+    });
+  } finally { https.createServer = original; }
+  await new Promise((resolve) => sensorServer.listen(0, '127.0.0.1', resolve));
+  sensorURL = `http://127.0.0.1:${sensorServer.address().port}`;
 });
 
 test.afterAll(async () => {
+  if (sensorServer?.listening) await new Promise((resolve) => sensorServer.close(resolve));
   if (server?.listening) await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 
-async function prepare(page, { insecure = false } = {}) {
+async function prepare(page, { insecure = false, sensor = false } = {}) {
   const requests = [];
   await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }));
   await page.route(`${authOrigin}/**`, async (route) => {
     const request = route.request();
     requests.push(new URL(request.url()).pathname);
+    if (sensor && new URL(request.url()).pathname === '/rest/v1/rpc/llt_get_sensor_snapshot') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ok', snapshot: { revision: 0, currentCycleId: null, cycles: [] } }) });
+      return;
+    }
     if (!new URL(request.url()).pathname.startsWith('/auth/v1/')) throw new Error('PRODUCTION DATA CANARY REACHED');
     const wrong = request.postDataJSON()?.password === 'wrong';
     await route.fulfill({ status: wrong ? 400 : 200, contentType: 'application/json', body: JSON.stringify(wrong ? { code: 'invalid_credentials', message: 'Invalid login credentials' } : { session: { user: { id: 'synthetic-preview-user' }, expires_at: Math.floor(Date.now() / 1000) + 3600 } }) });
   });
-  await page.addInitScript(({ insecure }) => {
+  await page.addInitScript(({ insecure, sensor }) => {
     if (insecure) Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false });
     const sessionKey = 'synthetic-preview-auth-session';
     localStorage.setItem('lando-world:lee-lees-tracker:device-identity:v1', 'Rolando');
@@ -65,11 +85,19 @@ async function prepare(page, { insecure = false } = {}) {
           },
         },
         from() { throw new Error('DATA CANARY: from invoked'); },
-        rpc() { throw new Error('DATA CANARY: rpc invoked'); },
-        channel() { throw new Error('DATA CANARY: realtime invoked'); },
+        rpc(name, args) {
+          if (!sensor) throw new Error('DATA CANARY: rpc invoked');
+          return options.global.fetch(`${url}/rest/v1/rpc/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args || {}) }).then(async (response) => ({ data: await response.json() }));
+        },
+        channel(name) {
+          if (!sensor) throw new Error('DATA CANARY: realtime invoked');
+          window.__sensorChannel = { name };
+          return { on(type, filter) { window.__sensorChannel = { name, type, filter }; return this; }, subscribe(callback) { callback('SUBSCRIBED'); return this; }, unsubscribe() {} };
+        },
+        removeChannel() { window.__sensorRemoved = true; },
       };
     } };
-  }, { insecure });
+  }, { insecure, sensor });
   return requests;
 }
 
@@ -180,4 +208,32 @@ test('URL and browser storage cannot activate auth preview or grant authorizatio
   expect(await page.evaluate(() => window.LandoWorldBuildMetadata.environment)).not.toBe('local-auth-preview');
   expect(await page.evaluate(() => window.LeeLeeTrackerAccess.getState())).toBe('denied');
   await expect(page.locator('#lws-local-dev-badge')).toHaveCount(0);
+});
+
+
+test('explicit secure sensor fixture allows sensor snapshot and scoped invalidation while clinical sync and PWA stay disabled', async ({ page }) => {
+  const requests = await prepare(page, { sensor: true });
+  await page.goto(`${sensorURL}/#/lee-lees-tracker`);
+  await signIn(page);
+  await expect(page.locator('.llt_sensor_card')).toContainText('No active sensor');
+  await expect.poll(() => requests.includes('/rest/v1/rpc/llt_get_sensor_snapshot')).toBe(true);
+  expect(await page.evaluate(() => window.__sensorChannel)).toEqual({
+    name: 'llt-sensor-synthetic-preview-user', type: 'postgres_changes',
+    filter: { event: '*', schema: 'public', table: 'llt_sensor_contexts', filter: 'user_id=eq.synthetic-preview-user' },
+  });
+  expect(await page.evaluate(() => window.LeeLeeTrackerDebug.getSyncStatus().sensorPreviewEnabled)).toBe(true);
+  expect(await page.evaluate(() => window.__previewPwaCalls)).toEqual([]);
+  expect(requests.every((path) => path.startsWith('/auth/v1/') || path === '/rest/v1/rpc/llt_get_sensor_snapshot')).toBe(true);
+  await expect(page.locator('body')).toContainText('Clinical sync remains disabled');
+  await page.evaluate(() => window.__previewLoseAuth());
+  await expect(page).toHaveURL(/#\/$/);
+  expect(await page.evaluate(() => window.__sensorRemoved)).toBe(true);
+});
+
+test('sensor capability does not bypass insecure credential guards', async ({ page }) => {
+  const requests = await prepare(page, { sensor: true, insecure: true });
+  await page.goto(`${sensorURL}/#/lee-lees-tracker`);
+  await expect(page.locator('[name="password"]')).toHaveCount(0);
+  await expect(page.locator('#lee-lee-diabetes-root')).toContainText('HTTPS required');
+  expect(requests).toEqual([]);
 });
