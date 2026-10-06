@@ -2385,3 +2385,106 @@ test('sensor opt-in requires every secure metadata condition and cannot broaden 
   channel.unsubscribe();
   assert.throws(() => client.removeChannel(channel), /disabled/);
 });
+
+function lowGlucoseTestRecord(overrides = {}) {
+  return record({ type: 'Low Glucose', eventType: 'check-insulin', bloodSugar: 53,
+    insulinUnits: null, administeredInsulinUnits: null, suggestedBaseUnits: null,
+    suggestedCorrectionUnits: null, suggestedTotalUnits: null, insulinPlanId: null,
+    insulinPlanSnapshot: null, doseCalculationStatus: 'not-applicable', mealCarbs: 15,
+    lowGlucoseEpisode: { version: 1, thresholdSnapshot: { lowMgDl: 70 }, rechecks: [], closure: null, pendingRecheck: null }, ...overrides });
+}
+
+for (const [key, next] of [
+  ['rechecks', [{ id: 'round', bloodSugar: 61, recordTimestamp: '2026-08-01T13:15:00Z', carbs: 15 }]],
+  ['closure', { kind: 'ended-without-confirmed-recovery' }],
+  ['pendingRecheck', { id: 'schedule', sourceRoundId: 'initial', dueAt: '2026-08-01T13:15:00Z' }],
+  ['thresholdSnapshot', { lowMgDl: 80 }], ['version', 2],
+]) test(`Low Glucose meaning fingerprint detects ${key} changes and ignores UI state`, () => {
+  const context = createSyncContext(); const record = lowGlucoseTestRecord();
+  const nextRecord = structuredClone(record); nextRecord.lowGlucoseEpisode[key] = next;
+  assert.notEqual(context.LeeLeeTrackerSync.recordMeaningFingerprint(record), context.LeeLeeTrackerSync.recordMeaningFingerprint(nextRecord));
+  assert.equal(context.LeeLeeTrackerSync.recordMeaningFingerprint(record), context.LeeLeeTrackerSync.recordMeaningFingerprint({ ...record, expanded: true, syncStatus: 'waiting' }));
+});
+
+test('Low Glucose hydration and serialization round trip preserve episode and non-insulin columns', () => {
+  const context = createSyncContext(); const record = lowGlucoseTestRecord();
+  record.lowGlucoseEpisode.pendingRecheck = { id: 'schedule', sourceRoundId: record.id, dueAt: '2026-08-01T13:15:00Z' };
+  const remote = context.LeeLeeTrackerSync.sanitizeRecordForRemote(record, 'user-1');
+  const hydrated = context.LeeLeeTrackerSync.recordFromRemote(remote);
+  assert.deepEqual(hydrated.lowGlucoseEpisode, record.lowGlucoseEpisode);
+  for (const key of ['insulin_units', 'administered_insulin_units', 'suggested_base_units', 'suggested_correction_units', 'suggested_total_units', 'insulin_plan_id', 'insulin_plan_snapshot']) assert.equal(remote[key], null);
+  assert.equal(remote.dose_calculation_status, 'not-applicable');
+});
+
+test('Low Glucose guard rejection retains attempted update, preserves remote episode and avoids automatic retry', async () => {
+  const base = lowGlucoseTestRecord();
+  const remote = createSyncContext().LeeLeeTrackerSync.sanitizeRecordForRemote(base, 'user-1');
+  const supabase = createMockSupabase([remote], { updateRecordRpcError: { code: '23514', message: 'LLT_LOW_GLUCOSE_WRITE_INCOMPATIBLE', details: 'PRIVATE_SYNTHETIC_DETAIL', constraint: 'lee_lee_records_low_glucose_write_guard' } });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  context.navigator.onLine = false;
+  const store = createDocumentStore({ records: [base] }); const repository = context.LeeLeeTrackerSync.createRepository(store);
+  await repository.initialize(); const attempted = { ...base, notes: 'retained edit' }; repository.queueUpsert(attempted, base);
+  context.navigator.onLine = true; await repository.processQueue();
+  const queue = repository.getSyncDiagnostics().queue;
+  assert.equal(queue[0].lastErrorCategory, 'low-glucose-compatibility'); assert.equal(queue[0].state, 'needs-attention');
+  assert.match(queue[0].lastErrorMessage, /latest compatible LLT/); assert.doesNotMatch(JSON.stringify(queue), /PRIVATE_SYNTHETIC_DETAIL|LLT_LOW_GLUCOSE_WRITE_INCOMPATIBLE/);
+  const before = queue[0].retryCount; await repository.processQueue(); assert.equal(repository.getSyncDiagnostics().queue[0].retryCount, before);
+  assert.deepEqual(supabase.client.rows[0].payload.lowGlucoseEpisode, base.lowGlucoseEpisode);
+  assert.equal(JSON.parse(context.localStorage.getItem(repository.keys.queue))[0].payload.notes, 'retained edit');
+});
+
+test('two devices exchange initial episode, pending schedule, recheck and explicit closure using existing queue', async () => {
+  const supabase = createMockSupabase();
+  const createDevice = async () => {
+    const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+    const store = createDocumentStore(); const repository = context.LeeLeeTrackerSync.createRepository(store);
+    await repository.initialize(); return { context, store, repository };
+  };
+  const a = await createDevice(); const b = await createDevice(); const initial = lowGlucoseTestRecord();
+  initial.lowGlucoseEpisode.pendingRecheck = { id: 'schedule', sourceRoundId: initial.id, dueAt: '2026-08-01T13:15:00Z' };
+  a.context.navigator.onLine = false; a.repository.queueUpsert(initial); a.context.navigator.onLine = true; await a.repository.processQueue();
+  await b.repository.syncNow(); const received = b.store.getDocument().records[0];
+  assert.equal(received.lowGlucoseEpisode.pendingRecheck.id, 'schedule');
+  const rechecked = structuredClone(received); rechecked.lowGlucoseEpisode.rechecks.push({ id: 'round-b', bloodSugar: 84, carbs: 0, recordTimestamp: '2026-08-01T13:15:00Z' }); rechecked.lowGlucoseEpisode.pendingRecheck = null;
+  b.context.navigator.onLine = false; b.repository.queueUpsert(rechecked, received); b.context.navigator.onLine = true; await b.repository.processQueue();
+  await a.repository.syncNow(); const receivedBack = a.store.getDocument().records[0];
+  assert.equal(receivedBack.lowGlucoseEpisode.rechecks[0].id, 'round-b'); assert.equal(receivedBack.lowGlucoseEpisode.pendingRecheck, null);
+  const closed = structuredClone(receivedBack); closed.lowGlucoseEpisode.closure = { kind: 'recovery-confirmed', recheckId: 'round-b' };
+  a.context.navigator.onLine = false; a.repository.queueUpsert(closed, receivedBack); a.context.navigator.onLine = true; await a.repository.processQueue();
+  await b.repository.syncNow(); assert.equal(b.store.getDocument().records[0].lowGlucoseEpisode.closure.recheckId, 'round-b');
+});
+
+test('concurrent Low Glucose rechecks preserve authoritative remote round and create explicit review conflict', async () => {
+  const context = createSyncContext(); const base = lowGlucoseTestRecord();
+  const authoritative = structuredClone(base); authoritative.version = 2; authoritative.lowGlucoseEpisode.rechecks.push({ id: 'other-device-round', bloodSugar: 61, carbs: 15, recordTimestamp: '2026-08-01T13:15:00Z' });
+  const supabase = createMockSupabase([context.LeeLeeTrackerSync.sanitizeRecordForRemote(authoritative, 'user-1')]);
+  const device = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } }); device.navigator.onLine = false;
+  const repository = device.LeeLeeTrackerSync.createRepository(createDocumentStore({ records: [base] })); await repository.initialize();
+  const local = structuredClone(base); local.lowGlucoseEpisode.rechecks.push({ id: 'local-round', bloodSugar: 84, carbs: 0, recordTimestamp: '2026-08-01T13:15:00Z' });
+  repository.queueUpsert(local, base); device.navigator.onLine = true; await repository.processQueue();
+  assert.equal(supabase.client.rows[0].payload.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
+  const conflict = repository.getConflicts()[0]; assert.equal(conflict.localRecord.lowGlucoseEpisode.rechecks[0].id, 'local-round');
+  assert.equal(conflict.sharedRecord.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
+});
+
+test('same-device queued episode → pending reminder → recheck advances only its acknowledged predecessor version', async () => {
+  const supabase = createMockSupabase();
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } }); context.navigator.onLine = false;
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore()); await repository.initialize();
+  const initial = lowGlucoseTestRecord(); repository.queueUpsert(initial);
+  const scheduled = structuredClone(initial); scheduled.lowGlucoseEpisode.pendingRecheck = { id: 'schedule' }; repository.queueUpsert(scheduled, initial);
+  const rechecked = structuredClone(scheduled); rechecked.lowGlucoseEpisode.pendingRecheck = null; rechecked.lowGlucoseEpisode.rechecks.push({ id: 'round', bloodSugar: 61 }); repository.queueUpsert(rechecked, scheduled);
+  context.navigator.onLine = true; await repository.processQueue();
+  assert.equal(repository.getSyncStatus().pendingCount, 0); assert.equal(repository.getConflicts().length, 0);
+  assert.equal(supabase.client.rows[0].version, 3); assert.equal(supabase.client.rows[0].payload.lowGlucoseEpisode.rechecks[0].id, 'round');
+});
+
+test('Low Glucose fingerprint tolerates JSONB key order while preserving typed values and array order', () => {
+  const context = createSyncContext(); const left = lowGlucoseTestRecord(); const right = structuredClone(left);
+  right.lowGlucoseEpisode = Object.fromEntries(Object.entries(right.lowGlucoseEpisode).reverse());
+  const fingerprint = context.LeeLeeTrackerSync.recordMeaningFingerprint;
+  assert.equal(fingerprint(left), fingerprint(right));
+  right.lowGlucoseEpisode.version = '1'; assert.notEqual(fingerprint(left), fingerprint(right));
+  right.lowGlucoseEpisode = null; assert.notEqual(fingerprint(left), fingerprint(right));
+  const missing = { ...right }; delete missing.lowGlucoseEpisode; assert.notEqual(fingerprint(right), fingerprint(missing));
+});

@@ -1083,7 +1083,7 @@ test('entry type configuration exposes active carb-counting contexts while prese
   const entryTypes = runtime.LeeLeeTrackerEntryTypes;
   const labels = Array.from(entryTypes.all, (definition) => definition.label);
 
-  assert.deepEqual(labels, ['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Exercise', 'Other']);
+  assert.deepEqual(labels, ['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Exercise', 'Other', 'Low Glucose']);
   assert.deepEqual(Array.from(entryTypes.mealTypes), ['Breakfast', 'Lunch', 'Dinner']);
   assert.equal(entryTypes.getEntryTypeConfig('Bedtime').label, 'Bedtime');
   assert.equal(entryTypes.entryTypeUsesMealGuidance('Breakfast'), true);
@@ -1110,6 +1110,7 @@ test('log entry configuration exposes one combined check workflow with active co
     'Snacks',
     'Bedtime',
     'Correction',
+    'Low Glucose',
   ]);
   assert.deepEqual(Array.from(entryTypes.getContextOptionsForEventType('meal')), ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
   assert.equal(entryTypes.getEventTypeConfig('check-insulin').fields.includes('bloodSugar'), true);

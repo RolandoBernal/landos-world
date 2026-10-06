@@ -31,8 +31,8 @@
     EVENT_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
   ));
   const MEAL_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other']);
-  const ACTIVE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Bedtime', 'Correction']);
-  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Other']);
+  const ACTIVE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Bedtime', 'Correction', 'Low Glucose']);
+  const CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snacks', 'Snack', 'Other', 'Low Glucose']);
   const SINGLE_USE_CHECK_CONTEXT_TYPES = Object.freeze(['Breakfast', 'Lunch', 'Dinner', 'Bedtime']);
   const ACTIVITY_CONTEXT_TYPES = Object.freeze(['Exercise', 'Other']);
   const NOTE_CONTEXT_TYPES = Object.freeze(['Other', 'Breakfast', 'Lunch', 'Dinner', 'Bedtime', '2 AM', 'Correction', 'Snack', 'Exercise']);
@@ -48,6 +48,7 @@
     { type: 'Snack', label: 'Snack', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Exercise', label: 'Exercise', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
     { type: 'Other', label: 'Other', clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'insulinUnits', 'notes'] },
+    { type: 'Low Glucose', label: 'Low Glucose', insulinApplicable: false, clinicalLogPrimary: false, mealGuidance: false, fields: ['bloodSugar', 'carbs', 'notes'] },
   ]);
   const ENTRY_TYPE_CONFIG = Object.freeze(Object.fromEntries(
     ENTRY_TYPE_DEFINITIONS.map((definition) => [definition.type, Object.freeze({ ...definition, fields: Object.freeze([...definition.fields]) })]),
@@ -57,6 +58,14 @@
   const MEAL_TYPES = ENTRY_TYPE_DEFINITIONS.filter((definition) => definition.mealGuidance).map((definition) => definition.type);
   const DEFAULT_ENTRY_TYPE = EXTRA_TYPES[0];
   const DEFAULT_EVENT_TYPE = EVENT_TYPE_DEFINITIONS[0].type;
+  const LOW_GLUCOSE_INSULIN_FIELDS = Object.freeze([
+    'insulinUnits', 'administeredInsulinUnits', 'suggestedBaseUnits', 'suggestedCorrectionUnits',
+    'suggestedTotalUnits', 'suggestedCarbDoseUnits', 'carbDoseUnits', 'roundedCarbDose',
+    'rawCarbDose', 'rawAggregateDose', 'roundedBaseDose', 'temporaryEatingAdjustmentUnits',
+    'insulinPlanId', 'insulinPlanSnapshot', 'insulinCarbRatioGrams', 'doseIncrementUnits',
+    'minimumAllowableDoseUnits', 'doseRoundingMode', 'calculationAudit',
+  ]);
+
   const TRACKER_NAV_ITEMS = Object.freeze([
     ['today', 'Today'],
     ['history', 'History'],
@@ -762,7 +771,7 @@
   }
 
   function entryTypeUsesFoodCalculator(type, eventType = 'check-insulin') {
-    return eventType === 'check-insulin' && ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
+    return eventType === 'check-insulin' && ['Low Glucose', 'Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
   }
 
   function normalizeCorrectionRange(range) {
@@ -1760,6 +1769,104 @@
     }, sharedPlan);
   }
 
+  function isLowGlucoseRecord(record) {
+    return record?.type === 'Low Glucose' || Object.hasOwn(record || {}, 'lowGlucoseEpisode');
+  }
+
+  function clearLowGlucoseInsulin(record) {
+    return { ...record, ...Object.fromEntries(LOW_GLUCOSE_INSULIN_FIELDS.map(key => [key, null])),
+      temporaryEatingAdjustmentApplied: false, temporaryEatingAdjustmentMessage: '',
+      minimumDoseWarning: '', insulinType: '', doseCalculationStatus: 'not-applicable' };
+  }
+
+  function lowGlucoseDoseResult() {
+    return { status: 'not-applicable', baseUnits: null, correctionUnits: null, carbDoseUnits: null,
+      suggestedTotalUnits: null, rawCarbDose: null, rawAggregateDose: null, roundedBaseDose: null,
+      temporaryEatingAdjustmentApplied: false, temporaryEatingAdjustmentUnits: null,
+      insulinPlanId: null, insulinPlanSnapshot: null, message: '' };
+  }
+
+  function isSupportedLowGlucoseEpisode(episode) {
+    const objectOrNull = value => value === null || (value && typeof value === 'object' && !Array.isArray(value));
+    if (!episode || episode.version !== 1 || !Array.isArray(episode.rechecks)
+      || !['thresholdSnapshot', 'closure', 'pendingRecheck'].every(key => Object.hasOwn(episode, key) && objectOrNull(episode[key]))) return false;
+    if (episode.closure && !['recovery-confirmed', 'ended-without-confirmed-recovery'].includes(episode.closure.kind)) return false;
+    if (episode.pendingRecheck && (!episode.pendingRecheck.id || !episode.pendingRecheck.sourceRoundId
+      || !Number.isFinite(Date.parse(episode.pendingRecheck.startedAt)) || !Number.isFinite(Date.parse(episode.pendingRecheck.dueAt)))) return false;
+    const ids = new Set();
+    return episode.rechecks.every(round => {
+      if (!round || typeof round.id !== 'string' || !round.id || ids.has(round.id)
+        || !Number.isFinite(Date.parse(round.recordTimestamp)) || !Number.isFinite(Number(round.bloodSugar)) || !(Number(round.bloodSugar) > 0)
+        || (round.carbs != null && (!Number.isFinite(Number(round.carbs)) || Number(round.carbs) < 0))) return false;
+      ids.add(round.id);
+      return true;
+    });
+  }
+
+  function resolveLowGlucoseThreshold(settings = trackerData.settings || {}, plan = null, timestamp = Date.now()) {
+    const status = getSharedSettingsStatus();
+    if (status.conflictCount) return null;
+    // Historical entry creation cannot claim today's configuration applied then.
+    if (getLocalDateKey(new Date(timestamp)) !== getLocalDateKey(new Date())) return null;
+    const value = settings.glucoseTargetMin ?? settings.targetGlucoseMin ?? settings.targetRangeMin;
+    const low = normalizeBloodSugar(value ?? plan?.targetGlucoseMin);
+    return low > 0 ? { lowMgDl: low, source: value != null ? 'configured-target-range' : 'plan',
+      ...(value == null && plan?.id ? { planId: plan.id } : {}) } : null;
+  }
+
+  function createLowGlucoseEpisode(thresholdSnapshot = null) {
+    return { version: 1, thresholdSnapshot, rechecks: [], closure: null, pendingRecheck: null };
+  }
+
+  function deriveLowGlucoseEpisode(record) {
+    const episode = record.lowGlucoseEpisode;
+    if (!isSupportedLowGlucoseEpisode(episode)) return null;
+    const rounds = episode.rechecks.slice().sort((a, b) => Date.parse(a.recordTimestamp) - Date.parse(b.recordTimestamp));
+    const threshold = normalizeBloodSugar(episode.thresholdSnapshot?.lowMgDl);
+    const initialTime = Date.parse(record.recordTimestamp);
+    const eligible = threshold > 0 ? rounds.filter(round => round.bloodSugar >= threshold && Date.parse(round.recordTimestamp) >= initialTime) : [];
+    const reference = rounds.find(round => round.id === episode.closure?.recheckId);
+    const confirmed = episode.closure?.kind === 'recovery-confirmed' && eligible.includes(reference);
+    const manual = episode.closure?.kind === 'ended-without-confirmed-recovery';
+    const firstRecovery = confirmed ? eligible[0] : null;
+    const recordedCarbs = [record.mealCarbs, ...rounds.map(round => round.carbs)].map(normalizeNumber).filter(value => value != null);
+    const readings = [Number(record.bloodSugar), ...rounds.map(round => Number(round.bloodSugar))].filter(value => Number.isFinite(value) && value > 0);
+    return { rounds, threshold: threshold > 0 ? threshold : null, eligible,
+      status: confirmed ? 'Recovery Confirmed' : manual ? 'Ended Without Confirmed Recovery' : 'Open',
+      latest: rounds.length ? rounds.at(-1).bloodSugar : record.bloodSugar,
+      lowest: readings.length ? Math.min(...readings) : null,
+      totalCarbs: recordedCarbs.length ? recordedCarbs.reduce((sum, value) => sum + value, 0) : null,
+      durationMinutes: firstRecovery ? (Date.parse(firstRecovery.recordTimestamp) - initialTime) / 60000 : null,
+      suspiciousChronology: rounds.some(round => Date.parse(round.recordTimestamp) < initialTime),
+      invalidClosure: Boolean(episode.closure && !confirmed && !manual) };
+  }
+
+  function updateLowGlucoseRound(record, round) {
+    const episode = record.lowGlucoseEpisode;
+    if (!isSupportedLowGlucoseEpisode(episode)) throw new Error('This episode requires a newer compatible LLT version.');
+    const rechecks = [...episode.rechecks];
+    const index = rechecks.findIndex(item => item.id === round.id);
+    if (index < 0) rechecks.push(round); else rechecks[index] = round;
+    let next = { ...record, lowGlucoseEpisode: { ...episode, rechecks, pendingRecheck: null } };
+    if (!isSupportedLowGlucoseEpisode(next.lowGlucoseEpisode)) throw new Error('Enter a valid recheck observation, timestamp and nonnegative treatment carbs.');
+    if (deriveLowGlucoseEpisode(next)?.invalidClosure) next.lowGlucoseEpisode.closure = null;
+    return next;
+  }
+
+  function closeLowGlucoseEpisode(record, kind) {
+    if (!['recovery-confirmed', 'ended-without-confirmed-recovery'].includes(kind)) throw new Error('Unsupported episode outcome.');
+    const derived = deriveLowGlucoseEpisode(record);
+    if (!derived) throw new Error('This episode requires a newer compatible LLT version.');
+    const reference = derived.eligible[0];
+    if (kind === 'recovery-confirmed' && !reference) throw new Error('A documented recheck at or above the episode threshold is required.');
+    return { ...record, lowGlucoseEpisode: { ...record.lowGlucoseEpisode, pendingRecheck: null,
+      closure: { kind, ...(kind === 'recovery-confirmed' ? { recheckId: reference.id } : {}), confirmedAt: new Date().toISOString() } } };
+  }
+
+  window.LeeLeeTrackerLowGlucose = Object.freeze({ isLowGlucoseRecord, isSupportedLowGlucoseEpisode,
+    clearLowGlucoseInsulin, lowGlucoseDoseResult, resolveLowGlucoseThreshold, createLowGlucoseEpisode,
+    deriveLowGlucoseEpisode, updateLowGlucoseRound, closeLowGlucoseEpisode });
+
   function normalizeDoseStatus(value) {
     return [
       'calculated',
@@ -1767,12 +1874,14 @@
       'unsupported-entry-type',
       'outside-configured-range',
       'manual',
+      'not-applicable',
       'unavailable',
     ].includes(value) ? value : 'manual';
   }
 
   function normalizeRecord(record) {
     if (!record || typeof record !== 'object') return null;
+    if (record.type === 'Low Glucose' && isSupportedLowGlucoseEpisode(record.lowGlucoseEpisode)) record = clearLowGlucoseInsulin(record);
     const legacyTimestamp = parseTimestamp(record.timestamp);
     const combinedTimestamp = createLocalTimestamp(record.date, record.time);
     const fallbackTimestamp = Number.isFinite(legacyTimestamp)
@@ -2537,6 +2646,7 @@
   function getFriendlySyncStatus(status = syncStatus, nowMs = Date.now()) {
     if (!status.configured) return { state: 'config-needed', message: 'Supabase setup needed' };
     if (!status.signedIn) return { state: 'signed-out', message: 'Sign in to sync' };
+    if (status.lastErrorCategory === 'low-glucose-compatibility') return { state: 'needs-attention', message: 'A Low Glucose write could not be saved safely. The attempted edit is retained. Use the latest compatible LLT version and review the pending item.' };
     if (status.conflictCount) return { state: 'conflict', message: 'Conflict needs review' };
     if (status.state === 'syncing') return { state: 'syncing', message: status.message || 'Syncing...' };
     if (status.state === 'offline') return { state: 'offline', message: status.message || 'Offline / Waiting to reconnect' };
@@ -2708,6 +2818,7 @@
       ['Activity', [shared.activityDescription, formatActivityDuration(shared.activityDurationMinutes), shared.activityIntensity].filter(Boolean).join(' · '), [local.activityDescription, formatActivityDuration(local.activityDurationMinutes), local.activityIntensity].filter(Boolean).join(' · ')],
       ['Blood Sugar', formatConflictValue(shared.bloodSugar, formatBloodSugar), formatConflictValue(local.bloodSugar, formatBloodSugar)],
       ['Insulin', formatConflictValue(getRecordActualInsulin(shared), formatInsulin), formatConflictValue(getRecordActualInsulin(local), formatInsulin)],
+      ...(isLowGlucoseRecord(local) || isLowGlucoseRecord(shared) ? [['Episode / rechecks / outcome / pending reminder', JSON.stringify(shared.lowGlucoseEpisode || null), JSON.stringify(local.lowGlucoseEpisode || null)]] : []),
       ['Notes', shared.notes || '', local.notes || ''],
       ['Deleted', shared.deletedAt ? 'Deleted' : 'Active', local.deletedAt ? 'Deleted' : 'Active'],
     ];
@@ -2976,6 +3087,7 @@
   }
 
   function calculateMealInsulinDose({ bloodSugar, entryType, insulinPlan, recordTimestamp, totalCarbs = 0 }) {
+    if (entryType === 'Low Glucose') return lowGlucoseDoseResult();
     const glucoseText = String(bloodSugar ?? '').trim();
     if (entryType === BEDTIME_CONTEXT_TYPE) {
       if (!insulinPlan || !Number.isFinite(Number(recordTimestamp))) {
@@ -3214,6 +3326,7 @@
   }
 
   function getRecordActualInsulin(record) {
+    if (isLowGlucoseRecord(record)) return null;
     return normalizeNumber(record?.administeredInsulinUnits ?? record?.insulinUnits);
   }
 
@@ -3361,6 +3474,7 @@
   }
 
   function getRecordCarbs(record) {
+    if (isLowGlucoseRecord(record)) return null;
     return normalizeNumber(record?.mealCarbs ?? record?.totalCarbs ?? record?.carbs);
   }
 
@@ -4167,6 +4281,7 @@
   }
 
   function renderEntryCardContent(record, { today = false } = {}) {
+    if (isLowGlucoseRecord(record)) return renderLowGlucoseCard(record, { interactive: today || ['history', 'history-day'].includes(currentEditor?.mode) });
     const content = getEntryCardContent(record);
     const renderedPrimary = getRenderedRecordPrimaryValue(record);
     const primary = today && record.eventType === 'check-insulin'
@@ -4294,10 +4409,10 @@
     currentEditor = null;
     const root = getRoot();
     if (!root) return;
-    const initialTimer = window.LeeLeePreMealTimer?.normalize();
+    const initialTimer = getPurposeAwareTimer();
     window.clearInterval(preMealTimerRefresh);
     preMealTimerRefresh = window.setInterval(() => {
-      const timer = window.LeeLeePreMealTimer?.normalize();
+      const timer = getPurposeAwareTimer();
       const value = root.querySelector('[data-pre-meal-timer-value]');
       if (value && timer?.status === 'active') value.textContent = formatPreMealRemaining(timer);
       if (timer?.status === 'completed') {
@@ -4311,6 +4426,7 @@
       ${renderTrackerTop({ active: 'today' })}
       ${renderTrackerNav('today')}
       ${renderPreMealTimerCard()}
+      ${renderOpenLowGlucoseEpisodes()}
       <div data-dexcom-card></div>
       <section aria-labelledby="lee-lee-diabetes-timeline-title">
         <h2 class="lee_lee_diabetes_section_title" id="lee-lee-diabetes-timeline-title">Today’s Activity</h2>
@@ -5625,16 +5741,18 @@
     `;
   }
 
+  function getEditorTypeFromState() { return currentEditor?.type; }
+
   function renderMealCarbsSection(record = {}) {
     const value = record.mealCarbs ?? record.totalCarbs ?? '';
     return `
       <section class="lee_lee_diabetes_carb_entry" data-carb-entry aria-labelledby="lee-lee-carb-entry-title">
-        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-entry-title">Meal Carbs</h2>
+        <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-entry-title">${getEditorTypeFromState() === 'Low Glucose' ? 'Treatment Carbs' : 'Meal Carbs'}</h2>
         <div class="lee_lee_diabetes_carb_entry_controls">
           <label class="lee_lee_diabetes_field lee_lee_diabetes_carb_total_field">
             Total Carbs
             <span class="lee_lee_diabetes_unit_input">
-              <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" required value="${escapeHtml(value)}">
+              <input class="lee_lee_diabetes_input" name="mealCarbs" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" ${getEditorTypeFromState() === 'Low Glucose' ? '' : 'required'} value="${escapeHtml(value)}">
               <span>g</span>
             </span>
           </label>
@@ -6035,6 +6153,10 @@
     const previousEditor = currentEditor;
     const previousCarbCalculatorFocus = captureCarbCalculatorFocus(root);
     const record = options.record || {};
+    if (isLowGlucoseRecord(record) && record.id && options.mode !== 'low-glucose-recheck' && !isSupportedLowGlucoseEpisode(record.lowGlucoseEpisode)) {
+      root.innerHTML = '<section class="lee_lee_diabetes_editor"><h1>Low Glucose episode</h1><p role="status">This episode cannot be edited safely with this LLT version. Use the latest compatible version. Your saved episode is preserved.</p><button type="button" class="lee_lee_diabetes_button" data-action="today">Back to Today</button></section>';
+      return;
+    }
     const recordComponentRows = record.id && Array.isArray(record.mealComponents) && record.mealComponents.length
       ? carbRowsFromMealComponents(record.mealComponents)
       : [];
@@ -6044,6 +6166,8 @@
       && previousEditor.id === (record.id || null);
     currentEditor = {
       mode: options.mode,
+      lowGlucoseParent: options.lowGlucoseParent || (sameEditorSession ? previousEditor.lowGlucoseParent : null),
+      lowGlucoseRoundId: options.lowGlucoseRoundId || (sameEditorSession ? previousEditor.lowGlucoseRoundId : null),
       id: record.id || null,
       eventType: normalizeEventType(record.eventType || options.eventType, record),
       type: record.type || options.type || DEFAULT_ENTRY_TYPE,
@@ -6090,14 +6214,15 @@
     const eventTime = record.time || getLocalTimeKey(new Date(recordTimestamp));
     const eventConfig = getEventTypeConfig(currentEditor.eventType);
     const contextType = normalizeRecordContext(currentEditor.type, currentEditor.eventType);
+    const lowGlucose = contextType === 'Low Glucose';
     const showCarbEntry = eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor${currentEditor.preserveDocumentScrollOnViewportPan ? ' data-preserve-document-scroll-on-viewport-pan' : ''}>
         <div class="lee_lee_diabetes_editor_main" data-editor-main ${currentEditor.carbCalculatorOpen ? 'inert aria-hidden="true"' : ''}>
-          <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
+          <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.mode === 'low-glucose-recheck' ? 'Record Recheck' : currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
           ${showLegacyEventSelect ? renderEventTypeSelect(currentEditor.eventType) : `<input type="hidden" name="eventType" value="${escapeHtml(currentEditor.eventType)}">`}
-          ${renderTypeSelect(contextType)}
+          ${currentEditor.mode === 'low-glucose-recheck' ? '<input type="hidden" name="type" value="Low Glucose">' : renderTypeSelect(contextType)}
           <p class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" data-editor-error role="alert" hidden>${escapeHtml(options.error || '')}</p>
           ${eventConfig.fields.includes('bloodSugar') ? `
             <label class="lee_lee_diabetes_field">
@@ -6132,7 +6257,7 @@
             <input class="lee_lee_diabetes_input" name="time" type="time" required value="${escapeHtml(eventTime)}">
           </label>
           <div data-dose-helper aria-live="polite"></div>
-              ${eventConfig.fields.includes('insulinUnits') ? `
+              ${!lowGlucose && eventConfig.fields.includes('insulinUnits') ? `
             <label class="lee_lee_diabetes_field">
               <span data-insulin-label>${entryTypeUsesDoseGuidance(contextType) ? 'Insulin Actually Given' : 'Insulin'}</span>
               <input class="lee_lee_diabetes_input" name="insulinUnits" type="number" inputmode="decimal" min="0" step="${escapeHtml(getDoseIncrementUnits(getCurrentPlan()))}" autocomplete="off" value="${escapeHtml(record.administeredInsulinUnits ?? record.insulinUnits ?? '')}">
@@ -6221,6 +6346,8 @@
   function buildDraftFromEditor(form) {
     return {
       id: currentEditor?.id || '',
+      ...(getEditorType(form) === 'Low Glucose' && currentEditor?.originalRecord?.lowGlucoseEpisode
+        ? { lowGlucoseEpisode: currentEditor.originalRecord.lowGlucoseEpisode } : {}),
       eventType: normalizeEventType(form.elements.eventType?.value),
       type: form.elements.type?.value || '',
       bloodSugar: form.elements.bloodSugar?.value || '',
@@ -6328,6 +6455,7 @@
 
   function getEditorDoseResult(form) {
     const type = getEditorType(form);
+    if (type === 'Low Glucose') return lowGlucoseDoseResult();
     const recordTimestamp = getEditorRecordTimestamp(form);
     const eventType = getEditorEventType(form);
     if (eventType !== 'check-insulin' || !entryTypeUsesDoseGuidance(type)) {
@@ -6507,7 +6635,13 @@
     const helper = form.querySelector('[data-dose-helper]');
     const result = getEditorDoseResult(form);
     if (helper) {
-      helper.innerHTML = renderDoseHelperResult(result);
+      const episode = currentEditor?.lowGlucoseParent?.lowGlucoseEpisode || currentEditor?.originalRecord?.lowGlucoseEpisode;
+      const snapshot = episode ? episode.thresholdSnapshot
+        : (type === 'Low Glucose' ? resolveLowGlucoseThreshold(trackerData.settings, null, getEditorRecordTimestamp(form)) : null);
+      const threshold = normalizeBloodSugar(snapshot?.lowMgDl);
+      const glucose = normalizeBloodSugar(form.elements.bloodSugar?.value);
+      const status = threshold > 0 ? `Episode threshold: ${threshold} mg/dL.${glucose > 0 ? ` This observation is ${glucose < threshold ? 'below' : 'at or above'} that threshold.` : ''}` : 'Episode threshold unavailable; recovery comparison is unavailable.';
+      helper.innerHTML = type === 'Low Glucose' ? `<p class="lee_lee_diabetes_help">Insulin is not applicable. ${escapeHtml(status)}</p>` : renderDoseHelperResult(result);
     }
     const insulinInput = form.elements.insulinUnits;
     const userEditedInsulin = form.dataset.userEditedInsulin === 'true' || currentEditor?.userEditedInsulin === true;
@@ -7276,13 +7410,243 @@
         records: nextRecords,
       };
     });
-    syncRepository?.queueUpsert(record, existingRecord);
-    updateRecentFoodsFromComponents(record.mealComponents || []);
+    if (!isLowGlucoseRecord(record) || saved.ok === true) syncRepository?.queueUpsert(record, existingRecord);
+    if (!isLowGlucoseRecord(record) || saved.ok === true) updateRecentFoodsFromComponents(record.mealComponents || []);
     return { ...saved, existingRecord };
   }
 
+  function renderLowGlucoseCard(record, { interactive = true } = {}) {
+    const derived = deriveLowGlucoseEpisode(record);
+    const id = escapeHtml(record.id);
+    if (!derived) return '<div><h3>Low Glucose</h3><p>Compatibility review required. Use the latest compatible LLT version. Episode data is preserved.</p></div>';
+    const roundLine = (round, initial = false) => `<li><strong>${initial ? 'Initial observation' : 'Recheck'}</strong> · ${renderRecordDateTime(round.recordTimestamp)}<p>${renderBloodSugar(round.bloodSugar)}${round.carbs == null ? '' : ` · Treatment ${renderCarbs(round.carbs)}`}</p>${round.notes ? `<p class="lee_lee_diabetes_timeline_notes">${escapeHtml(round.notes)}</p>` : ''}${(round.carbComponents || []).length ? `<p>${(round.carbComponents || []).map(component => escapeHtml(component.nameSnapshot || component.name || component.label || 'Recorded food')).join(', ')}</p>` : ''}${interactive && !initial ? `<button class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" type="button" data-action="low-edit-recheck" data-id="${id}" data-round-id="${escapeHtml(round.id)}">Edit Recheck</button>` : ''}</li>`;
+    return `<div class="lee_lee_diabetes_low_episode" data-low-glucose-episode="${id}">
+      <h3 class="lee_lee_diabetes_timeline_type">Low Glucose</h3><p><strong>${escapeHtml(derived.status)}</strong></p>
+      <p>Initial ${renderBloodSugar(record.bloodSugar)} · Latest ${renderBloodSugar(derived.latest)}</p>
+      <p>Lowest documented ${renderBloodSugar(derived.lowest)} · Total recorded treatment ${derived.totalCarbs == null ? 'not recorded' : renderCarbs(derived.totalCarbs)} · ${derived.rounds.length} rechecks</p>
+      <p class="lee_lee_diabetes_help">${derived.threshold == null ? 'Episode threshold unavailable; recovery comparison is unavailable.' : `Episode threshold: ${derived.threshold} mg/dL.`}</p>
+      ${derived.durationMinutes == null ? '' : `<p>Time to first documented recovery recheck: ${renderNumeric(String(Math.round(derived.durationMinutes)))} min. This does not measure the exact biological recovery time.</p>`}
+      ${derived.suspiciousChronology ? '<p role="status">A recheck predates the initial observation. Review the recorded times.</p>' : ''}
+      ${derived.invalidClosure ? '<p role="status">Recovery needs reconfirmation. Review the referenced recheck.</p>' : ''}
+      ${record.lowGlucoseEpisode.pendingRecheck ? `<p>Pending recheck · ${renderRecordDateTime(record.lowGlucoseEpisode.pendingRecheck.dueAt)}</p>` : ''}
+      <details><summary>Episode timeline</summary><ol>${roundLine({ ...record, carbs: record.mealCarbs, carbComponents: record.mealComponents }, true)}${derived.rounds.map(round => roundLine(round)).join('')}</ol></details>
+      ${interactive && derived.status === 'Open' ? `<div class="lee_lee_diabetes_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="low-record-recheck" data-id="${id}">Record Recheck</button>${derived.eligible.length ? `<button type="button" class="lee_lee_diabetes_button" data-action="low-confirm-recovery" data-id="${id}">Mark Episode Complete</button>` : `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="low-offer-timer" data-id="${id}">Recheck Timer</button>`}<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="low-end-episode" data-id="${id}">End Without Confirmed Recovery</button></div>` : ''}
+    </div>`;
+  }
+
+  function renderOpenLowGlucoseEpisodes() {
+    const today = getLocalDateKey(new Date());
+    const open = records.filter(record => !isRecordDeleted(record) && isLowGlucoseRecord(record)
+      && getRecordEventDateKey(record) !== today && deriveLowGlucoseEpisode(record)?.status === 'Open');
+    return open.length ? `<section aria-label="Open Low Glucose episodes"><h2 class="lee_lee_diabetes_section_title">Open Low Glucose Episodes</h2>${open.map(renderTimelineItem).join('')}</section>` : '';
+  }
+
+  function showLowGlucoseDialog(title, message, buttons, state = {}) {
+    const root = getRoot();
+    if (!root) return;
+    root.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
+    currentEditor = { ...(currentEditor || {}), ...state };
+    [...root.children].forEach(child => { child.inert = true; });
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" data-low-dialog role="dialog" aria-modal="true" aria-labelledby="low-dialog-title" aria-describedby="low-dialog-message"><div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div><section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--low"><h1 id="low-dialog-title">${escapeHtml(title)}</h1><p id="low-dialog-message" role="status">${escapeHtml(message)}</p><div class="lee_lee_diabetes_actions">${buttons}</div></section></div>`);
+    root.querySelector('[data-low-dialog] button')?.focus();
+  }
+
+  function lowButton(action, label, id = '') {
+    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="${action}" data-id="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
+  }
+
+  function saveLowGlucoseEditor(form) {
+    const existing = currentEditor?.originalRecord;
+    if (currentEditor.mode !== 'low-glucose-recheck' && existing && !isSupportedLowGlucoseEpisode(existing.lowGlucoseEpisode)) {
+      showEditorError(form, 'This episode requires a newer compatible LLT version.'); return;
+    }
+    const glucose = normalizeBloodSugar(form.elements.bloodSugar?.value);
+    if (!(glucose > 0)) { showEditorError(form, 'Enter the observed Blood Sugar above zero.'); return; }
+    const record = buildRecordFromForm(form);
+    if (!record) return;
+    if (currentEditor.mode === 'low-glucose-recheck') {
+      const parent = currentEditor.lowGlucoseParent;
+      const latest = records.find(item => item.id === parent?.id);
+      if (!latest || isRecordDeleted(latest) || latest.version !== parent.version
+        || JSON.stringify(latest.lowGlucoseEpisode) !== JSON.stringify(parent.lowGlucoseEpisode)) {
+        showEditorError(form, 'This episode changed while you were editing. Your inputs are still here. Review the latest episode before saving this recheck.'); return;
+      }
+      const previous = parent.lowGlucoseEpisode.rechecks.find(round => round.id === currentEditor.lowGlucoseRoundId);
+      const round = { ...(previous || {}), id: currentEditor.lowGlucoseRoundId, recordTimestamp: record.recordTimestamp,
+        bloodSugar: glucose, carbs: record.mealCarbs, carbComponents: record.mealComponents, foods: record.foods,
+        notes: record.notes, treatmentTimestamp: record.recordTimestamp,
+        createdAt: previous?.createdAt || record.updatedAt, updatedAt: record.updatedAt,
+        enteredBy: previous?.enteredBy || record.enteredBy, lastEditedBy: previous ? record.enteredBy : null };
+      const next = updateLowGlucoseRound(parent, round);
+      next.updatedAt = record.updatedAt;
+      persistLowGlucoseRecord(next, form, true);
+      return;
+    }
+    if (existing) {
+      const latest = records.find(item => item.id === existing.id);
+      if (latest && JSON.stringify(latest.lowGlucoseEpisode) !== JSON.stringify(existing.lowGlucoseEpisode)) {
+        showEditorError(form, 'This episode changed while you were editing. Your inputs are still here. Review its latest rechecks before saving.'); return;
+      }
+      if (deriveLowGlucoseEpisode(record)?.invalidClosure) record.lowGlucoseEpisode = { ...record.lowGlucoseEpisode, closure: null };
+      persistLowGlucoseRecord(record, form, false); return;
+    }
+    const threshold = record.lowGlucoseEpisode.thresholdSnapshot?.lowMgDl;
+    if (threshold > 0 && glucose >= threshold) {
+      showLowGlucoseDialog('Save Low Glucose episode?', `This glucose is at or above the current low threshold of ${threshold} mg/dL. Save this as a Low Glucose episode anyway?`, lowButton('low-confirm-initial', 'Save Episode') + lowButton('low-back-initial', 'Go Back'), { pendingLowGlucoseRecord: record });
+      return;
+    }
+    persistLowGlucoseRecord(record, form, true);
+  }
+
+  function persistLowGlucoseRecord(record, form = null, offer = false) {
+    const latest = records.find(item => item.id === record.id);
+    if (latest && (latest.version !== record.version || latest.syncStatus === 'conflict')) {
+      showEditorError(form, 'This episode changed. Review the latest version before saving.'); return false;
+    }
+    const previousData = trackerData;
+    const saved = upsertRecord(record);
+    if (saved.ok !== true) {
+      trackerData = previousData; records = previousData.records; insulinPlans = previousData.insulinPlans;
+      foodLibrary = previousData.foodLibrary; savedMeals = previousData.savedMeals;
+      if (form) showEditorError(form, 'The episode could not be saved locally. Your inputs are still here; try again.');
+      else showLowGlucoseDialog('Save needs attention', 'The episode could not be saved locally. The attempted change is retained; try again.', lowButton('low-retry-record', 'Try Again') + lowButton('low-done', 'Back to Today'), { pendingLowGlucoseRecord: record, offerLowGlucoseTimer: offer });
+      return false;
+    }
+    renderAfterRecordChange(record);
+    if (offer && deriveLowGlucoseEpisode(record)?.status === 'Open') {
+      const derived = deriveLowGlucoseEpisode(record);
+      if (derived.eligible.length) showLowGlucoseDialog('Recheck Saved', `This documented recheck is at or above the episode threshold of ${derived.threshold} mg/dL. The episode remains open until you explicitly confirm completion.`, lowButton('low-confirm-recovery', 'Mark Episode Complete', record.id) + lowButton('low-done', 'Done'));
+      else renderLowGlucoseTimerOffer(record);
+    }
+    return true;
+  }
+
+  function openLowGlucoseRecheck(record, roundId = '') {
+    if (!record || isRecordDeleted(record) || !deriveLowGlucoseEpisode(record)) return;
+    const previous = record.lowGlucoseEpisode.rechecks.find(round => round.id === roundId);
+    const id = previous?.id || createId();
+    const timestamp = previous?.recordTimestamp || new Date().toISOString();
+    renderEditor({ mode: 'low-glucose-recheck', lowGlucoseParent: JSON.parse(JSON.stringify(record)), lowGlucoseRoundId: id,
+      returnTo: getCurrentTopLevelSection() === 'history' ? 'history' : 'today',
+      record: { id, type: 'Low Glucose', eventType: 'check-insulin', recordTimestamp: timestamp,
+        bloodSugar: previous?.bloodSugar ?? '', mealCarbs: previous?.carbs ?? '',
+        mealComponents: previous?.carbComponents || [], notes: previous?.notes || '' } });
+  }
+
+  function renderLowGlucoseTimerOffer(record, error = '') {
+    showLowGlucoseDialog('Episode Saved', error || 'Optional reminder to record another glucose observation.',
+      lowButton('low-start-timer', 'Start 15-Min Recheck Timer', record.id) + lowButton('low-done', 'Done'),
+      { mode: 'low-timer-offer', pendingTimerRecord: record });
+  }
+
+  function getPurposeAwareTimer() {
+    const timer = window.LeeLeePreMealTimer?.normalize();
+    if (timer?.purpose !== 'low-glucose-recheck') return timer;
+    const record = records.find(item => item.id === timer.episodeId);
+    if (!record || isRecordDeleted(record) || deriveLowGlucoseEpisode(record)?.status !== 'Open'
+      || record.lowGlucoseEpisode.pendingRecheck?.id !== timer.scheduleId) {
+      window.LeeLeePreMealTimer.dismiss(); return null;
+    }
+    return timer;
+  }
+
+  function startLowGlucoseTimer(record, replace = false) {
+    window.LeeLeeDeadlineAlerts?.unlock?.();
+    const service = window.LeeLeePreMealTimer;
+    const latest = records.find(item => item.id === record?.id);
+    if (!service || !latest || deriveLowGlucoseEpisode(latest)?.status !== 'Open') return;
+    const current = getPurposeAwareTimer();
+    if (current?.status === 'active' && !replace) {
+      showLowGlucoseDialog('Timer Already Running', 'Keep the current timer or replace it with a 15-minute Low Glucose recheck timer?',
+        lowButton('low-done', 'Keep Current Timer') + lowButton('low-replace-timer', 'Replace Timer', latest.id), { pendingTimerRecord: latest });
+      return;
+    }
+    if (current?.purpose === 'low-glucose-recheck' && current.episodeId !== latest.id) {
+      const oldRecord = records.find(item => item.id === current.episodeId);
+      if (oldRecord && !persistLowGlucoseRecord({ ...oldRecord, lowGlucoseEpisode: { ...oldRecord.lowGlucoseEpisode, pendingRecheck: null } })) return;
+    }
+    const start = Date.now();
+    const schedule = { id: createId(), sourceRoundId: deriveLowGlucoseEpisode(latest).rounds.at(-1)?.id || latest.id,
+      startedAt: new Date(start).toISOString(), dueAt: new Date(start + 15 * 60000).toISOString() };
+    const next = { ...latest, updatedAt: new Date().toISOString(), lowGlucoseEpisode: { ...latest.lowGlucoseEpisode, pendingRecheck: schedule } };
+    if (!persistLowGlucoseRecord(next)) return;
+    const timer = service.start({ purpose: 'low-glucose-recheck', episodeId: latest.id, scheduleId: schedule.id,
+      startedAt: start, durationMinutes: 15, sourceEntryId: latest.id, sourceEntry: latest });
+    if (timer) renderLowGlucoseTimerModal(timer);
+    else renderLowGlucoseTimerOffer(next, 'The reminder schedule is saved, but the local timer could not start. You can record a recheck from the episode card.');
+  }
+
+  function renderLowGlucoseTimerModal(timer) {
+    if (!timer || !getPurposeAwareTimer()) return;
+    const completed = timer.status === 'completed';
+    if (completed && !window.LeeLeePreMealTimer?.getTimer()?.completionPresented) {
+      window.LeeLeeDeadlineAlerts?.chime?.();
+      window.LeeLeePreMealTimer?.markCompletionPresented?.();
+    }
+    showLowGlucoseDialog(completed ? 'Recheck Glucose' : 'Low Glucose Recheck',
+      completed ? 'The 15-minute reminder has finished. Record the actual glucose observation when available.' : 'Optional reminder. Background alarms are not guaranteed; completion appears when you return.',
+      (completed ? lowButton('low-timer-recheck', 'Record Recheck', timer.episodeId) : '') + lowButton('low-done', completed ? 'Later' : 'Back') + (!completed ? lowButton('low-stop-timer', 'Stop Timer', timer.episodeId) : ''), { mode: 'low-timer', timer });
+    getRoot()?.querySelector('#low-dialog-message')?.insertAdjacentHTML('beforebegin', `<p class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</p>`);
+    window.clearInterval(preMealTimerRefresh);
+    if (!completed) preMealTimerRefresh = window.setInterval(() => {
+      const current = getPurposeAwareTimer();
+      if (!current) { renderHome(); return; }
+      const element = getRoot()?.querySelector('[data-pre-meal-timer-value]');
+      if (element) element.textContent = formatPreMealRemaining(current);
+      if (current.status === 'completed') { window.clearInterval(preMealTimerRefresh); renderLowGlucoseTimerModal(current); }
+    }, 1000);
+  }
+
+  function handleLowGlucoseAction(action, target) {
+    const id = target.dataset.id;
+    const record = records.find(item => item.id === id);
+    if (action === 'low-timer-recheck') {
+      const timer = getPurposeAwareTimer();
+      if (!timer || timer.scheduleId !== currentEditor?.timer?.scheduleId) { renderHome(); return; }
+      openLowGlucoseRecheck(record); return;
+    }
+    if (action === 'low-record-recheck') { openLowGlucoseRecheck(record); return; }
+    if (action === 'low-edit-recheck') { openLowGlucoseRecheck(record, target.dataset.roundId); return; }
+    if (action === 'low-offer-timer') { renderLowGlucoseTimerOffer(record); return; }
+    if (action === 'low-start-timer' || action === 'low-replace-timer') { startLowGlucoseTimer(record, action === 'low-replace-timer'); return; }
+    if (action === 'low-confirm-initial' || action === 'low-retry-record') { persistLowGlucoseRecord(currentEditor.pendingLowGlucoseRecord, null, true); return; }
+    if (action === 'low-back-initial') {
+      const pending = currentEditor.pendingLowGlucoseRecord;
+      renderEditor({ mode: 'log-entry', record: pending });
+      // This was a new draft, not a persisted historical record.
+      currentEditor.id = null; currentEditor.originalRecord = null;
+      return;
+    }
+    if (action === 'low-confirm-recovery' || action === 'low-end-episode') {
+      if (!record || !deriveLowGlucoseEpisode(record)) return;
+      const recovery = action === 'low-confirm-recovery';
+      showLowGlucoseDialog(recovery ? 'Confirm documented recovery?' : 'End Without Confirmed Recovery?',
+        recovery ? 'Mark this episode complete using its first documented qualifying recheck? This does not measure the exact biological recovery time.' : 'End this episode without confirming recovery? This is a separate documented outcome.',
+        lowButton(recovery ? 'low-close-recovery' : 'low-close-manual', recovery ? 'Mark Episode Complete' : 'End Without Confirmed Recovery', id) + lowButton('low-done', 'Cancel'),
+        { lowGlucoseClosureRecord: JSON.parse(JSON.stringify(record)) }); return;
+    }
+    if (action === 'low-close-recovery' || action === 'low-close-manual') {
+      const original = currentEditor.lowGlucoseClosureRecord;
+      if (!record || JSON.stringify(record.lowGlucoseEpisode) !== JSON.stringify(original?.lowGlucoseEpisode)) {
+        showLowGlucoseDialog('Episode changed', 'Review the latest episode before confirming its outcome.', lowButton('low-done', 'Back to Today')); return;
+      }
+      persistLowGlucoseRecord(closeLowGlucoseEpisode(record, action === 'low-close-recovery' ? 'recovery-confirmed' : 'ended-without-confirmed-recovery')); return;
+    }
+    if (action === 'low-stop-timer') {
+      if (record) persistLowGlucoseRecord({ ...record, lowGlucoseEpisode: { ...record.lowGlucoseEpisode, pendingRecheck: null } });
+      return;
+    }
+    if (action === 'low-done') {
+      const episodeId = currentEditor?.pendingTimerRecord?.id || currentEditor?.timer?.episodeId || currentEditor?.lowGlucoseClosureRecord?.id;
+      if (currentEditor?.timer?.status === 'completed') window.LeeLeePreMealTimer?.dismiss();
+      renderHome();
+      const focus = [...(getRoot()?.querySelectorAll('button[data-id]') || [])].find(button => button.dataset.id === episodeId);
+      (focus || getRoot()?.querySelector('[data-action="log-entry"]'))?.focus();
+    }
+  }
+
   function isPreMealTimerEntryEligible(record, existingRecord) {
-    return !existingRecord && record?.eventType !== 'activity' && normalizeNumber(record?.mealCarbs) > 0;
+    return !isLowGlucoseRecord(record) && !existingRecord && record?.eventType !== 'activity' && normalizeNumber(record?.mealCarbs) > 0;
   }
 
   function formatPreMealRemaining(timer) {
@@ -7291,18 +7655,19 @@
   }
 
   function renderPreMealTimerCard() {
-    const timer = window.LeeLeePreMealTimer?.normalize();
+    const timer = getPurposeAwareTimer();
     if (!timer || timer.status !== 'active') return '';
-    return `<button type="button" class="lee_lee_diabetes_pre_meal_timer_card" data-action="open-pre-meal-timer" aria-label="Open active Pre-Meal Timer">
+    return `<button type="button" class="lee_lee_diabetes_pre_meal_timer_card" data-action="open-pre-meal-timer" aria-label="${timer.purpose === 'low-glucose-recheck' ? 'Open Low Glucose Recheck Timer' : 'Open active Pre-Meal Timer'}">
       <span class="lee_lee_diabetes_pre_meal_timer_icon" aria-hidden="true">⏱</span>
-      <span><strong>Pre-meal timer</strong><small>Ready to eat in about ${timer.durationMinutes} minutes</small></span>
+      <span><strong>${timer.purpose === 'low-glucose-recheck' ? 'Low Glucose Recheck' : 'Pre-meal timer'}</strong><small>${timer.purpose === 'low-glucose-recheck' ? 'Recheck glucose reminder' : `Ready to eat in about ${timer.durationMinutes} minutes`}</small></span>
       <strong class="lee_lee_diabetes_pre_meal_timer_value" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</strong><span aria-hidden="true">›</span>
     </button>`;
   }
 
-  function renderPreMealTimerModal(timer = window.LeeLeePreMealTimer?.normalize(), options = {}) {
+  function renderPreMealTimerModal(timer = getPurposeAwareTimer(), options = {}) {
     const root = getRoot();
     if (!root || !timer) return;
+    if (timer.purpose === 'low-glucose-recheck') { renderLowGlucoseTimerModal(timer); return; }
     const completed = timer.status === 'completed';
     const stopped = timer.status === 'stopped';
     const startedFromSave = options.startedFromSave === true && timer.status === 'active';
@@ -7342,7 +7707,7 @@
     window.clearInterval(preMealTimerRefresh);
     if (!completed && !stopped) {
       preMealTimerRefresh = window.setInterval(() => {
-        const current = window.LeeLeePreMealTimer?.normalize();
+        const current = getPurposeAwareTimer();
         const values = root.querySelectorAll('.lee_lee_diabetes_pre_meal_timer_panel [data-pre-meal-timer-value]');
         if (current?.status === 'active') values.forEach((value) => { value.textContent = formatPreMealRemaining(current); });
         if (current?.status === 'completed') {
@@ -7432,7 +7797,7 @@
         <div class="lee_lee_diabetes_pre_meal_timer_status_icon is-conflict" aria-hidden="true">⏱</div>
         <h1 id="pre-meal-conflict-title">Timer Already Running</h1>
         <div class="lee_lee_diabetes_pre_meal_timer_conflict_time">${formatPreMealRemaining(timer)} <span>remaining</span></div>
-        <p class="lee_lee_diabetes_pre_meal_timer_message">A pre-meal timer is already active. Keep it or restart it with the configured duration?</p>
+        <p class="lee_lee_diabetes_pre_meal_timer_message">${timer.purpose === 'low-glucose-recheck' ? 'A Low Glucose recheck timer is active.' : 'A pre-meal timer is already active.'} Keep it or replace it with the configured pre-meal timer?</p>
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_pre_meal_timer_conflict_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="keep-pre-meal-timer">Keep Current Timer</button><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="restart-pre-meal-timer">Restart Timer</button><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--text" data-action="dismiss-pre-meal-timer">Cancel</button></div>
       </section>
     </div>`);
@@ -7449,6 +7814,15 @@
       return null;
     }
     const nowTimestamp = now.toISOString();
+    if (observedContext.type === 'Low Glucose') {
+      return clearLowGlucoseInsulin({ ...(existing || {}), ...observedContext, id: existing?.id || createId(),
+        date: getLocalDateKey(new Date(recordTimestamp)), time: getLocalTimeKey(new Date(recordTimestamp)),
+        recordTimestamp: new Date(recordTimestamp).toISOString(), totalCarbs: observedContext.mealCarbs,
+        carbComponents: observedContext.mealComponents, createdAt: existing?.createdAt || nowTimestamp,
+        updatedAt: nowTimestamp, version: existing?.version || 1, enteredBy: existing?.enteredBy || syncRepository?.getDeviceIdentity?.() || 'Unknown',
+        lastEditedBy: existing ? syncRepository?.getDeviceIdentity?.() || 'Unknown' : null, source: existing?.source || 'app',
+        lowGlucoseEpisode: existing?.lowGlucoseEpisode || createLowGlucoseEpisode(resolveLowGlucoseThreshold(trackerData.settings, null, recordTimestamp)) });
+    }
     const calculatedGuidance = getCalculatedGuidance(form);
     const actualAction = getActualRecordedAction(form, calculatedGuidance);
     const preserveOriginalCalculation = Boolean(existing && !hasDoseAffectingEditorChanges(form, existing));
@@ -7621,6 +7995,7 @@
   }
 
   function handleSave(form) {
+    if (getEditorType(form) === 'Low Glucose') { saveLowGlucoseEditor(form); return; }
     if (currentEditor?.id && hasDoseAffectingEditorChanges(form, currentEditor.originalRecord)) {
       if (!getHistoricalPlanForRecord(currentEditor.originalRecord)) {
         showEditorError(form, 'This historical entry cannot safely recalculate because the insulin plan used for it is unavailable. You can still correct notes or the insulin actually given.');
@@ -9929,6 +10304,7 @@
       if (!target) return;
       if (currentEditor?.mode === 'settings') saveSettingsUiState();
       const action = target.dataset.action;
+      if (action?.startsWith('low-')) { handleLowGlucoseAction(action, target); return; }
       if (action === 'reset-password') {
         const form = target.closest('[data-auth-form]');
         const email = form?.elements.email?.value || '';
@@ -10202,7 +10578,7 @@
         if (input) input.value = Math.min(60, Math.max(1, Number(input.value || 15) + Number(target.dataset.delta || 0)));
       }
       if (action === 'open-pre-meal-timer') {
-        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+        renderPreMealTimerModal(getPurposeAwareTimer());
       }
       if (action === 'close-pre-meal-timer' || action === 'dismiss-pre-meal-timer') {
         if (action === 'dismiss-pre-meal-timer' && currentEditor?.mode === 'pre-meal-conflict' && currentEditor.pendingTimerRecord) {
@@ -10226,13 +10602,13 @@
         return;
       }
       if (action === 'stop-pre-meal-timer') {
-        const timer = window.LeeLeePreMealTimer?.normalize();
+        const timer = getPurposeAwareTimer();
         if (timer?.status === 'active') renderPreMealTimerStopConfirmation(timer);
         return;
       }
       if (action === 'cancel-stop-pre-meal-timer') {
         target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
-        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+        renderPreMealTimerModal(getPurposeAwareTimer());
         return;
       }
       if (action === 'confirm-stop-pre-meal-timer') {
@@ -10250,11 +10626,17 @@
       }
       if (action === 'keep-pre-meal-timer') {
         target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
-        renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+        renderPreMealTimerModal(getPurposeAwareTimer());
       }
       if (action === 'restart-pre-meal-timer') {
+        const pendingTimerRecord = currentEditor?.pendingTimerRecord;
+        const active = getPurposeAwareTimer();
+        if (active?.purpose === 'low-glucose-recheck') {
+          const episode = records.find(item => item.id === active.episodeId);
+          if (episode && !persistLowGlucoseRecord({ ...episode, lowGlucoseEpisode: { ...episode.lowGlucoseEpisode, pendingRecheck: null } })) return;
+        }
         const service = window.LeeLeePreMealTimer;
-        const record = currentEditor?.pendingTimerRecord;
+        const record = pendingTimerRecord;
         const settings = service?.getSettings();
         const timer = service?.start({ durationMinutes: settings?.durationMinutes, sourceEntryId: record?.id, sourceEntry: record });
         target.closest('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
@@ -10767,9 +11149,23 @@
         return;
       }
       if (event.target.name === 'type') {
+        const previousType = currentEditor.type;
+        const nextType = event.target.value;
+        if (currentEditor.id && ((previousType === 'Low Glucose') !== (nextType === 'Low Glucose'))) {
+          event.target.value = previousType;
+          updateEditorState(form);
+          showEditorError(form, 'Keep this saved entry in its original context. Record a separate entry for a different event.');
+          return;
+        }
         currentEditor.carbCalculatorRows = collectCarbCalculatorRowsFromForm(form);
-        const draft = buildDraftFromEditor(form);
-        draft.type = event.target.value;
+        let draft = buildDraftFromEditor(form);
+        if ((previousType === 'Low Glucose') !== (nextType === 'Low Glucose')) {
+          draft = clearLowGlucoseInsulin(draft);
+          delete draft.lowGlucoseEpisode;
+          currentEditor.userEditedInsulin = false;
+          currentEditor.autofilledInsulinUnits = null;
+        }
+        draft.type = nextType;
         renderEditor({
           mode: currentEditor?.mode || 'log-entry',
           eventType: draft.eventType,
@@ -10817,6 +11213,19 @@
       }
     });
     root.addEventListener('keydown', (event) => {
+      const lowDialog = root.querySelector('[data-low-dialog]');
+      if (lowDialog && event.key === 'Escape') {
+        event.preventDefault();
+        lowDialog.querySelector('[data-action="low-back-initial"], [data-action="low-done"]')?.click();
+        return;
+      }
+      if (lowDialog && event.key === 'Tab') {
+        const buttons = [...lowDialog.querySelectorAll('button:not([disabled])')];
+        const index = buttons.indexOf(document.activeElement);
+        event.preventDefault();
+        buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+        return;
+      }
       if (!shouldShowProtectedApp()) return;
       if (mealBuilderState && event.key === 'Escape') {
         event.preventDefault();
@@ -10851,7 +11260,7 @@
         if (event.key === 'Escape') {
           event.preventDefault();
           root.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
-          renderPreMealTimerModal(window.LeeLeePreMealTimer?.normalize());
+          renderPreMealTimerModal(getPurposeAwareTimer());
           return;
         }
         if (event.key === 'Tab') {

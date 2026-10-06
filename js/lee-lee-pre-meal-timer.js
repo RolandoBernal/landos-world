@@ -73,11 +73,12 @@
     return Math.max(0, timer.endsAt - now);
   }
 
-  function start({ durationMinutes, sourceEntryId, sourceEntry }) {
-    const now = Date.now();
-    const minutes = normalizeDuration(durationMinutes);
+  function start({ durationMinutes, sourceEntryId, sourceEntry, purpose = 'pre-meal', episodeId = null, scheduleId = null, startedAt } = {}) {
+    const now = Number.isFinite(startedAt) ? startedAt : Date.now();
+    const minutes = purpose === 'low-glucose-recheck' ? 15 : normalizeDuration(durationMinutes);
     const timer = {
       version: 1,
+      purpose, episodeId, scheduleId,
       status: 'active',
       startedAt: now,
       endsAt: now + minutes * 60 * 1000,
@@ -127,6 +128,7 @@
     getTimer,
     normalize,
     remainingMs,
+    markCompletionPresented() { const timer = getTimer(); if (timer) persist({ ...timer, completionPresented: true }); },
     start,
     stop,
     dismiss,

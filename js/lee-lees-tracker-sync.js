@@ -44,7 +44,7 @@
   const REMOTE_SAVED_MEALS_TABLE = 'lee_lee_saved_meals';
   const REMOTE_SETTINGS_AUDIT_TABLE = 'lee_lee_settings_audit';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
-  const DETERMINISTIC_ERROR_CATEGORIES = new Set(['authentication', 'authorization', 'validation', 'conflict', 'missing-record', 'duplicate']);
+  const DETERMINISTIC_ERROR_CATEGORIES = new Set(['low-glucose-compatibility', 'authentication', 'authorization', 'validation', 'conflict', 'missing-record', 'duplicate']);
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
@@ -918,6 +918,7 @@
   }
 
   function sanitizeSupabaseError(error) {
+    if (isLowGlucoseGuardError(error)) return { code: '23514', status: null, message: 'This Low Glucose write could not be saved safely. Your attempted edit is retained for review. Use the latest compatible LLT version before retrying.', details: '', hint: '' };
     return {
       code: String(error?.code || error?.status || '').slice(0, 80),
       status: error?.status || error?.statusCode || null,
@@ -927,7 +928,13 @@
     };
   }
 
+  function isLowGlucoseGuardError(error) {
+    return String(error?.message || '').includes('LLT_LOW_GLUCOSE_WRITE_INCOMPATIBLE')
+      || String(error?.constraint || '').includes('lee_lee_records_low_glucose_write_guard');
+  }
+
   function categorizeError(error) {
+    if (isLowGlucoseGuardError(error)) return 'low-glucose-compatibility';
     const code = String(error?.code || '').toUpperCase();
     const message = String(error?.message || error || '').toLowerCase();
     if (code === '28000' || code === 'PGRST301' || message.includes('jwt') || message.includes('auth')) return 'authentication';
@@ -1079,6 +1086,7 @@
       record.mealCarbs ?? '',
       record.totalCarbs ?? '',
       stableJson(record.foods || []),
+      ...(Object.hasOwn(record, 'lowGlucoseEpisode') ? [stableLowGlucoseJson(record.lowGlucoseEpisode)] : []),
       record.mealDescription || '',
       record.activityDescription || '',
       record.activityDurationMinutes ?? '',
@@ -1096,6 +1104,12 @@
     return String(value);
   }
 
+  function stableLowGlucoseJson(value) {
+    // JSONB may reorder object keys; preserve scalar types and round order.
+    return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
+  }
+
   function recordMeaningFingerprint(record = {}) {
     const source = record && typeof record === 'object' ? record : {};
     return [
@@ -1107,6 +1121,7 @@
       source.mealCarbs ?? '',
       source.totalCarbs ?? '',
       stableJson(source.foods || []),
+      ...(Object.hasOwn(source, 'lowGlucoseEpisode') ? [stableLowGlucoseJson(source.lowGlucoseEpisode)] : []),
       source.mealDescription || '',
       source.activityDescription || '',
       source.activityDurationMinutes ?? '',
@@ -1570,8 +1585,18 @@
 
     function acknowledgeRecord(operation, remote) {
       if (!remote?.id) throw new Error('Record upload returned no acknowledgement.');
-      setQueue(getQueue().filter((item) => item.id !== operation.id).map((item) => item.recordId === remote.id && item.type === 'soft-delete'
-        ? { ...item, baseVersion: remote.version } : item));
+      setQueue(getQueue().filter((item) => item.id !== operation.id).map((item) => {
+        if (item.recordId !== remote.id) return item;
+        if (item.type === 'soft-delete') return { ...item, baseVersion: remote.version };
+        // Advance only a proven same-device successor of this acknowledged
+        // Low Glucose write. Independent edits retain their stale base version
+        // and therefore require the existing explicit conflict review.
+        if (item.payload?.type === 'Low Glucose' && operation.payload?.type === 'Low Glucose'
+          && item.dependsOnOperationId === operation.id && recordsHaveSameContent(operation.payload, remote)) {
+          return { ...item, baseVersion: remote.version, payload: { ...item.payload, version: remote.version } };
+        }
+        return item;
+      }));
       if (getQueue().some((item) => item.recordId === remote.id)) {
         const current = getDocument();
         saveDocument({ ...current, records: current.records.map((item) => item.id === remote.id ? { ...item, version: remote.version } : item) }, { keepStatus: true });
@@ -1587,9 +1612,9 @@
       setMetadata({ lastRecordQueueSuccessAt: nowIso() });
     }
 
-    function queueOperation(type, record, baseVersion = null) {
+    function queueOperation(type, record, baseVersion = null, dependsOnOperationId = null) {
       if (isAuthenticationPreview()) return null;
-      const operation = createOperation(type, record, baseVersion);
+      const operation = { ...createOperation(type, record, baseVersion), ...(dependsOnOperationId ? { dependsOnOperationId } : {}) };
       setQueue([...getQueue(), operation]);
       markLocalRecord(record, navigator.onLine ? 'waiting' : 'offline');
       emit();
@@ -1608,7 +1633,10 @@
         source: record.source || 'app',
         clientCreatedAt: record.clientCreatedAt || record.createdAt || now,
       });
-      return queueOperation(existingRecord ? 'update' : 'insert', nextRecord, existingRecord?.version || null);
+      const previous = nextRecord.type === 'Low Glucose' && existingRecord
+        ? getQueue().filter(item => item.recordId === record.id && ['insert', 'update'].includes(item.type)).at(-1) : null;
+      const dependency = previous && recordsHaveSameContent(previous.payload, existingRecord) ? previous.id : null;
+      return queueOperation(existingRecord ? 'update' : 'insert', nextRecord, existingRecord?.version || null, dependency);
     }
 
     function queueSoftDelete(record) {
@@ -1793,7 +1821,10 @@
             category,
             error: details,
           });
-          if (['authentication', 'authorization', 'validation'].includes(failed.lastErrorCategory)) {
+          if (failed.lastErrorCategory === 'low-glucose-compatibility') {
+            setMetadata({ lastError: details.message, lastErrorCategory: category, lastErrorCode: details.code, lastErrorMessage: details.message });
+            markLocalRecord(attemptedOperation.payload, 'needs-attention', details.message);
+          } else if (['authentication', 'authorization', 'validation'].includes(failed.lastErrorCategory)) {
             setMetadata({
               lastError: 'A sync item needs review before it can be uploaded.',
               lastErrorCategory: failed.lastErrorCategory,
