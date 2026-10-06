@@ -3340,7 +3340,7 @@
 .llt_sensor_dialog_inner { padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); }
 .llt_sensor_dialog_header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .llt_sensor_dialog_header h2 { margin: 0; }
-.llt_sensor_dialog label { display: grid; gap: .4rem; margin: 1rem 0; }
+.llt_sensor_dialog label { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .4rem; margin: 1rem 0; }
 .llt_sensor_dialog input, .llt_sensor_dialog select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; font: inherit; color: inherit; background: var(--lee-lee-panel, #172032); border: 1px solid #68758c; border-radius: .5rem; padding: .6rem; }
 .llt_sensor_facts { display: grid; gap: .4rem; }
 .llt_sensor_facts dd { margin: 0 0 .5rem; }
@@ -3348,7 +3348,20 @@
 .llt_sensor_history p { margin: .4rem 0; }
 .llt_sensor_dialog [role="alert"] { color: #f2a6a6; }
 
-.llt_sensor_dialog input[type="date"], .llt_sensor_dialog input[type="time"] { font-family: var(--llt-numeric-font); color-scheme: inherit; }
+/* This body-mounted dialog is outside .app_theme's native date/time reset.
+   iOS native appearance overrides border-box sizing when padding is present. */
+.llt_sensor_dialog input[type="date"], .llt_sensor_dialog input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: var(--llt-numeric-font);
+  color-scheme: inherit;
+}
+.llt_sensor_dialog input[type="date"]::-webkit-date-and-time-value,
+.llt_sensor_dialog input[type="time"]::-webkit-date-and-time-value {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+}
 
 /* The tracked-sensor disclosure keeps secondary detail below its compact header. */
 .llt_sensor_disclosure { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 44px; cursor: pointer; list-style: none; }
@@ -3426,4 +3439,16 @@
 .lee_lee_diabetes_low_episode .lee_lee_diabetes_help,
 .lee_lee_diabetes_low_episode .lee_lee_diabetes_timeline_notes {
   font-family: var(--llt-numeric-font);
+}
+
+.lee_lee_diabetes_low_summary { margin: 1em 0; }
+.llt_sensor_review { display: block; }
+.llt_sensor_review dd { margin: .25rem 0 1rem; }
+
+.lee_lee_diabetes_low_timestamp { margin-top: .25rem; }
+@media (max-width: 640px) {
+  .lee_lee_diabetes_low_episode [data-action="low-edit-recheck"] {
+    box-sizing: border-box;
+    width: 100%;
+  }
 }

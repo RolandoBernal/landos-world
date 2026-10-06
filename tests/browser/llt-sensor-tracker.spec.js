@@ -31,6 +31,7 @@ async function start(page) {
     .getByRole("button", { name: "Start New Sensor", exact: true })
     .first()
     .click();
+  await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
   await expect(page.locator(".llt_sensor_dialog")).toContainText(
@@ -40,8 +41,12 @@ async function start(page) {
 test("start, correction, early replacement, undo and retained history survive reload", async ({
   page,
 }) => {
+  await page.addInitScript(() => Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true }));
   await open(page);
+  expect(await page.evaluate(() => typeof crypto.getRandomValues)).toBe("function");
   await start(page);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lando-world:llt-sensor-fixture:v1")));
+  expect(saved.currentCycleId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   await page.locator(".llt_sensor_manage summary").click();
   await page.getByRole("button", { name: "Edit Start Time", exact: true }).click();
   await page.locator('input[name="time"]').fill("00:01");
@@ -51,10 +56,13 @@ test("start, correction, early replacement, undo and retained history survive re
     .getByRole("button", { name: "Replace Sensor", exact: true })
     .last()
     .click();
+  await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await expect(page.locator(".llt_sensor_dialog")).toContainText(
-    "ends the sensor started",
+    "Saving this change will end the current sensor and start the new one.",
   );
+  await expect(page.locator(".llt_sensor_review dt")).toHaveText(["New sensor", "New sensor starts:", "Current sensor", "Current sensor started:"]);
+  await expect(page.locator(".llt_sensor_review dd")).toHaveCount(4);
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
   await expect(page.locator(".llt_sensor_dialog")).toContainText(
     "Replaced early",
@@ -86,6 +94,14 @@ test("start, correction, early replacement, undo and retained history survive re
   await expect(page.locator(".llt_sensor_dialog")).toContainText(
     "Cancelled — retained in history",
   );
+  const persisted = await page.evaluate(() => ({
+    cycles: JSON.parse(localStorage.getItem("lando-world:llt-sensor-fixture:v1")).cycles,
+    operations: Object.keys(JSON.parse(localStorage.getItem("lando-world:llt-sensor-fixture:v1:receipts"))),
+  }));
+  expect(persisted.cycles).toHaveLength(2);
+  expect(persisted.operations.length).toBeGreaterThanOrEqual(4);
+  for (const id of [...persisted.cycles.map(cycle => cycle.id), ...persisted.operations])
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 for (const [state, hours, copy] of [
   ["active", 48, "remaining"],
@@ -174,6 +190,7 @@ test("offline cached state cannot submit a new authoritative sensor", async ({
   await page
     .getByRole("button", { name: "Replace Sensor", exact: true })
     .click();
+  await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await expect(page.locator("[data-sensor-error]")).toContainText("Not saved");
 });
@@ -309,6 +326,8 @@ test("tracked sensor disclosure is user controlled, keyboard accessible and resp
   await expect(details).toBeVisible();
   for (const [width, height] of [[320,740],[393,852],[768,1024],[1280,800],[852,393]]) {
     await page.setViewportSize({width,height});
+    if (!(await card.evaluate(element => element.open))) await summary.click();
+    await expect(details).toBeVisible();
     const geometry = await card.locator(".llt_sensor_actions").evaluate((actions) => {
       const [first,second] = [...actions.children].map((button) => { const r=button.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,clip:button.scrollWidth>button.clientWidth+1}; });
       return {first,second,width:actions.getBoundingClientRect().width,overflow:document.documentElement.scrollWidth>innerWidth};
@@ -414,6 +433,7 @@ test("modal management fits narrow, wide and landscape viewports; no-sensor star
   await expect(modal.locator(".llt_sensor_management")).toHaveCount(0);
   await expect(modal.locator('[data-sensor-action="edit"], [data-sensor-action="undo"]')).toHaveCount(0);
   await modal.getByRole("button", { name: "Start New Sensor", exact: true }).click();
+  await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
   await modal.getByRole("button", { name: "Close", exact: true }).click();
@@ -436,4 +456,116 @@ test("modal management fits narrow, wide and landscape viewports; no-sensor star
   }
   await modal.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("button", { name: "Sensor Details & History" })).toBeFocused();
+});
+
+test("sensor native date/time controls and stacked replacement review fit both themes", async ({ page }, testInfo) => {
+  await open(page);
+  await start(page);
+  for (const width of [320, 393, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["light", "dark"]) {
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      if (!(await page.locator(".llt_sensor_card").evaluate(card => card.open))) await page.locator(".llt_sensor_disclosure").click();
+      await page.getByRole("button", { name: "Replace Sensor", exact: true }).click();
+      const modal = page.locator(".llt_sensor_dialog");
+      const titleFits = await page.locator(".llt_sensor_disclosure").first().evaluate(summary => {
+        const title=summary.querySelector("strong").getBoundingClientRect();
+        const chevron=summary.querySelector(".lee_lee_diabetes_accordion_chevron").getBoundingClientRect();
+        return title.right <= chevron.left && title.width > 0;
+      });
+      expect(titleFits).toBe(true);
+      for (const type of ["date", "time", "text"]) {
+        const input = modal.locator(`input[type=${type}]`);
+        await expect(input).toBeVisible();
+        if (type !== "text") expect(await input.evaluate(input => getComputedStyle(input).appearance)).toBe("none");
+        const bounds = await input.evaluate(input => {
+          const r = input.getBoundingClientRect(), p = input.parentElement.getBoundingClientRect();
+          return { contained: r.left >= p.left && r.right <= p.right + 1, height: r.height, clipped: input.scrollWidth > input.clientWidth + 1 };
+        });
+        expect(bounds.contained).toBe(true);
+        expect(bounds.clipped).toBe(false);
+        expect(bounds.height).toBeGreaterThanOrEqual(44);
+        await input.focus();
+        await expect(input).toBeFocused();
+      }
+      expect(await modal.evaluate(d => d.scrollWidth <= d.clientWidth + 1)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`sensor-inputs-${width}-${theme}.png`) });
+      await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
+  await page.getByRole("button", { name: "Review New Sensor" }).click();
+      await expect(modal.locator(".llt_sensor_review dt")).toHaveText(["New sensor", "New sensor starts:", "Current sensor", "Current sensor started:"]);
+      const rows = await modal.locator(".llt_sensor_review dd").evaluateAll(rows => rows.map(row => row.getBoundingClientRect().y));
+      expect(rows[1]).toBeGreaterThan(rows[0]);
+      await expect(modal.getByText("Saving this change will end the current sensor and start the new one.", { exact: true })).toBeVisible();
+      await expect(modal.getByRole("button", { name: "Save Sensor Change" })).toBeVisible();
+      await expect(modal.getByRole("button", { name: "Cancel" })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`sensor-review-${width}-${theme}.png`) });
+      await modal.getByRole("button", { name: "Cancel" }).click();
+    }
+  }
+});
+
+test('sensor code leading zeros stay attached through replacement, edit, undo, reload and second tab',async({page,context})=>{
+  await open(page);
+  const second=await context.newPage();await open(second);
+  await start(page);
+  await page.getByRole('button',{name:'Replace Sensor',exact:true}).last().click();
+  const code=page.getByLabel('Sensor Code',{exact:true});
+  await expect(code).toHaveValue('');
+  await expect(code).toHaveAttribute('type','text');
+  await expect(code).toHaveAttribute('inputmode','numeric');
+  await expect(code).toHaveAttribute('pattern','[0-9]{4}');
+  await expect(code).toHaveAttribute('maxlength','4');
+  await page.getByLabel('Sensor Start Time',{exact:true}).fill('00:01');
+  // Existing first cycle must predate replacement; use a synthetic past start.
+  await page.getByLabel('Sensor Start Date',{exact:true}).fill('2026-10-01');
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await page.locator('.llt_sensor_manage summary').click();
+  await page.getByRole('button',{name:'Edit Start Time',exact:true}).click();
+  await page.getByLabel('Sensor Start Date',{exact:true}).fill('2026-09-30');
+  await page.getByLabel('Sensor Start Time',{exact:true}).fill('00:01');
+  await page.getByRole('button',{name:'Review Start Correction'}).click();
+  await page.getByRole('button',{name:'Save Sensor Change'}).click();
+  await page.getByRole('button',{name:'Replace Sensor',exact:true}).last().click();
+  // Cancelling a form is allowed to retain draft; enter the new code explicitly.
+  await code.fill('0042');
+  await page.getByLabel('Sensor Start Date',{exact:true}).fill('2026-10-01');
+  await page.getByLabel('Sensor Start Time',{exact:true}).fill('00:02');
+  await page.getByRole('button',{name:'Review New Sensor'}).click();
+  await expect(page.locator('.llt_sensor_review dd')).toHaveText([
+    'Dexcom G7 · 0042',/Oct 1/, 'Dexcom G7 · 2345',/Sep 30/
+  ]);
+  await page.getByRole('button',{name:'Save Sensor Change'}).click();
+  await expect(second.locator('.llt_sensor_disclosure strong')).toHaveText('Dexcom G7 · 0042');
+  await expect(page.locator('.llt_sensor_history').nth(0)).toContainText('Dexcom G7 · 0042');
+  await expect(page.locator('.llt_sensor_history').nth(1)).toContainText('Dexcom G7 · 2345');
+  await page.locator('.llt_sensor_manage summary').click();
+  await page.getByRole('button',{name:'Edit Start Time',exact:true}).click();
+  await expect(code).toHaveCount(0);
+  await page.getByLabel('Sensor Start Time',{exact:true}).fill('00:03');
+  await page.getByRole('button',{name:'Review Start Correction'}).click();
+  await page.getByRole('button',{name:'Save Sensor Change'}).click();
+  await expect(page.locator('.llt_sensor_card strong')).toHaveText('Dexcom G7 · 0042');
+  await page.locator('.llt_sensor_manage summary').click();
+  await page.getByRole('button',{name:'Undo Current Sensor',exact:true}).click();
+  await page.getByRole('button',{name:'Undo Current Sensor',exact:true}).click();
+  await expect(second.locator('.llt_sensor_disclosure strong')).toHaveText('Dexcom G7 · 2345');
+  await expect(page.locator('.llt_sensor_history').filter({hasText:'Cancelled'})).toContainText('Dexcom G7 · 0042');
+  await page.getByRole('button',{name:'Close',exact:true}).click();await page.reload();
+  await expect(page.locator('.llt_sensor_disclosure strong')).toHaveText('Dexcom G7 · 2345');
+  await second.close();
+});
+
+test('invalid sensor code cannot reach review or save; no normalization',async({page})=>{
+  await open(page);
+  await page.getByRole('button',{name:'Start New Sensor',exact:true}).click();
+  for(const invalid of ['', '234','23456','23A5','12 34',' 2345','2345 ','٢٣٤٥','２３４５']){
+    await page.getByLabel('Sensor Code',{exact:true}).evaluate((input,value)=>{input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));},invalid);
+    await page.getByRole('button',{name:'Review New Sensor'}).click();
+    await expect(page.locator('[data-sensor-error]')).toHaveText('Enter the 4-digit sensor code.');
+    await expect(page.getByRole('button',{name:'Save Sensor Change'})).toHaveCount(0);
+  }
+  await page.getByLabel('Sensor Code',{exact:true}).fill('0000');
+  await page.getByRole('button',{name:'Review New Sensor'}).click();
+  await expect(page.locator('.llt_sensor_review')).toContainText('Dexcom G7 · 0000');
 });

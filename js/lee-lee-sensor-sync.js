@@ -211,16 +211,20 @@
         confirmed = false,
         actor = "Unknown",
         metadata = {},
+        sensorCode = null,
       } = {},
     ) {
       if (!state.verified || !state.snapshot)
         throw new Error("Refresh the authoritative sensor state first.");
+      if (sensorCode != null && (action !== "start" || !D.isValidSensorCode(sensorCode)))
+        throw new Error("Enter the 4-digit sensor code.");
       return {
-        p_operation_id: crypto.randomUUID(),
+        ...(sensorCode != null ? { p_sensor_code: sensorCode } : {}),
+        p_operation_id: D.generateUuid(),
         p_action: action,
         p_expected_revision: state.snapshot.revision,
         p_expected_current_cycle_id: state.snapshot.currentCycleId,
-        p_new_cycle_id: action === "start" ? id || crypto.randomUUID() : null,
+        p_new_cycle_id: action === "start" ? id || D.generateUuid() : null,
         p_started_at: action === "undo_current" ? null : start,
         p_confirm_replace: action === "start" && confirmed,
         p_actor_label: actor,

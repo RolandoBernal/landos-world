@@ -6,6 +6,10 @@ import { spawnSync, execFile } from "node:child_process";
 const docker = "/Applications/Docker.app/Contents/Resources/bin/docker";
 const container = "supabase_db_llt-14-5-curated";
 const enabled = process.env.LLT_LOCAL_SENSOR_DB_TEST === "1";
+// Optional disposable database supplied only by the local sensor-code harness.
+const database = process.env.LLT_LOCAL_SENSOR_DB_NAME || "postgres";
+if (database !== "postgres" && !/^llt_code_test_[0-9_]+$/.test(database))
+  throw new Error("Invalid disposable local sensor database name.");
 const args = [
   "exec",
   "-i",
@@ -14,7 +18,7 @@ const args = [
   "-U",
   "postgres",
   "-d",
-  "postgres",
+  database,
   "-X",
   "-qAt",
   "-v",

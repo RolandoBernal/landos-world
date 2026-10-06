@@ -451,3 +451,79 @@ test("audio dispatch failure is consumed once and ancient claims never replay af
   });
   assert.equal(count, 1);
 });
+
+
+test("UUID compatibility prefers native, formats secure fallback and fails without crypto", () => {
+  const domain = modules().LeeLeeDexcomSensor;
+  let nativeCalls = 0;
+  assert.equal(domain.generateUuid({ randomUUID() { nativeCalls++; return "native-id"; }, getRandomValues() { throw Error("unexpected fallback"); } }), "native-id");
+  assert.equal(nativeCalls, 1);
+  let calls = 0;
+  const secure = { getRandomValues(bytes) { assert.equal(bytes.length, 16); bytes.fill(++calls); return bytes; } };
+  const first = domain.generateUuid(secure), second = domain.generateUuid(secure);
+  assert.equal(typeof first, "string");
+  assert.equal(first.length, 36);
+  assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(first, "01010101-0101-4101-8101-010101010101");
+  assert.notEqual(first, second);
+  assert.equal(calls, 2);
+  assert.throws(() => domain.generateUuid({}), /Secure random generation/);
+});
+
+for (const value of ['2345','0042','0000','9999'])
+  test(`sensor code string ${value} validates, labels and hydrates unchanged`, () => {
+    assert.equal(D.isValidSensorCode(value),true);
+    const coded={...c,sensor_code:value};
+    const snap={revision:1,currentCycleId:c.id,cycles:[coded]};
+    const before=JSON.stringify(snap);
+    assert.equal(D.validate(snap,'A'),snap);
+    assert.equal(JSON.stringify(snap),before);
+    assert.equal(D.formatSensorLabel(coded),`Dexcom G7 · ${value}`);
+  });
+for (const value of ['', '234','23456','23A5','12 34',' 2345','2345 ','2345\n','+234','-234','2e34','٢٣٤٥','２３４５',2345])
+  test(`invalid sensor code ${JSON.stringify(value)} rejected without normalization`,()=>{
+    assert.equal(D.isValidSensorCode(value),false);
+    assert.throws(()=>D.validate({revision:1,currentCycleId:c.id,cycles:[{...c,sensor_code:value}]},'A'));
+  });
+test('absent and null legacy codes keep raw snapshot shape and plain label',()=>{
+  for(const row of [c,{...c,sensor_code:null}]) {
+    const snap={revision:1,currentCycleId:c.id,cycles:[row]}, before=JSON.stringify(snap);
+    assert.equal(D.validate(snap,'A'),snap);
+    assert.equal(JSON.stringify(snap),before);
+    assert.equal(D.formatSensorLabel(row),'Dexcom G7');
+  }
+});
+test('coded starts use optional installed parameter; edits/undo/legacy starts omit it',async()=>{
+  const s=await connected();
+  assert.equal(s.client.request('start',{sensorCode:'0042'}).p_sensor_code,'0042');
+  for(const action of ['start','edit_start','undo_current'])
+    assert.equal('p_sensor_code' in s.client.request(action),false);
+  assert.throws(()=>s.client.request('start',{sensorCode:'2345 '}));
+  assert.throws(()=>s.client.request('edit_start',{sensorCode:'0042'}));
+});
+test('coded pending retry, realtime refetch and offline cache retain exact leading-zero string',async()=>{
+  let snap={revision:0,currentCycleId:null,cycles:[]},lost=true;
+  const sent=[];
+  const s=await connected({rpc:async(name,p)=>{
+    if(name==='llt_get_sensor_snapshot') return {data:{status:'ok',snapshot:structuredClone(snap)}};
+    sent.push(structuredClone(p));
+    if(lost){lost=false;throw Error('lost');}
+    snap={revision:1,currentCycleId:c.id,cycles:[{...c,sensor_code:p.p_sensor_code}]};
+    return {data:{status:'accepted',snapshot:structuredClone(snap)}};
+  }});
+  const request=s.client.request('start',{start:c.started_at,sensorCode:'0042'});
+  assert.equal((await s.client.submit(request)).status,'unknown');
+  const pending=JSON.parse(s.store.get('lando-world:llt-sensor:pending:v1:A'));
+  assert.equal(pending.p_sensor_code,'0042');
+  assert.equal((await s.client.submit()).status,'accepted');
+  assert.equal(JSON.stringify(sent[0]),JSON.stringify(sent[1]));
+  const second=setup({rpc:async()=>({data:{status:'ok',snapshot:structuredClone(snap)}})});
+  second.client.connect({uid:'A',client:second.transport});await second.client.refresh();
+  assert.equal(D.current(second.client.get().snapshot).sensor_code,'0042');
+  snap={...snap,revision:2,cycles:[{...snap.cycles[0],revision:2,sensor_code:'2345'}]};
+  second.invalidate();await new Promise(r=>setImmediate(r));
+  assert.equal(D.current(second.client.get().snapshot).sensor_code,'2345');
+  const offline=setup({online:false,seed:Object.fromEntries(s.store)});
+  offline.client.connect({uid:'A',client:offline.transport});
+  assert.equal(D.current(offline.client.get().snapshot).sensor_code,'0042');
+});
