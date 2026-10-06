@@ -3393,3 +3393,37 @@
 .lee_lee_diabetes_shell [data-lee-lee-editor] textarea[name="notes"] {
   font-family: var(--llt-numeric-font);
 }
+
+/* Embedded Low Glucose episode disclosure; shared form/card styles stay intact. */
+.lee_lee_diabetes_low_episode {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lee_lee_diabetes_low_episode summary {
+  min-height: 44px;
+  line-height: 44px;
+  cursor: pointer;
+}
+
+.lee_lee_diabetes_low_episode li + li {
+  margin-top: 1rem;
+}
+
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_actions > button {
+  flex: 1 1 140px;
+}
+
+.lee_lee_diabetes_pre_meal_timer_panel--low {
+  background: var(--lee-lee-bg);
+}
+
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_help,
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_timeline_notes {
+  font-family: var(--llt-numeric-font);
+}
