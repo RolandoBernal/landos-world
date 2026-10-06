@@ -52,6 +52,7 @@ test('Low Glucose complete synthetic episode, explicit outcome, timeline and his
   await done(page);
   await expect(root.locator('[data-low-glucose-episode]')).toHaveCount(1);
   await expect(root.locator('[data-low-glucose-episode]')).toContainText('Open');
+  await expect(root.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 53 mg/dL', 'Total recorded treatment 15 g carbs', '0 rechecks']);
   let records = await stored(page); expect(records).toHaveLength(1); expect(records[0].insulinUnits).toBeNull(); expect(records[0].doseCalculationStatus).toBe('not-applicable');
   await page.screenshot({ path: testInfo.outputPath('02-open-episode.png'), fullPage: true });
   await recheck(page, '61', '15'); await done(page);
@@ -63,6 +64,7 @@ test('Low Glucose complete synthetic episode, explicit outcome, timeline and his
   await page.locator('[data-low-dialog] [data-action=low-confirm-recovery]').click();
   await page.locator('[data-action=low-close-recovery]').click();
   await expect(root.locator('[data-low-glucose-episode]')).toContainText('Recovery Confirmed');
+  await expect(root.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 53 mg/dL', 'Total recorded treatment 30 g carbs', '2 rechecks']);
   await root.getByText('Episode timeline', { exact: true }).click();
   await expect(root.locator('details')).toHaveAttribute('open', '');
   await expect(root.locator('details')).toContainText('Recheck');
@@ -291,6 +293,10 @@ test('Low Glucose secondary typography matches numeric text in both themes and r
   await save(page); await done(page);
   const card = page.locator('[data-low-glucose-episode]');
   await card.locator('summary').click();
+  await expect(card.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 63 mg/dL', 'Total recorded treatment 15 g carbs', '1 recheck']);
+  const positions = await card.locator('.lee_lee_diabetes_low_summary > div').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().y));
+  expect(positions[1]).toBeGreaterThan(positions[0]);
+  expect(positions[2]).toBeGreaterThan(positions[1]);
   const original = await stored(page);
   for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 }]) {
     await page.setViewportSize(viewport);
@@ -310,5 +316,63 @@ test('Low Glucose secondary typography matches numeric text in both themes and r
       await page.screenshot({ path: testInfo.outputPath(`typography-${viewport.width}-${theme}.png`), fullPage: true });
     }
   }
+  expect(await stored(page)).toEqual(original);
+});
+
+test('multi-round timeline separates type and timestamp and sizes Edit Recheck by viewport', async ({ page }, testInfo) => {
+  const record = seedEpisode();
+  const initial = Date.now() - 3600000;
+  record.recordTimestamp = new Date(initial).toISOString();
+  record.bloodSugar = 65;
+  record.notes = 'Synthetic initial observation note';
+  record.lowGlucoseEpisode.rechecks = [61, 68, 74].map((bloodSugar, index) => ({
+    id: `synthetic-round-${index}`, bloodSugar, carbs: index === 2 ? 0 : 15,
+    recordTimestamp: new Date(initial + (index + 1) * 900000).toISOString(),
+    notes: index === 0 ? 'Synthetic recheck note' : '',
+  }));
+  record.lowGlucoseEpisode.closure = { kind: 'recovery-confirmed', recheckId: 'synthetic-round-2', confirmedAt: new Date().toISOString() };
+  await open(page, [record]);
+  const card = page.locator('[data-low-glucose-episode]');
+  await card.locator('summary').click();
+  const rows = card.locator('ol > li');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.locator(':scope > strong')).toHaveText(['Initial observation', 'Recheck', 'Recheck', 'Recheck']);
+  await expect(card).toContainText('Recovery Confirmed');
+  await expect(card.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 61 mg/dL', 'Total recorded treatment 45 g carbs', '3 rechecks']);
+  const timestamps = await rows.locator('.lee_lee_diabetes_low_timestamp').allTextContents();
+  expect(new Set(timestamps).size).toBe(4);
+  await expect(rows.nth(0).locator(':scope > p').first()).toHaveText('65 mg/dL · Treatment 15 g carbs');
+  await expect(rows.nth(3).locator(':scope > p').first()).toHaveText('74 mg/dL · Treatment 0 g carbs');
+  await expect(card.locator('.lee_lee_diabetes_timeline_notes')).toHaveText(['Synthetic initial observation note', 'Synthetic recheck note']);
+  const original = await stored(page);
+  for (const width of [320, 393, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      for (const row of await rows.all()) {
+        const geometry = await row.evaluate(row => {
+          const title = row.querySelector('strong').getBoundingClientRect();
+          const timestamp = row.querySelector('.lee_lee_diabetes_low_timestamp').getBoundingClientRect();
+          const button = row.querySelector('button'), b = button?.getBoundingClientRect(), r = row.getBoundingClientRect();
+          return { titleBottom: title.bottom, timestampTop: timestamp.top, listStyle: getComputedStyle(row).listStyleType, overflow: row.scrollWidth > row.clientWidth + 1, width: r.width, buttonWidth: b?.width, buttonHeight: b?.height, contained: !b || b.left >= r.left && b.right <= r.right + 1 };
+        });
+        expect(geometry.timestampTop).toBeGreaterThanOrEqual(geometry.titleBottom);
+        expect(geometry.listStyle).toBe('decimal');
+        expect(geometry.overflow).toBe(false);
+        expect(geometry.contained).toBe(true);
+        if (geometry.buttonWidth) {
+          expect(geometry.buttonHeight).toBeGreaterThanOrEqual(44);
+          if (width <= 640) expect(Math.abs(geometry.buttonWidth - geometry.width)).toBeLessThan(2);
+          else expect(geometry.buttonWidth).toBeLessThan(geometry.width);
+        }
+      }
+      expect(await rows.locator('.lee_lee_diabetes_low_timestamp').allTextContents()).toEqual(timestamps);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`timeline-${width}-${theme}.png`), fullPage: true });
+    }
+  }
+  await card.getByRole('button', { name: 'Edit Recheck', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'Record Recheck', exact: true })).toBeVisible();
+  await expect(page.locator('[name=bloodSugar]')).toHaveValue('61');
   expect(await stored(page)).toEqual(original);
 });

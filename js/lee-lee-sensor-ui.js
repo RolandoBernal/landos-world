@@ -72,7 +72,7 @@
       s = status(c);
     const expanded = slot.querySelector(".llt_sensor_card[open]") !== null;
     const statusTag = c ? "span" : "p";
-    const heading = `<strong>Dexcom G7</strong><${statusTag} class="llt_sensor_status">${state.snapshot ? escape(s.label) : "Sensor tracking unavailable"}</${statusTag}>`;
+    const heading = `<strong>${escape(D.formatSensorLabel(c))}</strong><${statusTag} class="llt_sensor_status">${state.snapshot ? escape(s.label) : "Sensor tracking unavailable"}</${statusTag}>`;
     const secondary = `${state.snapshot ? `<p class="llt_sensor_time">${escape(s.detail)}</p>` : ""}<p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p><div class="llt_sensor_actions">${button("details", "Sensor Details & History")}${button("start", c ? "Replace Sensor" : "Start New Sensor", !state.snapshot || !!state.pending)}</div><p class="llt_sensor_notice" aria-live="polite"></p>`;
     const markup = c
       ? `<details class="llt_sensor_card" data-state="${escape(s.kind)}"${expanded ? " open" : ""}><summary class="llt_sensor_disclosure" aria-expanded="${expanded}" aria-controls="llt-sensor-card-content"><span>${heading}</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary><div id="llt-sensor-card-content" class="llt_sensor_content">${secondary}</div></details>`
@@ -160,11 +160,11 @@
       s = status(c),
       d = c ? D.lifecycle(c) : null;
     open(
-      `<p>${escape(state.snapshot ? s.label : "Sensor tracking unavailable")}</p><div class="llt_sensor_sync_row"><p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p>${button("refresh", "Refresh")}</div>${c ? `<dl class="llt_sensor_facts"><dt>Sensor Start</dt><dd>${escape(date(d.start))}</dd><dt>Standard expiration</dt><dd>${escape(date(d.expires))}</dd><dt>Grace period ends</dt><dd>${escape(date(d.graceEnd))}</dd></dl><section class="llt_sensor_management" aria-labelledby="llt-sensor-management-title"><h3 id="llt-sensor-management-title">Sensor Management</h3><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-sensor-action="start" aria-describedby="llt-sensor-replace-description" ${state.pending ? "disabled" : ""}>Replace Sensor</button><p id="llt-sensor-replace-description" class="llt_sensor_help">Start tracking a new Dexcom G7.</p><details class="llt_sensor_manage"><summary class="llt_sensor_disclosure" aria-expanded="false" aria-controls="llt-sensor-corrections"><span>Manage Sensor</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary><div id="llt-sensor-corrections" class="llt_sensor_corrections"><div>${button("edit", "Edit Start Time", !!state.pending)}<p>Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.</p></div><div>${button("undo", "Undo Current Sensor", !!state.pending)}<p>Remove a sensor that was added by mistake and restore the previous sensor when possible.</p></div></div></details></section>` : `<div class="llt_sensor_start">${button("start", "Start New Sensor", !state.snapshot || !!state.pending)}</div>`}<section class="llt_sensor_history_section" aria-labelledby="llt-sensor-history-title"><h3 id="llt-sensor-history-title">Sensor History</h3>${
+      `<p>${escape(D.formatSensorLabel(c))}</p><p>${escape(state.snapshot ? s.label : "Sensor tracking unavailable")}</p><div class="llt_sensor_sync_row"><p class="llt_sensor_sync" role="status">${escape(syncNote(state))}</p>${button("refresh", "Refresh")}</div>${c ? `<dl class="llt_sensor_facts"><dt>Sensor Start</dt><dd>${escape(date(d.start))}</dd><dt>Standard expiration</dt><dd>${escape(date(d.expires))}</dd><dt>Grace period ends</dt><dd>${escape(date(d.graceEnd))}</dd></dl><section class="llt_sensor_management" aria-labelledby="llt-sensor-management-title"><h3 id="llt-sensor-management-title">Sensor Management</h3><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-sensor-action="start" aria-describedby="llt-sensor-replace-description" ${state.pending ? "disabled" : ""}>Replace Sensor</button><p id="llt-sensor-replace-description" class="llt_sensor_help">Start tracking a new Dexcom G7.</p><details class="llt_sensor_manage"><summary class="llt_sensor_disclosure" aria-expanded="false" aria-controls="llt-sensor-corrections"><span>Manage Sensor</span><span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary><div id="llt-sensor-corrections" class="llt_sensor_corrections"><div>${button("edit", "Edit Start Time", !!state.pending)}<p>Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.</p></div><div>${button("undo", "Undo Current Sensor", !!state.pending)}<p>Remove a sensor that was added by mistake and restore the previous sensor when possible.</p></div></div></details></section>` : `<div class="llt_sensor_start">${button("start", "Start New Sensor", !state.snapshot || !!state.pending)}</div>`}<section class="llt_sensor_history_section" aria-labelledby="llt-sensor-history-title"><h3 id="llt-sensor-history-title">Sensor History</h3>${
         (state.snapshot?.cycles || [])
           .map((x) => {
             const life = D.lifecycle({ ...x, state: "current" });
-            return `<article class="llt_sensor_history"><strong>${escape(x.state === "cancelled" ? "Cancelled — retained in history" : x.state === "current" ? "Currently tracked" : Date.parse(x.ended_at) < life.expires ? "Replaced early" : "Replaced")}</strong><p>Started <span>${escape(date(x.started_at))}</span></p>${x.ended_at ? `<p>Replaced <span>${escape(date(x.ended_at))}</span></p>` : ""}${x.cancelled_at ? `<p>Cancelled <span>${escape(date(x.cancelled_at))}</span></p>` : ""}</article>`;
+            return `<article class="llt_sensor_history"><p>${escape(D.formatSensorLabel(x))}</p><strong>${escape(x.state === "cancelled" ? "Cancelled — retained in history" : x.state === "current" ? "Currently tracked" : Date.parse(x.ended_at) < life.expires ? "Replaced early" : "Replaced")}</strong><p>Started <span>${escape(date(x.started_at))}</span></p>${x.ended_at ? `<p>Replaced <span>${escape(date(x.ended_at))}</span></p>` : ""}${x.cancelled_at ? `<p>Cancelled <span>${escape(date(x.cancelled_at))}</span></p>` : ""}</article>`;
           })
           .join("") || "<p>No tracked sensor history.</p>"
       }</section><p class="llt_sensor_sync">Reminders work while LLT is open. Alerts cannot be guaranteed while the iPhone is locked.</p>`,
@@ -183,25 +183,34 @@
               : Date.now(),
           );
     open(
-      `<form data-sensor-form="${action}" data-expected-revision="${state.snapshot?.revision}" data-expected-current="${escape(state.snapshot?.currentCycleId || "")}"><label>Sensor Start Date<input type="date" name="date" required value="${escape(values.date)}"></label><label>Sensor Start Time<input type="time" name="time" required value="${escape(values.time)}"></label><p>Enter the sensor’s start time, even if you are recording it later. Dates display in your local time zone.</p>${action === "edit_start" && c?.previous_cycle_id ? "<p>Changing this start time also changes the recorded replacement time of the previous sensor.</p>" : ""}<div data-sensor-occurrences></div><p role="alert" data-sensor-error></p><div class="llt_sensor_actions">${button("save", action === "start" ? "Review New Sensor" : "Review Start Correction")}${button("details", "Cancel")}</div></form>`,
+      `<form data-sensor-form="${action}" data-expected-revision="${state.snapshot?.revision}" data-expected-current="${escape(state.snapshot?.currentCycleId || "")}"><label>Sensor Start Date<input type="date" name="date" required value="${escape(values.date)}"></label><label>Sensor Start Time<input type="time" name="time" required value="${escape(values.time)}"></label>${action === "start" ? `<label>Sensor Code<input type="text" name="sensorCode" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required value="${escape(values.sensorCode || "")}" aria-describedby="llt-sensor-code-help"></label><p id="llt-sensor-code-help" class="llt_sensor_help">4-digit code printed on the Dexcom G7 sensor/applicator.</p>` : ""}<p>Enter the sensor’s start time, even if you are recording it later. Dates display in your local time zone.</p>${action === "edit_start" && c?.previous_cycle_id ? "<p>Changing this start time also changes the recorded replacement time of the previous sensor.</p>" : ""}<div data-sensor-occurrences></div><p role="alert" data-sensor-error></p><div class="llt_sensor_actions">${button("save", action === "start" ? "Review New Sensor" : "Review Start Correction")}${button("details", "Cancel")}</div></form>`,
     );
     const f = dialog.querySelector("form");
     f.addEventListener("input", () => {
+      f.elements.sensorCode?.setCustomValidity("");
       draft = {
         action,
         date: f.elements.date.value,
         time: f.elements.time.value,
+        sensorCode: f.elements.sensorCode?.value ?? null,
       };
       dialog.querySelector("[data-sensor-occurrences]").innerHTML = "";
     });
   }
   async function review() {
     const f = dialog.querySelector("form");
-    if (!f.reportValidity()) return;
+    const code = f.elements.sensorCode;
+    code?.setCustomValidity(D.isValidSensorCode(code.value) ? "" : "Enter the 4-digit sensor code.");
+    if (!f.reportValidity()) {
+      if (code && !D.isValidSensorCode(code.value))
+        dialog.querySelector("[data-sensor-error]").textContent = "Enter the 4-digit sensor code.";
+      return;
+    }
     draft = {
       action: f.dataset.sensorForm,
       date: f.elements.date.value,
       time: f.elements.time.value,
+      sensorCode: code?.value ?? null,
     };
     const candidates = D.wallCandidates(draft.date, draft.time);
     const error = dialog.querySelector("[data-sensor-error]");
@@ -243,11 +252,17 @@
       confirmed: !!c,
       actor: repository?.getDeviceIdentity() || "Unknown",
       metadata: metadata(),
+      sensorCode: draft.sensorCode,
     });
-    confirm(
-      request,
-      `Sensor Start: ${date(start)}${draft.action === "start" && c ? ` — This ends the sensor started ${date(c.started_at)} and starts a new one.` : ""}${draft.action === "edit_start" && c?.previous_cycle_id ? " — The previous sensor’s recorded replacement time will also change." : ""}`,
-    );
+    if (draft.action === "start") {
+      const review = `<dl class="llt_sensor_facts llt_sensor_review"><dt>New sensor</dt><dd>${escape(D.formatSensorLabel({sensor_code: draft.sensorCode}))}</dd><dt>New sensor starts:</dt><dd>${escape(date(start))}</dd>${c ? `<dt>Current sensor</dt><dd>${escape(D.formatSensorLabel(c))}</dd><dt>Current sensor started:</dt><dd>${escape(date(c.started_at))}</dd>` : ""}</dl>${c ? "<p>Saving this change will end the current sensor and start the new one.</p>" : ""}`;
+      confirm(request, "", review);
+    } else {
+      confirm(
+        request,
+        `Sensor Start: ${date(start)}${c?.previous_cycle_id ? " — The previous sensor’s recorded replacement time will also change." : ""}`,
+      );
+    }
   }
   function metadata() {
     return {
@@ -261,9 +276,9 @@
       ).slice(0, 160),
     };
   }
-  function confirm(request, message) {
+  function confirm(request, message, review = "") {
     open(
-      `<p>${escape(message)}</p><p>Review this change before saving.</p><p data-sensor-error role="alert"></p><div class="llt_sensor_actions">${button("confirm", request.p_action === "undo_current" ? "Undo Current Sensor" : "Save Sensor Change")}${button("details", "Cancel")}</div>`,
+      `${review || `<p>${escape(message)}</p>`}<p>Review this change before saving.</p><p data-sensor-error role="alert"></p><div class="llt_sensor_actions">${button("confirm", request.p_action === "undo_current" ? "Undo Current Sensor" : "Save Sensor Change")}${button("details", "Cancel")}</div>`,
     );
     dialog._request = request;
   }
@@ -328,7 +343,7 @@
         }[name];
         if (name !== "none" && hours === undefined)
           throw new Error("Unknown fixture");
-        const id = crypto.randomUUID(),
+        const id = D.generateUuid(),
           snapshot = { revision: 0, currentCycleId: null, cycles: [] };
         if (hours !== undefined) {
           snapshot.revision = 1;
@@ -385,6 +400,16 @@
           } catch {}
           if (name === "llt_get_sensor_snapshot")
             return { data: { status: "ok", snapshot: structuredClone(data) } };
+          if (p.p_sensor_code != null && !D.isValidSensorCode(p.p_sensor_code))
+            return { data: {status: "invalid_request", reason: "invalid_sensor_code"} };
+          if (p.p_sensor_code != null && p.p_action !== "start")
+            return { data: {status: "invalid_request", reason: "invalid_action_shape"} };
+          const canonical = { ...p };
+          delete canonical.p_operation_id;
+          if (canonical.p_sensor_code == null) delete canonical.p_sensor_code;
+          if (receipts[p.p_operation_id]?.request &&
+            JSON.stringify(receipts[p.p_operation_id].request) !== JSON.stringify(canonical))
+            return {data: {status: "invalid_request", reason: "operation_id_reused", snapshot: structuredClone(data)}};
           if (receipts[p.p_operation_id])
             return {
               data: {
@@ -418,6 +443,7 @@
                 c.revision = rev;
               }
               data.cycles.unshift({
+                ...(p.p_sensor_code != null ? {sensor_code: p.p_sensor_code} : {}),
                 id: p.p_new_cycle_id,
                 user_id: uid,
                 sensor_type: D.MODEL,
@@ -471,7 +497,7 @@
             localStorage.setItem(key, JSON.stringify(data));
           }
           const r = { status, reason, snapshot: structuredClone(data) };
-          receipts[p.p_operation_id] = r;
+          receipts[p.p_operation_id] = { ...r, request: canonical };
           localStorage.setItem(key + ":receipts", JSON.stringify(receipts));
           return { data: r };
         },

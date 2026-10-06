@@ -2,6 +2,23 @@
   "use strict";
   const MODEL = "dexcom_g7_10d_v1",
     HOUR = 3600000;
+  function generateUuid(cryptoApi = globalThis.crypto) {
+    if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
+    if (typeof cryptoApi?.getRandomValues !== "function")
+      throw new Error("Secure random generation is unavailable in this browser.");
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  function isValidSensorCode(value) {
+    return typeof value === "string" && value.length === 4 && /^[0-9]{4}$/.test(value);
+  }
+  function formatSensorLabel(cycle) {
+    return isValidSensorCode(cycle?.sensor_code)
+      ? `Dexcom G7 · ${cycle.sensor_code}` : "Dexcom G7";
+  }
   function lifecycle(cycle, now = Date.now()) {
     if (!cycle || cycle.state === "cancelled") return { status: "none" };
     if (
@@ -47,6 +64,7 @@
     let count = 0;
     for (const c of snapshot.cycles) {
       if (
+        (c.sensor_code != null && !isValidSensorCode(c.sensor_code)) ||
         !c.id ||
         ids.has(c.id) ||
         c.user_id !== uid ||
@@ -132,6 +150,9 @@
   globalThis.LeeLeeDexcomSensor = Object.freeze({
     MODEL,
     HOUR,
+    generateUuid,
+    isValidSensorCode,
+    formatSensorLabel,
     lifecycle,
     current,
     validate,
