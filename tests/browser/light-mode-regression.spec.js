@@ -106,7 +106,7 @@ for (const width of [320, 393, 430, 768, 1280]) {
     for (const button of await page.locator('.imt_nav_button').all()) {
       await button.click();
       if (await button.getAttribute('data-imt-nav') === 'more') {
-        await expect(page.locator('#imt_settings_toggle')).toHaveCSS('color','rgb(255, 253, 247)');
+        await expect(page.locator('#imt_settings_toggle')).toHaveCSS('color','rgb(57, 69, 82)');
       }
       expect((await styles(page.locator('.imt_nav_button:not(.is-active)').first())).color).toBe('rgb(82, 97, 113)');
       expect((await styles(page.locator('.imt_nav_button.is-active .imt_nav_icon'))).color).toBe('rgb(100, 216, 203)');

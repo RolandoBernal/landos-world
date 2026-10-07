@@ -183,5 +183,7 @@
   color: #394552;
 }
 :root[data-theme="light"] .maintenance_total_view #imt_settings_toggle[aria-expanded="true"] {
-  color: #fffdf7;
+  color: #394552;
+  background-color: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
 }
