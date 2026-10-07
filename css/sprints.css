@@ -1108,3 +1108,22 @@
     font-size: clamp(0.82rem, 3vh, 0.95rem);
   }
 }
+
+/* The tinted layers need an opaque base over the dimmed workout. */
+:root[data-theme="light"] .sprints-confirm__dialog {
+  background-color: #faf6ff;
+}
+
+/* Match the launch button's side and bottom gutters to the card padding. */
+#lando-launcher .clock_launch_btn {
+  width: 100%;
+  margin-inline: 0;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+@media (max-width: 360px) {
+  #lando-launcher .clock_utility_card--weather {
+    gap: .7rem;
+  }
+}

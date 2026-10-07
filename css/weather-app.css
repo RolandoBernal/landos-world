@@ -669,3 +669,8 @@
 :root[data-theme="light"] .weather_week_low {
   color: var(--weather-muted) !important;
 }
+
+/* Keep button gold separate from light-mode heading/text gold tokens. */
+:root[data-theme="light"] .weather_settings_button {
+  background: linear-gradient(180deg, #ffe566, #ffd400);
+}

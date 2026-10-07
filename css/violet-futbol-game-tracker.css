@@ -1972,15 +1972,27 @@
 .vfgt_pk_total { text-align: center; font-size: 1.25rem; }
 
 /* Glanceable launcher presentation; keep the complete score notation together. */
-#lando-launcher > .clock_utility_card--vfgt { aspect-ratio: auto; min-height: 0; }
 #lando-launcher .clock_utility_card--vfgt > * { flex-shrink: 0; }
-#lando-launcher .vfgt_launcher_summary { display: grid; flex: 1 0 auto; align-content: center; justify-items: center; gap: .8rem; min-width: 0; text-align: center; }
+#lando-launcher .vfgt_launcher_summary { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; align-content: safe center; justify-items: center; gap: .2rem; min-width: 0; text-align: center; }
 #lando-launcher .vfgt_launcher_section { width: 100%; min-width: 0; }
 #lando-launcher .clock_utility_card--vfgt .clock_launch_btn { margin-top: 0; }
 #lando-launcher .vfgt_launcher_section h3 { margin: 0 0 .25rem; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--utility-accent-soft, #d9ecff); }
-#lando-launcher .vfgt_launcher_section p { margin: 0; line-height: 1.4; }
+#lando-launcher .vfgt_launcher_section p { margin: 0; line-height: 1.2; }
 #lando-launcher .vfgt_launcher_value,
 #lando-launcher .vfgt_launcher_score { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
 #lando-launcher .vfgt_launcher_score { display: flex; flex-wrap: wrap; justify-content: center; text-align: center; align-items: baseline; column-gap: .35em; row-gap: .1em; }
 #lando-launcher .vfgt_launcher_score_numbers { white-space: nowrap; font-variant-numeric: tabular-nums; }
 #lando-launcher .vfgt_launcher_section .vfgt_launcher_detail { margin-top: .2rem; font-size: .8rem; font-weight: 400; opacity: .8; overflow-wrap: anywhere; }
+
+:root[data-theme="light"] .vfgt_form select.vfgt_game_type_select {
+  color-scheme: light;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--vfgt-input);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%230968c3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 1rem center;
+  background-size: 1rem 1rem;
+  background-repeat: no-repeat;
+  padding-inline-end: 3rem;
+  opacity: 1;
+}
