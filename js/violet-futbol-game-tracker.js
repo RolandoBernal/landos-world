@@ -1988,6 +1988,7 @@
       title: `Start game vs. ${scheduled.team2}?`,
       message: `${formatDateTimeLabel(scheduled.date, scheduled.startTime)}\n\nThe live timer will begin with the first half.`,
       confirmLabel: 'Start Game',
+      confirmClass: 'vfgt_button--success',
     }).then((confirmed) => {
       if (confirmed) quickStartGame(id);
     });
