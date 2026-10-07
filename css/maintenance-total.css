@@ -172,9 +172,16 @@
   background: rgb(255 255 255 / 96%);
 }
 
-:root[data-theme="light"] .maintenance_total_view .imt_nav_button { color: #fffdf7; }
+:root[data-theme="light"] .maintenance_total_view .imt_nav_button { color: #526171; }
 :root[data-theme="light"] .maintenance_total_view .imt_bike_visual { background: linear-gradient(135deg, #e5e7e3, #c9ccc7); }
 :root[data-theme="light"] .maintenance_total_view .imt_status--good { background: #d9f3e5; color: #11683f; }
 :root[data-theme="light"] .maintenance_total_view .imt_status--upcoming { background: #fff0c9; color: #825400; }
 :root[data-theme="light"] .maintenance_total_view .imt_status--attention { background: #fbdcda; color: #b4232b; }
 :root[data-theme="light"] .maintenance_total_view .imt_record_action--danger { color: #b4232b; }
+
+:root[data-theme="light"] .maintenance_total_view #imt_settings_toggle {
+  color: #394552;
+}
+:root[data-theme="light"] .maintenance_total_view #imt_settings_toggle[aria-expanded="true"] {
+  color: #fffdf7;
+}

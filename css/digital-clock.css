@@ -1440,3 +1440,22 @@ body.is-child-app-active .pwa_network_status {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+:root[data-theme="light"] #clock-view .digit_clock_time {
+  color: #087a3a;
+  --vfgt-segment-off: transparent;
+}
+
+/* Size the launcher digits against the panel, not the browser viewport. */
+#lando-launcher .clock_utility_local_time {
+  container-type: inline-size;
+}
+
+#lando-launcher .clock_utility_local_time_value.digit_clock_time {
+  --digit-width: 10cqw;
+}
+
+#lando-launcher .clock_utility_local_time_value.digit_clock_time .ampm {
+  font-size: 6cqw;
+  letter-spacing: 0.08em;
+}
