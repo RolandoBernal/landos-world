@@ -425,7 +425,8 @@
 }
 
 .lee_lee_diabetes_timeline_values,
-.lee_lee_diabetes_timeline_notes {
+.lee_lee_diabetes_timeline_notes,
+.lee_lee_diabetes_low_details {
   margin-top: 0.22rem;
   color: var(--lee-lee-muted);
   font-size: 0.9rem;
@@ -3421,8 +3422,19 @@
 
 .lee_lee_diabetes_low_episode summary {
   min-height: 44px;
-  line-height: 44px;
+  line-height: 1.35;
+  align-content: center;
+  color: var(--lee-lee-muted);
+  font-size: 0.9rem;
   cursor: pointer;
+}
+
+.lee_lee_diabetes_low_episode p {
+  margin-block: 0.22rem;
+}
+
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_card_status {
+  margin-top: 0.25rem;
 }
 
 .lee_lee_diabetes_low_episode li + li {
@@ -3448,7 +3460,7 @@
   font-family: var(--llt-numeric-font);
 }
 
-.lee_lee_diabetes_low_summary { margin: 1em 0; }
+.lee_lee_diabetes_low_summary { margin: 0.7rem 0; }
 .llt_sensor_review { display: block; }
 .llt_sensor_review dd { margin: .25rem 0 1rem; }
 
@@ -3461,8 +3473,30 @@
 }
 
 .lee_lee_diabetes_low_disclosure {
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lee-lee-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.lee_lee_diabetes_low_disclosure [data-low-chevron] {
+  display: list-item;
+  list-style: disclosure-closed inside;
+}
+.lee_lee_diabetes_low_disclosure[aria-expanded="true"] [data-low-chevron] {
+  list-style-type: disclosure-open;
+}
+.lee_lee_diabetes_low_disclosure:focus-visible {
+  outline: 2px solid var(--lee-lee-soft);
+  outline-offset: 3px;
 }
 .lee_lee_diabetes_low_episode [data-low-details]:not([hidden]) {
   animation: llt-low-details-appear 140ms ease-out;
