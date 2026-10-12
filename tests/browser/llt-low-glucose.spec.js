@@ -427,6 +427,51 @@ test('progressive disclosure is independent, accessible, transient and preserves
 });
 
 
+test('Low Glucose visual hierarchy matches context cards in both themes on narrow screens', async ({ page }, testInfo) => {
+  const low = seedEpisode();
+  const context = type => {
+    const record = { ...low, id: `synthetic-${type}`, type, bloodSugar: 94 };
+    delete record.lowGlucoseEpisode;
+    return record;
+  };
+  await open(page, [low, context('Bedtime'), context('Snacks')]);
+  const original = await stored(page);
+  for (const width of [320, 393]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    const card = page.locator('[data-low-glucose-episode]');
+    const toggle = card.locator('[data-action=low-toggle-details]');
+    const styles = await card.evaluate(el => {
+      const style = node => { const s = getComputedStyle(node); return { size: parseFloat(s.fontSize), weight: s.fontWeight, color: s.color, family: s.fontFamily }; };
+      const otherTitle = [...document.querySelectorAll('.lee_lee_diabetes_timeline_type')].find(node => node.textContent === 'Bedtime');
+      const button = getComputedStyle(el.querySelector('[data-action=low-toggle-details]'));
+      return { title: style(el.querySelector('h3')), reference: style(otherTitle), status: style(el.querySelector('.lee_lee_diabetes_card_status')),
+        border: button.borderTopWidth, background: button.backgroundColor };
+    });
+    expect(styles.title).toEqual(styles.reference);
+    expect(styles.status.size).toBeLessThan(styles.title.size);
+    expect(styles.border).toBe('0px');
+    expect(styles.background).toBe('rgba(0, 0, 0, 0)');
+    expect(await toggle.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    await toggle.focus(); await page.keyboard.press('Space');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await card.locator('[data-low-chevron]').evaluate(el => getComputedStyle(el).listStyleType)).toBe('disclosure-open');
+    const disclosureStyles = await card.evaluate(el => {
+      const style = node => { const s = getComputedStyle(node); return [s.fontSize, s.color, s.lineHeight]; };
+      return [style(el.querySelector('[data-action=low-toggle-details]')), style(el.querySelector('summary'))];
+    });
+    expect(disclosureStyles[0]).toEqual(disclosureStyles[1]);
+    await card.locator('summary').click();
+    await expect(card.locator('ol')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`polish-${theme}-${width}.png`), fullPage: true });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(await card.locator('[data-low-chevron]').evaluate(el => getComputedStyle(el).listStyleType)).toBe('disclosure-closed');
+  }
+  expect(await stored(page)).toEqual(original);
+});
+
 test('65 → 62 → 75 → 79 offers completion at first qualifying recheck and keeps explicit closure', async ({ page }) => {
   await open(page);
   await newEpisode(page, '65', '15'); await save(page); await done(page);

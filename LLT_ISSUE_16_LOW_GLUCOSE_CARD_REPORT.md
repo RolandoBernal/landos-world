@@ -148,3 +148,23 @@ Fresh October 9 preparation validation: 545 unit, 19 metadata integration, 38 ex
 ## October 12 scoped release validation
 
 Authorized PR-only release preparation: 545 unit tests and syntax/diff checks passed; fresh desktop/mobile LLT browser suite 130 passed; local database checks 19 metadata plus 38 existing sensor, 82 Low Glucose and one synthetic Auth/REST/realtime all passed. All 13 candidate hashes remain unchanged. Earlier broad-suite evidence remains 560 passed/28 known baseline failures, not a green full suite. No production SQL was rerun; reviewed migration is included for history only. Application awaits PR review and Rolando’s merge; production deployment and updated-app acceptance remain pending.
+
+## Post-release visual polish — October 12, 2026 (local only)
+
+Branch: fix/llt-low-glucose-card-visual-polish. No commit, push, PR, deployment or production-data changes. Physical-iPhone review of this polish remains pending.
+
+Root cause: the episode status used a browser-default bold paragraph at the title's size, primary values used default paragraph spacing/type, and More/Less Details inherited full-width action-button chrome. The title itself already matched shared context-card typography.
+
+Reused timeline_type, card_status, timeline_values and the shared timeline muted-body rule/color tokens. The existing disclosure remains a keyboard-accessible button with a 44px minimum target and aria-expanded/aria-controls, now borderless/background-free with a leading aria-hidden triangle and state-dependent label. Episode Timeline uses matching disclosure font/color/line-height. Scoped paragraph/summary spacing is tighter; the original footer, action controls, timeline order/content/editing and collapse-state reset are retained. A dedicated low_details class shares body styles without changing saved-note semantics or applying the numeric font to all prose.
+
+Files: css/lee-lee-diabetes.css, js/lee-lee-diabetes-tracker.js, tests/browser/llt-low-glucose.spec.js and this report. No clinical calculations, thresholds, synchronization, sensor code, SQL, settings or Issue #12 code changed. All 75 unrelated file fingerprints remain unchanged.
+
+Validation: 221 Low Glucose/storage/reporting unit tests passed; 42 desktop/mobile Issue #16 browser scenarios passed; syntax and diff checks passed. New light/dark 320/393px comparisons verify exact Bedtime heading typography, subordinate status, matching disclosure styling, Space-key toggling, 44px targets, no horizontal overflow and unchanged persisted records. Existing tests cover independent timelines, transient disclosure, footer actions, multi-round chronology/Edit Recheck and explicit recovery/Continue Monitoring behavior. Screenshots reviewed beside Bedtime/Snacks. Initial class reuse accidentally included the container in saved-note selectors; corrected without weakening the assertions, then the full suite rerun successfully.
+
+Existing local preview retained: http://10.0.0.160:8000/#/lee-lees-tracker. HTTP 200 and exact changed JS/CSS served bytes verified. Authentication/production sync/PWA operations are disabled in this local-device preview. Please review collapsed/expanded completed and open episodes, both themes and footer/timeline controls on the physical iPhone before release authorization.
+
+## Issue #16.1 release authorization — October 12, 2026
+
+Rolando confirmed physical-iPhone acceptance and explicitly approved release of all the preceding visual polish, including typography/spacing and the matching native disclosure marker. The four-file scope is the CSS, tracker card rendering, Issue #16 browser spec and this report. The marker now uses native disclosure-open/disclosure-closed list markers rather than small Unicode triangles; aria-hidden presentation leaves the existing accessible button label and toggle contract intact. Clinical calculations, thresholds/completion/Continue Monitoring, insulin/settings, Carb Calculator, Sensor History, authentication/sync and database schema remain unchanged. No migration is included or rerun. All 75 unrelated files remain preserved.
+
+Release checks: 221 relevant unit tests, 42 desktop/mobile browser scenarios and syntax/diff checks passed. Physical-iPhone acceptance is user-confirmed. Production deployment must be verified for the merge SHA through the existing Pages workflow; this local report does not claim an as-yet-unverified deployment.

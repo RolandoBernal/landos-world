@@ -7421,10 +7421,10 @@
     if (!derived) return '<div><h3>Low Glucose</h3><p>Compatibility review required. Use the latest compatible LLT version. Episode data is preserved.</p></div>';
     const roundLine = (round, initial = false) => `<li><strong>${initial ? 'Initial observation' : 'Recheck'}</strong><div class="lee_lee_diabetes_low_timestamp">${renderRecordDateTime(round.recordTimestamp)}</div><p>${renderBloodSugar(round.bloodSugar)}${round.carbs == null ? '' : ` · Treatment ${renderCarbs(round.carbs)}`}</p>${round.notes ? `<p class="lee_lee_diabetes_timeline_notes">${escapeHtml(round.notes)}</p>` : ''}${(round.carbComponents || []).length ? `<p>${(round.carbComponents || []).map(component => escapeHtml(component.nameSnapshot || component.name || component.label || 'Recorded food')).join(', ')}</p>` : ''}${interactive && !initial ? `<button class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" type="button" data-action="low-edit-recheck" data-id="${id}" data-round-id="${escapeHtml(round.id)}">Edit Recheck</button>` : ''}</li>`;
     return `<div class="lee_lee_diabetes_low_episode" data-low-glucose-episode="${id}">
-      <h3 class="lee_lee_diabetes_timeline_type">Low Glucose</h3><p><strong>${escapeHtml(derived.status)}</strong></p>
-      <p>Initial ${renderBloodSugar(record.bloodSugar)} · Latest ${renderBloodSugar(derived.latest)}</p>
-      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_low_disclosure" data-action="low-toggle-details" aria-expanded="false" aria-controls="low-details-${id}">More Details ▾</button>
-      <div id="low-details-${id}" data-low-details hidden>
+      <h3 class="lee_lee_diabetes_timeline_type">Low Glucose</h3><p class="lee_lee_diabetes_card_status">${escapeHtml(derived.status)}</p>
+      <p class="lee_lee_diabetes_timeline_values">Initial ${renderBloodSugar(record.bloodSugar)} · Latest ${renderBloodSugar(derived.latest)}</p>
+      <button type="button" class="lee_lee_diabetes_low_disclosure" data-action="low-toggle-details" aria-expanded="false" aria-controls="low-details-${id}"><span aria-hidden="true" data-low-chevron></span><span data-low-disclosure-label>More Details</span></button>
+      <div id="low-details-${id}" class="lee_lee_diabetes_low_details" data-low-details hidden>
       <div class="lee_lee_diabetes_low_summary"><div>Lowest documented ${renderBloodSugar(derived.lowest)}</div><div>Total recorded treatment ${derived.totalCarbs == null ? 'not recorded' : renderCarbs(derived.totalCarbs)}</div><div>${derived.rounds.length} ${derived.rounds.length === 1 ? 'recheck' : 'rechecks'}</div></div>
       <p class="lee_lee_diabetes_help">${derived.threshold == null ? 'Episode threshold unavailable; recovery comparison is unavailable.' : `Episode threshold: ${derived.threshold} mg/dL.`}</p>
       ${derived.durationMinutes == null ? '' : `<p>Time to first documented recovery recheck: ${renderNumeric(String(Math.round(derived.durationMinutes)))} min. This does not measure the exact biological recovery time.</p>`}
@@ -10312,7 +10312,7 @@
         const expanded = target.getAttribute('aria-expanded') !== 'true';
         panel.hidden = !expanded;
         target.setAttribute('aria-expanded', String(expanded));
-        target.textContent = expanded ? 'Less Details ▴' : 'More Details ▾';
+        target.querySelector('[data-low-disclosure-label]').textContent = expanded ? 'Less Details' : 'More Details';
         if (!expanded) panel.querySelectorAll('details[open]').forEach(details => { details.open = false; });
         return;
       }
