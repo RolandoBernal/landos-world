@@ -15,6 +15,7 @@
       uid: null,
       snapshot: null,
       verified: false,
+      supportsMetadata: false,
       lastFetchedAt: null,
       pending: null,
       error: "",
@@ -72,6 +73,7 @@
             "Sensor sync unavailable. Last known state is shown.",
           );
         accept(data.snapshot);
+        state.supportsMetadata = data.capabilities?.sensorMetadata === 1;
       } catch (e) {
         if (epoch === generation) state.error = e.message;
       }
@@ -88,6 +90,7 @@
         uid: next?.uid || null,
         snapshot: null,
         verified: false,
+      supportsMetadata: false,
         lastFetchedAt: null,
         pending: null,
         error: "",
@@ -170,6 +173,11 @@
             pending,
           );
           if (epoch !== generation) return { status: "signed_out" };
+          if (error?.code === "PGRST202" && pending.p_replacement_metadata != null) {
+            storage.removeItem(key("pending")); state.pending = null; state.supportsMetadata = false;
+            state.error = "Not saved — replacement metadata requires the sensor database migration.";
+            emit(); return { status: "unavailable" };
+          }
           if (error || !data)
             throw new Error("Outcome unknown — reconnect to confirm.");
           if (
@@ -212,20 +220,31 @@
         actor = "Unknown",
         metadata = {},
         sensorCode = null,
+        targetId = null,
+        replacementMetadata = null,
       } = {},
     ) {
       if (!state.verified || !state.snapshot)
         throw new Error("Refresh the authoritative sensor state first.");
       if (sensorCode != null && (action !== "start" || !D.isValidSensorCode(sensorCode)))
         throw new Error("Enter the 4-digit sensor code.");
+      if (replacementMetadata !== null || action === "update_metadata") {
+        if (!state.supportsMetadata) throw new Error("Replacement metadata is unavailable until the sensor database migration is installed and verified.");
+        D.validateMetadata(replacementMetadata);
+        if (!["start", "update_metadata"].includes(action)) throw new Error("Invalid metadata action.");
+        if (action === "update_metadata" && state.snapshot.cycles.find(c => c.id === targetId)?.state !== "closed")
+          throw new Error("Only completed or early-replaced sensors can be edited.");
+      }
       return {
+        ...(replacementMetadata !== null ? { p_replacement_metadata: replacementMetadata } : {}),
+        ...(action === "update_metadata" ? { p_target_cycle_id: targetId } : {}),
         ...(sensorCode != null ? { p_sensor_code: sensorCode } : {}),
         p_operation_id: D.generateUuid(),
         p_action: action,
         p_expected_revision: state.snapshot.revision,
         p_expected_current_cycle_id: state.snapshot.currentCycleId,
         p_new_cycle_id: action === "start" ? id || D.generateUuid() : null,
-        p_started_at: action === "undo_current" ? null : start,
+        p_started_at: ["undo_current", "update_metadata"].includes(action) ? null : start,
         p_confirm_replace: action === "start" && confirmed,
         p_actor_label: actor,
         p_device_metadata: metadata,

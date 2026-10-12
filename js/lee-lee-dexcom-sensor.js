@@ -19,6 +19,33 @@
     return isValidSensorCode(cycle?.sensor_code)
       ? `Dexcom G7 · ${cycle.sensor_code}` : "Dexcom G7";
   }
+  const REASONS = Object.freeze({
+    normal_expiration: "Normal Expiration", did_not_pair: "Sensor Did Not Pair",
+    brief_sensor_issue: "Brief Sensor Issue / Sensor Error", inaccurate_readings: "Inaccurate Readings",
+    signal_loss: "Signal Loss", bleeding_bruising: "Bleeding or Bruising", applying_sensor: "Issue Applying Sensor",
+    sensor_failed: "Sensor Failed", fell_off: "Sensor Fell Off", skin_irritation: "Skin Irritation",
+    accidentally_removed: "Accidentally Removed", other: "Other",
+  });
+  function validateMetadata(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).length !== 3 ||
+      !["replacement_reason_id", "replacement_notes", "replacement_requested"].every(key => Object.hasOwn(value, key)) ||
+      (value.replacement_reason_id !== null && (typeof value.replacement_reason_id !== "string" || !Object.hasOwn(REASONS, value.replacement_reason_id))) ||
+      (value.replacement_notes !== null && (typeof value.replacement_notes !== "string" || Array.from(value.replacement_notes).length > 2000)) ||
+      (value.replacement_requested !== null && typeof value.replacement_requested !== "boolean"))
+      throw new Error("Enter a valid reason, notes up to 2,000 characters, and requested status.");
+    return value;
+  }
+  function historyStatus(cycle) {
+    return cycle.state === "cancelled" ? "Cancelled" : cycle.state === "current" ? "Active" :
+      lifecycle(cycle).early ? "Replaced Early" : "Completed";
+  }
+  function matchesFilter(cycle, filter) {
+    if (filter === "All") return true;
+    if (filter === "Sensor Issues") return Object.hasOwn(REASONS, cycle.replacement_reason_id) &&
+      !["normal_expiration", "other"].includes(cycle.replacement_reason_id);
+    return historyStatus(cycle) === filter;
+  }
   function lifecycle(cycle, now = Date.now()) {
     if (!cycle || cycle.state === "cancelled") return { status: "none" };
     if (
@@ -73,6 +100,8 @@
         c.revision > snapshot.revision
       )
         throw new Error("Invalid sensor history.");
+      validateMetadata({ replacement_reason_id: c.replacement_reason_id ?? null,
+        replacement_notes: c.replacement_notes ?? null, replacement_requested: c.replacement_requested ?? null });
       ids.add(c.id);
       lifecycle({ ...c, state: "current" });
       if (c.state === "current") {
@@ -148,6 +177,10 @@
     return values;
   }
   globalThis.LeeLeeDexcomSensor = Object.freeze({
+    REASONS,
+    validateMetadata,
+    historyStatus,
+    matchesFilter,
     MODEL,
     HOUR,
     generateUuid,
