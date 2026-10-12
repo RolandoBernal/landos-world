@@ -7423,6 +7423,8 @@
     return `<div class="lee_lee_diabetes_low_episode" data-low-glucose-episode="${id}">
       <h3 class="lee_lee_diabetes_timeline_type">Low Glucose</h3><p><strong>${escapeHtml(derived.status)}</strong></p>
       <p>Initial ${renderBloodSugar(record.bloodSugar)} · Latest ${renderBloodSugar(derived.latest)}</p>
+      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_low_disclosure" data-action="low-toggle-details" aria-expanded="false" aria-controls="low-details-${id}">More Details ▾</button>
+      <div id="low-details-${id}" data-low-details hidden>
       <div class="lee_lee_diabetes_low_summary"><div>Lowest documented ${renderBloodSugar(derived.lowest)}</div><div>Total recorded treatment ${derived.totalCarbs == null ? 'not recorded' : renderCarbs(derived.totalCarbs)}</div><div>${derived.rounds.length} ${derived.rounds.length === 1 ? 'recheck' : 'rechecks'}</div></div>
       <p class="lee_lee_diabetes_help">${derived.threshold == null ? 'Episode threshold unavailable; recovery comparison is unavailable.' : `Episode threshold: ${derived.threshold} mg/dL.`}</p>
       ${derived.durationMinutes == null ? '' : `<p>Time to first documented recovery recheck: ${renderNumeric(String(Math.round(derived.durationMinutes)))} min. This does not measure the exact biological recovery time.</p>`}
@@ -7430,6 +7432,7 @@
       ${derived.invalidClosure ? '<p role="status">Recovery needs reconfirmation. Review the referenced recheck.</p>' : ''}
       ${record.lowGlucoseEpisode.pendingRecheck ? `<p>Pending recheck · ${renderRecordDateTime(record.lowGlucoseEpisode.pendingRecheck.dueAt)}</p>` : ''}
       <details><summary>Episode timeline</summary><ol>${roundLine({ ...record, carbs: record.mealCarbs, carbComponents: record.mealComponents }, true)}${derived.rounds.map(round => roundLine(round)).join('')}</ol></details>
+      </div>
       ${interactive && derived.status === 'Open' ? `<div class="lee_lee_diabetes_actions"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="low-record-recheck" data-id="${id}">Record Recheck</button>${derived.eligible.length ? `<button type="button" class="lee_lee_diabetes_button" data-action="low-confirm-recovery" data-id="${id}">Mark Episode Complete</button>` : `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="low-offer-timer" data-id="${id}">Recheck Timer</button>`}<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="low-end-episode" data-id="${id}">End Without Confirmed Recovery</button></div>` : ''}
     </div>`;
   }
@@ -7515,7 +7518,7 @@
     renderAfterRecordChange(record);
     if (offer && deriveLowGlucoseEpisode(record)?.status === 'Open') {
       const derived = deriveLowGlucoseEpisode(record);
-      if (derived.eligible.length) showLowGlucoseDialog('Recheck Saved', `This documented recheck is at or above the episode threshold of ${derived.threshold} mg/dL. The episode remains open until you explicitly confirm completion.`, lowButton('low-confirm-recovery', 'Mark Episode Complete', record.id) + lowButton('low-done', 'Done'));
+      if (derived.eligible.length) showLowGlucoseDialog('Recheck Saved', `This documented recheck is at or above the episode threshold of ${derived.threshold} mg/dL. The episode remains open until you explicitly confirm completion.`, lowButton('low-confirm-recovery', 'Mark Episode Complete', record.id) + lowButton('low-done', 'Continue Monitoring'));
       else renderLowGlucoseTimerOffer(record);
     }
     return true;
@@ -10304,6 +10307,15 @@
       if (!target) return;
       if (currentEditor?.mode === 'settings') saveSettingsUiState();
       const action = target.dataset.action;
+      if (action === 'low-toggle-details') {
+        const panel = target.closest('[data-low-glucose-episode]').querySelector('[data-low-details]');
+        const expanded = target.getAttribute('aria-expanded') !== 'true';
+        panel.hidden = !expanded;
+        target.setAttribute('aria-expanded', String(expanded));
+        target.textContent = expanded ? 'Less Details ▴' : 'More Details ▾';
+        if (!expanded) panel.querySelectorAll('details[open]').forEach(details => { details.open = false; });
+        return;
+      }
       if (action?.startsWith('low-')) { handleLowGlucoseAction(action, target); return; }
       if (action === 'reset-password') {
         const form = target.closest('[data-auth-form]');

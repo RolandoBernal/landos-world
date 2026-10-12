@@ -527,3 +527,55 @@ test('coded pending retry, realtime refetch and offline cache retain exact leadi
   offline.client.connect({uid:'A',client:offline.transport});
   assert.equal(D.current(offline.client.get().snapshot).sensor_code,'0042');
 });
+
+test('sensor history status is independent of reason, including grace/expired current and cancelled', () => {
+  const closed = { ...c, state: 'closed', ended_at: new Date(start + 240 * H).toISOString(), replacement_reason_id: 'sensor_failed' };
+  assert.equal(D.historyStatus(closed), 'Completed'); assert.equal(D.matchesFilter(closed, 'Sensor Issues'), true);
+  const early = { ...closed, ended_at: new Date(start + 20 * H).toISOString(), replacement_reason_id: 'normal_expiration' };
+  assert.equal(D.historyStatus(early), 'Replaced Early'); assert.equal(D.matchesFilter(early, 'Sensor Issues'), false);
+  assert.equal(D.historyStatus(c), 'Active');
+  assert.equal(D.historyStatus({ ...closed, state: 'cancelled', ended_at: null }), 'Cancelled');
+  assert.equal(D.matchesFilter({ ...early, replacement_reason_id: 'other', replacement_notes: 'sensor failed' }, 'Sensor Issues'), false);
+  for (const id of Object.keys(D.REASONS).filter(id => !['normal_expiration','other'].includes(id)))
+    assert.equal(D.matchesFilter({ ...early, replacement_reason_id: id }, 'Sensor Issues'), true);
+});
+test('replacement metadata preserves unknown and explicit false; validates Unicode and identifiers', () => {
+  const value = { replacement_reason_id: null, replacement_notes: null, replacement_requested: false };
+  assert.equal(D.validateMetadata(value), value);
+  assert.doesNotThrow(() => D.validateMetadata({ ...value, replacement_notes: '😀'.repeat(2000) }));
+  for (const bad of [{ ...value, replacement_notes: '😀'.repeat(2001) }, { ...value, replacement_requested: 'false' }, { ...value, replacement_reason_id: 'unknown' }, { ...value, started_at: 'today' }])
+    assert.throws(() => D.validateMetadata(bad));
+});
+
+test('metadata capability is separate from snapshot; unsupported backend blocks new metadata requests', async () => {
+  const s = await connected();
+  assert.equal(s.client.get().supportsMetadata, false);
+  assert.throws(() => s.client.request('update_metadata', { targetId: c.id, replacementMetadata: { replacement_reason_id: null, replacement_notes: null, replacement_requested: null } }), /migration/);
+});
+test('metadata pending retry retains canonical target and values, offline cannot write and account switch clears capability', async () => {
+  const closed = { ...c, state: 'closed', ended_at: new Date(start + H).toISOString() };
+  const snapshot = { revision: 1, currentCycleId: null, cycles: [closed] };
+  let lost = true, calls = [];
+  const s = await connected({ rpc: async (name, p) => {
+    if (name === 'llt_get_sensor_snapshot') return { data: {status:'ok', snapshot, capabilities:{sensorMetadata:1}} };
+    calls.push(JSON.stringify(p)); if (lost) throw Error('lost response');
+    return { data: {status:'accepted', snapshot} };
+  }});
+  const value = { replacement_reason_id:'signal_loss',replacement_notes:'Exact note',replacement_requested:false };
+  const req = s.client.request('update_metadata', {targetId:c.id,replacementMetadata:value});
+  assert.equal(req.p_started_at, null); assert.equal(req.p_new_cycle_id, null);
+  assert.equal((await s.client.submit(req)).status, 'unknown');
+  assert.equal(s.client.get().pending.p_replacement_metadata.replacement_requested, false);
+  s.setOnline(false); assert.equal((await s.client.submit()).status, 'offline'); assert.equal(calls.length, 1);
+  s.setOnline(true); lost = false; assert.equal((await s.client.submit()).status, 'accepted');
+  assert.equal(calls[0], calls[1]); assert.equal(s.client.get().pending, null);
+  s.client.connect(null); assert.equal(s.client.get().supportsMetadata, false); assert.equal(s.client.get().snapshot, null);
+});
+test('missing migrated RPC is clearly not saved and never falsely treated as an uncertain success', async () => {
+  const s = await connected({rpc: async name => name === 'llt_get_sensor_snapshot' ?
+    {data:{status:'ok', snapshot:{revision:1,currentCycleId:null,cycles:[{...c,state:'closed',ended_at:new Date(start+H).toISOString()}]}, capabilities:{sensorMetadata:1}}} :
+    {error:{code:'PGRST202'}}});
+  const req = s.client.request('update_metadata',{targetId:c.id,replacementMetadata:{replacement_reason_id:null,replacement_notes:null,replacement_requested:false}});
+  assert.equal((await s.client.submit(req)).status,'unavailable'); assert.match(s.client.get().error,/Not saved/);
+  assert.equal(s.client.get().pending,null); assert.equal(s.client.get().supportsMetadata,false);
+});

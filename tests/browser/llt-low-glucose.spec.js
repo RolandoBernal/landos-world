@@ -65,6 +65,7 @@ test('Low Glucose complete synthetic episode, explicit outcome, timeline and his
   await page.locator('[data-action=low-close-recovery]').click();
   await expect(root.locator('[data-low-glucose-episode]')).toContainText('Recovery Confirmed');
   await expect(root.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 53 mg/dL', 'Total recorded treatment 30 g carbs', '2 rechecks']);
+  await root.getByRole('button', { name: 'More Details' }).click();
   await root.getByText('Episode timeline', { exact: true }).click();
   await expect(root.locator('details')).toHaveAttribute('open', '');
   await expect(root.locator('details')).toContainText('Recheck');
@@ -292,6 +293,7 @@ test('Low Glucose secondary typography matches numeric text in both themes and r
   await page.locator('[name=notes]').fill(recheckNote);
   await save(page); await done(page);
   const card = page.locator('[data-low-glucose-episode]');
+  await card.getByRole('button', { name: 'More Details' }).click();
   await card.locator('summary').click();
   await expect(card.locator('.lee_lee_diabetes_low_summary > div')).toHaveText(['Lowest documented 63 mg/dL', 'Total recorded treatment 15 g carbs', '1 recheck']);
   const positions = await card.locator('.lee_lee_diabetes_low_summary > div').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().y));
@@ -333,6 +335,7 @@ test('multi-round timeline separates type and timestamp and sizes Edit Recheck b
   record.lowGlucoseEpisode.closure = { kind: 'recovery-confirmed', recheckId: 'synthetic-round-2', confirmedAt: new Date().toISOString() };
   await open(page, [record]);
   const card = page.locator('[data-low-glucose-episode]');
+  await card.getByRole('button', { name: 'More Details' }).click();
   await card.locator('summary').click();
   const rows = card.locator('ol > li');
   await expect(rows).toHaveCount(4);
@@ -375,4 +378,142 @@ test('multi-round timeline separates type and timestamp and sizes Edit Recheck b
   await expect(page.getByRole('heading', { name: 'Record Recheck', exact: true })).toBeVisible();
   await expect(page.locator('[name=bloodSugar]')).toHaveValue('61');
   expect(await stored(page)).toEqual(original);
+});
+
+
+test('progressive disclosure is independent, accessible, transient and preserves records', async ({ page }, testInfo) => {
+  const first = seedEpisode();
+  const second = { ...seedEpisode({ threshold: null }), id: 'synthetic-second' };
+  await open(page, [first, second]);
+  const original = await stored(page);
+  const cards = page.locator('[data-low-glucose-episode]');
+  await expect(cards).toHaveCount(2);
+  const card = cards.first(), other = cards.last();
+  await expect(card.locator('[data-low-details]')).toBeHidden();
+  await expect(card).toContainText('Initial 53 mg/dL · Latest 53 mg/dL');
+  await expect(card).toContainText('Open');
+  const toggle = card.locator('[data-action=low-toggle-details]');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(await toggle.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await page.screenshot({ path: testInfo.outputPath('disclosure-collapsed.png'), fullPage: true });
+  await toggle.focus(); await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(card.locator('[data-low-details]')).toBeVisible();
+  await expect(other.locator('[data-low-details]')).toBeHidden();
+  await expect(card.locator('details')).not.toHaveAttribute('open', '');
+  await card.locator('summary').click();
+  await expect(card.locator('ol')).toBeVisible();
+  await card.getByRole('button', { name: 'Less Details' }).click();
+  await card.getByRole('button', { name: 'More Details' }).click();
+  await expect(card.locator('details')).not.toHaveAttribute('open', '');
+  const footer = card.locator('xpath=..').locator('.lee_lee_diabetes_timeline_footer');
+  await expect(footer.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await expect(footer.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+  const panelBox = await card.boundingBox(), footerBox = await footer.boundingBox();
+  expect(footerBox.y).toBeGreaterThanOrEqual(panelBox.y + panelBox.height - 1);
+  await page.screenshot({ path: testInfo.outputPath('disclosure-expanded.png'), fullPage: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await card.locator('[data-low-details]').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  await page.locator('[data-action=history]').first().click();
+  await expect(page.locator('[data-low-details]:visible')).toHaveCount(0);
+  await page.locator('[data-action=history-date]').first().click();
+  await expect(page.locator('[data-low-glucose-episode]')).toHaveCount(2);
+  await expect(page.locator('[data-low-details]:visible')).toHaveCount(0);
+  await page.locator('[data-low-glucose-episode]').first().getByRole('button', { name: 'More Details' }).click();
+  await expect(page.locator('[data-low-details]:visible')).toHaveCount(1);
+  expect(await stored(page)).toEqual(original);
+  await page.reload();
+  await expect(page.locator('[data-low-details]:visible')).toHaveCount(0);
+});
+
+
+test('65 → 62 → 75 → 79 offers completion at first qualifying recheck and keeps explicit closure', async ({ page }) => {
+  await open(page);
+  await newEpisode(page, '65', '15'); await save(page); await done(page);
+  await recheck(page, '62', '15'); await done(page);
+  await recheck(page, '75', '0');
+  const dialog = page.locator('[data-low-dialog]');
+  await expect(page.getByRole('heading', { name: 'Recheck Saved' })).toBeVisible();
+  await expect(dialog).toContainText('episode threshold of 70 mg/dL');
+  await expect(dialog.getByRole('button', { name: 'Mark Episode Complete' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Continue Monitoring', exact: true })).toBeVisible();
+  await done(page);
+  const card = page.locator('[data-low-glucose-episode]');
+  await expect(card).toContainText('Open');
+  await expect(card.getByRole('button', { name: 'Mark Episode Complete' })).toBeVisible();
+  await recheck(page, '79', '0');
+  await expect(page.getByRole('heading', { name: 'Recheck Saved' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Mark Episode Complete' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Continue Monitoring', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Mark Episode Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm documented recovery?' })).toBeVisible();
+  await page.locator('[data-action=low-close-recovery]').click();
+  await expect(card).toContainText('Recovery Confirmed');
+  const record = (await stored(page))[0];
+  expect(record.lowGlucoseEpisode.rechecks.map(round => round.bloodSugar)).toEqual([62, 75, 79]);
+  expect(record.lowGlucoseEpisode.closure.recheckId).toBe(record.lowGlucoseEpisode.rechecks[1].id);
+});
+
+for (const width of [320, 393]) test(`recovery offer visible at ${width}px and Done permits later completion without a new recheck`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 667 });
+  await open(page);
+  await newEpisode(page, '65', '15'); await save(page); await done(page);
+  await recheck(page, '62', '15');
+  await expect(page.locator('[data-low-dialog] [data-action=low-confirm-recovery]')).toHaveCount(0);
+  await done(page);
+  await recheck(page, '75', '0');
+  const dialog = page.locator('[data-low-dialog]');
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  const complete = dialog.getByRole('button', { name: 'Mark Episode Complete' });
+  await expect(complete).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Continue Monitoring', exact: true })).toBeVisible();
+  for (const button of await dialog.locator('button').all()) {
+    const geometry = await button.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { fits: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth,
+        unobscured: top === el || el.contains(top), height: r.height };
+    });
+    expect(geometry.fits).toBe(true); expect(geometry.unobscured).toBe(true);
+    expect(geometry.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({ path: testInfo.outputPath('qualifying-recheck-offer.png'), fullPage: false });
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Continue Monitoring', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(complete).toBeFocused();
+  await done(page);
+  let record = (await stored(page))[0];
+  expect(record.lowGlucoseEpisode.closure).toBeNull();
+  const card = page.locator('[data-low-glucose-episode]');
+  await expect(card.locator('[data-low-details]')).toBeHidden();
+  await expect(card.getByRole('button', { name: 'Mark Episode Complete' })).toBeVisible();
+  await card.getByRole('button', { name: 'Mark Episode Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm documented recovery?' })).toBeVisible();
+  await page.locator('[data-low-dialog] [data-action=low-done]').click();
+  expect((await stored(page))[0].lowGlucoseEpisode.closure).toBeNull();
+  await page.locator('[data-action=history]').first().click();
+  await page.locator('[data-action=history-date]').first().click();
+  await page.locator('[data-low-glucose-episode] [data-action=low-confirm-recovery]').click();
+  await page.locator('[data-action=low-close-recovery]').click();
+  record = (await stored(page))[0];
+  expect(record.lowGlucoseEpisode.rechecks).toHaveLength(2);
+  expect(record.lowGlucoseEpisode.closure.recheckId).toBe(record.lowGlucoseEpisode.rechecks[1].id);
+  await expect(page.locator('[data-low-glucose-episode]')).toContainText('Recovery Confirmed');
+  await expect(page.locator('[data-action=low-record-recheck]')).toHaveCount(0);
+  await page.locator('[data-action=history]').first().click();
+  await page.locator('[data-action=history-date]').first().click();
+  await expect(page.locator('[data-low-glucose-episode]')).toContainText('Recovery Confirmed');
+});
+
+for (const threshold of [80, null, 'not-a-threshold']) test(`saved threshold ${threshold} is respected after recheck`, async ({ page }) => {
+  const record = seedEpisode({ threshold });
+  await open(page, [record]);
+  await recheck(page, '75', '0');
+  await expect(page.locator('[data-low-dialog] [data-action=low-confirm-recovery]')).toHaveCount(0);
+  await done(page);
+  const card = page.locator('[data-low-glucose-episode]');
+  await expect(card).toContainText('Open');
+  await card.getByRole('button', { name: 'More Details' }).click();
+  await expect(card.locator('[data-low-details]')).toContainText(threshold === 80 ? 'Episode threshold: 80 mg/dL' : 'Episode threshold unavailable');
+  expect((await stored(page))[0].lowGlucoseEpisode.thresholdSnapshot).toEqual(record.lowGlucoseEpisode.thresholdSnapshot);
 });
