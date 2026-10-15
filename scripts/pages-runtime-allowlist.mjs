@@ -25,6 +25,7 @@ export const PAGES_RUNTIME_FILES = [
   'js/daily-chief-briefing.js',
   'js/landos-world-build-metadata.js',
   'js/landos-world-modal-utils.js',
+  'js/lee-lee-carb-calculator.js',
   'js/lee-lee-diabetes-tracker.js',
   'js/lee-lee-pre-meal-timer.js',
   'js/lee-lee-dexcom-sensor.js',

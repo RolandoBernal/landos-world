@@ -50,6 +50,7 @@ const PRECACHE_URLS = [
   './js/lee-lee-sensor-sync.js',
   './js/lee-lee-sensor-ui.js',
 
+  './js/lee-lee-carb-calculator.js',
   './js/lee-lee-diabetes-tracker.js',
   './js/sprints-app.js',
   './js/violet-futbol-game-tracker.js',
