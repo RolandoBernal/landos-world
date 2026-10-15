@@ -291,9 +291,9 @@ test('auth preview never registers, unregisters, clears caches or fetches deploy
 test('app dropdowns use padded custom select arrows', () => {
   [
     [html, /css\/daily-chief-briefing\.css\?v=20260917-1/],
-    [html, /css\/lee-lee-diabetes\.css\?v=20260926-1/],
+    [html, /css\/lee-lee-diabetes\.css\?v=20261015-1/],
     [html, /js\/lee-lees-tracker-sync\.js\?v=20260917-1/],
-    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20260926-1/],
+    [html, /js\/lee-lee-diabetes-tracker\.js\?v=20261015-1/],
     [html, /js\/pwa-manager\.js\?v=20260916-3/],
     [html, /css\/sprints\.css\?v=20260825-1/],
     [html, /css\/violet-futbol-game-tracker\.css\?v=20260919-2/],

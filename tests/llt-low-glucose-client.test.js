@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const source = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../js/lee-lee-carb-calculator.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
 const storageHarness = readFileSync(new URL('./lee-lees-tracker-storage.test.js', import.meta.url), 'utf8');
 const factories = storageHarness.slice(storageHarness.indexOf('function createLocalStorage'), storageHarness.indexOf('function sampleRecord'));
 const instrumented = source.replace('  window.LeeLeeTrackerStorage = {', `  window.LeeLeeTrackerStorage = {

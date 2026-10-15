@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const trackerSource = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
+const trackerSource = readFileSync(new URL('../js/lee-lee-carb-calculator.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
 const syncSource = readFileSync(new URL('../js/lee-lees-tracker-sync.js', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../css/lee-lee-diabetes.css', import.meta.url), 'utf8');
 const starterFoods = JSON.parse(readFileSync(new URL('../data/llt-starter-foods.json', import.meta.url), 'utf8'));
@@ -67,10 +67,20 @@ function createTrackerRuntime(seed = {}, options = {}) {
       },
       getEditorDoseResult,
       buildRecordFromForm,
+      renderCarbCalculator,
+      setCalculatorContext(context, state = {}) {
+        currentEditor = { calculatorSession: { context }, ...state };
+      },
     };
     window.LeeLeeTrackerVerification = {`) : trackerSource;
   vm.runInNewContext(source, context);
   return context;
+}
+
+function calculatorMarkup(context = 'entry', state = {}) {
+  const runtime = createTrackerRuntime({}, { editorAccess: true });
+  runtime.editorTestAccess.setCalculatorContext(context, state);
+  return runtime.editorTestAccess.renderCarbCalculator();
 }
 
 function createSyncRuntime() {
@@ -1200,7 +1210,7 @@ test('carb calculator rows preserve positive decimal quantities and derived row 
   assert.equal(helper.calculateCarbCalculatorMealTotal(rows), 371.5);
   assert.equal(helper.normalizeCarbCalculatorRows([{ qty: '', carbs: '26' }])[0].qty, '');
   assert.equal(helper.normalizeCarbCalculatorRows([{ qty: '0.', carbs: '26' }])[0].qty, '0.');
-  assert.equal(helper.hasValidCarbCalculatorTotal(rows), true);
+  assert.equal(helper.hasValidCarbCalculatorTotal(rows), false);
   assert.equal(helper.hasValidCarbCalculatorTotal(helper.normalizeCarbCalculatorRows([])), false);
   ['0.5', '0.25', '0.75', '1', '1.5', '1.25', '2.25', '9.99'].forEach((value) => {
     assert.equal(helper.isValidCarbCalculatorQuantity(value), true, value);
@@ -1607,14 +1617,14 @@ test('LLT report and conflict data preserve numeric typography in generated cell
 test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
   assert.match(trackerSource, /\+ Add Manual Amount\.\.\./);
-  assert.match(trackerSource, /itemEditorMode === 'edit' \? 'Edit Manual Amount' : 'Add Manual Amount'/);
+  assert.match(calculatorMarkup('entry', { carbCalculatorItemEditorMode: 'edit' }), />Edit Manual Amount<\/h2>/);
   assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor"/);
   assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor"/);
   assert.match(trackerSource, /name="carbItemQty" type="text" inputmode="decimal" maxlength="5"/);
   assert.match(trackerSource, /isValidCarbCalculatorQuantity\(qtyText\)/);
   assert.match(trackerSource, /setCustomValidity\('Enter a quantity greater than 0 with up to two decimal places\.'/);
   assert.match(trackerSource, /name="carbItemLabel" type="text" maxlength="80" autocomplete="off" placeholder="e\.g\. Orange"/);
-  assert.match(trackerSource, /name="carbItemCarbs" type="number" inputmode="decimal" min="0" step="0\.1"/);
+  assert.match(calculatorMarkup('entry', { carbCalculatorItemEditorMode: 'add' }), /name="carbItemCarbs"\s+type="number" inputmode="decimal" min="0" step="0\.1"/);
   assert.match(trackerSource, /focusTarget\('\[name="carbItemCarbs"\]'\)/);
   assert.match(trackerSource, /data-action="edit-carb-calculator-row"/);
   assert.match(trackerSource, /data-action="remove-carb-calculator-row"/);
@@ -1629,27 +1639,21 @@ test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /input\.select\(\)/);
 });
 
-test('carb calculator food library uses the shared select navigation', () => {
-  assert.match(trackerSource, /<label class="lee_lee_diabetes_field" for="lee-lee-carb-library-view">Food Library/);
-  assert.match(trackerSource, /<select class="lee_lee_diabetes_select" id="lee-lee-carb-library-view" name="carbLibraryView" data-carb-library-view>/);
-  assert.match(trackerSource, /<option value=""\$\{activeFoodLibraryTab \? '' : ' selected'\}>Select a list\.\.\.<\/option>/);
-  assert.match(trackerSource, /FOOD_LIBRARY_TABS\.map\(\(\[tab, label\]\) => `<option/);
-  assert.match(trackerSource, /event\.target\.matches\('\[data-carb-library-view\]'\)/);
-  assert.doesNotMatch(trackerSource, /class="lee_lee_diabetes_carb_tabs"/);
-  assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_tabs/);
+test('shared calculator discovery uses one inline input and lightweight shortcuts', () => {
+  const markup = calculatorMarkup();
+  assert.match(markup, /name="carbFoodSearch" type="search"/);
+  assert.match(markup, /Search foods &amp; meals/);
+  assert.match(markup, /data-picker="favorites"/);
+  assert.match(markup, /data-picker="recent"/);
+  assert.doesNotMatch(markup, /<select|data-carb-picker|Food Library/);
 });
 
-test('carb calculator library focus treatment is inset and picker changes preserve the native select', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \[data-carb-library-view\]:focus,[\s\S]*\.lee_lee_diabetes_carb_calculator \[data-carb-library-view\]:focus-visible \{[\s\S]*outline: 2px solid var\(--lee-lee-soft\)[\s\S]*outline-offset: -3px/);
-  const refreshStart = trackerSource.indexOf('function refreshCarbCalculatorLibraryView(form, picker)');
-  const refreshEnd = trackerSource.indexOf('\n  function updateEditorState(', refreshStart);
-  assert.notEqual(refreshStart, -1);
-  assert.notEqual(refreshEnd, -1);
-  const refreshBody = trackerSource.slice(refreshStart, refreshEnd);
-  assert.match(refreshBody, /renderCarbCalculatorPicker\(picker, '', rows\)/);
-  assert.match(refreshBody, /pickerElement\.replaceWith\(nextPicker\)/);
-  assert.doesNotMatch(refreshBody, /renderEditor\(|\.focus\(/);
-  assert.match(trackerSource, /if \(event\.target\.matches\('\[data-carb-library-view\]'\)\) \{[\s\S]*refreshCarbCalculatorLibraryView\(form, requestedPicker\);/);
+test('inline search refresh preserves the search input and clinical form', () => {
+  const start = trackerSource.indexOf('function refreshCarbCalculatorLibrarySearch(form)');
+  const end = trackerSource.indexOf('function updateEditorState(', start);
+  const body = trackerSource.slice(start, end);
+  assert.match(body, /results.innerHTML = renderCarbCalculatorLibraryList/);
+  assert.doesNotMatch(body, /renderEditor\(|form.innerHTML|input.outerHTML/);
 });
 
 test('carb calculator rerenders never restore focus to the Food Library select', () => {
@@ -1678,7 +1682,7 @@ test('carb calculator food search refreshes results without replacing the search
   assert.notEqual(refreshEnd, -1);
   const refreshBody = trackerSource.slice(refreshStart, refreshEnd);
   assert.match(refreshBody, /querySelector\('\[data-carb-library-list\]'\)/);
-  assert.match(refreshBody, /resultsList\.innerHTML = renderCarbCalculatorLibraryList\([\s\S]*'search'[\s\S]*currentEditor\.carbCalculatorRows/);
+  assert.match(refreshBody, /results\.innerHTML = renderCarbCalculatorLibraryList\([\s\S]*currentEditor\.carbCalculatorRows/);
   assert.doesNotMatch(refreshBody, /renderEditor\(/);
 });
 
@@ -1709,11 +1713,11 @@ test('manual amount uses the shared shell footer with balanced divider spacing',
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--item-editor > \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top: 0\.05rem/);
 });
 
-test('carb calculator states share one accessible dialog shell and active heading', () => {
-  assert.match(trackerSource, /<section class="lee_lee_diabetes_carb_calculator[^>]*data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">/);
-  assert.match(trackerSource, /<h2 class="lee_lee_diabetes_section_title\$\{isSearchOpen \? ' lee_lee_diabetes_carb_search_title' : ''\}" id="lee-lee-carb-calculator-title">\$\{escapeHtml\(activeTitle\)\}<\/h2>/);
+test('entry calculator states retain one accessible dialog shell and active heading', () => {
+  assert.match(calculatorMarkup(), /<section class="lee_lee_diabetes_carb_calculator[^>]*data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">/);
+  assert.match(calculatorMarkup(), /<h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator<\/h2>/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*role="dialog"|data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*aria-modal=/);
-  assert.match(trackerSource, /data-carb-calculator-body data-modal-scroll-container/);
+  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"\$\{pickerKey === 'search' \? ' data-modal-scroll-container'/);
 });
 
@@ -1736,7 +1740,7 @@ test('carb calculator keeps compact content-sized geometry with bounded overflow
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*max-height: 100%[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator_body \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
-  assert.match(trackerSource, /data-carb-calculator-body data-modal-scroll-container/);
+  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
   assert.doesNotMatch(trackerSource, /data-carb-calculator data-modal-scroll-container/);
 });
 
@@ -1746,7 +1750,7 @@ test('carb calculator search shares the body scroll owner without changing modal
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[^}]*overflow-y:\s*auto/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_picker \.lee_lee_diabetes_carb_library_list \{[\s\S]*display: grid[\s\S]*gap: 0\.55rem/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_picker \.lee_lee_diabetes_carb_library_list \{[^}]*overflow-y:\s*auto/);
-  assert.match(trackerSource, /data-carb-calculator-body data-modal-scroll-container/);
+  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"\$\{pickerKey === 'search' \? ' data-modal-scroll-container'/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open/);
 });
@@ -2732,7 +2736,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /name="mealCarbs"/);
   assert.match(trackerSource, /name="activityDurationMinutes"/);
   assert.match(trackerSource, /Open Carb Calc/);
-  assert.match(trackerSource, /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
+  assert.match(calculatorMarkup(), /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
@@ -3242,4 +3246,78 @@ test('migration session summary preserves original total and counts conflicts as
   assert.equal(summary.processed, 12);
   assert.equal(summary.remaining, 2);
   assert.equal(summary.percent, 86);
+});
+
+
+test('shared calculator sessions isolate working state and whitelist the entry return patch', () => {
+  const runtime = createTrackerRuntime();
+  const calculator = runtime.LeeLeeCarbCalculator;
+  const helper = runtime.LeeLeeTrackerDoseHelper;
+  const engine = calculator.createEngine({
+    isValidQuantity: helper.isValidCarbCalculatorQuantity,
+    normalizeNumber: value => value === '' || value == null || !Number.isFinite(Number(value)) || Number(value) < 0 ? null : Number(value),
+    isStarted: row => String(row.carbs ?? '').trim() !== '' || row.name,
+  });
+  const rows = [{ id: 'one', qty: '0.5', carbs: '13', name: 'Food' }];
+  const entry = calculator.createSession('entry', { carbCalculatorRows: rows }, 'entry-session');
+  const scratch = calculator.createSession('standalone', { carbCalculatorRows: rows }, 'scratch-session');
+  scratch.state.carbCalculatorRows[0].carbs = '99';
+  assert.equal(entry.state.carbCalculatorRows[0].carbs, '13');
+  const callbacks = { formatAmount: String, buildComponents: helper.buildMealComponentsFromCarbCalculatorRows };
+  assert.equal(calculator.entryPatch(engine, scratch, rows, callbacks), null);
+  const patch = calculator.entryPatch(engine, entry, rows, callbacks);
+  assert.deepEqual(Object.keys(patch), ['mealCarbs', 'mealComponents']);
+  assert.equal(patch.mealCarbs, '6.5');
+  for (const invalid of [{ qty: '', carbs: '8' }, { qty: '0', carbs: '8' }, { qty: '1', carbs: '' }, { qty: '1', carbs: '-3' }, { qty: '99', carbs: '1e308' }]) {
+    assert.equal(calculator.entryPatch(engine, entry, [...rows, { ...invalid, name: 'Started' }], callbacks), null);
+  }
+});
+
+
+test('standalone calculator is a non-modal region while entry subviews retain modal semantics', () => {
+  for (const state of [{}, { carbCalculatorPicker: 'search' }, { carbCalculatorItemEditorMode: 'add' }]) {
+    const standalone = calculatorMarkup('standalone', state);
+    const entry = calculatorMarkup('entry', state);
+    assert.match(standalone, /data-carb-calculator role="region"/);
+    assert.doesNotMatch(standalone, /aria-modal="true"|data-modal-scroll-container|carb_calc_backdrop/);
+    assert.match(entry, /data-carb-calculator role="dialog" aria-modal="true"/);
+    assert.match(entry, /data-carb-calculator-body data-modal-scroll-container/);
+  }
+});
+
+
+test('unified discovery searches foods and meals case-insensitively and deduplicates by type and identity', () => {
+  const helper = createTrackerRuntime().LeeLeeTrackerDoseHelper;
+  const food = { id: 'shared-id', name: 'Cub snack', carbs: 10, favorite: true, sourceType: 'user' };
+  const meal = { id: 'shared-id', name: 'Cub Meal w/chow mein noodles + orange chicken', components: [], totalCarbs: 68, favorite: true };
+  const results = helper.searchCalculatorItems([food, food], [meal, meal], 'cUb');
+  assert.equal(results.length, 2);
+  assert.deepEqual(Array.from(results, result => result.type), ['food', 'meal']);
+  assert.equal(helper.searchCalculatorItems([food], [meal], 'Cub Me')[0].type, 'meal');
+  assert.equal(helper.searchCalculatorItems([food], [meal], '', 'favorites').length, 2);
+  assert.equal(helper.searchCalculatorItems([food], [meal], 'missing').length, 0);
+});
+
+test('saved meal quantity uses one frozen saved amount without ingredient double-counting or live references', () => {
+  const helper = createTrackerRuntime().LeeLeeTrackerDoseHelper;
+  const meal = { id: 'meal', name: 'Cub Meal', totalCarbs: 999, components: [
+    { componentType: 'food', foodId: 'noodles', nameSnapshot: 'Noodles', quantity: 2, carbsPerServing: 20, carbTotal: 40 },
+    { componentType: 'manual', nameSnapshot: 'Chicken', carbTotal: 28 },
+  ] };
+  const before = JSON.stringify(meal);
+  const row = helper.carbRowFromSavedMeal(meal);
+  assert.equal(row.sourceType, 'meal'); assert.equal(row.carbs, '68');
+  row.qty = '2';
+  assert.equal(helper.calculateCarbCalculatorMealTotal([row]), 136);
+  const snapshots = helper.buildMealComponentsFromCarbCalculatorRows([row]);
+  assert.equal(snapshots.length, 1); assert.equal(snapshots[0].componentType, 'manual');
+  assert.equal(snapshots[0].nameSnapshot, 'Cub Meal'); assert.equal(snapshots[0].carbTotal, 136);
+  assert.equal(JSON.stringify(meal), before);
+  meal.components[0].carbTotal = 200;
+  assert.equal(helper.calculateCarbCalculatorMealTotal([row]), 136);
+  assert.equal(snapshots[0].carbTotal, 136);
+  const totalOnly = helper.carbRowFromSavedMeal({ id: 'total-only', name: 'Known total', totalCarbs: 68 });
+  totalOnly.qty = '0.5'; assert.equal(helper.calculateCarbCalculatorRowTotal(totalOnly), 34);
+  const merged = helper.mergeCarbCalculatorRows([totalOnly], [helper.carbRowFromSavedMeal({ id: 'total-only', name: 'Known total', totalCarbs: 68 })]);
+  assert.equal(merged.length, 1); assert.equal(merged[0].qty, '1.5');
 });

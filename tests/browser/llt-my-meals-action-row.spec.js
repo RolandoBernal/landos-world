@@ -102,17 +102,16 @@ test('Neighboring food cards, Favorites, Recent, Search and calculator retain th
   await page.getByRole('button', { name: 'Open Carb Calculator' }).click();
   const calc = page.locator('[data-carb-calculator]');
   for (const list of ['favorites', 'recent']) {
-    await calc.locator('[data-carb-library-view]').selectOption(list);
-    await expect(calc.locator(`[data-carb-picker="${list}"]`).getByRole('button', { name: /Neighbor Food/ })).toBeVisible();
+    await calc.getByRole('button', { name: list === 'favorites' ? 'Favorites' : 'Recent', exact: true }).click();
+    await expect(calc.locator('[data-carb-library-list]').getByRole('button', { name: /Neighbor Food/ })).toBeVisible();
   }
-  await calc.getByRole('button', { name: 'Search foods...', exact: true }).click();
   await calc.locator('[name="carbFoodSearch"]').fill('Neighbor');
   await calc.getByRole('button', { name: /Neighbor Food 12.5 g carbs/ }).click();
   await expect(calc.getByLabel('Meal Total')).toHaveText('12.5 g');
   await expect(calc.getByRole('button', { name: 'Edit Neighbor Food', exact: true })).toBeVisible();
   await expect(calc.getByRole('button', { name: 'Remove Neighbor Food', exact: true })).toBeVisible();
   await calc.getByRole('button', { name: '+ Add Manual Amount...', exact: true }).click();
-  await calc.getByLabel('Label', { exact: true }).fill('Manual neighbor');
+  await calc.getByLabel('Label (optional)', { exact: true }).fill('Manual neighbor');
   await calc.getByLabel('Carbs per serving').fill('5');
   await calc.getByRole('button', { name: 'Add Item', exact: true }).click();
   await expect(calc.getByLabel('Meal Total')).toHaveText('17.5 g');

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const trackerSource = readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
+const trackerSource = readFileSync(new URL('../js/lee-lee-carb-calculator.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../js/lee-lee-diabetes-tracker.js', import.meta.url), 'utf8');
 const storageKey = 'lando-world:lee-lees-tracker:v1';
 const preRebrandKeyPrefix = ['le', 'vi'].join('');
 const legacyRecordsKey = `${preRebrandKeyPrefix}_diabetes_records_v1`;
