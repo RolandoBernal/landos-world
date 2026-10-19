@@ -21,6 +21,7 @@
   <meta name="apple-mobile-web-app-title" content="Lando's World">
   <meta name="theme-color" content="#000000">
   <script src="js/theme-manager.js?v=20260822-1"></script>
+  <script src="js/launcher-preferences.js?v=1"></script>
   <script src="js/landos-world-modal-utils.js?v=1"></script>
   <script src="js/landos-world-build-metadata.js?v=1"></script>
   <script>
@@ -119,6 +120,18 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           <button type="button" class="appearance_option" data-appearance-option="light" role="radio" aria-checked="false">Light</button>
           <button type="button" class="appearance_option" data-appearance-option="dark" role="radio" aria-checked="false">Dark</button>
         </div>
+      </section>
+      <section class="lando_settings_panel" aria-labelledby="my-apps-title">
+        <div class="lando_settings_panel_header"><h2 id="my-apps-title" tabindex="-1">My Apps</h2></div>
+        <p>Choose which apps appear on your Lando's World home screen and arrange them in your preferred order.</p>
+        <div class="my_apps_actions">
+          <button type="button" data-my-apps-action="recommended">Use Recommended Apps</button>
+          <button type="button" data-my-apps-action="all">Show All Apps</button>
+        </div>
+        <p id="my-apps-order-help" class="my_apps_help">Drag a handle or use the Move Up and Move Down buttons. Hidden apps keep their position.</p>
+        <ol id="my-apps-list" class="my_apps_list" role="list" aria-describedby="my-apps-order-help"></ol>
+        <p id="my-apps-order-status" class="my_apps_announcement" role="status" aria-atomic="true"></p>
+        <p id="my-apps-status" role="status"></p>
       </section>
       <div id="pwa-offline-settings" aria-live="polite"></div>
     </main>
@@ -462,6 +475,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     const APP_CARDS = [
       {
         id: 'weather',
+        settingsTitle: "Lando's World Weather",
         iconSrc: 'icons/weather.png',
         iconAlt: '',
         iconClass: 'clock_utility_icon--exact',
@@ -475,6 +489,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       },
       {
         id: 'digital-clock',
+        settingsTitle: "Lando's World Digital Clock",
         iconSrc: 'icons/digital-clock.png',
         iconAlt: '',
         iconClass: 'clock_utility_icon--exact',
@@ -501,6 +516,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       },
       {
         id: 'violet-sprints',
+        settingsTitle: "Lando's World Violet Sprints",
         iconSrc: 'icons/violet-sprints.png',
         iconAlt: '',
         iconClass: 'clock_utility_icon--exact',
@@ -677,11 +693,240 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       runTick();
     }
 
+    const launcherPreferences = window.LandosLauncherPreferences;
+    const launcherIds = APP_CARDS.map((app) => app.id);
+    const launcherStore = launcherPreferences.createStore(launcherIds);
+    let launcherState;
+
+    let myAppsDrag = null;
+
+    function announceAppOrder(message) {
+      document.getElementById('my-apps-order-status').textContent = message;
+    }
+
+    function syncMyApps() {
+      const list = document.getElementById('my-apps-list');
+      if (!list.childElementCount) {
+        APP_CARDS.forEach((app) => {
+          const title = app.settingsTitle || app.title;
+          const row = document.createElement('li');
+          row.className = 'my_apps_row';
+          row.dataset.myAppRow = app.id;
+          const handle = document.createElement('span');
+          handle.className = 'my_apps_drag_handle';
+          handle.dataset.myAppDrag = app.id;
+          handle.textContent = '⠿';
+          handle.title = 'Drag to reorder';
+          handle.setAttribute('aria-hidden', 'true');
+          const label = document.createElement('label');
+          label.className = 'my_apps_identity';
+          const icon = document.createElement('img');
+          icon.src = app.iconSrc;
+          icon.alt = '';
+          const name = document.createElement('span');
+          name.textContent = title;
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.dataset.myAppId = app.id;
+          label.append(icon, name, input);
+          const controls = document.createElement('div');
+          controls.className = 'my_apps_moves';
+          for (const [direction, symbol] of [['up', '↑'], ['down', '↓']]) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.myAppMove = direction;
+            button.dataset.myAppFor = app.id;
+            button.setAttribute('aria-label', `Move ${title} ${direction}`);
+            button.title = `Move ${direction}`;
+            button.textContent = symbol;
+            controls.appendChild(button);
+          }
+          row.append(handle, label, controls);
+          list.appendChild(row);
+        });
+      }
+      const scrollPosition = { x: window.scrollX, y: window.scrollY };
+      const focused = list.contains(document.activeElement) ? document.activeElement : null;
+      const rows = new Map([...list.children].map((row) => [row.dataset.myAppRow, row]));
+      const blocked = launcherState.status === 'unsupported';
+      launcherState.preferences.appOrder.forEach((id, index) => {
+        const row = rows.get(id);
+        // Move existing nodes, preserving input identity and screen-reader order.
+        if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+        const input = row.querySelector('input');
+        input.checked = launcherState.preferences.visibleAppIds.includes(id);
+        input.disabled = blocked;
+        row.querySelector('.my_apps_drag_handle').classList.toggle('is_unavailable', blocked);
+        row.querySelectorAll('[data-my-app-move]').forEach((button) => {
+          button.disabled = blocked;
+          // Keep boundary controls focusable after a keyboard move reaches an end.
+          button.setAttribute('aria-disabled', String(blocked || (button.dataset.myAppMove === 'up' ? index === 0 : index === launcherIds.length - 1)));
+        });
+      });
+      if (focused && !focused.disabled && document.activeElement !== focused) focused.focus({ preventScroll: true });
+      if (window.scrollY !== scrollPosition.y) window.scrollTo(scrollPosition.x, scrollPosition.y);
+      document.querySelectorAll('[data-my-apps-action]').forEach((button) => { button.disabled = blocked; });
+      const messages = {
+        missing: 'All apps are shown. Choose your apps or use the recommended configuration.',
+        saved: 'Your app preferences are saved on this device.',
+        invalid: 'Saved app preferences could not be read. All apps are shown. Make a selection to replace the invalid configuration.',
+        unsupported: 'These preferences use a newer version. All apps are shown. Update Lando’s World to edit them.',
+        unavailable: 'App preferences could not be read. Changes apply for this session if storage is unavailable.',
+        unsaved: 'Changes apply for this session only. App preferences could not be saved. Try your selection again to retry.',
+      };
+      document.getElementById('my-apps-status').textContent = messages[launcherState.status];
+    }
+
+    function applyLauncherChange(action) {
+      finishMyAppsDrag(false);
+      launcherState = launcherStore.change(action);
+      renderLauncherCards();
+      syncMyApps();
+      updateDigitalClockLauncher();
+      loadWeatherLauncherCard();
+      updateRoadBikeChecklistLauncherSummary();
+      window.VioletFutbolGameTracker?.refreshLandingSummary?.();
+    }
+
+    function moveMyApp(id, position) {
+      if (launcherState.status === 'unsupported' || launcherState.preferences.appOrder.indexOf(id) === position) return;
+      applyLauncherChange((preferences) => launcherPreferences.move(preferences, id, position, launcherIds));
+      const app = APP_CARDS.find((item) => item.id === id);
+      announceAppOrder(`${app.settingsTitle || app.title} moved to position ${launcherState.preferences.appOrder.indexOf(id) + 1} of ${launcherIds.length}.`);
+    }
+
+    function markMyAppsDrop(drag) {
+      const list = document.getElementById('my-apps-list');
+      const others = [...list.children].filter((row) => row !== drag.row);
+      drag.position = others.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return drag.y > rect.top + rect.height / 2;
+      }).length;
+      list.querySelectorAll('.my_apps_drop_before, .my_apps_drop_after').forEach((row) => row.classList.remove('my_apps_drop_before', 'my_apps_drop_after'));
+      if (drag.position === drag.start) return;
+      if (drag.position < others.length) others[drag.position].classList.add('my_apps_drop_before');
+      else others.at(-1)?.classList.add('my_apps_drop_after');
+    }
+
+    function scrollMyAppsDrag() {
+      const drag = myAppsDrag;
+      if (!drag?.active) return;
+      const edge = 56;
+      const delta = drag.y < edge ? -Math.min(12, (edge - drag.y) / 4)
+        : drag.y > innerHeight - edge ? Math.min(12, (drag.y - innerHeight + edge) / 4) : 0;
+      if (delta) window.scrollBy(0, delta);
+      markMyAppsDrop(drag);
+      drag.frame = requestAnimationFrame(scrollMyAppsDrag);
+    }
+
+    function finishMyAppsDrag(commit, message = '') {
+      const drag = myAppsDrag;
+      if (!drag) return;
+      myAppsDrag = null;
+      cancelAnimationFrame(drag.frame);
+      drag.unblock?.();
+      if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+      drag.row.classList.remove('my_apps_dragging');
+      document.getElementById('my-apps-list').querySelectorAll('.my_apps_drop_before, .my_apps_drop_after').forEach((row) => row.classList.remove('my_apps_drop_before', 'my_apps_drop_after'));
+      if (commit && drag.active && drag.position !== drag.start) moveMyApp(drag.id, drag.position);
+      else if (drag.active) announceAppOrder(message || 'Move cancelled. App order unchanged.');
+    }
+
+    function initMyApps() {
+      launcherState = launcherStore.read();
+      syncMyApps();
+      const list = document.getElementById('my-apps-list');
+      list.addEventListener('change', (event) => {
+        const id = event.target.dataset.myAppId;
+        if (!id) return;
+        const checked = event.target.checked;
+        applyLauncherChange((preferences) => ({ ...preferences, visibleAppIds: checked
+          ? [...preferences.visibleAppIds, id] : preferences.visibleAppIds.filter((value) => value !== id) }));
+      });
+      list.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-my-app-move]');
+        if (!button || button.getAttribute('aria-disabled') === 'true') return;
+        const position = launcherState.preferences.appOrder.indexOf(button.dataset.myAppFor);
+        moveMyApp(button.dataset.myAppFor, position + (button.dataset.myAppMove === 'up' ? -1 : 1));
+        button.focus({ preventScroll: true });
+      });
+      list.addEventListener('pointerdown', (event) => {
+        const handle = event.target.closest('[data-my-app-drag]');
+        if (!handle || !event.isPrimary || event.button !== 0 || launcherState.status === 'unsupported' || myAppsDrag) return;
+        const id = handle.dataset.myAppDrag;
+        myAppsDrag = { id, handle, row: handle.closest('li'), pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+          startY: event.clientY, start: launcherState.preferences.appOrder.indexOf(id), position: launcherState.preferences.appOrder.indexOf(id), active: false };
+        handle.setPointerCapture(event.pointerId);
+      });
+      list.addEventListener('pointermove', (event) => {
+        const drag = myAppsDrag;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        drag.y = event.clientY;
+        if (!drag.active && Math.hypot(event.clientX - drag.x, event.clientY - drag.startY) >= 8) {
+          drag.active = true;
+          drag.row.classList.add('my_apps_dragging');
+          drag.unblock = window.LandosPWA?.registerUpdateBlocker?.('app ordering', () => 'Finish moving the app before updating.');
+          announceAppOrder('Moving app. Release at the marked position, or press Escape to cancel.');
+          scrollMyAppsDrag();
+        }
+        if (drag.active) { event.preventDefault(); markMyAppsDrop(drag); }
+      });
+      list.addEventListener('pointerup', (event) => {
+        if (!myAppsDrag || event.pointerId !== myAppsDrag.pointerId) return;
+        const rect = list.getBoundingClientRect();
+        finishMyAppsDrag(event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom);
+      });
+      for (const type of ['pointercancel', 'lostpointercapture']) list.addEventListener(type, (event) => {
+        if (event.pointerId === myAppsDrag?.pointerId) finishMyAppsDrag(false);
+      });
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && myAppsDrag) { event.preventDefault(); finishMyAppsDrag(false); }
+      });
+      window.addEventListener('hashchange', () => finishMyAppsDrag(false));
+      window.addEventListener('blur', () => finishMyAppsDrag(false));
+      document.addEventListener('visibilitychange', () => { if (document.hidden) finishMyAppsDrag(false); });
+      document.querySelectorAll('[data-my-apps-action]').forEach((button) => {
+        button.addEventListener('click', () => applyLauncherChange((preferences) => button.dataset.myAppsAction === 'recommended'
+          ? launcherPreferences.recommended(preferences, launcherIds)
+          : { ...preferences, visibleAppIds: launcherIds }));
+      });
+      window.addEventListener('storage', (event) => {
+        if (event.key !== null && event.key !== launcherPreferences.STORAGE_KEY) return;
+        finishMyAppsDrag(false, 'Move cancelled. App preferences changed in another tab.');
+        launcherState = launcherStore.read();
+        renderLauncherCards();
+        syncMyApps();
+        updateDigitalClockLauncher();
+        loadWeatherLauncherCard();
+        window.VioletFutbolGameTracker?.refreshLandingSummary?.();
+      });
+    }
+
     function renderLauncherCards() {
       const container = document.getElementById('lando-launcher');
       if (!container) return;
       container.textContent = '';
-      APP_CARDS.forEach((app) => {
+      const byId = new Map(APP_CARDS.map((app) => [app.id, app]));
+      const visible = new Set(launcherState.preferences.visibleAppIds);
+      if (!visible.size) {
+        const empty = document.createElement('section');
+        empty.className = 'lando_settings_panel my_apps_empty';
+        const title = document.createElement('h2');
+        title.textContent = 'No Apps Selected';
+        const text = document.createElement('p');
+        text.textContent = "Choose which applications you'd like to see in Lando's World.";
+        const manage = document.createElement('button');
+        manage.type = 'button';
+        manage.textContent = 'Manage My Apps';
+        manage.addEventListener('click', () => {
+          navigateToRoute('settings');
+          window.setTimeout(() => document.getElementById('my-apps-title').focus(), 0);
+        });
+        empty.append(title, text, manage);
+        container.appendChild(empty);
+      }
+      launcherState.preferences.appOrder.filter((id) => visible.has(id)).forEach((id) => {
+        const app = byId.get(id);
         const card = document.createElement('section');
         card.className = `digital_clock_wrapper clock_utility_card app_theme app_theme--${app.theme} clock_utility_card--${app.accent}`;
 
@@ -901,7 +1146,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       if (LANDO_ACTIVE_ROUTES.has(route)) {
         if (route === 'lee-lees-tracker') window.LeeLeeTrackerAccess?.enter?.();
         if (route === 'violet-sprints') {
-          document.getElementById('open-sprints')?.click();
+          window.VioletSprints?.open?.();
           activeView = document.getElementById('sprints-view');
         } else {
           activeView = setActiveView(route);
@@ -1524,6 +1769,7 @@ ${dateLongParts.year}`;
       });
     }
     document.addEventListener('DOMContentLoaded', () => {
+      initMyApps();
       renderLauncherCards();
       updateDigitalClockLauncher();
       scheduleDigitalClockLauncherRefresh();

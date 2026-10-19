@@ -41,6 +41,7 @@ export const PAGES_RUNTIME_FILES = [
   'js/road-bike-checklist.js',
   'js/sprints-app.js',
   'js/theme-manager.js',
+  'js/launcher-preferences.js',
   'js/violet-futbol-game-tracker.js',
   'js/weather-app.js',
   'js/weather-service.js',
