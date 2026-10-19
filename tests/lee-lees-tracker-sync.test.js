@@ -2488,3 +2488,136 @@ test('Low Glucose fingerprint tolerates JSONB key order while preserving typed v
   right.lowGlucoseEpisode = null; assert.notEqual(fingerprint(left), fingerprint(right));
   const missing = { ...right }; delete missing.lowGlucoseEpisode; assert.notEqual(fingerprint(right), fingerprint(missing));
 });
+
+
+test('pending settings metadata exports independent allowlisted operations without state or network changes', async () => {
+  const calls = [];
+  const supabase = createMockSupabase();
+  const originalRpc = supabase.client.rpc;
+  supabase.client.rpc = (...args) => { calls.push(args); return originalRpc(...args); };
+  const context = createSyncContext({ supabase });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const operation = {
+    id: '11111111-1111-4111-8111-111111111111',
+    type: 'update-shared-settings', baseVersion: 31, state: 'pending', retryCount: 1, coalescedCount: 2,
+    createdAt: '2026-10-19T17:03:49.130Z', lastAttemptAt: '2026-10-19T18:16:34Z', auditEvent: null,
+    lastErrorCategory: 'validation', lastErrorCode: '23502',
+    lastErrorMessage: 'null value in column "event_id" of relation "lee_lee_settings_audit" violates not-null constraint SENSITIVE_CANARY',
+    payload: { patientName: 'SENSITIVE_CANARY', clinicalValue: 999, access_token: 'SENSITIVE_CANARY' },
+    session: { user: 'SENSITIVE_CANARY' },
+  };
+  context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify([
+    operation,
+    { ...operation, id: '22222222-2222-4222-8222-222222222222', baseVersion: 32, retryCount: 3,
+      auditEvent: { eventId: '33333333-3333-4333-8333-333333333333', previousSettings: { name: 'SENSITIVE_CANARY' } },
+      lastErrorCategory: 'network', lastErrorCode: '', lastErrorMessage: 'SENSITIVE_CANARY' },
+  ]));
+  context.localStorage.setItem('unrelated-canary', 'SENSITIVE_CANARY');
+  const before = context.localStorage.dump();
+  context.localStorage.setItem = () => { throw new Error('Diagnostics attempted storage write'); };
+  context.localStorage.removeItem = () => { throw new Error('Diagnostics attempted storage removal'); };
+  context.fetch = () => { throw new Error('Diagnostics attempted fetch'); };
+  const diagnostics = repository.getPendingSharedSettingsDiagnostics();
+  assert.equal(diagnostics.schemaVersion, 1);
+  assert.equal(diagnostics.processorActive, false);
+  assert.equal(diagnostics.authenticatedSessionPresent, false);
+  const [first, second] = diagnostics.operations;
+  assert.equal(diagnostics.operations.length, 2);
+  assert.equal(first.operationId, operation.id);
+  assert.equal(second.operationId, '22222222-2222-4222-8222-222222222222');
+  assert.equal(first.baseVersion, 31); assert.equal(second.baseVersion, 32);
+  assert.equal(first.auditEventState, 'null'); assert.equal(first.auditEventId, null);
+  assert.equal(second.auditEventState, 'present'); assert.equal(second.auditEventIdState, 'present');
+  assert.equal(second.auditEventId, '33333333-3333-4333-8333-333333333333');
+  assert.equal(first.lastFailureClassification, 'audit-event-id-required');
+  assert.equal(first.lastErrorCode, '23502'); assert.equal(second.lastFailureClassification, 'network');
+  assert.equal(first.createdAt, operation.createdAt);
+  assert.equal(first.lastAttemptAt, '2026-10-19T18:16:34.000Z');
+  assert.equal(first.state, 'pending'); assert.equal(second.retryCount, 3);
+  assert.equal(first.coalescedCount, 2);
+  assert.equal(first.nextRetryAt, null); assert.equal(first.retryEligibility, 'unavailable');
+  assert.equal(first.acknowledgmentState, 'unavailable');
+  assert.deepEqual(Object.keys(first), ['operationId', 'operationType', 'baseVersion', 'auditEventState',
+    'auditEventIdState', 'auditEventId', 'lastErrorCategory', 'lastErrorCode', 'lastFailureClassification',
+    'retryCount', 'coalescedCount', 'state', 'createdAt', 'lastAttemptAt', 'nextRetryAt', 'retryEligibility', 'acknowledgmentState']);
+  assert.equal(JSON.stringify(diagnostics).includes('SENSITIVE_CANARY'), false);
+  assert.deepEqual(context.localStorage.dump(), before);
+  assert.equal(calls.length, 0);
+  await Promise.resolve();
+  assert.deepEqual(context.localStorage.dump(), before);
+  assert.equal(calls.length, 0);
+});
+
+test('pending settings metadata sanitizes malformed fields and distinguishes missing/null/invalid audit IDs', () => {
+  const context = createSyncContext();
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const base = { id: 'SENSITIVE_CANARY', type: 'SENSITIVE_CANARY', state: 'SENSITIVE_CANARY',
+    baseVersion: 'SENSITIVE_CANARY', retryCount: -1, coalescedCount: Infinity,
+    createdAt: 'SENSITIVE_CANARY', lastAttemptAt: 'SENSITIVE_CANARY',
+    lastErrorCategory: 'SENSITIVE_CANARY', lastErrorCode: 'SENSITIVE_CANARY', lastErrorMessage: 'SENSITIVE_CANARY' };
+  context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify([
+    base, { ...base, auditEvent: {} }, { ...base, auditEvent: { eventId: null } },
+    { ...base, auditEvent: { eventId: 'SENSITIVE_CANARY' } }, { ...base, auditEvent: 'SENSITIVE_CANARY' },
+    { ...base, lastErrorCode: '23502', lastErrorMessage: 'null value in column "different" of relation "other" violates not-null constraint' },
+  ]));
+  const result = repository.getPendingSharedSettingsDiagnostics();
+  assert.equal(result.operations[0].auditEventState, 'missing');
+  assert.equal(result.operations[1].auditEventIdState, 'missing');
+  assert.equal(result.operations[2].auditEventIdState, 'null');
+  assert.equal(result.operations[3].auditEventIdState, 'invalid');
+  assert.equal(result.operations[4].auditEventState, 'invalid');
+  assert.equal(result.operations[5].lastFailureClassification, 'other-constraint');
+  for (const item of result.operations) {
+    assert.equal(item.operationId, null); assert.equal(item.baseVersion, null); assert.equal(item.retryCount, null);
+    assert.equal(item.createdAt, null); assert.equal(item.lastAttemptAt, null);
+    assert.equal(item.state, 'unavailable'); assert.equal(item.lastErrorCategory, 'unavailable');
+  }
+  assert.equal(JSON.stringify(result).includes('SENSITIVE_CANARY'), false);
+});
+
+test('pending settings metadata reads live processing state without starting a second RPC', async () => {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ version: 32 })] });
+  const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await repository.initialize();
+  const deferred = createDeferred(); let calls = 0;
+  supabase.client.rpc = () => { calls += 1; return deferred.promise; };
+  repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic clinic' });
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  const before = context.localStorage.dump();
+  const result = repository.getPendingSharedSettingsDiagnostics();
+  assert.equal(result.processorActive, true);
+  assert.equal(result.authenticatedSessionPresent, true);
+  assert.equal(result.authoritativeVersion, 32);
+  assert.equal(result.operations[0].lastAttemptAt, null);
+  assert.equal(result.operations[0].acknowledgmentState, 'unavailable');
+  assert.equal(calls, 1); assert.deepEqual(context.localStorage.dump(), before);
+  deferred.resolve({ data: null, error: { code: '42501', message: 'synthetic rejection' } });
+  await repository.processSharedSettingsQueue();
+  assert.equal(repository.getPendingSharedSettingsDiagnostics().operations[0].lastErrorCode, '42501');
+});
+
+
+test('pending settings metadata classifies retained errors without exporting free-form messages', () => {
+  const context = createSyncContext();
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  const cases = [
+    ['authentication', 'PGRST301', 'SENSITIVE_CANARY', 'authentication'],
+    ['authorization', '42501', 'SENSITIVE_CANARY', 'authorization'],
+    ['remote', '', 'Invalid Shared Settings update response.', 'invalid-rpc-response'],
+    ['remote', '23502', 'null value in column "event_id" of relation "unrelated_table" violates not-null constraint', 'other-constraint'],
+    ['remote', '23502', 'column "event_id" of relation "lee_lee_settings_audit" SENSITIVE_CANARY', 'other-constraint'],
+    ['remote', '400', 'SENSITIVE_CANARY', 'other-rejection'],
+  ];
+  context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify(cases.map(([category, code, message], index) => ({
+    id: `synthetic-${index}`, lastErrorCategory: category, lastErrorCode: code, lastErrorMessage: message,
+  }))));
+  const result = repository.getPendingSharedSettingsDiagnostics();
+  result.operations.forEach((operation, index) => {
+    assert.equal(operation.lastFailureClassification, cases[index][3]);
+    assert.equal(operation.lastErrorCode, cases[index][1] || null);
+  });
+  assert.equal(JSON.stringify(result).includes('SENSITIVE_CANARY'), false);
+  context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify({ malformed: 'SENSITIVE_CANARY' }));
+  assert.equal(repository.getPendingSharedSettingsDiagnostics().operations.length, 0);
+});

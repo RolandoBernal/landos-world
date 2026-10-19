@@ -8545,6 +8545,7 @@
       error: sanitizeDiagnosticError(diagnostics),
       conflictCount: Array.isArray(diagnostics.conflicts) ? diagnostics.conflicts.length : 0,
       sharedSettings: getSharedSettingsStatus(),
+      pendingSharedSettings: buildPendingSharedSettingsDiagnosticsPackage(),
     };
   }
 
@@ -8686,6 +8687,33 @@
     );
   }
 
+  function buildPendingSharedSettingsDiagnosticsPackage() {
+    // This dedicated package intentionally excludes the broader Settings diagnostics.
+    return syncRepository?.getPendingSharedSettingsDiagnostics?.() || {
+      schemaVersion: 1,
+      capturedAt: new Date().toISOString(),
+      online: Boolean(navigator.onLine),
+      authenticatedSessionPresent: false,
+      processorActive: false,
+      authoritativeVersion: null,
+      authoritativeFetchedAt: null,
+      operations: [],
+    };
+  }
+
+  async function copyPendingSharedSettingsDiagnostics(button) {
+    const text = JSON.stringify(buildPendingSharedSettingsDiagnosticsPackage(), null, 2);
+    const status = button?.parentElement?.querySelector('[data-pending-settings-copy-status]');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      if (status) status.textContent = 'Pending settings metadata copied.';
+    } catch (error) {
+      if (status) status.textContent = 'Metadata could not be copied. Clipboard access is required.';
+    }
+    // Do not rerender Settings: rendering can persist UI state or start other work.
+  }
+
   async function copyAllSettingsDiagnostics() {
     await copyDiagnosticPayload(
       buildSettingsDiagnosticsPackage(),
@@ -8785,6 +8813,10 @@
         <summary role="heading" aria-level="2">Sync Diagnostics <span class="lee_lee_diabetes_accordion_chevron" aria-hidden="true">⌄</span></summary>
         <div class="lee_lee_diabetes_settings_accordion_body">
         ${renderSettingsDiagnosticAction('syncDiagnostics')}
+        <div class="lee_lee_diabetes_diagnostic_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-pending-settings-metadata">Copy Pending Settings Metadata</button>
+          <span role="status" aria-live="polite" data-pending-settings-copy-status></span>
+        </div>
         ${renderStatusGrid(rows)}
         ${renderInsulinPlanVerification()}
         ${(diagnostics?.foodLibraryQueue || []).map((item) => `<section><h3>Pending ${escapeHtml(item.entityType || 'food')}</h3>${renderStatusGrid([
@@ -10419,6 +10451,11 @@
       }
       const target = eventTarget?.closest?.('[data-action]');
       if (!target) return;
+      // Diagnostic copying must bypass the normal persisted Settings UI bookkeeping.
+      if (target.dataset.action === 'copy-pending-settings-metadata') {
+        copyPendingSharedSettingsDiagnostics(target);
+        return;
+      }
       if (currentEditor?.mode === 'settings') saveSettingsUiState();
       const action = target.dataset.action;
       if (currentEditor?.calculatorSession?.context === 'standalone'
@@ -11503,6 +11540,7 @@
     getInsulinPlanVerification,
     buildInsulinPlanDiagnosticsPackage,
     buildSettingsDiagnosticsPackage,
+    buildPendingSharedSettingsDiagnosticsPackage,
     getSettingsSectionDiagnostic,
   };
 
