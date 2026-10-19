@@ -1378,6 +1378,74 @@
       };
     }
 
+    // Read-only diagnostic boundary: never return payloads or free-form error text.
+    function getPendingSharedSettingsDiagnostics() {
+      const safeInteger = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const safeTimestamp = (value) => typeof value === 'string'
+        && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)
+        && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
+      const safeId = (value) => typeof value === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+        ? value.toLowerCase() : null;
+      const categories = new Set(['authentication', 'authorization', 'duplicate', 'validation', 'network', 'missing-record', 'remote']);
+      const sqlCodes = new Set(['23502', '23503', '23505', '23514', '22023', '22P02', '28000', '28P01', '42501',
+        'P0001', 'P0002', '40001', '40P01', '57014', '08000', '08001', '08003', '08006', '53300', '53400',
+        '55P03', '42P01', '42703', '42883', 'XX000']);
+      const states = new Set(['pending', 'conflicted', 'failed', 'needs-attention']);
+      const storedQueue = readJson(SHARED_SETTINGS_QUEUE_KEY, []);
+      const queue = Array.isArray(storedQueue) ? storedQueue.filter((item) => item && typeof item === 'object') : [];
+      return {
+        schemaVersion: 1,
+        capturedAt: nowIso(),
+        online: Boolean(navigator.onLine),
+        authenticatedSessionPresent: Boolean(session?.user?.id),
+        processorActive: Boolean(processingSharedSettings),
+        authoritativeVersion: safeInteger(latestFetchedSharedSettings?.settings?.version),
+        authoritativeFetchedAt: safeTimestamp(latestFetchedSharedSettings?.fetchedAt),
+        operations: queue.map((operation) => {
+          const audit = operation?.auditEvent;
+          const eventId = safeId(audit?.eventId);
+          const rawCode = typeof operation?.lastErrorCode === 'string' ? operation.lastErrorCode : '';
+          const code = sqlCodes.has(rawCode) || /^PGRST\d{3}$/.test(rawCode) || /^[45]\d{2}$/.test(rawCode) ? rawCode : null;
+          const category = categories.has(operation?.lastErrorCategory) ? operation.lastErrorCategory : 'unavailable';
+          // Inspect locally, then export only a fixed classification, never the message.
+          const message = typeof operation?.lastErrorMessage === 'string' ? operation.lastErrorMessage : '';
+          let failure = 'unavailable';
+          if (code === '23502' && /null value in column ["']event_id["']/i.test(message)
+            && /relation ["']lee_lee_settings_audit["']/i.test(message) && /not-null constraint/i.test(message)) {
+            failure = 'audit-event-id-required';
+          } else if (/^Invalid Shared Settings (?:insert|update) response\.$/.test(message)) {
+            failure = 'invalid-rpc-response';
+          } else if (['authentication', 'authorization', 'network', 'duplicate', 'missing-record'].includes(category)) {
+            failure = category;
+          } else if (code?.startsWith('23')) {
+            failure = 'other-constraint';
+          } else if (code || category !== 'unavailable') {
+            failure = 'other-rejection';
+          }
+          return {
+            operationId: safeId(operation?.id),
+            operationType: ['insert-shared-settings', 'update-shared-settings'].includes(operation?.type) ? operation.type : 'unavailable',
+            baseVersion: safeInteger(operation?.baseVersion),
+            auditEventState: audit === null ? 'null' : audit === undefined ? 'missing' : typeof audit === 'object' && !Array.isArray(audit) ? 'present' : 'invalid',
+            auditEventIdState: audit?.eventId === null ? 'null' : audit?.eventId === undefined ? 'missing' : eventId ? 'present' : 'invalid',
+            auditEventId: eventId,
+            lastErrorCategory: category,
+            lastErrorCode: code,
+            lastFailureClassification: failure,
+            retryCount: safeInteger(operation?.retryCount),
+            coalescedCount: safeInteger(operation?.coalescedCount),
+            state: states.has(operation?.state) ? operation.state : 'unavailable',
+            createdAt: safeTimestamp(operation?.createdAt),
+            lastAttemptAt: safeTimestamp(operation?.lastAttemptAt),
+            nextRetryAt: null,
+            retryEligibility: 'unavailable',
+            acknowledgmentState: 'unavailable',
+          };
+        }),
+      };
+    }
+
     function getSyncDiagnostics() {
       const metadata = getMetadata();
       const recordQueue = getRecordQueueSnapshot();
@@ -2764,6 +2832,7 @@
       getSyncStatus,
       getRecordQueueSnapshot,
       getSyncDiagnostics,
+      getPendingSharedSettingsDiagnostics,
       getDeviceIdentity,
       setDeviceIdentity,
       getDeviceInstallationId,

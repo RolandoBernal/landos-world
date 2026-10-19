@@ -3321,3 +3321,25 @@ test('saved meal quantity uses one frozen saved amount without ingredient double
   const merged = helper.mergeCarbCalculatorRows([totalOnly], [helper.carbRowFromSavedMeal({ id: 'total-only', name: 'Known total', totalCarbs: 68 })]);
   assert.equal(merged.length, 1); assert.equal(merged[0].qty, '1.5');
 });
+
+
+test('pending settings diagnostic package adds metadata without changing existing export structure or verification', () => {
+  const runtime = createTrackerRuntime();
+  const api = runtime.LeeLeeTrackerVerification;
+  const pending = { configured: true, signedIn: true, sharedSettingsPendingCount: 1 };
+  const before = api.evaluateInsulinPlanVerification({ syncState: pending });
+  const metadata = api.buildPendingSharedSettingsDiagnosticsPackage();
+  assert.equal(metadata.schemaVersion, 1);
+  assert.equal(metadata.operations.length, 0);
+  const all = api.buildSettingsDiagnosticsPackage();
+  assert.ok(all.sections.syncDiagnostics.queue.operations);
+  assert.ok(all.sections.syncDiagnostics.pendingSharedSettings.operations);
+  const section = api.getSettingsSectionDiagnostic('syncDiagnostics');
+  assert.equal(section.data.pendingSharedSettings.schemaVersion, 1);
+  const after = api.evaluateInsulinPlanVerification({ syncState: pending });
+  assert.equal(before.status, 'NOT_VERIFIED'); assert.equal(after.status, before.status);
+  assert.deepEqual(Array.from(after.reasons), ['A shared-settings write is still pending.']);
+  assert.match(trackerSource, /data-action="copy-pending-settings-metadata"/);
+  const copy = trackerSource.slice(trackerSource.indexOf('  async function copyPendingSharedSettingsDiagnostics('), trackerSource.indexOf('  async function copyAllSettingsDiagnostics('));
+  assert.doesNotMatch(copy, /renderSettings\(|saveSharedSettings\(|syncNow\(|processSharedSettingsQueue\(|localStorage\./);
+});
