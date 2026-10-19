@@ -1890,16 +1890,22 @@
     activeTimer.start();
   }
 
+  function openSprints() {
+    if (window.LandosWorld && window.location.hash !== '#/violet-sprints') {
+      window.LandosWorld.navigateToRoute('violet-sprints');
+    }
+    if (!restoreActiveTimerIfAvailable()) showWorkoutList();
+    unlockAudio().then((audioEnabled) => {
+      if (!audioEnabled) showSoundEnableControl();
+    });
+  }
+
   function init() {
     loadWorkouts();
-    document.getElementById('open-sprints')?.addEventListener('click', () => {
-      if (window.LandosWorld && window.location.hash !== '#/violet-sprints') {
-        window.LandosWorld.navigateToRoute('violet-sprints');
-      }
-      if (!restoreActiveTimerIfAvailable()) showWorkoutList();
-      unlockAudio().then((audioEnabled) => {
-        if (!audioEnabled) showSoundEnableControl();
-      });
+    // Launcher cards can be hidden or rebuilt; keep the existing entry action
+    // independent of any particular card node.
+    document.addEventListener('click', (event) => {
+      if (event.target.closest?.('#open-sprints')) openSprints();
     });
     window.addEventListener?.('focus', () => {
       if (activeTimer) activeTimer.reconcile({ sound: false, persist: true });
@@ -1932,6 +1938,7 @@
   }
 
   window.VioletSprints = {
+    open: openSprints,
     ACTIVE_TIMER_KEY,
     STORAGE_KEY,
     clearActiveTimerState,

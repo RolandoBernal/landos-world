@@ -37,6 +37,7 @@ const PRECACHE_URLS = [
   './css/road-bike-checklist.css',
   './css/maintenance-total.css',
   './js/theme-manager.js',
+  './js/launcher-preferences.js',
   './js/landos-world-build-metadata.js',
   './js/pwa-manager.js',
   './js/weather-service.js',
