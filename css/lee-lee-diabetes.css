@@ -3753,3 +3753,14 @@
   align-content: start;
   grid-auto-rows: max-content;
 }
+
+/* Entry calculator lives in the native top layer; reset user-agent dialog bounds. */
+dialog.lee_lee_diabetes_carb_calc_layer {
+  margin: 0;
+  border: 0;
+  max-inline-size: none;
+  max-block-size: none;
+  color: inherit;
+  background: transparent;
+}
+dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
