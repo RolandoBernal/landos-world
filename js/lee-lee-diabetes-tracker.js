@@ -5894,10 +5894,10 @@
     const usesVisualViewportPanel = !standalone || Boolean(itemEditorMode);
     const activeTitle = itemEditorMode ? (itemEditorMode === 'edit' ? (currentEditor.carbCalculatorItemDraft?.sourceType === 'meal' ? 'Edit Meal Amount' : currentEditor.carbCalculatorItemDraft?.sourceType === 'food' ? 'Edit Food Item' : 'Edit Manual Amount') : 'Add Manual Amount') : 'Carb Calculator';
     return `
-      <div class="lee_lee_diabetes_carb_calc_layer${standalone ? ' lee_lee_diabetes_carb_calc_layer--embedded' : ''}" data-carb-calculator-layer>
+      <${standalone ? 'div' : 'dialog'} ${standalone ? '' : 'aria-labelledby="lee-lee-carb-calculator-title"'} class="lee_lee_diabetes_carb_calc_layer${standalone ? ' lee_lee_diabetes_carb_calc_layer--embedded' : ''}" data-carb-calculator-layer>
         ${standalone ? '' : '<div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>'}
         ${usesVisualViewportPanel ? '<div class="lee_lee_diabetes_carb_calc_visual_viewport" data-modal-visual-viewport>' : ''}
-        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared${standalone ? ' lee_lee_diabetes_carb_calculator--embedded' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="${standalone ? 'region' : 'dialog'}" ${standalone ? '' : 'aria-modal="true"'} aria-labelledby="${standalone && !itemEditorMode ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
+        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared${standalone ? ' lee_lee_diabetes_carb_calculator--embedded' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${standalone && !itemEditorMode ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
           ${!standalone || itemEditorMode ? `<div class="lee_lee_diabetes_carb_calculator_header${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_header' : ''}">
             ${itemEditorMode ? `
               <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>
@@ -5925,7 +5925,7 @@
           ` : ''}
         </section>
         ${usesVisualViewportPanel ? '</div>' : ''}
-      </div>
+      </${standalone ? 'div' : 'dialog'}>
     `;
   }
 
@@ -7088,7 +7088,6 @@
   function scheduleCarbCalculatorViewportFrame(event) {
     requestAnimationFrame(() => {
       applyCarbCalculatorViewportFrame();
-      restoreLockedCarbCalculatorScroll();
       const input = document.activeElement;
       if (event?.type === 'resize' && input?.matches?.('input, textarea') && input.closest?.('[data-carb-calculator]')) {
         window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(input, 14, input.closest('[data-modal-scroll-container]'));
@@ -7104,24 +7103,12 @@
         y: lockedSnapshot.y,
         token: window.LandosWorldModalUtils?.lockBackgroundScroll?.('llt-carb-calculator') || null,
       };
-      window.addEventListener('scroll', restoreLockedCarbCalculatorScroll, { passive: true });
-    }
-    restoreLockedCarbCalculatorScroll();
-  }
-
-  function restoreLockedCarbCalculatorScroll() {
-    if (!carbCalculatorScrollLock) return;
-    const targetX = Number.isFinite(carbCalculatorScrollLock.x) ? carbCalculatorScrollLock.x : 0;
-    const targetY = Number.isFinite(carbCalculatorScrollLock.y) ? carbCalculatorScrollLock.y : 0;
-    if (window.scrollX !== targetX || window.scrollY !== targetY) {
-      window.scrollTo?.(targetX, targetY);
     }
   }
 
   function unlockCarbCalculatorDocumentScroll() {
     const lock = carbCalculatorScrollLock;
     if (!lock) return null;
-    window.removeEventListener('scroll', restoreLockedCarbCalculatorScroll);
     if (lock.token) window.LandosWorldModalUtils?.unlockBackgroundScroll?.(lock.token);
     carbCalculatorScrollLock = null;
     const snapshot = { x: lock.x, y: lock.y, viewportHeight: window.visualViewport?.height || window.innerHeight || 0 };
@@ -7145,6 +7132,15 @@
 
   function enableCarbCalculatorModalViewport(snapshot) {
     lockCarbCalculatorDocumentScroll(snapshot);
+    const layer = document.querySelector('[data-carb-calculator-layer]');
+    if (layer instanceof HTMLDialogElement && !layer.open) {
+      // The top layer uses viewport coordinates even inside a transformed/scrolled app.
+      layer.addEventListener('cancel', event => {
+        event.preventDefault();
+        layer.querySelector('[data-action="close-carb-calculator"]')?.click();
+      });
+      layer.showModal();
+    }
     attachCarbCalculatorViewportListeners();
     applyCarbCalculatorViewportFrame();
   }

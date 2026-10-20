@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: /llt-(issues-18-19|calculator-phase-c1|settings-audit-validation)\.spec\.js/,
+  testMatch: /llt-(issue-19-1|issues-18-19|calculator-phase-c1|settings-audit-validation)\.spec\.js/,
   // These existing wheel-input tests run separately in Chromium; mobile WebKit has no wheel API.
   grepInvert: /internal stars and scrolling/,
   timeout: 60000,
