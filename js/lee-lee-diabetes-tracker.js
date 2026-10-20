@@ -8930,6 +8930,16 @@
     return String(value);
   }
 
+  function renderSettingsAuditChange(change) {
+    const previous = formatSettingsAuditValue(change.previousValue);
+    const next = formatSettingsAuditValue(change.newValue);
+    const complex = [change.previousValue, change.newValue].some(value => value && typeof value === 'object') || previous.length + next.length > 160;
+    const value = raw => escapeHtml(raw && typeof raw === 'object' ? JSON.stringify(raw, null, 2) : formatSettingsAuditValue(raw));
+    return `<div><dt>${escapeHtml(change.label || change.key || 'Changed setting')}</dt><dd>${complex
+      ? `<details><summary>View before and after values</summary><p>Before</p><pre>${value(change.previousValue)}</pre><p>After</p><pre>${value(change.newValue)}</pre></details>`
+      : `${escapeHtml(previous)} → ${escapeHtml(next)}`}</dd></div>`;
+  }
+
   function renderSettingsChangeHistory() {
     const events = syncRepository?.getSettingsAuditHistory?.() || [];
     const rows = events.slice(0, 50).map((event) => {
@@ -8940,7 +8950,7 @@
         <p>${escapeHtml(`Changed by ${event.displayName || 'Unknown'} on ${event.deviceLabel || 'Unknown device'}`)}</p>
         <p class="lee_lee_diabetes_help">${escapeHtml(`${event.devicePlatform || 'Browser'} · ${event.appEnvironment || 'Unknown'} · app ${event.appVersion || 'Unknown'}`)}</p>
         ${event.versionAfter ? `<p class="lee_lee_diabetes_help">Plan version ${escapeHtml(String(event.versionAfter))}</p>` : ''}
-        <dl>${(event.changes || []).map((change) => `<div><dt>${escapeHtml(change.label || change.key || 'Changed setting')}</dt><dd>${escapeHtml(formatSettingsAuditValue(change.previousValue))} → ${escapeHtml(formatSettingsAuditValue(change.newValue))}</dd></div>`).join('')}</dl>
+        <dl>${(event.changes || []).map(renderSettingsAuditChange).join('')}</dl>
       </article>`;
     }).join('');
     return `<details class="lee_lee_diabetes_settings_section lee_lee_diabetes_settings_accordion" data-settings-accordion data-settings-key="settings-change-history"${isSettingsAccordionOpen('settings-change-history') ? ' open' : ''}>

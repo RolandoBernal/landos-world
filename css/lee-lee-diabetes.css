@@ -1101,7 +1101,7 @@
   box-sizing: border-box;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .lee_lee_diabetes_carb_calc_backdrop {
@@ -3730,4 +3730,26 @@
 }
 [data-carb-calculator-layer][data-keyboard-open="true"] .lee_lee_diabetes_carb_calculator--item-editor:not(.lee_lee_diabetes_carb_calculator--embedded) .lee_lee_diabetes_carb_item_editor_body {
   align-content: start;
+}
+
+/* Issues #18/#19: contain audit values and preserve native sheet scrolling. */
+.lee_lee_diabetes_audit_event,
+.lee_lee_diabetes_audit_event :is(header, p, dl, dt, dd, details, pre) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+.lee_lee_diabetes_audit_event pre {
+  white-space: pre-wrap;
+  font: inherit;
+  font-family: var(--llt-numeric-font);
+}
+.lee_lee_diabetes_audit_event summary { cursor: pointer; min-block-size: 44px; }
+.lee_lee_diabetes_audit_event details p { margin-block: .5rem; }
+@media (max-width: 640px) {
+  .lee_lee_diabetes_audit_event dl > div { grid-template-columns: minmax(0, 1fr); gap: .25rem; }
+}
+.lee_lee_diabetes_carb_calculator:not(.lee_lee_diabetes_carb_calculator--embedded):not(.lee_lee_diabetes_carb_calculator--item-editor) .lee_lee_diabetes_carb_calculator_body {
+  align-content: start;
+  grid-auto-rows: max-content;
 }
