@@ -1715,7 +1715,7 @@ test('manual amount uses the shared shell footer with balanced divider spacing',
 });
 
 test('entry calculator states retain one accessible dialog shell and active heading', () => {
-  assert.match(calculatorMarkup(), /<section class="lee_lee_diabetes_carb_calculator[^>]*data-carb-calculator role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title">/);
+  assert.match(calculatorMarkup(), /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
   assert.match(calculatorMarkup(), /<h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator<\/h2>/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*role="dialog"|data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*aria-modal=/);
   assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
@@ -2737,7 +2737,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /name="mealCarbs"/);
   assert.match(trackerSource, /name="activityDurationMinutes"/);
   assert.match(trackerSource, /Open Carb Calc/);
-  assert.match(calculatorMarkup(), /role="dialog" aria-modal="true" aria-labelledby="lee-lee-carb-calculator-title"/);
+  assert.match(calculatorMarkup(), /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
@@ -3281,7 +3281,7 @@ test('standalone calculator is a non-modal region while entry subviews retain mo
     const entry = calculatorMarkup('entry', state);
     assert.match(standalone, /data-carb-calculator role="region"/);
     assert.doesNotMatch(standalone, /aria-modal="true"|data-modal-scroll-container|carb_calc_backdrop/);
-    assert.match(entry, /data-carb-calculator role="dialog" aria-modal="true"/);
+    assert.match(entry, /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
     assert.match(entry, /data-carb-calculator-body data-modal-scroll-container/);
   }
 });

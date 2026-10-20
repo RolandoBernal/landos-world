@@ -1137,6 +1137,7 @@
       foodResults = foodResults.filter(food => food.favorite);
       mealResults = mealResults.filter(meal => meal.favorite);
     }
+    if (collection === 'meals') foodResults = [];
     if (collection === 'recent') {
       foodResults = getRecentFoodItems(foods).filter(food => searchTextMatches(food.name, query));
       mealResults = []; // Saved Meals have no persisted recent-use field.
@@ -5975,9 +5976,9 @@
         <input class="lee_lee_diabetes_input" name="carbFoodSearch" type="search" placeholder="Search foods or meals..." autocomplete="off" value="${escapeHtml(query)}" aria-controls="lee-lee-carb-results">
       </label>
       <div class="lee_lee_diabetes_carb_shortcuts" data-carb-search-shortcuts${query.trim() ? ' hidden' : ''}>
-        ${[['favorites', 'Favorites'], ['recent', 'Recent']].map(([key, label]) => `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="carb-search-shortcut" data-picker="${key}" aria-pressed="${activePicker === key}" aria-expanded="${activePicker === key}" aria-controls="lee-lee-carb-results">${label}</button>`).join('')}
+        ${[['favorites', 'Favorites'], ['recent', 'Recent'], ['meals', 'My Meals']].map(([key, label]) => `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="carb-search-shortcut" data-picker="${key}" aria-pressed="${activePicker === key}" aria-expanded="${activePicker === key}" aria-controls="lee-lee-carb-results">${label}</button>`).join('')}
       </div>
-      <div class="lee_lee_diabetes_carb_library_list" id="lee-lee-carb-results" data-carb-library-list data-results-bounded="${!query.trim() && ['favorites', 'recent'].includes(activePicker)}" tabindex="0" role="region" aria-label="Food and meal results">
+      <div class="lee_lee_diabetes_carb_library_list" id="lee-lee-carb-results" data-carb-library-list data-results-bounded="${!query.trim() && ['favorites', 'recent', 'meals'].includes(activePicker)}" tabindex="0" role="region" aria-label="Food and meal results">
         ${currentEditor?.carbCalculatorFoodEditorOpen ? `${foodLibraryError ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(foodLibraryError)}</p>` : ''}${renderFoodEditorPanel()}` : renderCarbCalculatorLibraryList(activePicker, query, rows)}
       </div>
       <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount...</button>
@@ -5986,21 +5987,30 @@
 
   function renderCarbCalculatorLibraryList(activePicker, search, rows = []) {
     const query = String(search || '').trim();
-    const collection = query ? '' : ['favorites', 'recent'].includes(activePicker) ? activePicker : '';
-    if (!query && !collection) return '<p class="lee_lee_diabetes_help">Search your foods and saved meals, or choose Favorites or Recent.</p>';
+    const collection = query ? '' : ['favorites', 'recent', 'meals'].includes(activePicker) ? activePicker : '';
+    if (!query && !collection) return '<p class="lee_lee_diabetes_help">Search your foods and saved meals, or choose Favorites, Recent, or My Meals.</p>';
     const results = searchCalculatorItems(foodLibrary, savedMeals, query, collection);
     const visible = collection ? results : results.slice(0, CARB_SEARCH_RESULT_LIMIT);
-    return visible.length ? visible.map(({ type, item }) => type === 'food'
+    const status = collection === 'meals' ? renderCarbCalculatorMealStatus() : '';
+    if (collection === 'meals' && !visible.length) return `${status}<div class="lee_lee_diabetes_empty"><p>No saved meals on this device yet.</p><p>Create or edit meals in Foods → My Meals.</p></div>`;
+    return status + (visible.length ? visible.map(({ type, item }) => type === 'food'
       ? renderCarbCalculatorFoodSearchResult(item, rows)
-      : renderCarbCalculatorMealSearchResult(item, rows)).join('') + (results.length > visible.length ? '<p class="lee_lee_diabetes_help">More matches available. Refine your search.</p>' : '') : `<div class="lee_lee_diabetes_empty"><p>No foods or meals found${query ? ` for “${escapeHtml(query)}”` : ''}.</p><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-food-editor">+ Add New Food</button></div>`;
+      : renderCarbCalculatorMealSearchResult(item, rows)).join('') + (results.length > visible.length ? '<p class="lee_lee_diabetes_help">More matches available. Refine your search.</p>' : '') : `<div class="lee_lee_diabetes_empty"><p>No foods or meals found${query ? ` for “${escapeHtml(query)}”` : ''}.</p><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-carb-food-editor">+ Add New Food</button></div>`);
+  }
+
+  function renderCarbCalculatorMealStatus(status = syncStatus) {
+    // The library is local-first: sync never hides usable local meals.
+    if (status.state === 'syncing') return '<p class="lee_lee_diabetes_help" role="status">Sync in progress. Showing meals saved on this device.</p>';
+    if (status.lastError) return '<p class="lee_lee_diabetes_error" role="status">Sync is unavailable. Meals saved on this device are still available.</p>';
+    return '';
   }
 
   function renderCarbCalculatorMealSearchResult(meal, rows = []) {
     const selected = rows.some(row => row.sourceType === 'meal' && row.mealId === meal.id);
     return `<div class="lee_lee_diabetes_carb_food_row">
-      <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}" aria-label="Add meal ${escapeHtml(meal.name)} ${escapeHtml(formatCarbs(meal.totalCarbs))}">
+      <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}" aria-label="Add meal ${escapeHtml(meal.name)} ${escapeHtml(formatCarbs(meal.totalCarbs))}${selected ? ' again (+1 saved amount)' : ''}">
         <span><small class="lee_lee_diabetes_carb_result_type">MEAL · My Meals</small><strong>${escapeHtml(meal.name)}</strong><small>${renderCarbGrams(formatCarbAmount(meal.totalCarbs))} per saved amount</small></span>
-        <span aria-hidden="true">${selected ? '✓' : '+'}</span>
+        <span class="lee_lee_diabetes_carb_pick_state" aria-hidden="true">${selected ? 'Add again (+1)' : 'Add'}</span>
       </button>
     </div>`;
   }
@@ -6865,7 +6875,7 @@
 
   function dismissCarbDiscoveryOutside(target) {
     if (!currentEditor?.carbCalculatorOpen || currentEditor.carbCalculatorFoodEditorOpen || currentEditor.carbCalculatorItemEditorMode
-      || !['favorites', 'recent'].includes(currentEditor.carbCalculatorPicker)
+      || !['favorites', 'recent', 'meals'].includes(currentEditor.carbCalculatorPicker)
       || target?.closest?.('[data-carb-library-list], [data-carb-search-shortcuts]')) return;
     currentEditor.carbCalculatorPicker = '';
     refreshCarbCalculatorLibrarySearch(getRoot()?.querySelector('[data-lee-lee-editor]'));
@@ -6891,7 +6901,7 @@
       const active = String(currentEditor.carbCalculatorPicker === button.dataset.picker);
       button.setAttribute('aria-pressed', active); button.setAttribute('aria-expanded', active);
     });
-    results.dataset.resultsBounded = String(!input.value.trim() && ['favorites', 'recent'].includes(currentEditor.carbCalculatorPicker));
+    results.dataset.resultsBounded = String(!input.value.trim() && ['favorites', 'recent', 'meals'].includes(currentEditor.carbCalculatorPicker));
     results.scrollTop = 0;
     results.innerHTML = renderCarbCalculatorLibraryList(currentEditor.carbCalculatorPicker, input.value, currentEditor.carbCalculatorRows);
   }
@@ -7225,7 +7235,7 @@
   function finishCarbCalculatorAddition(form) {
     const input = form?.querySelector('[name="carbFoodSearch"]');
     currentEditor.carbCalculatorSearch = '';
-    currentEditor.carbCalculatorPicker = '';
+    if (currentEditor.carbCalculatorPicker !== 'meals') currentEditor.carbCalculatorPicker = '';
     if (input) { input.value = ''; input.blur(); }
     const active = document.activeElement;
     if (active && form?.contains(active)) active.blur();
@@ -10227,6 +10237,9 @@
         insulinPlans = trackerData.insulinPlans;
         foodLibrary = trackerData.foodLibrary;
         savedMeals = trackerData.savedMeals;
+        if (currentEditor?.carbCalculatorOpen && currentEditor.carbCalculatorPicker === 'meals') {
+          refreshCarbCalculatorLibrarySearch(getRoot()?.querySelector('[data-lee-lee-editor]'));
+        }
         if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'foods', 'settings'].includes(currentEditor.mode)) {
           if (currentEditor?.mode === 'history') renderHistory();
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
@@ -10318,6 +10331,9 @@
       return;
     }
     if (!currentEditor) return;
+    if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPicker === 'meals') {
+      refreshCarbCalculatorLibrarySearch(getRoot()?.querySelector('[data-lee-lee-editor]'));
+    }
     if (currentEditor.mode === 'settings') {
       const section = getRoot()?.querySelector('[aria-labelledby="lee-lee-sync-title"]');
       if (section) section.outerHTML = renderSyncStatusSection();
@@ -10421,7 +10437,7 @@
     });
     root.addEventListener('pointerdown', (event) => {
       const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
-      carbDiscoveryPointer = ['favorites', 'recent'].includes(currentEditor?.carbCalculatorPicker)
+      carbDiscoveryPointer = ['favorites', 'recent', 'meals'].includes(currentEditor?.carbCalculatorPicker)
         ? { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false } : null;
       focusCarbCalculatorInputOnPointer(event);
       const useTarget = eventTarget?.closest?.('[data-action="use-carb-calculator-total"]');
