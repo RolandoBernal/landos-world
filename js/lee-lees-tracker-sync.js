@@ -45,6 +45,10 @@
   const REMOTE_SETTINGS_AUDIT_TABLE = 'lee_lee_settings_audit';
   const DEVICE_USERS = ['Rolando', 'Emily', 'Levi', 'Violet', 'Unknown'];
   const DETERMINISTIC_ERROR_CATEGORIES = new Set(['low-glucose-compatibility', 'authentication', 'authorization', 'validation', 'conflict', 'missing-record', 'duplicate']);
+  // Only these known deterministic settings-validation failures stop automatic retry.
+  const PERMANENT_SETTINGS_ERROR_CODES = new Set(['23502', '23514', '22P02', '22023']);
+  const SETTINGS_VERSION_REQUIRED_MESSAGE = 'Pending settings require a valid expected version before synchronization.';
+  const SETTINGS_AUDIT_REQUIRED_MESSAGE = 'Pending settings require valid audit metadata before synchronization.';
   const SHARED_SETTINGS_SCHEMA_VERSION = 2;
   const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
   const DEFAULT_PLAN_EFFECTIVE_FROM = '2026-07-31';
@@ -634,6 +638,11 @@
     ].join('|');
   }
 
+  function hasValidSettingsAudit(operation) {
+    return typeof operation?.auditEvent?.eventId === 'string'
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operation.auditEvent.eventId);
+  }
+
   function sharedSettingsAreSame(left, right) {
     return sharedSettingsFingerprint(left) === sharedSettingsFingerprint(right);
   }
@@ -1173,6 +1182,7 @@
     let initialized = false;
     let processing = false;
     let processingSharedSettings = false;
+    const unsubmittedSettingsOperations = new Set();
     let processingFoodLibrary = false;
     let fullSyncPromise = null;
     let realtimeChannel = null;
@@ -1204,6 +1214,10 @@
       if (conflicts.length) {
         state = 'conflict';
         message = 'Conflict needs review';
+      } else if (queue.some((operation) => operation.state === 'needs-attention' || !hasValidSettingsAudit(operation)
+        || hasPermanentSettingsWriteFailure(operation))) {
+        state = 'needs-attention';
+        message = 'Pending settings need review. Automatic upload is blocked; local changes are preserved.';
       } else if (queue.length && !navigator.onLine) {
         state = 'offline';
         message = 'Offline — waiting to sync';
@@ -1260,6 +1274,10 @@
       } else if (conflicts.length) {
         state = 'conflict';
         message = 'Conflict needs review';
+      } else if (sharedSettingsQueue.some((operation) => operation.state === 'needs-attention' || !hasValidSettingsAudit(operation)
+        || hasPermanentSettingsWriteFailure(operation))) {
+        state = 'needs-attention';
+        message = 'Pending settings need review. Automatic upload is blocked; local changes are preserved.';
       } else if (totalPendingCount && !navigator.onLine) {
         state = 'offline';
         message = formatPendingSyncMessage({
@@ -1410,10 +1428,24 @@
           const category = categories.has(operation?.lastErrorCategory) ? operation.lastErrorCategory : 'unavailable';
           // Inspect locally, then export only a fixed classification, never the message.
           const message = typeof operation?.lastErrorMessage === 'string' ? operation.lastErrorMessage : '';
+          const stage = ['audit-lookup', 'write-rpc', 'acknowledgment', 'reconciliation'].includes(operation.lastFailureStage)
+            ? operation.lastFailureStage : 'unavailable';
           let failure = 'unavailable';
-          if (code === '23502' && /null value in column ["']event_id["']/i.test(message)
+          if (stage === 'audit-lookup') {
+            failure = 'audit-lookup-failed';
+          } else if (stage === 'reconciliation') {
+            failure = 'reconciliation-failed';
+          } else if (stage === 'write-rpc' && operation.lastWriteRejected !== true) {
+            failure = 'write-outcome-unknown';
+          } else if (stage === 'acknowledgment' && !/^Invalid Shared Settings (?:insert|update) response\.$/.test(message)) {
+            failure = 'acknowledgment-uncertain';
+          } else if (code === '23502' && /null value in column ["']event_id["']/i.test(message)
             && /relation ["']lee_lee_settings_audit["']/i.test(message) && /not-null constraint/i.test(message)) {
             failure = 'audit-event-id-required';
+          } else if (code === '22023' && message === SETTINGS_AUDIT_REQUIRED_MESSAGE) {
+            failure = 'audit-event-id-required';
+          } else if (code === '22023' && message === SETTINGS_VERSION_REQUIRED_MESSAGE) {
+            failure = 'invalid-settings-version';
           } else if (/^Invalid Shared Settings (?:insert|update) response\.$/.test(message)) {
             failure = 'invalid-rpc-response';
           } else if (['authentication', 'authorization', 'network', 'duplicate', 'missing-record'].includes(category)) {
@@ -1432,6 +1464,7 @@
             auditEventId: eventId,
             lastErrorCategory: category,
             lastErrorCode: code,
+            lastFailureStage: stage,
             lastFailureClassification: failure,
             retryCount: safeInteger(operation?.retryCount),
             coalescedCount: safeInteger(operation?.coalescedCount),
@@ -2098,42 +2131,47 @@
       };
     }
 
-    function coalesceSharedSettingsOperation(operation) {
-      const existingQueue = getSharedSettingsQueue();
-      const baseVersion = existingQueue.find((item) => item.baseVersion != null)?.baseVersion ?? operation.baseVersion;
-      const retryCount = existingQueue.reduce((max, item) => Math.max(max, Number(item.retryCount || 0)), 0);
-      const coalescedCount = existingQueue.reduce((total, item) => total + Number(item.coalescedCount || 1), 1);
+    function coalesceSharedSettingsOperation(operation, existingQueue) {
+      const tail = existingQueue.at(-1);
+      // An attempted (including response-unknown) operation is immutable. Legacy
+      // null/invalid events also require explicit recovery, never silent replacement.
+      if (!tail || !unsubmittedSettingsOperations.has(tail.id) || tail.state !== 'pending' || tail.lastAttemptAt || Number(tail.retryCount || 0)
+        || hasPermanentSettingsWriteFailure(tail)
+        || !hasValidSettingsAudit(tail) || !tail.auditEvent.previousSettings
+        || ['displayName', 'deviceInstallationId', 'deviceProfile', 'devicePlatform', 'appEnvironment', 'appVersion']
+          .some((field) => tail.auditEvent[field] !== operation.auditEvent[field])) return null;
       return {
-        ...operation,
-        baseVersion,
-        type: baseVersion ? 'update-shared-settings' : 'insert-shared-settings',
-        retryCount,
-        coalescedCount,
-        auditEvent: existingQueue[0]?.auditEvent
-          ? {
-            ...existingQueue[0].auditEvent,
-            changes: sharedSettingsChanges(existingQueue[0].auditEvent.previousSettings || existingQueue[0].payload, operation.payload),
-          }
-          : operation.auditEvent,
+        ...tail,
+        payload: operation.payload,
+        coalescedCount: Number(tail.coalescedCount || 1) + 1,
+        auditEvent: {
+          ...tail.auditEvent,
+          changes: sharedSettingsChanges(tail.auditEvent.previousSettings, operation.payload),
+        },
       };
     }
 
     function saveSharedSettings(settings) {
       if (isAuthenticationPreview()) return null;
       const previousSettings = getSharedSettingsCache();
+      const existingQueue = getSharedSettingsQueue();
       const cachedVersion = previousSettings.version || null;
-      const pendingBaseVersion = getSharedSettingsQueue().find((operation) => operation.baseVersion != null)?.baseVersion ?? null;
       const normalized = normalizeSharedSettings({
         ...settings,
         lastEditedBy: getDeviceIdentity() || null,
         syncStatus: navigator.onLine ? 'waiting' : 'offline',
       });
-      const baseVersion = pendingBaseVersion || normalized.version || cachedVersion;
+      // Use the established full settings meaning, not the narrower audit-field
+      // list. A no-op must neither replace a pending intent nor stimulate retry.
+      if (sharedSettingsAreSame(previousSettings, normalized)
+        && (!existingQueue.length || sharedSettingsAreSame(existingQueue.at(-1).payload, normalized))) return existingQueue.at(-1) || null;
+      const baseVersion = existingQueue.at(-1)?.baseVersion ?? normalized.version ?? cachedVersion;
+      const operation = createSharedSettingsOperation(normalized, baseVersion);
+      const coalesced = coalesceSharedSettingsOperation(operation, existingQueue);
+      const queuedOperation = coalesced || operation;
+      if (!coalesced) unsubmittedSettingsOperations.add(operation.id);
+      setSharedSettingsQueue(coalesced ? [...existingQueue.slice(0, -1), coalesced] : [...existingQueue, operation]);
       setSharedSettingsCache({ ...normalized, version: normalized.version || cachedVersion });
-      const changes = sharedSettingsChanges(previousSettings, normalized);
-      const operation = createSharedSettingsOperation(normalized, baseVersion, changes.length ? createSettingsAuditEvent(previousSettings, normalized, baseVersion) : null);
-      const queuedOperation = coalesceSharedSettingsOperation(operation);
-      setSharedSettingsQueue([queuedOperation]);
       emit();
       processSharedSettingsQueue().catch(() => {});
       return queuedOperation;
@@ -2151,7 +2189,15 @@
       };
       setSettingsAuditCache([acceptedEvent, ...getSettingsAuditCache().filter((event) => event.eventId !== acceptedEvent.eventId)]);
       const queue = getSharedSettingsQueue().filter((item) => item.id !== operation.id);
-      setSharedSettingsQueue(queue.map((item) => ({ ...item, baseVersion: remote.version, type: 'update-shared-settings' })));
+      setSharedSettingsQueue(queue.map((item, index) => {
+        // Advance only the first proven, unsent same-device successor. Preserve
+        // unrelated/legacy/attempted operations' expected versions verbatim.
+        const successor = index === 0 && item.state === 'pending' && !item.lastAttemptAt && !Number(item.retryCount || 0)
+          && hasValidSettingsAudit(item) && item.auditEvent.previousSettings
+          && item.baseVersion === operation.baseVersion
+          && sharedSettingsAreSame(item.auditEvent.previousSettings, operation.payload);
+        return successor ? { ...item, baseVersion: remote.version, type: 'update-shared-settings' } : item;
+      }));
       if (queue.length) {
         setSharedSettingsCache({ ...queue[queue.length - 1].payload, version: remote.version });
       } else {
@@ -2197,11 +2243,6 @@
 
     async function registerSharedSettingsConflict(operation, knownSharedSettings = null) {
       const sharedSettings = knownSharedSettings || await fetchSharedSettings();
-      if (sharedSettings && sharedSettingsAreSame(sharedSettings, operation.payload)) {
-        mergeSharedSettings(sharedSettings);
-        setSharedSettingsQueue(getSharedSettingsQueue().filter((item) => item.id !== operation.id));
-        return;
-      }
       setConflicts([
         ...getConflicts().filter((conflict) => conflict.recordId !== 'shared-settings'),
         {
@@ -2233,6 +2274,109 @@
       return processSharedSettingsQueuePromise;
     }
 
+    function sharedSettingsResponseIsAccepted(result, operation) {
+      const expectedVersion = operation.baseVersion == null ? 1 : operation.baseVersion + 1;
+      return result?.status === 'accepted'
+        && result.eventId === operation.auditEvent.eventId
+        && result.settings?.user_id === session?.user?.id
+        && result.settings?.version === expectedVersion
+        && result.versionAfter === expectedVersion
+        && (result.versionBefore ?? null) === (operation.baseVersion ?? null)
+        && sharedSettingsAreSame(sharedSettingsFromRemote(result.settings), operation.payload);
+    }
+
+    function settingsRecoveryBackupMatches(operation) {
+      if (!operation.recovery) return true;
+      const expectedKey = `${SHARED_SETTINGS_QUEUE_KEY}:recovery:${operation.id}`;
+      const backup = readJson(expectedKey, null);
+      return operation.recovery.backupKey === expectedKey && backup?.ownerId === session?.user?.id
+        && backup.operation?.id === operation.id && backup.candidate?.id === operation.id
+        && backup.candidate?.auditEvent?.eventId === operation.auditEvent?.eventId
+        && backup.candidate?.baseVersion === operation.baseVersion
+        && JSON.stringify(backup.operation?.payload) === JSON.stringify(operation.payload)
+        && JSON.stringify(backup.candidate?.payload) === JSON.stringify(operation.payload);
+    }
+
+    // Explicit device-local recovery. Never infer original save provenance or
+    // overwrite differing authority. Sensitive backups stay on this device.
+    async function recoverInvalidSharedSettingsOperation() {
+      const stop = (reason) => ({ ok: false, reason });
+      if (!navigator.onLine || processingSharedSettings || processSharedSettingsQueuePromise) return stop('Wait until online and synchronization is idle.');
+      const client = await ensureClient();
+      if (!client || !session?.user?.id || isAuthenticationPreview() || isLocalDeviceDevelopment()) return stop('Sign in to production before recovery.');
+      if (!DEVICE_USERS.filter(name => name !== 'Unknown').includes(getDeviceIdentity())) return stop('Select your device profile before recovery.');
+      if (getConflicts().some(item => item.recordId === 'shared-settings')) return stop('A settings conflict requires explicit review.');
+      const recoveryUserId = session.user.id;
+      const originalQueue = getSharedSettingsQueue();
+      const operation = originalQueue[0];
+      if (originalQueue.length !== 1 || operation?.type !== 'update-shared-settings'
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operation.id)
+        || !Number.isSafeInteger(operation.baseVersion) || operation.baseVersion < 1) return stop('Recovery requires one identifiable pending settings update.');
+      const backupKey = `${SHARED_SETTINGS_QUEUE_KEY}:recovery:${operation.id}`;
+      const storedBackup = localStorage.getItem(backupKey);
+      let backup = storedBackup ? readJson(backupKey, null) : null;
+      if (storedBackup && (!backup || backup.ownerId !== session.user.id || backup.operation?.id !== operation.id)) return stop('The recovery backup requires private review.');
+      if (hasValidSettingsAudit(operation)) return stop('Audit identity is already prepared. Use Sync Now; unresolved conflicts require review.');
+      if (operation.auditEvent != null || operation.lastErrorCode !== '23502') return stop('This operation does not match the missing-audit recovery condition.');
+      const queueBeforeRead = JSON.stringify(originalQueue);
+      let authoritative;
+      try { authoritative = await fetchSharedSettings(); } catch (error) { return stop('Authoritative settings could not be read. Nothing was recovered.'); }
+      if (session?.user?.id !== recoveryUserId || JSON.stringify(getSharedSettingsQueue()) !== queueBeforeRead || processingSharedSettings) return stop('The queue changed during review. Try again when synchronization is idle.');
+      if (!authoritative || authoritative.hasExplicitInsulinPlan === false
+        || authoritative.version !== operation.baseVersion
+        || !sharedSettingsAreSame(authoritative, operation.payload)
+        || !sharedSettingsAreSame(getSharedSettingsCache(), operation.payload)
+        || (getLocalSharedSettings && !sharedSettingsAreSame(getLocalSharedSettings(), operation.payload))) {
+        return stop('Recovery stopped: authoritative version or settings differ. Both versions are preserved; explicit conflict review is required.');
+      }
+      if (!backup) {
+        const auditEvent = createSettingsAuditEvent(authoritative, operation.payload, authoritative.version);
+        auditEvent.changeNote = 'Explicit recovery of missing audit identity; original save actor and time are unknown. No clinical values changed.';
+        const candidate = { ...operation, auditEvent, state: 'pending', lastErrorCategory: '', lastErrorCode: '', lastErrorMessage: '',
+          lastFailureStage: '', lastWriteRejected: false,
+          recovery: { backupKey, preparedAt: nowIso(), authoritativeVersion: authoritative.version, approvedBy: getDeviceIdentity() } };
+        backup = { schemaVersion: 1, ownerId: session.user.id, operation, queue: originalQueue,
+          cachedSettings: getSharedSettingsCache(), authoritative, candidate, createdAt: nowIso() };
+        const serialized = JSON.stringify(backup);
+        try {
+          localStorage.setItem(backupKey, serialized);
+          if (localStorage.getItem(backupKey) !== serialized) return stop('Recovery backup could not be verified. The operation is unchanged.');
+        } catch (error) { return stop('Recovery backup could not be saved. The operation is unchanged.'); }
+      }
+      if (JSON.stringify(backup.operation.payload) !== JSON.stringify(operation.payload)
+        || backup.candidate?.id !== operation.id || !hasValidSettingsAudit(backup.candidate)
+        || backup.candidate.baseVersion !== operation.baseVersion
+        || JSON.stringify(backup.candidate.payload) !== JSON.stringify(operation.payload)
+        || JSON.stringify(backup.queue) !== queueBeforeRead) return stop('Recovery backup does not match the preserved operation. Review is required.');
+      // Persist the same candidate after interruption; never mint another event ID.
+      try { setSharedSettingsQueue([backup.candidate]); } catch (error) { return stop('The backup is preserved; queue preparation failed. Retry only after storage is available.'); }
+      await processSharedSettingsQueue();
+      const fresh = await fetchSharedSettings();
+      if (!getSharedSettingsQueue().length && fresh) mergeSharedSettings(fresh);
+      emit();
+      const status = getSharedSettingsStatus();
+      return status.pendingCount || status.conflictCount
+        ? stop('Recovery remains unresolved. The operation or conflict and its private backup are preserved. See Sync Diagnostics.')
+        : { ok: true, reason: 'Settings recovery accepted and refreshed. Check insulin-plan verification and save a new entry.' };
+    }
+
+    function hasPermanentSettingsWriteFailure(operation) {
+      return operation.lastFailureStage === 'write-rpc'
+        && operation.lastWriteRejected === true
+        && PERMANENT_SETTINGS_ERROR_CODES.has(operation.lastErrorCode);
+    }
+
+    function blockSharedSettingsOperation(operation, reason = SETTINGS_AUDIT_REQUIRED_MESSAGE) {
+      // Preserve identity, payload and audit provenance. No automatic repair or replay.
+      setSharedSettingsQueue(getSharedSettingsQueue().map((item) => item.id !== operation.id ? item : {
+        ...item,
+        state: 'needs-attention',
+        lastErrorCategory: 'validation',
+        lastErrorCode: item.lastErrorCode || '22023',
+        lastErrorMessage: item.lastErrorMessage || reason,
+      }));
+    }
+
     async function processSharedSettingsQueueInternal() {
       if (isAuthenticationPreview()) return getSyncStatus();
       if (processingSharedSettings || !navigator.onLine) return getSyncStatus();
@@ -2240,58 +2384,101 @@
       if (!client || !session?.user?.id) return getSyncStatus();
       processingSharedSettings = true;
       emit();
-      const remaining = [];
-      const snapshot = getSharedSettingsQueue();
-      for (const operation of snapshot) {
+      // Process the current head in order. A failed/blocked predecessor must never
+      // be skipped or re-coalesced into a different event on later saves.
+      while (!getConflicts().some((item) => item.recordId === 'shared-settings')) {
+        const operation = getSharedSettingsQueue()[0];
+        if (!operation) break;
+        if ((operation.state && operation.state !== 'pending') || hasPermanentSettingsWriteFailure(operation)
+          || !hasValidSettingsAudit(operation) || !settingsRecoveryBackupMatches(operation)
+          || (operation.baseVersion != null && (!Number.isSafeInteger(operation.baseVersion) || operation.baseVersion < 1))) {
+          blockSharedSettingsOperation(operation, hasValidSettingsAudit(operation) ? SETTINGS_VERSION_REQUIRED_MESSAGE : SETTINGS_AUDIT_REQUIRED_MESSAGE);
+          break;
+        }
         const attemptedOperation = { ...operation, lastAttemptAt: nowIso() };
+        unsubmittedSettingsOperations.delete(operation.id);
+        // Persist before sending: after interruption/restart this intent cannot be
+        // mistaken for an unsent, freely coalescible operation.
+        setSharedSettingsQueue(getSharedSettingsQueue().map((item) => item.id === operation.id ? attemptedOperation : item));
+        let failureStage = 'audit-lookup';
+        let writeRejected = false;
         try {
-          const remotePayload = sharedSettingsToRemote(attemptedOperation.payload, session.user.id);
-          if (!attemptedOperation.baseVersion) {
-            const { data, error } = await client.rpc('insert_lee_lee_shared_settings_with_audit', {
-              p_settings: remotePayload,
-              p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', 1),
-            });
-            if (error) {
-              if (isDuplicateKeyError(error)) {
-                await registerSharedSettingsConflict(attemptedOperation);
+          // Event IDs identify immutable audit intents. The SQL RPC does not
+          // deduplicate settings mutation by event ID; never replay an identity
+          // already recorded remotely, even when current values happen to match.
+          const { data: priorEvent, error: auditReadError } = await client.from(REMOTE_SETTINGS_AUDIT_TABLE)
+            .select('*').eq('authorized_user_id', session.user.id)
+            .eq('event_id', attemptedOperation.auditEvent.eventId).maybeSingle();
+          if (auditReadError) throw auditReadError;
+          if (priorEvent) {
+            failureStage = 'reconciliation';
+            if (attemptedOperation.recovery && priorEvent.status === 'Accepted'
+              && priorEvent.event_id === attemptedOperation.auditEvent.eventId
+              && priorEvent.authorized_user_id === session.user.id
+              && priorEvent.version_before === attemptedOperation.baseVersion
+              && priorEvent.version_after === attemptedOperation.baseVersion + 1) {
+              const fresh = await fetchSharedSettings();
+              if (fresh?.version === priorEvent.version_after && sharedSettingsAreSame(fresh, attemptedOperation.payload)
+                && settingsRecoveryBackupMatches(attemptedOperation)) {
+                acknowledgeSharedSettings(attemptedOperation, { ...fresh, versionBefore: priorEvent.version_before,
+                  versionAfter: priorEvent.version_after, acceptedAt: priorEvent.accepted_at });
                 continue;
               }
-              throw error;
             }
-            const result = data || {};
-            if (result.status === 'conflict') {
-              await registerSharedSettingsConflict(attemptedOperation, result.settings ? sharedSettingsFromRemote(result.settings) : null);
-              continue;
-            }
-            if (result.status !== 'accepted' || !result.settings) throw new Error('Invalid Shared Settings insert response.');
-            acknowledgeSharedSettings(attemptedOperation, {
-              ...sharedSettingsFromRemote(result.settings),
-              versionBefore: result.versionBefore,
-              versionAfter: result.versionAfter,
-              acceptedAt: result.acceptedAt,
-              changedFields: result.changedFields,
-            });
-            continue;
+            await registerSharedSettingsConflict(attemptedOperation);
+            setSharedSettingsQueue(getSharedSettingsQueue().filter((item) => item.id !== operation.id));
+            break;
           }
-          const { data, error } = await client
-            .rpc('update_lee_lee_shared_settings_with_audit', {
-              p_expected_version: Number(attemptedOperation.baseVersion),
-              p_patient_name: remotePayload.patient_name,
-              p_patient_date_of_birth: remotePayload.patient_date_of_birth,
-              p_clinic_name: remotePayload.clinic_name,
-              p_clinic_phone: remotePayload.clinic_phone,
-              p_last_edited_by: remotePayload.last_edited_by,
-              p_payload: remotePayload.payload,
-              p_app_schema_version: remotePayload.app_schema_version,
-              p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', Number(attemptedOperation.baseVersion) + 1),
-            });
-          if (error) throw error;
+          const remotePayload = sharedSettingsToRemote(attemptedOperation.payload, session.user.id);
+          const insert = attemptedOperation.baseVersion == null;
+          const args = insert ? {
+            p_settings: remotePayload,
+            p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', 1),
+          } : {
+            p_expected_version: attemptedOperation.baseVersion,
+            p_patient_name: remotePayload.patient_name,
+            p_patient_date_of_birth: remotePayload.patient_date_of_birth,
+            p_clinic_name: remotePayload.clinic_name,
+            p_clinic_phone: remotePayload.clinic_phone,
+            p_last_edited_by: remotePayload.last_edited_by,
+            p_payload: remotePayload.payload,
+            p_app_schema_version: remotePayload.app_schema_version,
+            p_audit_event: auditEventToRemote(attemptedOperation.auditEvent, session.user.id, 'Accepted', attemptedOperation.baseVersion + 1),
+          };
+          if (attemptedOperation.recovery && !settingsRecoveryBackupMatches(attemptedOperation)) {
+            throw new Error('Recovery ownership or backup changed before submission.');
+          }
+          failureStage = 'write-rpc';
+          const { data, error } = await client.rpc(insert ? 'insert_lee_lee_shared_settings_with_audit' : 'update_lee_lee_shared_settings_with_audit', args);
+          if (error) {
+            writeRejected = true;
+            if (insert && isDuplicateKeyError(error)) {
+              failureStage = 'reconciliation';
+              await registerSharedSettingsConflict(attemptedOperation);
+              setSharedSettingsQueue(getSharedSettingsQueue().filter((item) => item.id !== operation.id));
+              break;
+            }
+            throw error;
+          }
+          failureStage = 'acknowledgment';
           const result = data || {};
           if (result.status === 'conflict') {
+            failureStage = 'reconciliation';
             await registerSharedSettingsConflict(attemptedOperation, result.settings ? sharedSettingsFromRemote(result.settings) : null);
-            continue;
+            setSharedSettingsQueue(getSharedSettingsQueue().filter((item) => item.id !== operation.id));
+            break;
           }
-          if (result.status !== 'accepted' || !result.settings) throw new Error('Invalid Shared Settings update response.');
+          if (!sharedSettingsResponseIsAccepted(result, attemptedOperation)) {
+            throw new Error(`Invalid Shared Settings ${insert ? 'insert' : 'update'} response.`);
+          }
+          if (attemptedOperation.recovery) {
+            failureStage = 'reconciliation';
+            const fresh = await fetchSharedSettings();
+            if (fresh?.version !== result.versionAfter || !sharedSettingsAreSame(fresh, attemptedOperation.payload)
+              || !settingsRecoveryBackupMatches(attemptedOperation)) {
+              throw new Error('Recovered settings require authoritative reconciliation.');
+            }
+          }
           acknowledgeSharedSettings(attemptedOperation, {
             ...sharedSettingsFromRemote(result.settings),
             versionBefore: result.versionBefore,
@@ -2301,18 +2488,21 @@
           });
         } catch (error) {
           const sanitizedError = sanitizeSupabaseError(error);
-          remaining.push({
-            ...attemptedOperation,
+          const permanent = failureStage === 'write-rpc' && writeRejected
+            && PERMANENT_SETTINGS_ERROR_CODES.has(sanitizedError.code);
+          setSharedSettingsQueue(getSharedSettingsQueue().map((item) => item.id !== operation.id ? item : {
+            ...item,
             retryCount: Number(attemptedOperation.retryCount || 0) + 1,
-            lastErrorCategory: categorizeError(error),
+            lastFailureStage: failureStage,
+            lastWriteRejected: failureStage === 'write-rpc' && writeRejected,
+            lastErrorCategory: permanent ? 'validation' : categorizeError(error),
             lastErrorCode: sanitizedError.code,
-            lastErrorMessage: sanitizedError.message,
-            state: 'pending',
-          });
-          // Keep newer local configuration intact after an older request fails.
+            lastErrorMessage: permanent ? 'Settings validation failed. Pending settings are preserved for review.' : sanitizedError.message,
+            state: permanent ? 'needs-attention' : 'pending',
+          }));
+          break;
         }
       }
-      setSharedSettingsQueue([...getSharedSettingsQueue().filter((item) => !snapshot.some((old) => old.id === item.id)), ...remaining.filter((item) => getSharedSettingsQueue().some((current) => current.id === item.id))]);
       processingSharedSettings = false;
       emit();
       return getSyncStatus();
@@ -2604,6 +2794,10 @@
       const resolvedIds = new Set();
       let resolvedCount = 0;
       conflicts.forEach((conflict) => {
+        if (conflict.entityType === 'shared-settings') {
+          remaining.push(conflict);
+          return;
+        }
         const identical = conflict.entityType === 'shared-settings'
           ? sharedSettingsAreSame(conflict.localRecord, conflict.sharedRecord)
           : recordsHaveSameContent(conflict.localRecord, conflict.sharedRecord);
@@ -2833,6 +3027,7 @@
       getRecordQueueSnapshot,
       getSyncDiagnostics,
       getPendingSharedSettingsDiagnostics,
+      recoverInvalidSharedSettingsOperation,
       getDeviceIdentity,
       setDeviceIdentity,
       getDeviceInstallationId,

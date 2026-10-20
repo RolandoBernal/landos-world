@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { randomUUID } from 'node:crypto';
 
 const syncSource = readFileSync(new URL('../js/lee-lees-tracker-sync.js', import.meta.url), 'utf8');
 const migrationSource = readFileSync(
@@ -77,7 +78,7 @@ function createSyncContext({
     URL,
     console,
     crypto: {
-      randomUUID: () => `uuid-${Math.random().toString(36).slice(2)}`,
+      randomUUID,
     },
     document: {
       visibilityState: 'visible',
@@ -342,6 +343,10 @@ function createMockSupabase(remoteRows = [], options = {}) {
     },
     rpc(name, args) {
       rpcCalls.push({ name, args });
+      if (['insert_lee_lee_shared_settings_with_audit', 'update_lee_lee_shared_settings_with_audit'].includes(name)) {
+        if (!args.p_audit_event?.event_id) return Promise.resolve({ data: null, error: { code: '23502', message: 'null value in column "event_id" of relation "lee_lee_settings_audit" violates not-null constraint' } });
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.p_audit_event.event_id)) return Promise.resolve({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } });
+      }
       if (name === 'insert_lee_lee_shared_settings_with_audit') {
         const payload = args.p_settings;
         const existing = sharedSettingsRows.find((item) => item.user_id === userId);
@@ -2132,14 +2137,16 @@ test('settings edited during an upload survive acknowledgement and sync at the n
   const started = createDeferred();
   supabase.client.rpc = async (...args) => { started.resolve(); await gate.promise; return realRpc(...args); };
   const base = repository.getSharedSettings();
-  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 20 } });
+  repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 22 } });
   const running = repository.processSharedSettingsQueue();
   await started.promise;
   repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, insulinCarbRatioGrams: 15 } });
   gate.resolve();
   await running;
   assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
-  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 1);
+  assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 0);
+  assert.equal(supabase.client.auditRows.length, 2);
+  assert.notEqual(supabase.client.auditRows[0].event_id, supabase.client.auditRows[1].event_id);
   await repository.processSharedSettingsQueue();
   assert.equal(repository.getSyncStatus().sharedSettingsPendingCount, 0);
   assert.equal(repository.getSharedSettings().insulinPlan.insulinCarbRatioGrams, 15);
@@ -2538,7 +2545,7 @@ test('pending settings metadata exports independent allowlisted operations witho
   assert.equal(first.nextRetryAt, null); assert.equal(first.retryEligibility, 'unavailable');
   assert.equal(first.acknowledgmentState, 'unavailable');
   assert.deepEqual(Object.keys(first), ['operationId', 'operationType', 'baseVersion', 'auditEventState',
-    'auditEventIdState', 'auditEventId', 'lastErrorCategory', 'lastErrorCode', 'lastFailureClassification',
+    'auditEventIdState', 'auditEventId', 'lastErrorCategory', 'lastErrorCode', 'lastFailureStage', 'lastFailureClassification',
     'retryCount', 'coalescedCount', 'state', 'createdAt', 'lastAttemptAt', 'nextRetryAt', 'retryEligibility', 'acknowledgmentState']);
   assert.equal(JSON.stringify(diagnostics).includes('SENSITIVE_CANARY'), false);
   assert.deepEqual(context.localStorage.dump(), before);
@@ -2554,7 +2561,8 @@ test('pending settings metadata sanitizes malformed fields and distinguishes mis
   const base = { id: 'SENSITIVE_CANARY', type: 'SENSITIVE_CANARY', state: 'SENSITIVE_CANARY',
     baseVersion: 'SENSITIVE_CANARY', retryCount: -1, coalescedCount: Infinity,
     createdAt: 'SENSITIVE_CANARY', lastAttemptAt: 'SENSITIVE_CANARY',
-    lastErrorCategory: 'SENSITIVE_CANARY', lastErrorCode: 'SENSITIVE_CANARY', lastErrorMessage: 'SENSITIVE_CANARY' };
+    lastErrorCategory: 'SENSITIVE_CANARY', lastErrorCode: 'SENSITIVE_CANARY', lastErrorMessage: 'SENSITIVE_CANARY',
+    lastFailureStage: 'SENSITIVE_CANARY', lastWriteRejected: 'SENSITIVE_CANARY' };
   context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify([
     base, { ...base, auditEvent: {} }, { ...base, auditEvent: { eventId: null } },
     { ...base, auditEvent: { eventId: 'SENSITIVE_CANARY' } }, { ...base, auditEvent: 'SENSITIVE_CANARY' },
@@ -2570,6 +2578,7 @@ test('pending settings metadata sanitizes malformed fields and distinguishes mis
   for (const item of result.operations) {
     assert.equal(item.operationId, null); assert.equal(item.baseVersion, null); assert.equal(item.retryCount, null);
     assert.equal(item.createdAt, null); assert.equal(item.lastAttemptAt, null);
+    assert.equal(item.lastFailureStage, 'unavailable');
     assert.equal(item.state, 'unavailable'); assert.equal(item.lastErrorCategory, 'unavailable');
   }
   assert.equal(JSON.stringify(result).includes('SENSITIVE_CANARY'), false);
@@ -2580,16 +2589,16 @@ test('pending settings metadata reads live processing state without starting a s
   const context = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } });
   const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
   await repository.initialize();
-  const deferred = createDeferred(); let calls = 0;
-  supabase.client.rpc = () => { calls += 1; return deferred.promise; };
+  const deferred = createDeferred(); const started = createDeferred(); let calls = 0;
+  supabase.client.rpc = () => { calls += 1; started.resolve(); return deferred.promise; };
   repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic clinic' });
-  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  await started.promise;
   const before = context.localStorage.dump();
   const result = repository.getPendingSharedSettingsDiagnostics();
   assert.equal(result.processorActive, true);
   assert.equal(result.authenticatedSessionPresent, true);
   assert.equal(result.authoritativeVersion, 32);
-  assert.equal(result.operations[0].lastAttemptAt, null);
+  assert.ok(result.operations[0].lastAttemptAt);
   assert.equal(result.operations[0].acknowledgmentState, 'unavailable');
   assert.equal(calls, 1); assert.deepEqual(context.localStorage.dump(), before);
   deferred.resolve({ data: null, error: { code: '42501', message: 'synthetic rejection' } });
@@ -2620,4 +2629,528 @@ test('pending settings metadata classifies retained errors without exporting fre
   assert.equal(JSON.stringify(result).includes('SENSITIVE_CANARY'), false);
   context.localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify({ malformed: 'SENSITIVE_CANARY' }));
   assert.equal(repository.getPendingSharedSettingsDiagnostics().operations.length, 0);
+});
+
+
+const issue17Config = { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' };
+async function issue17Fixture(options = {}, localStorage = createLocalStorage()) {
+  const supabase = createMockSupabase([], { sharedSettingsRows: [remoteSharedSettingsRow({ version: 32 })], ...options });
+  const context = createSyncContext({ supabase, config: issue17Config, localStorage });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await repository.initialize();
+  return { supabase, context, repository, localStorage };
+}
+function issue17Queue(fixture) {
+  return JSON.parse(fixture.localStorage.getItem(fixture.repository.keys.sharedSettingsQueue) || '[]');
+}
+function issue17SeedLegacy(fixture, overrides = {}) {
+  const payload = { ...fixture.repository.getSharedSettings(), clinicName: 'Synthetic retained intent' };
+  const operation = { id: randomUUID(), recordId: 'shared-settings', entityType: 'shared-settings', type: 'update-shared-settings',
+    baseVersion: 32, payload, auditEvent: null, retryCount: 28, coalescedCount: 2, state: 'pending',
+    createdAt: '2026-10-19T20:00:00.000Z', lastAttemptAt: '2026-10-19T20:30:00.000Z',
+    lastErrorCategory: 'validation', lastErrorCode: '23502',
+    lastErrorMessage: 'null value in column "event_id" of relation "lee_lee_settings_audit" violates not-null constraint', ...overrides };
+  fixture.localStorage.setItem(fixture.repository.keys.sharedSettingsQueue, JSON.stringify([operation]));
+  fixture.localStorage.setItem(fixture.repository.keys.sharedSettingsCache, JSON.stringify(payload));
+  return operation;
+}
+
+test('Issue 17 unchanged save is a true no-op and cannot replace or retry a legacy intent', async () => {
+  const fixture = await issue17Fixture(); const { repository, localStorage, supabase } = fixture;
+  const before = localStorage.dump();
+  assert.equal(repository.saveSharedSettings(repository.getSharedSettings()), null);
+  await Promise.resolve();
+  assert.deepEqual(localStorage.dump(), before); assert.equal(supabase.client.rpcCalls.length, 0);
+  const legacy = issue17SeedLegacy(fixture);
+  const pendingBefore = localStorage.dump();
+  const result = repository.saveSharedSettings(repository.getSharedSettings());
+  assert.equal(result.id, legacy.id); await Promise.resolve();
+  assert.deepEqual(localStorage.dump(), pendingBefore); assert.equal(supabase.client.rpcCalls.length, 0);
+});
+
+test('Issue 17 meaningful fields outside the audited list still submit a valid stable event', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const base = repository.getSharedSettings();
+  const operation = repository.saveSharedSettings({ ...base, insulinPlan: { ...base.insulinPlan, notes: 'Synthetic changed note' } });
+  assert.match(operation.auditEvent.eventId, /^[0-9a-f-]{36}$/i);
+  assert.equal(operation.auditEvent.changes.length, 0);
+  await repository.processSharedSettingsQueue();
+  assert.equal(supabase.client.rpcCalls[0].args.p_audit_event.event_id, operation.auditEvent.eventId);
+  assert.equal(supabase.client.sharedSettingsRows[0].version, 33);
+  assert.equal(repository.getSharedSettingsStatus().pendingCount, 0);
+});
+
+test('Issue 17 unsent coalescing retains one operation/event and original provenance with final intent', async () => {
+  const fixture = await issue17Fixture(); const { repository, context, supabase } = fixture;
+  context.navigator.onLine = false;
+  const base = repository.getSharedSettings();
+  const first = repository.saveSharedSettings({ ...base, clinicName: 'Synthetic first' });
+  const second = repository.saveSharedSettings({ ...base, clinicName: 'Synthetic final', clinicPhone: '555-0101' });
+  const queue = issue17Queue(fixture);
+  assert.equal(queue.length, 1); assert.equal(second.id, first.id);
+  assert.equal(second.auditEvent.eventId, first.auditEvent.eventId);
+  assert.equal(second.auditEvent.clientCreatedAt, first.auditEvent.clientCreatedAt);
+  assert.deepEqual(JSON.parse(JSON.stringify(second.auditEvent.previousSettings)), JSON.parse(JSON.stringify(first.auditEvent.previousSettings)));
+  assert.equal(second.coalescedCount, 2); assert.equal(second.payload.clinicName, 'Synthetic final');
+  assert.ok(second.auditEvent.changes.some(change => change.key === 'clinicName' && change.newValue === 'Synthetic final'));
+  context.navigator.onLine = true; await repository.processSharedSettingsQueue();
+  assert.equal(supabase.client.auditRows.length, 1); assert.equal(supabase.client.auditRows[0].event_id, first.auditEvent.eventId);
+});
+
+test('Issue 17 legacy null event is preserved independently of a later valid change and blocks successors', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase, localStorage } = fixture;
+  const legacy = issue17SeedLegacy(fixture);
+  const next = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic later intent' });
+  await repository.processSharedSettingsQueue();
+  const [retained, successor] = issue17Queue(fixture);
+  assert.equal(retained.id, legacy.id); assert.equal(JSON.stringify(retained.payload), JSON.stringify(legacy.payload));
+  assert.equal(retained.auditEvent, null); assert.equal(retained.retryCount, 28);
+  assert.equal(retained.lastAttemptAt, legacy.lastAttemptAt); assert.equal(retained.state, 'needs-attention');
+  assert.equal(successor.id, next.id); assert.match(successor.auditEvent.eventId, /^[0-9a-f-]{36}$/i);
+  assert.equal(successor.payload.clinicName, 'Synthetic later intent'); assert.equal(supabase.client.rpcCalls.length, 0);
+  const restart = createSyncContext({ localStorage, supabase, config: issue17Config });
+  const afterRestart = restart.LeeLeeTrackerSync.createRepository(createDocumentStore());
+  await afterRestart.initialize(); await afterRestart.processSharedSettingsQueue();
+  assert.deepEqual(JSON.parse(localStorage.getItem(repository.keys.sharedSettingsQueue)), [retained, successor]);
+  assert.equal(supabase.client.rpcCalls.length, 0); assert.equal(afterRestart.getSharedSettingsStatus().pendingCount, 2);
+  assert.equal(afterRestart.getSharedSettingsStatus().state, 'needs-attention');
+});
+
+test('Issue 17 valid event with SQL 23502 becomes needs-attention and is not automatically retried', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase, localStorage } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = (...args) => { supabase.client.rpcCalls.push({ name: args[0], args: args[1] }); return Promise.resolve({ data: null, error: { code: '23502', message: 'SENSITIVE synthetic server error' } }); };
+  const created = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic change' });
+  await repository.processSharedSettingsQueue();
+  const first = issue17Queue(fixture)[0];
+  assert.equal(first.state, 'needs-attention'); assert.equal(first.retryCount, 1); assert.equal(first.lastErrorCode, '23502');
+  assert.equal(first.auditEvent.eventId, created.auditEvent.eventId); assert.deepEqual(first.payload, JSON.parse(JSON.stringify(created.payload)));
+  assert.equal(first.lastErrorMessage.includes('SENSITIVE'), false);
+  await repository.processSharedSettingsQueue(); await repository.syncSharedSettings();
+  assert.equal(supabase.client.rpcCalls.length, 1); assert.equal(issue17Queue(fixture)[0].retryCount, 1);
+  supabase.client.rpc = rpc;
+  const context = createSyncContext({ localStorage, supabase, config: issue17Config });
+  const restarted = context.LeeLeeTrackerSync.createRepository(createDocumentStore()); await restarted.initialize();
+  assert.equal(issue17Queue(fixture)[0].id, created.id); assert.equal(supabase.client.rpcCalls.length, 1);
+});
+
+test('Issue 17 transient network retries survive restart with the original event and expected version', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase, localStorage } = fixture;
+  const rpc = supabase.client.rpc; let failed = false;
+  supabase.client.rpc = (...args) => {
+    if (!failed) { failed = true; supabase.client.rpcCalls.push({ name: args[0], args: args[1] }); return Promise.resolve({ data: null, error: { message: 'Failed to fetch' } }); }
+    return rpc(...args);
+  };
+  const created = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic network retry' });
+  await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].state, 'pending'); assert.equal(issue17Queue(fixture)[0].lastErrorCategory, 'network');
+  const context = createSyncContext({ localStorage, supabase, config: issue17Config });
+  const restarted = context.LeeLeeTrackerSync.createRepository(createDocumentStore()); await restarted.initialize();
+  assert.equal(restarted.getSharedSettingsStatus().pendingCount, 0);
+  assert.deepEqual(supabase.client.rpcCalls.map(call => call.args.p_audit_event.event_id), [created.auditEvent.eventId, created.auditEvent.eventId]);
+  assert.deepEqual(supabase.client.rpcCalls.map(call => call.args.p_expected_version), [32, 32]);
+  assert.equal(supabase.client.auditRows.length, 1);
+});
+
+test('Issue 17 other SQL failures are not all made permanent', async () => {
+  const fixture = await issue17Fixture({ updateSharedSettingsRpcError: { code: '40001', message: 'serialization retry' } });
+  fixture.repository.saveSharedSettings({ ...fixture.repository.getSharedSettings(), clinicName: 'Synthetic serializable retry' });
+  await fixture.repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].state, 'pending');
+  await fixture.repository.processSharedSettingsQueue(); assert.equal(issue17Queue(fixture)[0].retryCount, 2);
+});
+
+test('Issue 17 invalid audit UUID and invalid expected version are blocked before RPC', async () => {
+  for (const overrides of [{ auditEvent: { eventId: 'invalid synthetic ID' }, lastErrorCode: '' },
+    { auditEvent: { eventId: randomUUID() }, baseVersion: -1, lastErrorCode: '' }]) {
+    const fixture = await issue17Fixture(); const legacy = issue17SeedLegacy(fixture, overrides);
+    await fixture.repository.processSharedSettingsQueue();
+    assert.equal(issue17Queue(fixture)[0].state, 'needs-attention');
+    assert.equal(JSON.stringify(issue17Queue(fixture)[0].payload), JSON.stringify(legacy.payload));
+    assert.equal(fixture.supabase.client.rpcCalls.length, 0);
+  }
+});
+
+test('Issue 17 response loss cannot silently acknowledge equal values or duplicate the accepted event', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc; let lose = true;
+  supabase.client.rpc = async (...args) => { const result = await rpc(...args); if (lose) { lose = false; throw new Error('Network connection interrupted after acceptance'); } return result; };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic accepted intent' });
+  await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].id, operation.id);
+  assert.equal(supabase.client.auditRows.length, 1); assert.equal(supabase.client.sharedSettingsRows[0].version, 33);
+  await repository.processSharedSettingsQueue();
+  const conflict = repository.getConflicts()[0];
+  assert.equal(conflict.operation.id, operation.id); assert.equal(conflict.operation.auditEvent.eventId, operation.auditEvent.eventId);
+  assert.equal(repository.cleanupIdenticalConflicts(), 0); assert.equal(repository.getSharedSettingsStatus().conflictCount, 1);
+  assert.equal(supabase.client.auditRows.length, 1); assert.equal(supabase.client.sharedSettingsRows[0].version, 33);
+});
+
+test('Issue 17 a mismatched acknowledgment never clears the pending operation', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = async (...args) => { const result = await rpc(...args); return { ...result, data: { ...result.data, eventId: randomUUID() } }; };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic response mismatch' });
+  await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].id, operation.id);
+  assert.equal(repository.getPendingSharedSettingsDiagnostics().operations[0].lastFailureClassification, 'invalid-rpc-response');
+  assert.equal(repository.getSettingsAuditHistory().some(event => event.status === 'Accepted'), false);
+});
+
+// Test-only rehearsal of the documented, separately approved operator procedure.
+// No application recovery API or automatic repair is introduced by these fixtures.
+function prepareIssue17SyntheticRecovery(fixture, legacy) {
+  const remote = fixture.supabase.client.sharedSettingsRows[0];
+  if (remote.version !== legacy.baseVersion) return null;
+  const candidate = { ...legacy, state: 'pending', lastErrorCategory: '', lastErrorCode: '', lastErrorMessage: '',
+    auditEvent: { eventId: randomUUID(), clientCreatedAt: '2026-10-19T21:00:00.000Z', versionBefore: remote.version,
+      changes: [], previousSettings: fixture.context.LeeLeeTrackerSync.sharedSettingsFromRemote(remote),
+      changeNote: 'Synthetic explicit recovery approval; original save provenance unknown' } };
+  fixture.localStorage.setItem(fixture.repository.keys.sharedSettingsQueue, JSON.stringify([candidate]));
+  return candidate;
+}
+
+test('Issue 17 explicit synthetic recovery is durable, preserves original intent and acknowledges exactly once', async () => {
+  const fixture = await issue17Fixture(); const legacy = issue17SeedLegacy(fixture);
+  await fixture.repository.processSharedSettingsQueue();
+  const originalPayload = JSON.stringify(legacy.payload);
+  const prepared = prepareIssue17SyntheticRecovery(fixture, legacy);
+  assert.equal(prepared.id, legacy.id); assert.equal(JSON.stringify(prepared.payload), originalPayload);
+  const stableId = prepared.auditEvent.eventId;
+  const context = createSyncContext({ localStorage: fixture.localStorage, supabase: fixture.supabase, config: issue17Config });
+  const restarted = context.LeeLeeTrackerSync.createRepository(createDocumentStore()); await restarted.initialize();
+  assert.equal(restarted.getSharedSettingsStatus().pendingCount, 0); assert.equal(restarted.getSharedSettingsStatus().conflictCount, 0);
+  assert.equal(fixture.supabase.client.auditRows.filter(event => event.event_id === stableId).length, 1);
+  await restarted.processSharedSettingsQueue(); await restarted.syncSharedSettings();
+  assert.equal(fixture.supabase.client.auditRows.length, 1); assert.equal(fixture.supabase.client.sharedSettingsRows[0].version, 33);
+  assert.equal(restarted.getSharedSettings().clinicName, legacy.payload.clinicName);
+  assert.equal(restarted.getLatestFetchedSharedSettings().settings.version, 33);
+});
+
+test('Issue 17 synthetic recovery stops when authority changes, including a race after preparation', async () => {
+  const fixture = await issue17Fixture(); const legacy = issue17SeedLegacy(fixture);
+  const before = JSON.stringify(issue17Queue(fixture));
+  fixture.supabase.client.sharedSettingsRows[0].version = 33;
+  assert.equal(prepareIssue17SyntheticRecovery(fixture, legacy), null);
+  assert.equal(JSON.stringify(issue17Queue(fixture)), before);
+  fixture.supabase.client.sharedSettingsRows[0].version = 32;
+  const prepared = prepareIssue17SyntheticRecovery(fixture, legacy);
+  fixture.supabase.client.sharedSettingsRows[0].version = 33;
+  fixture.supabase.client.sharedSettingsRows[0].clinic_name = 'Synthetic newer server setting';
+  await fixture.repository.processSharedSettingsQueue();
+  assert.equal(fixture.supabase.client.auditRows.length, 0);
+  assert.equal(fixture.supabase.client.sharedSettingsRows[0].clinic_name, 'Synthetic newer server setting');
+  assert.equal(fixture.repository.getConflicts()[0].operation.id, legacy.id);
+  assert.equal(fixture.repository.getConflicts()[0].operation.auditEvent.eventId, prepared.auditEvent.eventId);
+  assert.equal(JSON.stringify(fixture.repository.getConflicts()[0].operation.payload), JSON.stringify(legacy.payload));
+});
+
+
+test('Issue 17 a recorded audit identity cannot be reused for a changed legacy payload', async () => {
+  const fixture = await issue17Fixture(); const eventId = randomUUID();
+  fixture.supabase.client.auditRows.push({ event_id: eventId, authorized_user_id: 'user-1', status: 'Accepted', version_before: 31, version_after: 32 });
+  const legacy = issue17SeedLegacy(fixture, { auditEvent: { eventId }, retryCount: 0, lastAttemptAt: '', lastErrorCode: '' });
+  await fixture.repository.processSharedSettingsQueue();
+  assert.equal(fixture.supabase.client.rpcCalls.length, 0);
+  assert.equal(fixture.supabase.client.sharedSettingsRows[0].version, 32);
+  assert.equal(fixture.repository.getConflicts()[0].operation.id, legacy.id);
+  assert.equal(fixture.repository.getSharedSettingsStatus().conflictCount, 1);
+});
+
+test('Issue 17 acknowledgment cannot rebase an unrelated or invalid successor', async () => {
+  const fixture = await issue17Fixture(); const { repository, context, localStorage, supabase } = fixture;
+  context.navigator.onLine = false;
+  const first = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic accepted predecessor' });
+  const unrelated = { ...first, id: randomUUID(), auditEvent: null, payload: { ...first.payload, clinicName: 'Synthetic unrelated legacy' }, baseVersion: 7 };
+  localStorage.setItem(repository.keys.sharedSettingsQueue, JSON.stringify([first, unrelated]));
+  context.navigator.onLine = true; await repository.processSharedSettingsQueue();
+  const retained = issue17Queue(fixture)[0];
+  assert.equal(retained.id, unrelated.id); assert.equal(retained.baseVersion, 7);
+  assert.equal(JSON.stringify(retained.payload), JSON.stringify(unrelated.payload));
+  assert.equal(supabase.client.rpcCalls.length, 1); assert.equal(retained.state, 'needs-attention');
+});
+
+
+test('Issue 17 a divergent cache does not turn an explicit save into a false no-op', async () => {
+  const fixture = await issue17Fixture(); const baseline = fixture.repository.getSharedSettings();
+  const legacy = issue17SeedLegacy(fixture);
+  fixture.localStorage.setItem(fixture.repository.keys.sharedSettingsCache, JSON.stringify(baseline));
+  const explicit = fixture.repository.saveSharedSettings(baseline);
+  await fixture.repository.processSharedSettingsQueue();
+  const queue = issue17Queue(fixture);
+  assert.equal(queue.length, 2); assert.equal(queue[0].id, legacy.id);
+  assert.equal(JSON.stringify(queue[0].payload), JSON.stringify(legacy.payload));
+  assert.equal(queue[1].id, explicit.id); assert.equal(queue[1].payload.clinicName, baseline.clinicName);
+  assert.ok(queue[1].auditEvent.eventId); assert.equal(fixture.supabase.client.rpcCalls.length, 0);
+});
+
+test('Issue 17 a claimed acceptance with inconsistent version provenance remains pending', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = async (...args) => { const result = await rpc(...args); return { ...result, data: { ...result.data, versionBefore: 7 } }; };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic provenance mismatch' });
+  await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].id, operation.id);
+  assert.equal(repository.getSettingsAuditHistory().some(event => event.status === 'Accepted'), false);
+});
+
+
+test('Issue 17 failed audit lookup preserves intent and cannot submit before event identity is checked', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const from = supabase.client.from;
+  supabase.client.from = function(table) {
+    const builder = from.call(this, table);
+    if (table === 'lee_lee_settings_audit') builder.maybeSingle = async () => ({ data: null, error: { message: 'Failed to fetch audit identity' } });
+    return builder;
+  };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic guarded lookup' });
+  await repository.processSharedSettingsQueue();
+  assert.equal(supabase.client.rpcCalls.length, 0); assert.equal(issue17Queue(fixture)[0].id, operation.id);
+  assert.equal(issue17Queue(fixture)[0].state, 'pending'); assert.equal(issue17Queue(fixture)[0].lastErrorCategory, 'network');
+  supabase.client.from = from; await repository.processSharedSettingsQueue();
+  assert.equal(repository.getSharedSettingsStatus().pendingCount, 0); assert.equal(supabase.client.auditRows.length, 1);
+});
+
+
+test('Issue 17 coalescing does not misattribute edits made under a different audit actor', async () => {
+  const fixture = await issue17Fixture(); const { repository, context, supabase } = fixture;
+  context.navigator.onLine = false; repository.setDeviceIdentity('Rolando');
+  const first = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic first actor' });
+  repository.setDeviceIdentity('Emily');
+  const second = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic second actor' });
+  assert.notEqual(first.id, second.id); assert.notEqual(first.auditEvent.eventId, second.auditEvent.eventId);
+  assert.equal(issue17Queue(fixture).length, 2);
+  assert.equal(issue17Queue(fixture)[0].auditEvent.displayName, 'Rolando');
+  assert.equal(issue17Queue(fixture)[1].auditEvent.displayName, 'Emily');
+  context.navigator.onLine = true; await repository.processSharedSettingsQueue();
+  assert.equal(supabase.client.auditRows.length, 2); assert.equal(repository.getSharedSettingsStatus().pendingCount, 0);
+});
+
+test('Issue 17 an old event without attempt metadata is not assumed safe to coalesce', async () => {
+  const fixture = await issue17Fixture(); const { repository, context } = fixture;
+  context.navigator.onLine = false;
+  const original = issue17SeedLegacy(fixture, { auditEvent: { eventId: randomUUID(), previousSettings: repository.getSharedSettings() },
+    lastAttemptAt: undefined, retryCount: 0, lastErrorCode: '' });
+  const next = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic new independent intent' });
+  const queue = issue17Queue(fixture);
+  assert.equal(queue.length, 2); assert.equal(queue[0].id, original.id);
+  assert.equal(JSON.stringify(queue[0].payload), JSON.stringify(original.payload));
+  assert.notEqual(next.auditEvent.eventId, original.auditEvent.eventId);
+});
+
+
+for (const code of ['40001', '23502']) {
+  test(`Issue 17 D.1 audit READ ${code} preserves retry eligibility and identity through recovery`, async () => {
+    const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+    const from = supabase.client.from;
+    supabase.client.from = function(table) {
+      const builder = from.call(this, table);
+      if (table === 'lee_lee_settings_audit') builder.maybeSingle = async () => ({ data: null, error: { code, message: 'Synthetic read failure' } });
+      return builder;
+    };
+    const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic read recovery' });
+    await repository.processSharedSettingsQueue();
+    await repository.processSharedSettingsQueue();
+    const pending = issue17Queue(fixture)[0];
+    assert.equal(pending.state, 'pending'); assert.equal(pending.lastFailureStage, 'audit-lookup');
+    assert.equal(pending.lastWriteRejected, false); assert.equal(supabase.client.rpcCalls.length, 0);
+    assert.equal(pending.id, operation.id); assert.equal(pending.auditEvent.eventId, operation.auditEvent.eventId);
+    assert.equal(JSON.stringify(pending.payload), JSON.stringify(operation.payload));
+    assert.equal(repository.getPendingSharedSettingsDiagnostics().operations[0].lastFailureClassification, 'audit-lookup-failed');
+    assert.notEqual(repository.getSharedSettingsStatus().state, 'needs-attention');
+    supabase.client.from = from; await repository.processSharedSettingsQueue();
+    await repository.processSharedSettingsQueue();
+    assert.equal(issue17Queue(fixture).length, 0); assert.equal(supabase.client.auditRows.length, 1);
+    assert.equal(supabase.client.rpcCalls[0].args.p_audit_event.event_id, operation.auditEvent.eventId);
+  });
+}
+
+test('Issue 17 D.1 thrown WRITE 23502 has unknown outcome and cannot permanently block intent', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = async () => { throw { code: '23502', message: 'Synthetic interrupted RPC' }; };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic unknown outcome' });
+  await repository.processSharedSettingsQueue();
+  const pending = issue17Queue(fixture)[0];
+  assert.equal(pending.state, 'pending'); assert.equal(pending.lastWriteRejected, false);
+  assert.equal(pending.auditEvent.eventId, operation.auditEvent.eventId);
+  assert.equal(repository.getPendingSharedSettingsDiagnostics().operations[0].lastFailureClassification, 'write-outcome-unknown');
+  supabase.client.rpc = rpc; await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture).length, 0); assert.equal(supabase.client.auditRows.length, 1);
+});
+
+test('Issue 17 D.1 returned WRITE 23502 remains permanently blocked with confirmed rejection evidence', async () => {
+  const fixture = await issue17Fixture({ updateSharedSettingsRpcError: { code: '23502', message: 'Synthetic write constraint' } });
+  fixture.repository.saveSharedSettings({ ...fixture.repository.getSharedSettings(), clinicName: 'Synthetic rejected write' });
+  await fixture.repository.processSharedSettingsQueue();
+  const pending = issue17Queue(fixture)[0];
+  assert.equal(pending.state, 'needs-attention'); assert.equal(pending.lastFailureStage, 'write-rpc');
+  assert.equal(pending.lastWriteRejected, true);
+  await fixture.repository.processSharedSettingsQueue();
+  assert.equal(fixture.supabase.client.rpcCalls.length, 1); assert.equal(issue17Queue(fixture)[0].id, pending.id);
+});
+
+
+test('Issue 17 D.1 post-write acknowledgment failure is not a write rejection and cannot replay acceptance', async () => {
+  const fixture = await issue17Fixture(); const { repository, supabase, localStorage } = fixture;
+  const setItem = localStorage.setItem;
+  let fail = true;
+  localStorage.setItem = function(key, value) {
+    if (fail && key === 'lando-world:lee-lees-tracker:settings-audit-cache:v1') {
+      fail = false; throw { code: '23502', message: 'Synthetic local acknowledgment failure' };
+    }
+    return setItem.call(this, key, value);
+  };
+  const operation = repository.saveSharedSettings({ ...repository.getSharedSettings(), clinicName: 'Synthetic accepted uncertain receipt' });
+  await repository.processSharedSettingsQueue();
+  const pending = issue17Queue(fixture)[0];
+  assert.equal(pending.id, operation.id); assert.equal(pending.auditEvent.eventId, operation.auditEvent.eventId);
+  assert.equal(pending.state, 'pending'); assert.equal(pending.lastFailureStage, 'acknowledgment');
+  assert.equal(pending.lastWriteRejected, false);
+  assert.equal(repository.getPendingSharedSettingsDiagnostics().operations[0].lastFailureClassification, 'acknowledgment-uncertain');
+  assert.equal(supabase.client.auditRows.length, 1);
+  await repository.processSharedSettingsQueue();
+  assert.equal(supabase.client.rpcCalls.length, 1); assert.equal(supabase.client.auditRows.length, 1);
+  assert.equal(repository.getConflicts()[0].operation.id, operation.id);
+  assert.equal(repository.getSharedSettingsStatus().conflictCount, 1);
+});
+
+
+async function issue17RecoverableFixture() {
+  const fixture = await issue17Fixture();
+  fixture.repository.setDeviceIdentity('Rolando');
+  const legacy = issue17SeedLegacy(fixture, { payload: fixture.repository.getSharedSettings() });
+  fixture.localStorage.setItem(fixture.repository.keys.sharedSettingsCache, JSON.stringify(legacy.payload));
+  await fixture.repository.processSharedSettingsQueue();
+  return { ...fixture, legacy: issue17Queue(fixture)[0] };
+}
+
+test('Issue 17 actual recovery API backs up exact intent before one accepted write, preserving other local data', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase, localStorage, legacy } = fixture;
+  localStorage.setItem('synthetic-records', JSON.stringify([{ id: 'existing', bloodSugar: 123, mealCarbs: 41, administeredInsulinUnits: 3 }]));
+  const beforeRecords = localStorage.getItem('synthetic-records'); const rpc = supabase.client.rpc;
+  let backup;
+  supabase.client.rpc = async (...args) => {
+    backup = JSON.parse(localStorage.getItem(`${repository.keys.sharedSettingsQueue}:recovery:${legacy.id}`));
+    assert.equal(JSON.stringify(backup.operation), JSON.stringify(legacy));
+    assert.equal(backup.candidate.auditEvent.eventId, args[1].p_audit_event.event_id);
+    assert.equal(issue17Queue(fixture)[0].auditEvent.eventId, backup.candidate.auditEvent.eventId);
+    return rpc(...args);
+  };
+  const result = await repository.recoverInvalidSharedSettingsOperation();
+  assert.equal(result.ok, true, result.reason); assert.equal(issue17Queue(fixture).length, 0);
+  assert.equal(backup.candidate.id, legacy.id); assert.equal(JSON.stringify(backup.candidate.payload), JSON.stringify(legacy.payload));
+  assert.match(backup.candidate.auditEvent.changeNote, /original save actor and time are unknown/);
+  assert.equal(localStorage.getItem('synthetic-records'), beforeRecords);
+  assert.equal(supabase.client.auditRows.length, 1); assert.equal(repository.getLatestFetchedSharedSettings().settings.version, 33);
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  assert.equal(supabase.client.auditRows.length, 1);
+});
+
+for (const condition of ['values', 'version', 'read', 'backup-write', 'backup-readback']) {
+  test(`Issue 17 actual recovery refuses ${condition} failure without losing original intent`, async () => {
+    const fixture = await issue17RecoverableFixture(); const { repository, supabase, localStorage } = fixture;
+    const before = JSON.stringify(issue17Queue(fixture));
+    if (condition === 'values') { supabase.client.sharedSettingsRows[0].clinic_name = 'Synthetic different authority';
+      supabase.client.sharedSettingsRows[0].payload.patientClinic.clinicName = 'Synthetic different authority'; }
+    if (condition === 'version') supabase.client.sharedSettingsRows[0].version = 33;
+    if (condition === 'read') {
+      const from = supabase.client.from;
+      supabase.client.from = function(table) { const builder = from.call(this, table);
+        if (table === 'lee_lee_shared_settings') builder.maybeSingle = async () => ({ data: null, error: { code: '40001', message: 'Synthetic authority read error' } });
+        return builder;
+      };
+    }
+    if (condition === 'backup-write' || condition === 'backup-readback') {
+      const setItem = localStorage.setItem;
+      localStorage.setItem = function(key, value) {
+        if (key.includes(':recovery:')) { if (condition === 'backup-write') throw new Error('Synthetic full storage'); else return; }
+        return setItem.call(this, key, value);
+      };
+    }
+    assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+    assert.equal(JSON.stringify(issue17Queue(fixture)), before); assert.equal(supabase.client.rpcCalls.length, 0);
+    assert.equal(supabase.client.auditRows.length, 0);
+  });
+}
+
+test('Issue 17 actual recovery reuses saved identity when interrupted before queue preparation', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, localStorage, legacy, supabase } = fixture;
+  const setItem = localStorage.setItem; let fail = true;
+  localStorage.setItem = function(key, value) { if (key === repository.keys.sharedSettingsQueue && fail) { fail = false; throw new Error('Synthetic queue interruption'); } return setItem.call(this, key, value); };
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  const backup = JSON.parse(localStorage.getItem(`${repository.keys.sharedSettingsQueue}:recovery:${legacy.id}`));
+  assert.equal(issue17Queue(fixture)[0].auditEvent, null);
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, true);
+  assert.equal(supabase.client.auditRows[0].event_id, backup.candidate.auditEvent.eventId);
+});
+
+test('Issue 17 actual recovery survives restart after transient failure with one stable event', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase, localStorage } = fixture;
+  const rpc = supabase.client.rpc; supabase.client.rpc = async () => ({ data: null, error: { message: 'Failed to fetch' } });
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  const pending = issue17Queue(fixture)[0]; assert.ok(pending.recovery);
+  supabase.client.rpc = rpc;
+  const context = createSyncContext({ localStorage, supabase, config: issue17Config });
+  const restarted = context.LeeLeeTrackerSync.createRepository(createDocumentStore()); await restarted.initialize();
+  assert.equal(restarted.getSharedSettingsStatus().pendingCount, 0);
+  assert.equal(supabase.client.auditRows.length, 1); assert.equal(supabase.client.auditRows[0].event_id, pending.auditEvent.eventId);
+});
+
+test('Issue 17 actual recovery reconciles interrupted acceptance without replay or duplicate audit', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = async (...args) => { await rpc(...args); throw new Error('Synthetic response lost after acceptance'); };
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  const pending = issue17Queue(fixture)[0]; assert.equal(pending.state, 'pending');
+  supabase.client.rpc = rpc; await repository.processSharedSettingsQueue(); await repository.syncSharedSettings();
+  assert.equal(repository.getSharedSettingsStatus().pendingCount, 0); assert.equal(repository.getSharedSettingsStatus().conflictCount, 0);
+  assert.equal(supabase.client.rpcCalls.length, 1); assert.equal(supabase.client.auditRows.length, 1);
+  assert.equal(supabase.client.auditRows[0].event_id, pending.auditEvent.eventId);
+});
+
+test('Issue 17 actual recovery preserves conflict if authority changes after preparation', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase, legacy } = fixture;
+  const rpc = supabase.client.rpc;
+  supabase.client.rpc = async (...args) => { supabase.client.sharedSettingsRows[0].version = 33;
+    supabase.client.sharedSettingsRows[0].clinic_name = 'Synthetic concurrent authoritative change';
+    supabase.client.sharedSettingsRows[0].payload.patientClinic.clinicName = 'Synthetic concurrent authoritative change'; return rpc(...args); };
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  const conflict = repository.getConflicts()[0]; assert.equal(conflict.operation.id, legacy.id);
+  assert.equal(JSON.stringify(conflict.operation.payload), JSON.stringify(legacy.payload));
+  assert.equal(conflict.sharedRecord.clinicName, 'Synthetic concurrent authoritative change');
+  assert.equal(supabase.client.auditRows.length, 0);
+});
+
+test('Issue 17 recovery cannot submit with a missing private backup', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase, localStorage } = fixture;
+  const rpc = supabase.client.rpc; supabase.client.rpc = async () => ({ data: null, error: { message: 'Failed to fetch' } });
+  await repository.recoverInvalidSharedSettingsOperation();
+  const pending = issue17Queue(fixture)[0]; localStorage.removeItem(pending.recovery.backupKey);
+  supabase.client.rpc = rpc; await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture)[0].state, 'needs-attention'); assert.equal(supabase.client.auditRows.length, 0);
+});
+
+test('Issue 17 recovery refuses corrupted backup and preserves blocked original for private review', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, localStorage, legacy, supabase } = fixture;
+  const before = JSON.stringify(issue17Queue(fixture));
+  localStorage.setItem(`${repository.keys.sharedSettingsQueue}:recovery:${legacy.id}`, '{invalid');
+  assert.equal((await repository.recoverInvalidSharedSettingsOperation()).ok, false);
+  assert.equal(JSON.stringify(issue17Queue(fixture)), before); assert.equal(supabase.client.rpcCalls.length, 0);
+});
+
+test('Issue 17 recovery cannot acknowledge accepted write when fresh authority read fails', async () => {
+  const fixture = await issue17RecoverableFixture(); const { repository, supabase } = fixture;
+  const rpc = supabase.client.rpc; const from = supabase.client.from; let accepted = false;
+  supabase.client.rpc = async (...args) => { const result = await rpc(...args); accepted = true; return result; };
+  supabase.client.from = function(table) { const builder = from.call(this, table);
+    if (table === 'lee_lee_shared_settings' && accepted) builder.maybeSingle = async () => ({ data: null, error: { code: '23502', message: 'Synthetic post-write read failure' } });
+    return builder;
+  };
+  await assert.rejects(() => repository.recoverInvalidSharedSettingsOperation());
+  const pending = issue17Queue(fixture)[0];
+  assert.equal(pending.state, 'pending'); assert.equal(pending.lastFailureStage, 'reconciliation');
+  assert.equal(pending.lastWriteRejected, false); assert.equal(supabase.client.auditRows.length, 1);
+  supabase.client.from = from; await repository.processSharedSettingsQueue();
+  assert.equal(issue17Queue(fixture).length, 0); assert.equal(supabase.client.rpcCalls.length, 1);
 });

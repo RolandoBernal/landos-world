@@ -246,3 +246,158 @@ Risk is limited to diagnostic serialization/UI integration and ordinary release 
 **Next authorization:** approve preparing these six files for a reviewable PR. No files were staged or committed, and nothing was pushed, merged or deployed.
 
 Local review preview: `http://127.0.0.1:8766/#/lee-lees-tracker`, loopback-only LOCAL DEV with Supabase synchronization disabled. Served sync/tracker files were byte-compared with the implementation; metadata identifies the diagnostic branch and dirty baseline. Port 8765 already served a different source and was left untouched. The preview stays running for review. Earlier investigation line references retain their pre-Phase-C baseline numbering.
+
+## Phase D — Confirmed Failure, Prevention, and Recovery
+
+### Baseline, evidence and classification
+
+Local-only Phase D starts at verified `origin/main` **`49a2588b13927dbb0adbd60e379355151701fb78`**, including merged PR #152. After explicit baseline approval, Git verified local main was an ancestor and fast-forwarded the unused main ref without force or checkout changes. Branch: `fix/llt-issue17-settings-audit-validation`. Worktree: `/Users/rolandobernal/.codex/worktrees/llt-issue17-phase-d/landos-world`. Original development files and the Phase C worktree are preserved. Earlier report sections remain historical evidence; this section supersedes their insufficient-evidence classification for the now-confirmed rejection.
+
+User-supplied actual iPhone metadata: authoritative/base version 32; online/authenticated true; processor inactive; operation `7834cf68-9c0e-454a-94b4-459f57cc67d1`, update-shared-settings, null audit object/missing event ID; SQL `23502`, classification `audit-event-id-required`; pending, retryCount 28, coalescedCount 2; created `2026-10-19T22:26:44.374Z`, last attempted `2026-10-19T23:59:04.748Z`. This newer timestamp is not the earlier Phase A creation time: continuity/identity across those snapshots is not established.
+
+**Classification A — CONFIRMED APPLICATION DEFECT:** a null audit is submitted to an RPC requiring an event UUID, and the client keeps its deterministic rejection automatically retryable. SQL is enforcing its existing contract. The last rejected transaction is not a successful remote acceptance. This does not prove that the same intended values were never accepted through another write, nor identify the precise original user action.
+
+### Exact source cause versus unproven trigger
+
+Baseline `saveSharedSettings` computes the narrower `sharedSettingsChanges` list, passes **null** to `createSharedSettingsOperation` when that list is empty, and queues it anyway. `createSharedSettingsOperation` deliberately retains explicit null. `auditEventToRemote` then returns null; `processSharedSettingsQueueInternal` has no required-ID guard. SQL's required audit insert throws `23502`; catch increments retryCount and sets every failure back to pending without a terminal validation state.
+
+The baseline coalescer retains an existing truthy audit object without validating its event ID; otherwise it takes the incoming event, including null. It can carry null forward across another unchanged save, preserve a valid event, or take a new valid incoming event after a null one. It also replaces operation identity and can reuse a sent event for a changed successor. **coalescedCount=2 alone proves none of these was the production trigger.** Unchanged-save reproduction and these coalescing paths are confirmed source/synthetic findings; which path produced the iPhone null event remains unconfirmed.
+
+### Prevention and identity rules implemented
+
+Changes are confined to sync code, focused tests and this report:
+
+- `saveSharedSettings`: compare established full shared-settings meaning before queueing. A true no-op returns without cache/queue writes or retry stimulation. An existing pending intent is retained. If cache and pending intent diverge, an explicit save is not mistaken for a no-op. Meaningful changes outside the narrower audit-field list still receive an event, even when its client change list is empty; SQL continues deriving its own audit diff.
+- `coalesceSharedSettingsOperation`: coalesce only an operation created in the current repository session and proven not yet attempted, with valid audit UUID, original before-snapshot, pending state, no failure/attempt, and matching actor/device/environment/version provenance. Retain that original operation/event ID, creation time, expected version and provenance; update final payload/change summary/count only. Older unknown-attempt entries, blocked/null events, changed actors and in-flight/failed writes remain separate. In-memory unsent tracking adds no persisted schema or migration.
+- The processor now handles the current head in order and stops on blocked/failing predecessors or settings conflicts. It persists `lastAttemptAt` before any remote identity check/submission and seals the operation against later coalescing. A directly linked unsent successor may advance expected version only after its predecessor's validated acceptance and matching before-snapshot; unrelated/invalid/attempted entries are not blindly rebased.
+- Required audit UUID and expected-version validation runs before RPC. Invalid legacy entries retain original ID, payload, audit value, creation/attempt times and retry count; their state becomes `needs-attention`. There is no automatic ID generation for old operations, payload repair, rebase or replay.
+- A read-only lookup of the current user's audit event identity precedes submission. Any already-recorded identity goes to explicit conflict review, preserving its operation, rather than replaying a potentially different legacy/coalesced payload. Failed lookup cannot proceed to RPC. This guards the existing SQL's lack of settings-mutation deduplication by event ID; no database function or constraint changes are made.
+- Acknowledgment requires accepted status, matching event identity/account, expected before/after versions, and returned settings matching the intended shared-settings meaning. Conflicts preserve the full operation in conflict storage before removing it from the active send queue. Matching values alone no longer auto-clear settings conflicts, including through `cleanupIdenticalConflicts`; record-conflict behavior remains unchanged.
+
+The event lookup is replay protection, not a claim of new server-side exactly-once semantics. A recorded event never automatically establishes that a legacy coalesced successor was accepted.
+
+### Permanent-error handling and diagnostic safety
+
+Only known settings validation codes `23502`, `23514`, `22P02`, and `22023` stop automatic retry with `needs-attention`. Existing rejected operations with those codes are blocked before another RPC; new failures increment their failed-attempt count once, retain payload/identity, and stop. Network failures and other SQL failures such as `40001` remain retryable with the same event/base version. No generic force flag bypasses validation. A later specifically approved recovery can deliberately prepare a valid operation; the blocked state does not permanently destroy that possibility.
+
+Shared-settings and overall sync status show a fixed review-required message rather than implying uploads will keep retrying. The metadata-only export keeps its allowlist, adding only fixed local guard classifications (`audit-event-id-required`, `invalid-settings-version`). No raw errors, clinical values, payloads or credentials are added to that export. The Phase C copy action remains read-only. Dosing and insulin-plan verification code is byte-unchanged; pending or conflicted settings still fail closed.
+
+### Legacy recovery decision: separate explicit approval required
+
+**No deployable recovery command, UI or automatic legacy repair was implemented.** A null audit provides no original immutable event identity, and a coalescing count cannot reconstruct provenance or intent. Automatic recovery is therefore not established as safe. Applying this prevention release will block the existing invalid operation, not resolve it or restore suggested-dose guidance by itself.
+
+Proposed separately approved device recovery procedure:
+
+1. Privately review the actual intended payload on the iPhone and obtain confirmation of that intent. Preserve a durable local copy of the entire original operation, including unknown/null audit provenance, before changing any metadata. Do not send clinical payloads or credentials for diagnosis. A future reviewed recovery tool must implement this preservation; the current diagnostic export intentionally cannot serve as a payload backup.
+2. Fetch authoritative settings at recovery time. Require exact expected-version equality to the retained operation's base; do not assume version 32 still applies. If changed, stop for a separate conflict/intent decision rather than automatically rebasing or overwriting newer settings. Do not delete an operation just because current values match.
+3. After explicit approval, persist one new UUID audit identity under the **same original operation ID and unchanged payload**, recording the recovery approver/time and a note that original audit provenance is unknown. Retain original creation time/failure history in the preserved original copy. Do not fabricate original actor/before-values or generate another event on each retry. This is a new explicit recovery authorization event, not a reconstructed historical event.
+4. Submit only through the existing expected-version RPC. A race after the authoritative read must yield conflict preservation, never overwrite newer settings. Clear the active item only after a validated acceptance receipt; retain the original backup until fresh authoritative reconciliation and normal verification complete.
+5. After interruption/restart, reuse the prepared identity. Check remote audit identity before any replay. If already recorded or the response is uncertain, preserve the operation for explicit acceptance/intent correlation; do not auto-ack from equality. A recorded event plus current row may still be insufficient when the audit snapshot omits some payload metadata or a successor is involved.
+6. Fetch authoritative settings again after acceptance, ensure all settings queues/conflicts are resolved, and reevaluate the unchanged complete-plan verification guard. No forced PASS or suggested dose while unresolved.
+
+This procedure needs a separately reviewed implementation/approval for durable preservation, approval capture and device access. Test-only preparation below is not a production recovery mechanism. No production queries or writes were executed. Client prevention needs no SQL migration; a fully automatic server-idempotent recovery design would be a separate scope/approval.
+
+### Focused validation and its limits
+
+- **284 LLT sync/reporting/storage tests passed, 0 failed.** All data are synthetic. Existing test UUIDs were corrected to valid UUIDs and the mock now enforces the SQL audit-ID constraint. The in-flight edit test now starts with a real change (its former first save equaled the baseline), asserts two distinct accepted event identities, and the diagnostic test waits for actual RPC start rather than a fixed microtask count.
+- **3 Pages builder tests passed.** `npm run check:js`, explicit new browser-test syntax check, and `git diff --check` passed.
+- Final targeted browsers: **16 Chromium/mobile Chromium and 16 desktop/iPhone WebKit checks passed**, covering both the new prevention fixture and unchanged diagnostic copy tests. Tests use disposable browser contexts and synthetic Supabase mocks; non-fixture external requests are blocked.
+- Production Pages builder passed with synthetic validation inputs `2026-10-19-999` and baseline SHA. Artifact: `/var/folders/_x/w_9mk62s5z33r9rkbz20jnzh0000gn/T/landos-pages-build-llt17-phaseD-validated`. This is an uncommitted local build, not a production identity or deployment claim.
+
+| Requested regression | Evidence |
+| --- | --- |
+| Unchanged save / valid new write | No storage/RPC on true no-op; full-meaning notes change still has valid audit UUID |
+| Two coalesced writes / null legacy | One unsent event with final intent; legacy operation retained separately and blocks successors |
+| Stable retries / permanent `23502` / transient failures | Same identity/base across network retry and restart; known validation stops; `40001` remains retryable |
+| Stale version / invalid preservation | Existing conflict tests plus recovery version-change/race tests preserve original intent without server overwrite |
+| Recovery restart / idempotence / no duplicates | Explicit test-only preparation, same ID/payload/event across restart, exactly one acceptance; uncertain acceptance stops for review |
+| Authority changes during recovery | Preparation refuses changed version; post-preparation race yields a preserved conflict |
+| Acknowledgment proof | Wrong event/version provenance cannot clear queue; prior recorded identity cannot be reused; audit-read failure cannot submit |
+| Verification while pending / recovery | Preserved needs-attention/conflict states block; zero queue alone is insufficient; fresh complete matching authority permits normal verification |
+| Provenance / unrelated operations | Different actors remain distinct events; unknown-attempt legacy is not coalesced; invalid/unrelated successors retain versions/payloads |
+
+Initial regression failures were fixture issues (cross-realm equality, an unchanged first save awaiting a now-skipped upload, and fixed-microtask timing after the new read). They were corrected within these targeted tests; no unrelated historical failure was repaired. Recovery preparation exists only in test code, simulating an explicitly authorized operator transition. The tests do not prove physical-iPhone behavior, production SQL execution, durable recovery-backup implementation, or clinical dose correctness.
+
+### Changed files, risks and next authorization
+
+Exact five-file Phase D inventory:
+
+1. `js/lee-lees-tracker-sync.js`
+2. `tests/lee-lees-tracker-sync.test.js`
+3. `tests/lee-lees-tracker-reporting.test.js`
+4. `tests/browser/llt-settings-audit-validation.spec.js`
+5. `docs/architecture/llt-issue-17-production-settings-sync-investigation.md`
+
+Remaining risks: audit lookup adds a read/latency dependency; a missing grant, unavailable service or unexpected deployed response keeps writes unresolved. Previously auto-cleared equal settings conflicts now require review. Older unknown-attempt entries are deliberately not coalesced. Mixed old clients, concurrent contexts, storage failures and uncertain receipts can still require explicit intervention; no claim of global exactly-once execution is made. SQL's existing event-ID deduplication limitation remains. The production initiating save path is not reconstructed from the new metadata.
+
+A reviewed release through the normal branch/PR/merge/Pages workflow is required for prevention to reach production. No production action occurred. Rollback must revert only this scoped client change through review, preserve every queue/record/settings value, and recognize that old behavior can recreate invalid writes; it must never reset data. The existing iPhone item requires its own separately approved recovery, even after a prevention release. Neither Settings History overflow nor Carb Calculator scrolling was investigated or changed.
+
+**Next action:** review this local prevention-only diff and authorize PR preparation if accepted. Recovery-tool implementation and any actual device recovery require separate authorization. No files staged or committed; no push, PR, merge, deployment, migration or production queue modification in Phase D.
+
+Local review preview: `http://127.0.0.1:8767/#/lee-lees-tracker` (loopback-only LOCAL DEV, production sync disabled). Its served sync source was byte-compared to the validated worktree. Original/Phase C previews were left untouched. The original workspace report remains the Phase C copy; Phase D documentation is isolated in this branch.
+
+
+### Phase D.1 — Failure-stage classification correction
+
+The focused Phase D safety review found one confirmed client defect in the proposed, uncommitted Phase D processor: the shared catch classified every SQL-shaped error as a settings WRITE failure. Audit READ `40001` was exported as `other-rejection` with no RPC executed. Audit READ `23502` set `needs-attention`; code-only status/preflight checks then prevented recovery. These are synthetic fault-injection results, not additional production database observations. The earlier Phase D validation summary above predates this correction.
+
+The targeted correction tracks `audit-lookup`, `write-rpc`, `acknowledgment`, and `reconciliation` separately. Internal `lastWriteRejected` is true only for an explicit error returned by the write RPC. Known permanent validation codes block automatically only with both WRITE stage and confirmed rejection evidence. Status, preflight and coalescing use the same predicate rather than SQL code alone. Existing explicit blocked state and invalid legacy audit metadata remain preserved and blocked; no legacy repair or event-ID fabrication was added.
+
+| Failure origin | Result |
+| --- | --- |
+| Audit READ returned/thrown failure, including `40001`/`23502` | Keep operation, payload and event identity pending; no RPC or acknowledgment; existing retry policy applies; diagnostic `audit-lookup-failed` |
+| WRITE RPC explicitly returns permanent validation error | Keep operation as recoverable `needs-attention`; stop automatic retries |
+| WRITE RPC throws before a reliable response | Pending with stable identity and `write-outcome-unknown`; retry checks remote audit identity before submitting |
+| Invalid receipt or local acknowledgment failure | No fabricated acceptance; retain unresolved intent when acknowledgment has not removed it; `invalid-rpc-response` or `acknowledgment-uncertain` |
+| Failure while recording a conflict / reconciling a prior remote event | `reconciliation-failed`; preserve unresolved operation; never classify as a WRITE rejection |
+
+The metadata-only export adds the enum-validated `lastFailureStage` field and fixed failure classifications. Unknown/malicious stage values export as `unavailable`; internal rejection evidence, payloads and free-form error messages are not added to the export. The diagnostic action remains read-only.
+
+Validation: **289 LLT tests plus 3 Pages build tests passed**, including five new targeted unit cases: READ `40001`, READ `23502`, thrown/unknown WRITE `23502`, explicit permanent WRITE `23502`, and accepted WRITE followed by local acknowledgment failure. Existing Phase D tests continue proving invalid receipts cannot acknowledge, interrupted acceptance is not replayed, legacy intent survives restart, and pending/conflicted settings block insulin-plan verification. The READ cases verify no write before lookup recovery, unchanged identity/payload, retry eligibility, and exactly one acceptance after recovery. Sanitization coverage includes malicious stage metadata.
+
+**40 browser checks passed**: 20 Chromium/mobile Chromium and 20 desktop/iPhone WebKit, including both READ failure codes, recovery, existing prevention and diagnostic copy checks. JavaScript syntax, explicit browser-test syntax, production Pages build, and diff whitespace checks passed. Build artifact: `/var/folders/_x/w_9mk62s5z33r9rkbz20jnzh0000gn/T/landos-pages-build-llt17-phaseD1-validated`, using synthetic local validation identity `2026-10-19-999` and baseline `49a2588b13927dbb0adbd60e379355151701fb78`; not deployed.
+
+No further safety defect was exposed by these focused tests. Remaining limits are unchanged: synthetic fixtures do not establish physical-iPhone recovery, global exactly-once execution, production SQL behavior, or atomic multi-key browser storage. Audit lookup remains an availability dependency; uncertain acceptance requires explicit conflict review. No clinical calculations/settings, verification safeguards, server schema/RPC definitions, or unrelated UI changed. No production operation was repaired, removed or accessed.
+
+Phase D.1 changes only synchronization logic, its focused unit/browser tests, and this report; the existing Phase D reporting test changes remain intact. **Ready for final focused safety review, not approved for release.** Next action: review the complete five-file Phase D diff; staging/commit/push/PR require renewed authorization. The existing production null-audit operation still needs separately authorized recovery with original intent preserved.
+
+## Emergency restoration — explicit implementation and release authorization
+
+Rolando explicitly authorized recovery implementation, scoped commit/push/PR, merge after passing checks, and normal GitHub Pages deployment. This supersedes the earlier phase stop gates. Current verified baseline remains `49a2588b13927dbb0adbd60e379355151701fb78`; original development and Phase C worktrees are preserved.
+
+### Final root cause and entry-saving evidence
+
+Classification: **A — confirmed application defect**, with the production missing-audit operation as its observed consequence. The client submitted a null audit event and retried SQL `23502`; the exact initiating gesture remains unknown. Phase D/D.1 prevent null audit submissions, avoid unchanged writes, preserve coalescing identity and distinguish READ, WRITE and acknowledgment/reconciliation failures.
+
+Entry saving is separate from suggested-dose verification: `updateEditorSaveState`, `buildRecordFromForm`, and `handleSave` allow actual observations/carbs/administered insulin to be recorded with null suggested dose while authority is unavailable. Production-mode synthetic browser tests prove this separation with a pending settings operation, followed by ordinary verified guidance after recovery. No dose, clinical setting, rounding, correction or verification rule changed.
+
+One additional narrow defect was reproduced: `renderSharedSyncMigrationPrompt` accessed `isOffline`, `isAuth`, `isFailed` and `session` outside their scope, causing `ReferenceError: isOffline is not defined`. Removed only that misplaced three-line continuation block. Existing continuation logic remains in its intended migration paths. A unit test and desktop/mobile browser tests cover existing-history prompt → Not Now → new entry saved without exceptions. This is a confirmed startup-path defect, not proof that the reported iPhone saving failure used that path. No other entry persistence defect was confirmed.
+
+### Explicit device-local legacy recovery
+
+Settings → Sync Diagnostics → **Recover Missing-Audit Settings** invokes `recoverInvalidSharedSettingsOperation` after explicit confirmation. It is disabled by repository policy in local-device/authentication-preview modes; tests use a production-mode shell with a wholly synthetic client and no external network access.
+
+Recovery requires online authenticated access, a known device profile, idle settings processing, no settings conflict, and exactly one identifiable update with missing audit identity and SQL `23502`. It fetches fresh authoritative settings and requires the unchanged expected version, an explicit remote plan, and equality of the full existing settings meaning between queue, cache, app-local settings and server. Plan IDs alone are not clinical mismatch evidence. Differing values/version stop recovery without a write; both original intent and authority remain available for explicit review. The mechanism never automatically resolves a differing clinical payload.
+
+Before preparing the queue it writes an account-bound, device-local snapshot at `<shared-settings-queue-key>:recovery:<operation-id>`, reads the exact serialized bytes back, and retains the original operation (including null audit metadata, retries/coalescing/provenance), original queue, cached settings, fetched authority and prepared candidate. This sensitive snapshot stays in existing private browser storage; it is not copied to clipboard, logs, diagnostics, PR text or public artifacts. Storage/verification failure stops preparation. The snapshot supports private reconstruction of the original intent and pre-recovery state; it must not be blindly restored after remote acceptance.
+
+The candidate preserves original operation ID and payload byte-for-byte, records explicit recovery approval at the current time/device (not fabricated historical provenance), and establishes one stable UUID. Both snapshot and candidate are persisted before the RPC. A snapshot-only interruption reuses the same candidate; an interrupted queued candidate resumes through normal processing after restart. Missing/mismatched backups or ownership stop automatic submission. RPC expected-version checks prevent stale replacement, including races after preparation. A race preserves the original operation inside an explicit settings conflict; it does not count as successful recovery.
+
+Acknowledgment requires either the existing fully validated RPC acceptance receipt plus fresh matching authority, or (for a backed recovery only) the same account/event ID with Accepted status and exact before/after versions plus fresh matching authoritative revision/payload. Unknown outcomes remain pending; retry consults audit identity before any write. Prior acceptance can therefore reconcile without another accepted event. Backup/ownership is rechecked before submission and acknowledgment. Fresh authority and ordinary verification run after recovery. Records and other queue domains are untouched; no schema/RPC definition, migration, SQL constraint, Settings History UI or Carb Calculator UI changed.
+
+### Final focused validation and limits
+
+- **303 LLT tests and 3 build tests passed**; affected final review rerun: **39 Issue #17 tests passed**.
+- **52 focused browser checks passed** across desktop/mobile Chromium and desktop/iPhone WebKit, covering prevention, metadata privacy/non-mutation, real recovery API/UI, fresh verification and entry saving. The final affected recovery checks were rerun after fixture isolation/review refinements.
+- Syntax checks, explicit syntax checks for both new browser files, production Pages build and `git diff --check` passed. Build uses a synthetic local validation identity, not a deployment claim.
+- New tests cover exact backup-before-write, snapshot write/readback failure, corrupt/missing backup, interrupted preparation, restart, transient failure, stale authority before/during recovery, interrupted acceptance without duplicate audit, post-write read failure, pending-plan gate, existing records and manual entry facts.
+
+No physical iPhone execution is claimed by synthetic tests. The code does not promise global exactly-once execution across arbitrary old clients or atomic multi-key localStorage transactions. CAS, stable identity, verified backup, conservative conflicts and fresh authority contain these risks. Any changed authority, multiple queue operations, unknown original provenance, unavailable storage/read or unresolved conflict stops recovery for review. The original invalid operation is not automatically replaced on installation.
+
+Exact release inventory: `js/lee-lees-tracker-sync.js`, `js/lee-lee-diabetes-tracker.js`, `tests/lee-lees-tracker-sync.test.js`, `tests/lee-lees-tracker-reporting.test.js`, `tests/browser/llt-settings-audit-validation.spec.js`, `tests/browser/llt-issue17-recovery.spec.js`, and this report. Local review preview remains `http://127.0.0.1:8767/#/lee-lees-tracker` with production synchronization disabled.
+
+### Release evidence and production acceptance
+
+Commit, PR, merge and deployed release evidence will be recorded after the authorized release steps. **Production acceptance is pending actual iPhone execution**: install the new release using the normal Application Status updater; run the recovery action above; confirm zero pending settings/no settings conflicts, fresh authoritative version, VERIFIED plan, a saved new entry, intact existing entries and no unintended clinical changes or duplicate records/audits. If any precondition fails, preserve data and report the fixed recovery message; do not reset, reinstall, sign out, clear queues or keep retrying an unsafe write.
+
+Rollback: revert only this seven-file client change through a reviewed PR and normal Pages workflow; do not reset storage or alter Supabase. Retain every original/candidate queue entry, conflict, record and private recovery snapshot. Reverting code does not undo an accepted server event. If rollback is necessary, pause further recovery and privately review both the snapshot and current authority before any data transition. No production database migration is needed. Settings History overflow and Carb Calculator scrolling remain separate P1 backlog items, untouched.

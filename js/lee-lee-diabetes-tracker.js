@@ -8194,9 +8194,6 @@
       </section>
     `;
     focusPrimaryAction();
-    if (!isOffline && !isAuth && !isFailed && shouldAutomaticallyContinueMigration(session)) {
-      scheduleMigrationContinuation(getRetryDelay(Number(session?.retryCount || 1)));
-    }
   }
 
   function renderSharedSettingsMigrationPrompt() {
@@ -8722,6 +8719,27 @@
     );
   }
 
+  async function recoverPendingSettings(button) {
+    if (!window.confirm('Recover the missing-audit settings operation? A private backup stays on this device. Recovery stops if server settings or version differ. No records are deleted.')) return;
+    button.disabled = true;
+    const status = button.parentElement.querySelector('[data-settings-recovery-status]');
+    let message;
+    try {
+      const result = await syncRepository.recoverInvalidSharedSettingsOperation();
+      message = result.reason;
+      if (result.ok) {
+        getInsulinPlanVerification();
+        renderSettings();
+      }
+    } catch (error) {
+      message = 'Recovery is unresolved. Keep this device data intact and inspect Sync Diagnostics before retrying.';
+    } finally {
+      button.disabled = false;
+      const currentStatus = getRoot()?.querySelector('[data-settings-recovery-status]') || status;
+      if (currentStatus) currentStatus.textContent = message;
+    }
+  }
+
   function renderInsulinPlanVerification() {
     const verification = getInsulinPlanVerification();
     const local = verification.localPlan || {};
@@ -8816,6 +8834,11 @@
         <div class="lee_lee_diabetes_diagnostic_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-pending-settings-metadata">Copy Pending Settings Metadata</button>
           <span role="status" aria-live="polite" data-pending-settings-copy-status></span>
+        </div>
+        <div class="lee_lee_diabetes_diagnostic_actions">
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="recover-pending-settings">Recover Missing-Audit Settings</button>
+          <p class="lee_lee_diabetes_help">Keeps a private backup on this device. Proceeds only when pending settings match the current server version and values.</p>
+          <span role="status" aria-live="polite" data-settings-recovery-status></span>
         </div>
         ${renderStatusGrid(rows)}
         ${renderInsulinPlanVerification()}
@@ -10454,6 +10477,10 @@
       // Diagnostic copying must bypass the normal persisted Settings UI bookkeeping.
       if (target.dataset.action === 'copy-pending-settings-metadata') {
         copyPendingSharedSettingsDiagnostics(target);
+        return;
+      }
+      if (target.dataset.action === 'recover-pending-settings') {
+        recoverPendingSettings(target);
         return;
       }
       if (currentEditor?.mode === 'settings') saveSettingsUiState();

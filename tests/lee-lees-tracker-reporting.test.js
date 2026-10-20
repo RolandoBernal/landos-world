@@ -65,6 +65,7 @@ function createTrackerRuntime(seed = {}, options = {}) {
       setOriginal(record) {
         currentEditor = { id: record.id, originalRecord: record, mealComponents: [], carbCalculatorRows: [], userEditedInsulin: true };
       },
+      renderSharedSyncMigrationPrompt,
       getEditorDoseResult,
       buildRecordFromForm,
       renderCarbCalculator,
@@ -3342,4 +3343,31 @@ test('pending settings diagnostic package adds metadata without changing existin
   assert.match(trackerSource, /data-action="copy-pending-settings-metadata"/);
   const copy = trackerSource.slice(trackerSource.indexOf('  async function copyPendingSharedSettingsDiagnostics('), trackerSource.indexOf('  async function copyAllSettingsDiagnostics('));
   assert.doesNotMatch(copy, /renderSettings\(|saveSharedSettings\(|syncNow\(|processSharedSettingsQueue\(|localStorage\./);
+});
+
+
+test('Issue 17 verification stays blocked for preserved invalid writes and requires authority after queue recovery', () => {
+  const api = createTrackerRuntime().LeeLeeTrackerVerification;
+  const plan = completeVerificationPlan();
+  const input = { localPlan: plan, syncState: { configured: true, signedIn: true },
+    authoritative: { settings: { version: 33, insulinPlan: plan }, sourcePlan: plan, fetchedAt: '2026-10-19T21:00:00.000Z' } };
+  const blocked = api.evaluateInsulinPlanVerification({ ...input, sharedSettingsStatus: { pendingCount: 1, state: 'needs-attention' } });
+  assert.equal(blocked.status, 'NOT_VERIFIED');
+  assert.deepEqual(Array.from(blocked.reasons), ['A shared-settings write is still pending.']);
+  const noAuthority = api.evaluateInsulinPlanVerification({ ...input, authoritative: null, sharedSettingsStatus: { pendingCount: 0 } });
+  assert.equal(noAuthority.status, 'NOT_VERIFIED');
+  const conflict = api.evaluateInsulinPlanVerification({ ...input, sharedSettingsStatus: { pendingCount: 0, conflictCount: 1 } });
+  assert.equal(conflict.status, 'NOT_VERIFIED');
+  const reconciled = api.evaluateInsulinPlanVerification({ ...input, sharedSettingsStatus: { pendingCount: 0, conflictCount: 0 } });
+  assert.equal(reconciled.status, 'VERIFIED');
+});
+
+
+test('Issue 17 migration prompt renders without referencing interrupted-session variables', () => {
+  const runtime = createTrackerRuntime({}, { editorAccess: true, buildMetadata: { environment: 'local-device' } });
+  const root = { innerHTML: '', querySelector: () => null };
+  runtime.document.getElementById = () => root;
+  runtime.requestAnimationFrame = () => {};
+  assert.doesNotThrow(() => runtime.editorTestAccess.renderSharedSyncMigrationPrompt());
+  assert.match(root.innerHTML, /We found existing records/);
 });
