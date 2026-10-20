@@ -42,7 +42,12 @@ The three outdated unit assertions also failed on unchanged main (300 passed / 3
 
 - Verified starting local/remote main: `42545678aa1fc8214e323b6b0b5f47a66e6c6649`.
 - Branch: `feature/llt-issue-20-my-meals` in an isolated managed worktree.
-- Commit/PR/merge/deployed identity: recorded after delivery in the final release evidence and PR. This committed document is the pre-deployment validation snapshot; exact deployment identifiers cannot exist before merge.
+- Implementation commit: `4869150585b03914a2de1a8d1f18be9fa053430d`.
+- PR: https://github.com/RolandoBernal/landos-world/pull/156 (open and mergeable; base remains the verified starting main).
+- Required CI: GitHub reports no checks for the PR; main has no branch protection or rulesets. Local test/build evidence is listed above; absent CI is not presented as a passing CI run.
+- Merge SHA: **not created**. Automatic approval review rejected the merge because it triggers production and did not recognize the attached brief as trusted direct merge authorization. Direct confirmation in chat is required before retrying.
+- Deployed release: **Issue #20 not deployed**. The latest successful Pages run observed was `39361847104` for starting main `42545678aa1fc8214e323b6b0b5f47a66e6c6649`; this is not an Issue #20 release verification.
+- Preview: http://127.0.0.1:55960/#/lee-lees-tracker (isolated local-device development, with the served calculator JavaScript byte-compared to the feature source).
 - Existing GitHub Actions Pages workflow is the only production deployment path.
 - iPhone acceptance: **PENDING Rolando's physical-device PASS**. Browser automation does not constitute physical acceptance.
 
