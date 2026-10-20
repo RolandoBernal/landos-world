@@ -1,7 +1,4 @@
 (() => {
-  const WEATHER_APP_PREFERENCES_KEY = 'weather_app_preferences_v1';
-  const DAILY_CHIEF_DOCUMENTS_KEY = 'daily_chief_briefing_documents_v1';
-  const DEFAULT_LOCATION = 'Nashville, Tennessee';
   const CACHE_RECHECK_MS = 20 * 60 * 1000;
 
   let state = {
@@ -16,38 +13,18 @@
     lastVisibleRefreshAt: 0,
   };
   let initialized = false;
+  let weatherRequest = 0;
+  const POPULAR_CITIES = {
+    'United States': ['Nashville, Tennessee', 'New York, New York', 'Los Angeles, California', 'Chicago, Illinois', 'Miami, Florida', 'Atlanta, Georgia', 'San Francisco, California', 'Seattle, Washington', 'Boston, Massachusetts', 'Washington, DC'],
+    International: ['Mexico City, Mexico', 'Cancún, Mexico', 'London, United Kingdom', 'Paris, France', 'Madrid, Spain', 'Barcelona, Spain', 'Rome, Italy', 'Tokyo, Japan', 'Toronto, Canada', 'Vancouver, Canada', 'Sydney, Australia', 'Berlin, Germany'],
+  };
 
   function getRoot() {
     return document.getElementById('weather-root');
   }
 
   function loadLocationPreference() {
-    try {
-      const weatherPrefs = JSON.parse(localStorage.getItem(WEATHER_APP_PREFERENCES_KEY) || 'null');
-      if (weatherPrefs?.location) return sanitizeLocation(weatherPrefs.location);
-    } catch {
-      /* ignore */
-    }
-    try {
-      const briefingPrefs = JSON.parse(localStorage.getItem(DAILY_CHIEF_DOCUMENTS_KEY) || 'null');
-      if (briefingPrefs?.preferences?.preferredLocation) {
-        return sanitizeLocation(briefingPrefs.preferences.preferredLocation);
-      }
-    } catch {
-      /* ignore */
-    }
-    return DEFAULT_LOCATION;
-  }
-
-  function saveLocationPreference(location) {
-    const clean = sanitizeLocation(location) || DEFAULT_LOCATION;
-    state.location = clean;
-    try {
-      localStorage.setItem(WEATHER_APP_PREFERENCES_KEY, JSON.stringify({ location: clean }));
-    } catch {
-      /* storage unavailable */
-    }
-    window.dispatchEvent(new CustomEvent('weather:location-changed', { detail: { location: clean } }));
+    return window.LandosWeatherService.getLocationPreferences().location;
   }
 
   function sanitizeLocation(value) {
@@ -159,6 +136,7 @@
   }
 
   function renderSettings() {
+    const currentMode = window.LandosWeatherService.getLocationPreferences().weatherLocationMode === 'current';
     const updated = state.snapshot?.fetchedAt ? `Last updated ${formatTime(state.snapshot.fetchedAt)}` : 'No weather has been loaded yet.';
     const notice = state.isRefreshing
       ? 'Refreshing weather…'
@@ -176,12 +154,26 @@
         <section class="weather_settings_panel" aria-labelledby="weather-location-title">
           <h2 id="weather-location-title">Location</h2>
           <form class="weather_settings_form" data-weather-form="location">
-            <label for="weather-location">Weather location</label>
+            <label for="weather-location-mode">Weather location</label>
+            <select id="weather-location-mode" name="mode">
+              <option value="current" ${currentMode ? 'selected' : ''}>Current Location</option>
+              <option value="saved" ${currentMode ? '' : 'selected'}>Choose a City</option>
+            </select>
+            <div data-weather-city-fields ${currentMode ? 'hidden' : ''}>
+              <label for="weather-popular-city">City</label>
+              <select id="weather-popular-city">
+                <option value="">Saved city / Enter another city</option>
+                ${Object.entries(POPULAR_CITIES).map(([group, cities]) => `<optgroup label="${group}">${cities.map(city => `<option value="${escapeHtml(city)}">${escapeHtml(city)}</option>`).join('')}</optgroup>`).join('')}
+              </select>
+              <label for="weather-location">City and state / region</label>
+              <input id="weather-location" name="location" value="${escapeHtml(state.location)}" maxlength="90" autocomplete="address-level2" required ${currentMode ? 'disabled' : ''}>
+            </div>
             <div class="weather_settings_location_row">
-              <input id="weather-location" name="location" value="${escapeHtml(state.location)}" maxlength="90" autocomplete="address-level2" required>
               <button type="submit" class="weather_settings_button weather_settings_button--primary" ${state.isRefreshing ? 'disabled' : ''}>Set</button>
             </div>
-            <p class="weather_settings_help">Enter a city and state, such as Nashville, Tennessee.</p>
+            <p class="weather_settings_help">Tap Set to apply. Current Location requests device permission and refreshes occasionally while open. Your saved city is kept as a fallback.</p>
+            <p class="weather_settings_help">Current Location sends coordinates to BigDataCloud to find the city and to Open-Meteo for weather.</p>
+            <p class="weather_settings_help" data-weather-location-status role="status">${escapeHtml(state.locationNotice || '')}</p>
           </form>
         </section>
         <section class="weather_settings_panel" aria-labelledby="weather-refresh-title">
@@ -289,21 +281,15 @@
 
   async function loadWeather(options = {}) {
     const service = window.LandosWeatherService;
-    if (!service || state.isRefreshing) return;
-    const cached = service.getCachedWeather(state.location);
-    if (cached && !options.force) {
-      state = { ...state, status: cached.isStale ? 'stale' : 'ready', snapshot: cached, error: '' };
-      render();
-      if (!cached.isStale) return;
-    } else if (!state.snapshot) {
-      state = { ...state, status: 'loading', error: '' };
-      render();
-    }
-    state = { ...state, isRefreshing: true, error: '' };
+    if (!service || (state.isRefreshing && options.reason !== 'location')) return;
+    const request = ++weatherRequest;
+    const selection = JSON.stringify(service.getLocationPreferences());
+    state = { ...state, isRefreshing: true, error: '', status: state.snapshot ? state.status : 'loading' };
     render();
     let result;
     try {
-      result = await service.getWeather(state.location, {
+      result = await service.getAppWeather({
+        requestPermission: Boolean(options.requestPermission),
         force: Boolean(options.force),
         unitSystem: getUnitSystem(),
         ttlMs: CACHE_RECHECK_MS,
@@ -315,15 +301,17 @@
         error: friendlyWeatherError(error?.message),
       };
     }
+    if (request !== weatherRequest || selection !== JSON.stringify(service.getLocationPreferences())) return;
     const failed = Boolean(result.error);
     const errorMessage = failed ? friendlyWeatherError(result.error) : '';
     const successNotice = options.reason === 'location'
-      ? `Weather loaded for ${state.location}.`
+      ? `Weather loaded for ${service.getLocationPreferences().weatherLocationMode === 'current' ? result.snapshot?.locationName || state.location : state.location}.`
       : options.reason === 'refresh' ? 'Weather refreshed.' : '';
     state = {
       ...state,
       status: result.status,
-      snapshot: result.snapshot || state.snapshot,
+      locationNotice: result.locationNotice || '',
+      snapshot: result.snapshot,
       error: errorMessage,
       isRefreshing: false,
       lastVisibleRefreshAt: Date.now(),
@@ -337,16 +325,27 @@
     const form = event.target.closest('[data-weather-form="location"]');
     if (!form) return;
     event.preventDefault();
-    const nextLocation = sanitizeLocation(form.location.value);
-    if (!nextLocation) return;
-    if (nextLocation !== state.location) {
-      window.LandosWeatherService?.clearLocation(state.location);
-      saveLocationPreference(nextLocation);
-      state = { ...state, location: nextLocation, status: 'loading', snapshot: null, error: '', notice: `Loading weather for ${nextLocation}…`, noticeTone: 'status' };
-    } else {
-      state = { ...state, notice: 'Refreshing weather…', noticeTone: 'status', error: '' };
+    const mode = form.elements.mode.value;
+    const nextLocation = sanitizeLocation(form.elements.location.value);
+    if (mode === 'saved' && !nextLocation) return;
+    // Settings owns this request so only its Set action may prompt for permission.
+    window.LandosWeatherService.saveLocationPreferences(mode, nextLocation);
+    state = { ...state, location: loadLocationPreference(), status: 'loading', snapshot: null, error: '', notice: '', locationNotice: '' };
+    loadWeather({ force: true, reason: 'location', requestPermission: mode === 'current' });
+    window.dispatchEvent(new CustomEvent('weather:location-changed'));
+  }
+
+  function handleLocationChange(event) {
+    const form = event.target.closest('[data-weather-form="location"]');
+    if (!form) return;
+    if (event.target.id === 'weather-location-mode') {
+      const current = event.target.value === 'current';
+      form.querySelector('[data-weather-city-fields]').hidden = current;
+      form.elements.location.disabled = current;
     }
-    loadWeather({ force: true, reason: 'location' });
+    if (event.target.id === 'weather-popular-city' && event.target.value) {
+      form.elements.location.value = event.target.value;
+    }
   }
 
   function handleClick(event) {
@@ -373,6 +372,13 @@
     if (initialized || !getRoot()) return;
     initialized = true;
     document.addEventListener('submit', handleSubmit);
+    document.addEventListener('change', handleLocationChange);
+    window.addEventListener('storage', event => {
+      if (event.key === 'weather_app_preferences_v1') {
+        state = { ...state, location: loadLocationPreference(), snapshot: null };
+        loadWeather({ reason: 'location' });
+      }
+    });
     document.addEventListener('click', handleClick);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('online', () => loadWeather({ force: true }));

@@ -38,7 +38,8 @@
 }
 
 .weather_settings_button:focus-visible,
-.weather_settings_form input:focus-visible {
+.weather_settings_form input:focus-visible,
+.weather_settings_form select:focus-visible {
   outline: 2px solid var(--weather-yellow);
   outline-offset: 3px;
 }
@@ -101,14 +102,15 @@
   gap: 0.65rem;
 }
 
-.weather_settings_form input {
+.weather_settings_form input,
+.weather_settings_form select {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
   min-height: 46px;
   padding: 0 0.9rem;
   color: var(--weather-ink);
-  background: rgb(0 0 0 / 18%);
+  background-color: rgb(0 0 0 / 18%);
   border: 1px solid rgb(255 212 0 / 24%);
   border-radius: 10px;
   font: inherit;
@@ -467,8 +469,9 @@
   color: var(--weather-ink);
 }
 
-:root[data-theme="light"] .weather_settings_form input {
-  background: rgb(255 255 255 / 82%);
+:root[data-theme="light"] .weather_settings_form input,
+:root[data-theme="light"] .weather_settings_form select {
+  background-color: rgb(255 255 255 / 82%);
 }
 
 :root[data-theme="light"] .weather_location_form input::placeholder {
@@ -673,4 +676,14 @@
 /* Keep button gold separate from light-mode heading/text gold tokens. */
 :root[data-theme="light"] .weather_settings_button {
   background: linear-gradient(180deg, #ffe566, #ffd400);
+}
+
+.weather_settings_form [data-weather-city-fields]:not([hidden]) {
+  display: grid;
+  gap: 0.55rem;
+}
+.weather_settings_form select option,
+.weather_settings_form select optgroup {
+  background: var(--weather-panel-strong);
+  color: var(--weather-ink);
 }

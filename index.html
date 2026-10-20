@@ -1253,19 +1253,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
     }
 
     function getWeatherAppLocation() {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(WEATHER_APP_PREFERENCES_KEY) || 'null');
-        if (parsed?.location) return String(parsed.location).trim();
-      } catch {
-        /* ignore */
-      }
-      try {
-        const parsed = JSON.parse(localStorage.getItem(DAILY_CHIEF_DOCUMENTS_KEY) || 'null');
-        if (parsed?.preferences?.preferredLocation) return String(parsed.preferences.preferredLocation).trim();
-      } catch {
-        /* ignore */
-      }
-      return 'Nashville, Tennessee';
+      return window.LandosWeatherService?.getLocationPreferences().location || 'Nashville, Tennessee';
     }
 
     function getWeatherUnitSystem() {
@@ -1307,25 +1295,20 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       updateWeatherLauncherDate();
     }
 
+    let weatherLauncherRequest = 0;
     async function loadWeatherLauncherCard(options = {}) {
       const weatherService = window.LandosWeatherService;
       if (!weatherService) return;
-      const location = getWeatherAppLocation();
-      if (!location) {
-        renderWeatherLauncherCard({ status: 'needs-location', snapshot: null });
-        return;
+      const request = ++weatherLauncherRequest;
+      try {
+        const result = await weatherService.getCurrentWeather({
+          force: Boolean(options.force),
+          unitSystem: getWeatherUnitSystem(),
+        });
+        if (request === weatherLauncherRequest) renderWeatherLauncherCard(result);
+      } catch {
+        if (request === weatherLauncherRequest) renderWeatherLauncherCard({ status: 'error', snapshot: null });
       }
-      const cached = weatherService.getCachedWeather(location);
-      if (cached) {
-        renderWeatherLauncherCard({ status: cached.isStale ? 'stale' : 'ready', snapshot: cached });
-        if (!cached.isStale && !options.force) return;
-      }
-      if (!cached) renderWeatherLauncherCard({ status: 'loading', snapshot: null });
-      const result = await weatherService.getWeather(location, {
-        force: Boolean(options.force),
-        unitSystem: getWeatherUnitSystem(),
-      });
-      renderWeatherLauncherCard(result);
     }
     function savePreferences() {
       try {
@@ -1787,6 +1770,12 @@ ${dateLongParts.year}`;
       updateWeatherLauncherDate();
       scheduleWeatherLauncherDateRefresh();
       loadWeatherLauncherCard();
+      window.addEventListener('storage', event => {
+        if (event.key === 'weather_app_preferences_v1') loadWeatherLauncherCard({ force: true });
+      });
+      window.addEventListener('hashchange', () => {
+        if (normalizeRouteFromHash() === 'home') loadWeatherLauncherCard();
+      });
       window.addEventListener('weather:location-changed', () => {
         loadWeatherLauncherCard({ force: true });
       });
@@ -1798,6 +1787,7 @@ ${dateLongParts.year}`;
       });
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+          loadWeatherLauncherCard();
           updateWeatherLauncherDate();
           scheduleWeatherLauncherDateRefresh();
           updateDigitalClockLauncher();

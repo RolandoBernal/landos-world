@@ -11,6 +11,131 @@
     Night: 22,
   };
   const inFlight = new Map();
+  const PREFERENCES_KEY = 'weather_app_preferences_v1';
+  const CURRENT_KEY = 'device-current';
+  let currentLocation = null; // Coordinates are memory-only and re-resolved after the refresh interval.
+  let currentAttempt = null;
+  let lastAttemptAt = 0;
+  let locationNotice = '';
+  let currentLocationError = '';
+
+  function getLocationPreferences() {
+    const prefs = readJson(PREFERENCES_KEY, {});
+    const briefing = readJson('daily_chief_briefing_documents_v1', {});
+    return {
+      ...prefs,
+      location: normalizeLocationQuery(prefs.location || briefing.preferences?.preferredLocation || 'Nashville, Tennessee').slice(0, 90),
+      weatherLocationMode: prefs.weatherLocationMode === 'current' ? 'current' : 'saved',
+    };
+  }
+
+  function saveLocationPreferences(mode, location) {
+    const prefs = getLocationPreferences();
+    writeJson(PREFERENCES_KEY, {
+      ...prefs,
+      location: normalizeLocationQuery(location || prefs.location).slice(0, 90),
+      weatherLocationMode: mode === 'current' ? 'current' : 'saved',
+    });
+    locationNotice = '';
+  }
+
+  async function fetchJson(url, options = {}) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (options.signal?.aborted) controller.abort();
+    options.signal?.addEventListener('abort', abort, { once: true });
+    const timer = global.setTimeout(abort, 10000);
+    try {
+      const response = await global.fetch(url, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error('Weather unavailable right now.');
+      return await response.json();
+    } finally {
+      global.clearTimeout(timer);
+      options.signal?.removeEventListener('abort', abort);
+    }
+  }
+
+  async function detectCurrentLocation(requestPermission) {
+    if (global.navigator?.onLine === false) throw new Error('You are offline.');
+    if (!global.navigator?.geolocation) throw new Error('Device location is unavailable.');
+    if (!requestPermission) {
+      // Only an explicit Set may open a permission prompt. Older browsers without
+      // the Permissions API can still enable/retry location from Settings.
+      let permission;
+      try { permission = await global.navigator.permissions?.query({ name: 'geolocation' }); } catch { /* unsupported */ }
+      if (permission?.state !== 'granted') {
+        throw new Error(permission?.state === 'denied' ? 'Location permission is denied.' : 'Select Current Location and tap Set to allow location access.');
+      }
+    }
+    const position = await new Promise((resolve, reject) => {
+      const timer = global.setTimeout(() => reject(new Error('Device location timed out.')), 9000);
+      global.navigator.geolocation.getCurrentPosition(
+        value => { global.clearTimeout(timer); resolve(value); },
+        error => {
+          global.clearTimeout(timer);
+          reject(new Error(error.code === 1 ? 'Location permission is denied.' : error.code === 3 ? 'Device location timed out.' : 'Device location is unavailable.'));
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: DEFAULT_TTL_MS },
+      );
+    });
+    const latitude = Number(position.coords.latitude);
+    const longitude = Number(position.coords.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) throw new Error('Device location is unavailable.');
+    const payload = await fetchJson(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+    const city = payload.city || payload.locality;
+    if (!city || !payload.countryCode) throw new Error('The current city could not be resolved.');
+    return {
+      locationIdentifier: CURRENT_KEY,
+      locationName: [city, payload.principalSubdivision, payload.countryCode].filter(Boolean).join(', '),
+      // City-scale coordinates also keep precise fixes out of the existing SW weather cache URLs.
+      latitude: Math.round(latitude * 100) / 100, longitude: Math.round(longitude * 100) / 100,
+      timezone: 'auto', resolvedAt: Date.now(),
+    };
+  }
+
+  async function resolveCurrentLocation(options) {
+    if (currentLocation && Date.now() - currentLocation.resolvedAt < DEFAULT_TTL_MS) return currentLocation;
+    currentLocation = null;
+    if (currentAttempt) return currentAttempt;
+    if (!options.requestPermission && Date.now() - lastAttemptAt < DEFAULT_TTL_MS) throw new Error(currentLocationError || 'Current Location is temporarily unavailable.');
+    lastAttemptAt = Date.now();
+    currentAttempt = detectCurrentLocation(options.requestPermission).then(location => {
+      currentLocation = location;
+      currentLocationError = '';
+      return location;
+    }).catch(error => {
+      currentLocationError = error.message;
+      throw error;
+    }).finally(() => { currentAttempt = null; });
+    return currentAttempt;
+  }
+
+  async function getAppWeather(options = {}) {
+    const prefs = getLocationPreferences();
+    if (prefs.weatherLocationMode !== 'current') return getWeather(prefs.location, options);
+    return getCurrentWeather(options);
+  }
+
+  // The launcher always follows the device; the full app chooses its own mode.
+  // Both paths reuse the same fix, forecast cache, and permission/fallback rules.
+  async function getCurrentWeather(options = {}) {
+    const prefs = getLocationPreferences();
+    try {
+      const location = await resolveCurrentLocation(options);
+      const result = await getWeatherForLocation(location, options);
+      if (!result.snapshot) throw new Error('Weather for Current Location is unavailable.');
+      locationNotice = result.error
+        ? `Weather could not be refreshed. Showing last-known weather for ${result.snapshot.locationName}.`
+        : `Current Location: ${result.snapshot.locationName}.`;
+      return { ...result, locationNotice };
+    } catch (error) {
+      const cached = getCachedWeather(CURRENT_KEY, options);
+      const fallback = cached ? { status: 'stale', snapshot: { ...cached, isStale: true } } : await getWeather(prefs.location, options).catch(() => ({ status: 'error', snapshot: null }));
+      locationNotice = `${error.message} ${cached ? 'Showing last-known weather for' : 'Using saved city:'} ${fallback.snapshot?.locationName || prefs.location}.`;
+      return { ...fallback, locationNotice };
+    }
+  }
+
 
   const CONDITION_MAP = new Map([
     [0, ['Clear', '☀️']],
@@ -158,9 +283,7 @@
       return cache[key];
     }
     const url = `${GEOCODING_ENDPOINT}?name=${encodeURIComponent(normalized)}&count=1&language=en&format=json`;
-    const response = await global.fetch(url, { signal: options.signal });
-    if (!response.ok) throw new Error('Weather location could not be resolved.');
-    const payload = await response.json();
+    const payload = await fetchJson(url, options);
     const result = payload?.results?.[0];
     if (!result || result.latitude == null || result.longitude == null) {
       throw new Error('Weather location could not be resolved.');
@@ -258,10 +381,12 @@
 
   function writeSnapshot(snapshot) {
     const cache = readCache();
-    writeJson(CACHE_KEY, {
-      ...cache,
-      [snapshot.locationIdentifier]: snapshot,
-    });
+    const stored = { ...snapshot };
+    if (snapshot.locationIdentifier === CURRENT_KEY) {
+      delete stored.latitude;
+      delete stored.longitude;
+    }
+    writeJson(CACHE_KEY, { ...cache, [snapshot.locationIdentifier]: stored });
   }
 
   function readCachedSnapshot(locationIdentifier, ttlMs = DEFAULT_TTL_MS) {
@@ -284,9 +409,7 @@
   }
 
   async function fetchForecastForLocation(location, options = {}) {
-    const response = await global.fetch(buildForecastUrl(location, options.unitSystem), { signal: options.signal });
-    if (!response.ok) throw new Error('Weather unavailable right now.');
-    const payload = await response.json();
+    const payload = await fetchJson(buildForecastUrl(location, options.unitSystem), options);
     return normalizeForecastPayload(payload, location, options.unitSystem, Date.now());
   }
 
@@ -296,7 +419,13 @@
       return { status: 'needs-location', snapshot: null, error: 'Set your weather location first.' };
     }
     const location = await geocodeLocation(normalized, options);
-    const cached = readCachedSnapshot(location.locationIdentifier, options.ttlMs);
+    return getWeatherForLocation(location, options);
+  }
+
+  async function getWeatherForLocation(location, options = {}) {
+    const candidate = readCachedSnapshot(location.locationIdentifier, options.ttlMs);
+    const cached = candidate && (candidate.unitSystem || 'imperial') === (options.unitSystem || 'imperial')
+      && (location.locationIdentifier !== CURRENT_KEY || candidate.locationName === location.locationName) ? candidate : null;
     if (cached && !cached.isStale && !options.force) {
       return { status: 'ready', snapshot: cached, stale: false };
     }
@@ -324,10 +453,15 @@
 
   function getCachedWeather(locationName, options = {}) {
     const key = locationCacheKey(locationName);
-    return key ? readCachedSnapshot(key, options.ttlMs) : null;
+    const cached = key ? readCachedSnapshot(key, options.ttlMs) : null;
+    return cached && (cached.unitSystem || 'imperial') === (options.unitSystem || 'imperial') ? cached : null;
   }
 
   global.LandosWeatherService = {
+    getLocationPreferences,
+    saveLocationPreferences,
+    getAppWeather,
+    getCurrentWeather,
     CACHE_KEY,
     GEOCODE_CACHE_KEY,
     DEFAULT_TTL_MS,

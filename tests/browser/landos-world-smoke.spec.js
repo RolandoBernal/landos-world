@@ -938,11 +938,19 @@ test('Weather Settings owns location and refresh controls without losing weather
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('weather_app_preferences_v1')).location)).toBe('Austin, Texas');
 
   const beforeRefresh = page.weatherRequests.length;
+  // Hold the response so the synthetic second click actually occurs in flight.
+  let releaseRefresh;
+  const refreshGate = new Promise(resolve => { releaseRefresh = resolve; });
+  await page.route(WEATHER_API_PATTERN, async route => {
+    await refreshGate;
+    await route.fulfill({ json: WEATHER_FIXTURE });
+  });
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await page.locator('[data-weather-action="refresh"]').evaluate((button) => {
     button.disabled = false;
     button.click();
   });
+  releaseRefresh();
   await expect(page.locator('.weather_settings_status')).toContainText('Weather refreshed.');
   expect(page.weatherRequests.length).toBe(beforeRefresh + 1);
 
