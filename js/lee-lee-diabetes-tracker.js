@@ -6010,7 +6010,7 @@
     return `<div class="lee_lee_diabetes_carb_food_row">
       <button type="button" class="lee_lee_diabetes_carb_food_option" data-action="add-saved-meal-to-carb-calculator" data-id="${escapeHtml(meal.id)}" aria-label="Add meal ${escapeHtml(meal.name)} ${escapeHtml(formatCarbs(meal.totalCarbs))}${selected ? ' again (+1 saved amount)' : ''}">
         <span><small class="lee_lee_diabetes_carb_result_type">MEAL · My Meals</small><strong>${escapeHtml(meal.name)}</strong><small>${renderCarbGrams(formatCarbAmount(meal.totalCarbs))} per saved amount</small></span>
-        <span class="lee_lee_diabetes_carb_pick_state" aria-hidden="true">${selected ? 'Add again (+1)' : 'Add'}</span>
+        <span class="lee_lee_diabetes_carb_pick_state" aria-hidden="true">${selected ? '✓' : '+'}</span>
       </button>
     </div>`;
   }
@@ -7235,7 +7235,7 @@
   function finishCarbCalculatorAddition(form) {
     const input = form?.querySelector('[name="carbFoodSearch"]');
     currentEditor.carbCalculatorSearch = '';
-    if (currentEditor.carbCalculatorPicker !== 'meals') currentEditor.carbCalculatorPicker = '';
+    currentEditor.carbCalculatorPicker = '';
     if (input) { input.value = ''; input.blur(); }
     const active = document.activeElement;
     if (active && form?.contains(active)) active.blur();

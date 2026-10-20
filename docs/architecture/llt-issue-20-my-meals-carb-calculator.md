@@ -66,3 +66,18 @@ Do not clear user storage, reinstall, or bypass the updater. The issue remains p
 ## Recovery
 
 Risk: LOW; presentation/discovery changes over existing saved-meal selection. Previous known-good main is the starting SHA above. If needed, revert the eventual Issue #20 merge commit using `git revert -m 1 <merge-sha>` on a fresh fix branch, validate, and release that revert through a reviewed PR and the same Pages workflow. Never reset or migrate user data for rollback.
+
+## Issue #20.1 — Quick-access consistency
+
+Baseline: production `2026-10-20-39`, main `d3ca58de9420cba923cdd8867a8cf581f2b4ba7b`. This follow-up changes only two production lines: meal results use the existing `lee_lee_diabetes_carb_pick_state` plus/check glyph, and successful additions unconditionally clear the existing quick-access picker. This restores the same collapse behavior as Favorites and Recent without adding another state system. Accessible meal labels and the existing whole-row touch target are preserved. Failed/missing-meal additions and rapid duplicate rejections return before collapse. Reopen My Meals to add another meal or increment the same saved amount.
+
+No food/meal arithmetic, quantities, persistence, clinical calculations, verification, form transfer, native dialog, scrolling, safe-area, auth, or settings behavior is changed.
+
+Validation: **305 relevant unit tests**, **26 desktop/mobile Chromium browser tests**, and **10 iPhone 13 WebKit tests** passed. Browser coverage includes matching control classes and glyphs, 44px touch targets and long-name overflow at 320/390/768px widths, one-row totals, collapse/reopen, missing-meal and duplicate rejection, multiple meals, unchanged Favorites/Recent behavior, New/Edit unsaved fields, and Use transfer. WebKit includes all four Issue #19.1 repeated-open/scroll/keyboard geometry cases. Syntax checks, exact diff checks, production artifact generation with synthetic metadata, and byte-comparison of the local preview JavaScript passed. The initial cross-shortcut test attempted a repeated food add inside the unchanged 350ms guard; its intentional-repeat timing was corrected without changing production behavior. The build initially rejected a noncanonical temporary output path; rerunning with the builder-approved OS temporary root passed.
+
+Exact changed files:
+- `js/lee-lee-diabetes-tracker.js`
+- `tests/browser/llt-issue-20.spec.js`
+- `docs/architecture/llt-issue-20-my-meals-carb-calculator.md`
+
+Release tracking: commit, PR URL, merge SHA, deployed release, and served-asset proof are recorded in the final PR body and post-deployment local report after those identities exist. The committed section is a pre-release validation snapshot. Physical production iPhone acceptance remains **PENDING Rolando's PASS** for Issue #20.1.
