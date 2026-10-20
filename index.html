@@ -1279,7 +1279,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         return;
       }
       el.classList.remove('is-loading');
-      const unit = snapshot.temperatureUnit || (uiState.unit === 'C' ? '°C' : '°F');
+      const temperature = value => window.LandosWeatherService.formatTemperature(value, snapshot.unitSystem || (snapshot.temperatureUnit === '°C' ? 'metric' : 'imperial'));
       el.innerHTML = `
         <div class="clock_utility_weather_header">
           <div class="clock_utility_weather_location">${snapshot.locationName || getWeatherAppLocation()}</div>
@@ -1287,10 +1287,10 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         </div>
         <div class="clock_utility_weather_now">
           <span class="clock_utility_weather_icon" aria-hidden="true">${snapshot.currentConditionIcon || '🌤️'}</span>
-          <span class="clock_utility_weather_temp">${snapshot.currentTemperature}${unit}</span>
+          <span class="clock_utility_weather_temp">${temperature(snapshot.currentTemperature)}</span>
           <span class="clock_utility_weather_condition">${snapshot.currentConditionLabel || t('currentConditions')}</span>
         </div>
-        <div class="clock_utility_weather_range">H ${snapshot.todayHigh}${unit} · L ${snapshot.todayLow}${unit}${snapshot.isStale ? ' · Updating' : ''}</div>
+        <div class="clock_utility_weather_range">H ${temperature(snapshot.todayHigh)} · L ${temperature(snapshot.todayLow)}${snapshot.isStale ? ' · Updating' : ''}</div>
       `;
       updateWeatherLauncherDate();
     }

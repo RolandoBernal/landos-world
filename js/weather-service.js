@@ -193,6 +193,15 @@
     return normalizeLocationQuery(locationName).toLowerCase();
   }
 
+  // Rendering only: preserve fetched units and Fahrenheit rounding in the snapshot.
+  function formatTemperature(value, unitSystem = 'imperial') {
+    if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '' || !Number.isFinite(Number(value))) return '—';
+    const temperature = Number(value);
+    const fahrenheit = unitSystem === 'metric' ? Math.round(temperature * 9 / 5 + 32) : temperature;
+    const celsius = Math.round(unitSystem === 'metric' ? temperature : (temperature - 32) * 5 / 9);
+    return `<span class="lww_temperature_pair${String(fahrenheit).length >= 3 ? ' lww_temperature_pair--long' : ''}">${fahrenheit}°F<small class="lww_temperature_celsius"> ${celsius}°C</small></span>`;
+  }
+
   function getCondition(code) {
     const [label, icon] = CONDITION_MAP.get(Number(code)) || ['Current conditions', '🌤️'];
     return {
@@ -467,6 +476,7 @@
     DEFAULT_TTL_MS,
     normalizeLocationQuery,
     getCondition,
+    formatTemperature,
     normalizeForecastPayload,
     createDaypartForecast,
     createWeeklyForecast,

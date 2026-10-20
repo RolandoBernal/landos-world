@@ -51,6 +51,11 @@
     return value == null ? '—' : `${value}${suffix}`;
   }
 
+  function formatTemperature(value) {
+    const snapshot = state.snapshot;
+    return window.LandosWeatherService.formatTemperature(value, snapshot?.unitSystem || (snapshot?.temperatureUnit === '°C' ? 'metric' : 'imperial'));
+  }
+
   function friendlyWeatherError(error) {
     const message = String(error || '');
     if (/location could not be resolved|set your weather location/i.test(message)) {
@@ -103,7 +108,6 @@
 
   function renderHero() {
     const snapshot = state.snapshot;
-    const unit = snapshot?.temperatureUnit || '°F';
     const offlineNote = navigator.onLine === false && snapshot
       ? '<p class="weather_offline_note">Offline - showing last downloaded forecast.</p>'
       : '';
@@ -116,12 +120,12 @@
             <div>
               <p class="weather_location">${escapeHtml(snapshot.locationName || state.location)}</p>
               <h1 id="weather-title">Weather</h1>
-              <div class="weather_current_temp">${escapeHtml(formatValue(snapshot.currentTemperature, unit))}</div>
+              <div class="weather_current_temp">${formatTemperature(snapshot.currentTemperature)}</div>
               <p class="weather_condition"><span role="img" aria-label="${escapeHtml(snapshot.currentConditionLabel)}">${escapeHtml(snapshot.currentConditionIcon || '🌤️')}</span> ${escapeHtml(snapshot.currentConditionLabel || 'Current conditions')}</p>
             </div>
             <dl class="weather_current_details">
-              ${renderDetail('Feels Like', formatValue(snapshot.apparentTemperature, unit))}
-              ${renderDetail('High / Low', `${formatValue(snapshot.todayHigh, unit)} / ${formatValue(snapshot.todayLow, unit)}`)}
+              ${renderDetail('Feels Like', formatTemperature(snapshot.apparentTemperature), true)}
+              ${renderDetail('High / Low', `${formatTemperature(snapshot.todayHigh)} / ${formatTemperature(snapshot.todayLow)}`, true)}
               ${renderDetail('Humidity', formatValue(snapshot.humidity, '%'))}
               ${renderDetail('Wind', formatValue(snapshot.windSpeed, ` ${snapshot.windSpeedUnit || 'mph'}`))}
               ${renderDetail('Rain', formatValue(snapshot.precipitationProbability, '%'))}
@@ -201,8 +205,8 @@
     `;
   }
 
-  function renderDetail(label, value) {
-    return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+  function renderDetail(label, value, temperatureMarkup = false) {
+    return `<div><dt>${escapeHtml(label)}</dt><dd>${temperatureMarkup ? value : escapeHtml(value)}</dd></div>`;
   }
 
   function renderTodayForecast(snapshot) {
@@ -217,12 +221,11 @@
   }
 
   function renderDaypartCard(daypart) {
-    const unit = state.snapshot?.temperatureUnit || '°F';
     return `
       <article class="weather_daypart_card">
         <span class="weather_card_label">${escapeHtml(daypart.label)}</span>
         <span class="weather_card_icon" role="img" aria-label="${escapeHtml(daypart.conditionLabel)}">${escapeHtml(daypart.conditionIcon || '🌤️')}</span>
-        <strong>${escapeHtml(formatValue(daypart.temperature, unit))}</strong>
+        <strong>${formatTemperature(daypart.temperature)}</strong>
         <span>${escapeHtml(daypart.conditionLabel || 'Conditions')}</span>
         <small>Rain ${escapeHtml(formatValue(daypart.precipitationProbability, '%'))}</small>
       </article>
@@ -230,7 +233,6 @@
   }
 
   function renderWeeklyForecast(snapshot) {
-    const unit = snapshot.temperatureUnit || '°F';
     const windUnit = snapshot.windSpeedUnit || 'mph';
     return `
       <section class="weather_section" aria-labelledby="weather-week-title">
@@ -240,8 +242,8 @@
             <article class="weather_week_card">
               <span class="weather_card_label">${escapeHtml(day.label)}</span>
               <span class="weather_card_icon" role="img" aria-label="${escapeHtml(day.conditionLabel)}">${escapeHtml(day.conditionIcon || '🌤️')}</span>
-              <strong>${escapeHtml(formatValue(day.high, unit))}</strong>
-              <span class="weather_week_low">${escapeHtml(formatValue(day.low, unit))}</span>
+              <strong>${formatTemperature(day.high)}</strong>
+              <span class="weather_week_low">${formatTemperature(day.low)}</span>
               <span>${escapeHtml(day.conditionLabel || 'Conditions')}</span>
               <small>Rain ${escapeHtml(formatValue(day.precipitationProbability, '%'))} · Wind ${escapeHtml(formatValue(day.windSpeed, ` ${windUnit}`))}</small>
             </article>
