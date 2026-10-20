@@ -86,12 +86,14 @@ for (const context of ['standalone', 'entry', 'edit']) {
     await expect(list.locator('[data-action="add-food-to-carb-calculator"]')).toHaveCount(0);
     const add = root(page).getByRole('button', { name: /^Add meal Cub Meal/ });
     // Synchronous rapid taps exercise the duplicate guard, without an auto-wait delay.
-    await add.evaluate(node => { node.click(); document.querySelector(`[data-action="add-saved-meal-to-carb-calculator"][data-id="22222222-2222-4222-8222-222222222222"]`).click(); });
+    await add.evaluate(node => { node.click(); document.querySelector('[data-action="carb-search-shortcut"][data-picker="meals"]').click(); document.querySelector('[data-action="add-saved-meal-to-carb-calculator"][data-id="22222222-2222-4222-8222-222222222222"]').click(); });
     await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(1);
     await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('68 g');
     await expect(meals).toHaveAttribute('aria-pressed', 'true');
-    await expect(add).toContainText('Add again (+1)');
+    await expect(add).toContainText('✓');
     await root(page).getByRole('button', { name: /^Add meal Decimal meal/ }).click();
+    await expect(meals).toHaveAttribute('aria-pressed', 'false');
+    await expect(list.locator('[data-action="add-saved-meal-to-carb-calculator"]')).toHaveCount(0);
     await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('71.75 g');
     await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(2);
     await root(page).locator('[name="carbFoodSearch"]').fill('Office');
@@ -132,11 +134,59 @@ test('intentional repeat adds one saved amount to the existing meal quantity', a
   await root(page).getByRole('button', { name: 'My Meals', exact: true }).click();
   const add = root(page).getByRole('button', { name: /^Add meal Cub Meal/ });
   await add.click();
-  await expect(add).toContainText('Add again (+1)');
+  await expect(root(page).getByRole('button', { name: 'My Meals', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await root(page).getByRole('button', { name: 'My Meals', exact: true }).click();
+  await expect(add).toContainText('✓');
   await page.waitForTimeout(400); // Exceed the existing 350 ms accidental-double-tap guard.
   await add.click();
   await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(1);
   await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('136 g');
   await root(page).getByRole('button', { name: `Edit ${mealName}`, exact: true }).click();
   await expect(root(page).locator('[name="carbItemQty"]')).toHaveValue('2');
+});
+
+test('Issue 20.1: shared plus controls, collapse/reopen, and failed addition preserve the open calculator', async ({ page }) => {
+  await seed(page); await enter(page, 'entry');
+  const meals = root(page).getByRole('button', { name: 'My Meals', exact: true });
+  const list = root(page).locator('[data-carb-library-list]');
+  await root(page).getByRole('button', { name: 'Favorites', exact: true }).click();
+  const food = root(page).locator(`[data-action="add-food-to-carb-calculator"][data-id="${foodId}"]`);
+  const foodClasses = await food.getAttribute('class');
+  const glyphClasses = await food.locator('[aria-hidden="true"]').last().getAttribute('class');
+  await expect(food.locator('.lee_lee_diabetes_carb_pick_state')).toHaveText('+');
+  await meals.click();
+  const add = root(page).getByRole('button', { name: /^Add meal Cub Meal/ });
+  expect(await add.getAttribute('class')).toBe(foodClasses);
+  expect(await add.locator('.lee_lee_diabetes_carb_pick_state').getAttribute('class')).toBe(glyphClasses);
+  await expect(add.locator('.lee_lee_diabetes_carb_pick_state')).toHaveText('+');
+  // A stale/missing library ID must leave discovery open and totals untouched.
+  await add.evaluate(node => { node.dataset.id = 'synthetic-missing-meal'; });
+  await add.click();
+  await expect(meals).toHaveAttribute('aria-pressed', 'true');
+  await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('0 g');
+  await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(0);
+  await add.evaluate(node => { node.dataset.id = '22222222-2222-4222-8222-222222222222'; });
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    const rect = await add.boundingBox();
+    expect(rect.width).toBeGreaterThanOrEqual(44); expect(rect.height).toBeGreaterThanOrEqual(44);
+    expect(await list.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  }
+  await add.click();
+  await expect(meals).toHaveAttribute('aria-pressed', 'false');
+  await expect(list.locator('[data-action="add-saved-meal-to-carb-calculator"]')).toHaveCount(0);
+  await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(1);
+  await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('68 g');
+  await expect(root(page).locator('[data-carb-calculator]')).toBeVisible();
+  await expect(root(page).locator('[name="mealCarbs"]')).toHaveValue('');
+  await meals.click();
+  await expect(add).toBeVisible();
+  await expect(add.locator('.lee_lee_diabetes_carb_pick_state')).toHaveText('✓');
+  for (const shortcut of ['Favorites', 'Recent']) {
+    await page.waitForTimeout(400); // Intentional repeated food adds must exceed the existing 350 ms guard.
+    await root(page).getByRole('button', { name: shortcut, exact: true }).click();
+    await food.click();
+    await expect(root(page).getByRole('button', { name: shortcut, exact: true })).toHaveAttribute('aria-pressed', 'false');
+  }
+  await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('88 g');
 });
