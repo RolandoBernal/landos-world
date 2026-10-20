@@ -331,3 +331,23 @@ test('launcher denial falls back without enabling current mode or rewriting save
   assert.equal(localStorage.getItem('weather_app_preferences_v1'), before);
   assert.equal(service.getLocationPreferences().weatherLocationMode, 'saved');
 });
+
+
+test('formats paired temperatures with unchanged Fahrenheit and rounded Celsius', () => {
+  const { service } = createService();
+  for (const [f, c] of [[32, 0], [45, 7], [61, 16], [75, 24], [100, 38], [-4, -20], [0, -18], [-1, -18], [31, -1]]) {
+    const markup = service.formatTemperature(f);
+    assert.match(markup, new RegExp(`>${f}°F<`));
+    assert.ok(markup.includes(` ${c}°C</small>`));
+  }
+  assert.ok(service.formatTemperature(61.4).includes('61.4°F'));
+  assert.ok(service.formatTemperature(16, 'metric').includes('61°F'));
+  assert.ok(service.formatTemperature(16, 'metric').includes('16°C'));
+});
+
+test('unavailable temperatures never produce zero, NaN or injected markup', () => {
+  const { service } = createService();
+  for (const invalid of [null, undefined, '', ' ', NaN, Infinity, -Infinity, 'invalid', '<img src=x>', false, [], {}]) {
+    assert.equal(service.formatTemperature(invalid), '—');
+  }
+});

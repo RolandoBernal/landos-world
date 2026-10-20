@@ -373,8 +373,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.weather_daypart_card span:not(.weather_card_label, .weather_card_icon),
-.weather_week_card span:not(.weather_card_label, .weather_card_icon) {
+.weather_daypart_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair),
+.weather_week_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair) {
   overflow: hidden;
   color: rgb(255 253 244 / 82%);
   font-size: 0.84rem;
@@ -505,8 +505,8 @@
   color: var(--weather-muted);
 }
 
-:root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon),
-:root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon),
+:root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair),
+:root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair),
 :root[data-theme="light"] .weather_ride p {
   color: rgb(33 23 4 / 74%);
 }
@@ -663,8 +663,8 @@
   color: var(--weather-muted);
 }
 
-:root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon),
-:root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon),
+:root[data-theme="light"] .weather_daypart_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair),
+:root[data-theme="light"] .weather_week_card span:not(.weather_card_label, .weather_card_icon, .lww_temperature_pair),
 :root[data-theme="light"] .weather_ride p {
   color: rgb(33 23 4 / 74%);
 }
@@ -686,4 +686,47 @@
 .weather_settings_form select optgroup {
   background: var(--weather-panel-strong);
   color: var(--weather-ink);
+}
+
+/* LWW-only paired units: keep the existing Fahrenheit typography. */
+.lww_temperature_pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.12em;
+  white-space: nowrap;
+}
+.weather_app .lww_temperature_celsius {
+  color: var(--weather-muted);
+  font-size: max(0.78em, 0.75rem);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.weather_current_temp .lww_temperature_celsius {
+  font-size: 0.45em;
+}
+.clock_utility_weather_summary .lww_temperature_celsius {
+  color: rgb(255 255 255 / 74%);
+  font-size: max(0.8em, 0.75rem);
+  font-weight: 500;
+}
+.clock_utility_weather_temp .lww_temperature_celsius {
+  font-size: 0.65em;
+}
+.clock_utility_weather_summary .clock_utility_weather_range {
+  white-space: normal;
+}
+
+/* Fit the extra unit only when the hero's available width requires it. */
+.weather_hero_content > div {
+  min-width: 0;
+}
+.weather_current_temp {
+  container-type: inline-size;
+}
+.weather_current_temp .lww_temperature_pair {
+  font-size: min(1em, 30cqi);
+}
+.weather_current_temp .lww_temperature_pair--long {
+  font-size: min(1em, 23cqi);
 }
