@@ -15,9 +15,13 @@ function createLocalStorage(seed = {}) {
   };
 }
 
-function createService({ fetch, localStorage = createLocalStorage() } = {}) {
+function createService({ fetch, navigator, localStorage = createLocalStorage() } = {}) {
   const context = {
     console,
+    navigator,
+    AbortController,
+    setTimeout,
+    clearTimeout,
     Date,
     Intl,
     Map,
@@ -215,4 +219,115 @@ test('prevents duplicate simultaneous forecast requests for the same location', 
   assert.equal(first.status, 'ready');
   assert.equal(second.status, 'ready');
   assert.equal(fetchCount, 1);
+});
+
+const deviceNavigator = (failure) => ({
+  permissions: { query: async () => ({ state: 'granted' }) },
+  geolocation: { getCurrentPosition: (success, error) => failure ? error({ code: failure }) : success({ coords: { latitude: 35.9251, longitude: -86.8689 } }) },
+});
+const locationFetch = async url => ({ ok: true, json: async () => url.includes('bigdatacloud')
+  ? { city: 'Franklin', principalSubdivision: 'Tennessee', countryCode: 'US' }
+  : url.includes('/search') ? { results: [{ name: 'Nashville', admin1: 'Tennessee', country_code: 'US', latitude: 36.16, longitude: -86.78 }] }
+    : mockForecastPayload() });
+
+test('legacy saved city survives mode changes and reload', async () => {
+  const localStorage = createLocalStorage({ weather_app_preferences_v1: JSON.stringify({ location: 'Austin, Texas', extra: true }) });
+  const { service } = createService({ localStorage });
+  assert.equal(service.getLocationPreferences().weatherLocationMode, 'saved');
+  service.saveLocationPreferences('current');
+  const reloaded = createService({ localStorage }).service;
+  assert.equal(reloaded.getLocationPreferences().weatherLocationMode, 'current');
+  assert.equal(reloaded.getLocationPreferences().location, 'Austin, Texas');
+  reloaded.saveLocationPreferences('saved');
+  assert.equal(reloaded.getLocationPreferences().location, 'Austin, Texas');
+  assert.equal(reloaded.getLocationPreferences().extra, true);
+});
+
+test('current location shares one fix, labels weather consistently and never persists coordinates', async () => {
+  const requests = [];
+  const nav = deviceNavigator();
+  let fixes = 0;
+  const original = nav.geolocation.getCurrentPosition;
+  nav.geolocation.getCurrentPosition = (...args) => { fixes++; original(...args); };
+  const { service, localStorage } = createService({ navigator: nav, fetch: url => { requests.push(url); return locationFetch(url); } });
+  service.saveLocationPreferences('current');
+  const [first, second] = await Promise.all([service.getAppWeather({ requestPermission: true }), service.getAppWeather()]);
+  assert.equal(fixes, 1);
+  assert.equal(first.snapshot.locationName, 'Franklin, Tennessee, US');
+  assert.equal(second.snapshot.currentTemperature, 72);
+  assert.equal(first.snapshot.todayHigh, 84);
+  assert.match(requests.find(url => url.includes('/forecast')), /latitude=35.93&longitude=-86.87/);
+  assert.doesNotMatch(JSON.stringify(localStorage.dump()), /35.9251|86.8689|latitude|longitude/);
+  service.saveLocationPreferences('saved');
+  assert.equal((await service.getAppWeather()).snapshot.locationName, 'Nashville, Tennessee, US');
+});
+
+for (const failure of [1, 2, 3]) {
+  test(`device location error ${failure} falls back to saved city with an explanation`, async () => {
+    const { service } = createService({ navigator: deviceNavigator(failure), fetch: locationFetch });
+    service.saveLocationPreferences('current');
+    const result = await service.getAppWeather({ requestPermission: true });
+    assert.equal(result.snapshot.locationName, 'Nashville, Tennessee, US');
+    assert.match(result.locationNotice, /Using saved city/);
+    assert.equal(service.getLocationPreferences().weatherLocationMode, 'current');
+  });
+}
+
+test('last-known current weather works offline after reload without prompting', async () => {
+  const { service, localStorage } = createService({ navigator: deviceNavigator(), fetch: locationFetch });
+  service.saveLocationPreferences('current');
+  await service.getAppWeather({ requestPermission: true });
+  const reloaded = createService({ localStorage, navigator: { onLine: false }, fetch: () => { throw Error('offline'); } }).service;
+  const result = await reloaded.getAppWeather();
+  assert.equal(result.snapshot.locationName, 'Franklin, Tennessee, US');
+  assert.equal(result.snapshot.isStale, true);
+  assert.match(result.locationNotice, /last-known/);
+});
+
+test('automatic refresh never opens a permission prompt and backs off failures', async () => {
+  let fixes = 0;
+  const { service } = createService({ navigator: { permissions: { query: async () => ({ state: 'prompt' }) }, geolocation: { getCurrentPosition: () => { fixes++; } } }, fetch: locationFetch });
+  service.saveLocationPreferences('current');
+  await service.getAppWeather();
+  await service.getAppWeather();
+  assert.equal(fixes, 0);
+});
+
+test('reverse lookup and weather failures preserve a coherent fallback', async () => {
+  for (const failedEndpoint of ['bigdatacloud', 'latitude=35.93']) {
+    const { service } = createService({ navigator: deviceNavigator(), fetch: url => url.includes(failedEndpoint) ? Promise.reject(Error('unavailable')) : locationFetch(url) });
+    service.saveLocationPreferences('current');
+    const result = await service.getAppWeather({ requestPermission: true });
+    assert.equal(result.snapshot.locationName, 'Nashville, Tennessee, US');
+    assert.equal(result.snapshot.latitude, 36.16);
+    assert.match(result.locationNotice, /Using saved city/);
+  }
+});
+
+
+test('launcher resolves the device independently while the app preserves its saved city', async () => {
+  const { service, localStorage } = createService({ navigator: deviceNavigator(), fetch: async url => {
+    if (url.includes('/search')) return { ok: true, json: async () => ({ results: [{ name: 'Vancouver', admin1: 'British Columbia', country_code: 'CA', latitude: 49.28, longitude: -123.12 }] }) };
+    if (url.includes('latitude=49.28')) return { ok: true, json: async () => ({ ...mockForecastPayload(), current: { temperature_2m: 50, weather_code: 61 } }) };
+    return locationFetch(url);
+  } });
+  service.saveLocationPreferences('saved', 'Vancouver, Canada');
+  const before = localStorage.getItem('weather_app_preferences_v1');
+  const [landing, app] = await Promise.all([service.getCurrentWeather(), service.getAppWeather()]);
+  assert.equal(landing.snapshot.locationName, 'Franklin, Tennessee, US');
+  assert.equal(landing.snapshot.currentTemperature, 72);
+  assert.equal(app.snapshot.locationName, 'Vancouver, British Columbia, CA');
+  assert.equal(app.snapshot.currentTemperature, 50);
+  assert.equal((await service.getCurrentWeather()).snapshot.locationName, 'Franklin, Tennessee, US');
+  assert.equal(localStorage.getItem('weather_app_preferences_v1'), before);
+});
+
+test('launcher denial falls back without enabling current mode or rewriting saved preferences', async () => {
+  const { service, localStorage } = createService({ navigator: deviceNavigator(1), fetch: locationFetch });
+  const before = localStorage.getItem('weather_app_preferences_v1');
+  const result = await service.getCurrentWeather();
+  assert.equal(result.snapshot.locationName, 'Nashville, Tennessee, US');
+  assert.match(result.locationNotice, /permission is denied.*Using saved city/);
+  assert.equal(localStorage.getItem('weather_app_preferences_v1'), before);
+  assert.equal(service.getLocationPreferences().weatherLocationMode, 'saved');
 });
