@@ -9,14 +9,14 @@ async function open(page) {
 }
 test('legacy, explicit recommended, reload, show all, empty recovery and routes', async ({ page }) => {
   await open(page);
-  await expect(cards(page)).toHaveCount(8);
+  await expect(cards(page)).toHaveCount(9);
   expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
   await recommended(page).click();
   await expect(cards(page)).toHaveCount(3);
   expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.map((b) => b.dataset.route))).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
   await page.reload(); await expect(cards(page)).toHaveCount(3);
   await page.getByRole('button', { name: 'Show All Apps' }).click();
-  await expect(cards(page)).toHaveCount(8);
+  await expect(cards(page)).toHaveCount(9);
   for (const input of await page.locator('[data-my-app-id]').all()) await input.uncheck();
   await page.goto('/#/');
   await expect(page.getByRole('heading', { name: 'No Apps Selected' })).toBeVisible();
@@ -53,7 +53,7 @@ test('saved ordering, no first-render incorrect cards, unrelated storage and cro
 });
 test('malformed and future schema recovery, denied writes report session-only changes', async ({ page }) => {
   await page.addInitScript((k) => localStorage.setItem(k, '{'), key);
-  await open(page); await expect(cards(page)).toHaveCount(8);
+  await open(page); await expect(cards(page)).toHaveCount(9);
   await expect(page.locator('#my-apps-status')).toContainText('could not be read');
   await recommended(page).click(); await expect(cards(page)).toHaveCount(3);
   await page.evaluate((k) => { localStorage.setItem(k, '{"schemaVersion":2}'); window.dispatchEvent(new StorageEvent('storage', { key: k })); }, key);
@@ -85,7 +85,7 @@ test('read-denied storage keeps management available and reports unsaved changes
     Storage.prototype.getItem = function(name) { if (name === k) throw Error('denied'); return original.call(this, name); };
   }, key);
   await open(page);
-  await expect(cards(page)).toHaveCount(8);
+  await expect(cards(page)).toHaveCount(9);
   await expect(page.locator('#my-apps-status')).toContainText('could not be read');
   await recommended(page).click();
   await expect(cards(page)).toHaveCount(3);
@@ -144,12 +144,12 @@ test('ordering: keyboard controls retain focus, announce positions and stop at b
   await down.focus(); await page.keyboard.press('Enter');
   await expect(down).toBeFocused();
   expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
-  await expect(page.locator('#my-apps-order-status')).toContainText('position 2 of 8');
+  await expect(page.locator('#my-apps-order-status')).toContainText('position 2 of 9');
   const up = moveButton(page, 'weather', 'up'); await up.focus(); await page.keyboard.press('Space');
   await expect(up).toBeFocused(); await expect(up).toHaveAttribute('aria-disabled', 'true');
   await expect(up).toHaveCSS('outline-style', 'solid');
   await page.keyboard.press('Enter'); expect(await page.evaluate(() => window.orderWrites)).toBe(2);
-  expect(await rows(page).count()).toBe(8);
+  expect(await rows(page).count()).toBe(9);
 });
 
 test('ordering: hidden positions, Show All, recommended order, reload and empty recovery', async ({ page }) => {
@@ -163,7 +163,7 @@ test('ordering: hidden positions, Show All, recommended order, reload and empty 
   await toggle(page, 'weather').uncheck(); await toggle(page, 'weather').check();
   expect((await preference(page)).appOrder).toEqual(order);
   await page.getByRole('button', { name: 'Show All Apps' }).click();
-  expect(await rowOrder(page)).toEqual(order); await expect(cards(page)).toHaveCount(8);
+  expect(await rowOrder(page)).toEqual(order); await expect(cards(page)).toHaveCount(9);
   await page.reload(); expect(await rowOrder(page)).toEqual(order);
   await recommended(page).click(); expect((await rowOrder(page)).slice(0, 3)).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
   expect((await rowOrder(page)).slice(3)).toEqual(order.slice(3));
@@ -172,7 +172,7 @@ test('ordering: hidden positions, Show All, recommended order, reload and empty 
   expect((await preference(page)).visibleAppIds).toEqual([]);
   await page.goto('/#/'); await expect(page.getByRole('heading', { name: 'No Apps Selected' })).toBeVisible();
   await page.getByRole('button', { name: 'Manage My Apps' }).click();
-  await expect(page.locator('#my-apps-title')).toBeFocused(); await expect(rows(page)).toHaveCount(8);
+  await expect(page.locator('#my-apps-title')).toBeFocused(); await expect(rows(page)).toHaveCount(9);
   await page.goto('/#/violet-futbol-game-tracker'); await expect(page.locator('#violet-futbol-game-tracker-view')).toBeVisible();
   await page.goBack(); await expect(page.locator('#my-apps-title')).toBeVisible();
 });
@@ -187,7 +187,7 @@ test('ordering: mouse handle drag previews without writes and commits once', asy
   expect(await rowOrder(page)).toEqual(original); expect(await page.evaluate(() => window.orderWrites)).toBe(0);
   await page.mouse.up(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
   expect(await page.evaluate(() => window.orderWrites)).toBe(1);
-  expect((await preference(page)).visibleAppIds).toHaveLength(8);
+  expect((await preference(page)).visibleAppIds).toHaveLength(9);
   expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.slice(0, 2).map((b) => b.dataset.route))).toEqual(['digital-clock', 'weather']);
   await page.reload(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
 });
@@ -241,7 +241,7 @@ test('ordering: touch handle drag and natural row scrolling use separate gesture
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scroll);
   expect(await rowOrder(page)).toEqual(before); expect(await page.evaluate(() => window.orderWrites)).toBe(1);
-  expect((await preference(page)).visibleAppIds).toHaveLength(8);
+  expect((await preference(page)).visibleAppIds).toHaveLength(9);
   await cdp.detach();
 });
 
@@ -280,7 +280,7 @@ test('ordering: failure feedback and newer schemas preserve data and keep safe a
 for (const width of [320, 375, 390, 430, 768, 1440]) {
   test(`ordering layout: named controls, targets and focus at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await open(page);
-    await expect(rows(page)).toHaveCount(8);
+    await expect(rows(page)).toHaveCount(9);
     await assertSingleRowLayout(page);
     for (const id of ['weather', 'death-on-notecards']) {
       const button = moveButton(page, id, id === 'weather' ? 'down' : 'up');
@@ -311,7 +311,7 @@ async function assertSingleRowLayout(page, scaled = false) {
       textRects: [...range.getClientRects()].map((r) => ({ x: r.x, right: r.right, y: r.y, bottom: r.bottom })),
       iconReady: icon.complete && icon.naturalWidth > 0, labelOverflow: label.scrollWidth > label.clientWidth + 1 };
   }));
-  expect(geometry).toHaveLength(8);
+  expect(geometry).toHaveLength(9);
   for (const g of geometry) {
     expect(g.iconReady, g.text).toBe(true);
     expect(g.labelOverflow, g.text).toBe(false);
@@ -387,7 +387,7 @@ test('browser contexts keep independent preferences and every hidden local app r
   const independent = await browser.newContext({ baseURL });
   try {
     const other = await independent.newPage(); await open(other);
-    await expect(cards(other)).toHaveCount(8);
+    await expect(cards(other)).toHaveCount(9);
     expect(await other.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
   } finally { await independent.close(); }
   await page.goto('/#/');
@@ -410,4 +410,40 @@ test('Sprints launcher action survives preference renders and hidden direct navi
   await expect(page.locator('.sprints-list-item').first()).toBeVisible();
   await page.goto('/#/');
   await expect(page.locator('#open-sprints')).toHaveCount(0);
+});
+
+test('LWVD: existing preferences, visibility, accessible ordering, official icon and standalone entry', async ({ page }) => {
+  const saved = { schemaVersion: 1, visibleAppIds: ['digital-clock', 'weather'], appOrder: ['digital-clock', 'weather', 'lee-lees-tracker', 'violet-sprints', 'violet-futbol-game-tracker', 'road-bike-checklist', 'maintenance-total', 'death-on-notecards'] };
+  await page.addInitScript(({key, saved}) => { if (!sessionStorage.getItem('lwvd-seeded')) { localStorage.setItem(key, JSON.stringify(saved)); sessionStorage.setItem('lwvd-seeded','yes'); } }, {key, saved});
+  await open(page);
+  expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)), key)).toEqual(saved);
+  await expect(toggle(page, 'violet-dineros')).not.toBeChecked();
+  await expect(page.locator('#open-violet-dineros')).toHaveCount(0);
+  await toggle(page, 'violet-dineros').check();
+  await expect(page.locator('#open-violet-dineros')).toHaveAttribute('href', 'violet-dineros/index.html');
+  await moveButton(page, 'violet-dineros', 'up').click();
+  expect((await rowOrder(page)).at(-2)).toBe('violet-dineros');
+  await moveButton(page, 'violet-dineros', 'down').click();
+  expect((await rowOrder(page)).at(-1)).toBe('violet-dineros');
+  await page.reload(); await expect(toggle(page, 'violet-dineros')).toBeChecked();
+  await toggle(page, 'violet-dineros').uncheck(); await expect(page.locator('#open-violet-dineros')).toHaveCount(0);
+  await page.getByRole('button', {name: 'Show All Apps'}).click(); await expect(toggle(page, 'violet-dineros')).toBeChecked();
+  await recommended(page).click(); await expect(toggle(page, 'violet-dineros')).not.toBeChecked();
+  expect((await preference(page)).visibleAppIds).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
+  await toggle(page, 'violet-dineros').check(); await page.goto('/#/');
+  const card = page.locator('.clock_utility_card').filter({has: page.locator('#open-violet-dineros')});
+  await expect(card).toContainText('Your money. Your goals.');
+  await expect(card.locator('img')).toHaveAttribute('src', 'icons/violet-dineros.png');
+  expect(await card.locator('img').evaluate(img => img.complete && img.naturalWidth === 1024)).toBe(true);
+  await page.locator('#open-violet-dineros').click(); await expect(page).toHaveURL(/\/violet-dineros\/index.html$/);
+  await expect(page.locator('.plant')).toHaveAttribute('src','../icons/violet-dineros.svg');
+});
+
+test('LWVD: drag ordering uses existing launcher controls', async ({ page }) => {
+  await page.setViewportSize({width:390,height:1400}); await open(page);
+  const box = await beginMouseDrag(page, 'violet-dineros');
+  const previous = await page.locator('[data-my-app-row="death-on-notecards"]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, previous.y + 4, {steps:12}); await page.mouse.up();
+  expect((await rowOrder(page)).slice(-2)).toEqual(['violet-dineros','death-on-notecards']);
+  await page.reload(); expect((await rowOrder(page)).slice(-2)).toEqual(['violet-dineros','death-on-notecards']);
 });

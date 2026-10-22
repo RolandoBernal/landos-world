@@ -15,7 +15,7 @@ function fixture(raw = null) {
 }
 const config = (visible = ids, order = ids) => ({ schemaVersion: 1, visibleAppIds: visible, appOrder: order });
 test('missing preserves complete registry order without any write', () => {
-  assert.equal(ids.length, 8);
+  assert.equal(ids.length, 9);
   const f = fixture();
   assert.deepEqual(f.store.read(), { status: 'missing', preferences: config() });
   assert.deepEqual(f.writes, []);
@@ -108,7 +108,7 @@ test('ordering hidden apps persists and reloads, visibility edits keep positions
 test('ordering boundary/no-op changes avoid redundant writes', () => {
   const f = fixture(JSON.stringify(config()));
   f.store.change((p) => api.move(p, ids[0], -10, ids));
-  f.store.change((p) => api.move(p, ids[7], 99, ids));
+  f.store.change((p) => api.move(p, ids.at(-1), 99, ids));
   assert.deepEqual(f.writes, []);
   f.store.change((p) => api.move(p, ids[0], 1, ids));
   f.store.change((p) => api.move(p, ids[0], 1, ids));
@@ -128,4 +128,16 @@ test('ordering storage failures keep custom session order and never touch other 
   assert.deepEqual(f.store.read().preferences.visibleAppIds, [ids[2]]);
   assert.deepEqual(JSON.parse(f.raw()), config([ids[2]]));
   assert.deepEqual(f.writes, []);
+});
+
+test('LWVD registry addition preserves existing saved choices without writing', () => {
+  const oldIds = ids.filter(id => id !== 'violet-dineros');
+  const saved = config(['weather', 'digital-clock'], [...oldIds].reverse());
+  const raw = JSON.stringify(saved), f = fixture(raw);
+  const loaded = f.store.read().preferences;
+  assert.deepEqual(loaded.visibleAppIds, saved.appOrder.filter(id => saved.visibleAppIds.includes(id)));
+  assert.deepEqual(loaded.appOrder, [...saved.appOrder, 'violet-dineros']);
+  assert.equal(f.raw(), raw);
+  assert.deepEqual(f.writes, []);
+  assert.deepEqual(api.recommended(loaded, ids).visibleAppIds, ['digital-clock', 'weather', 'lee-lees-tracker']);
 });
