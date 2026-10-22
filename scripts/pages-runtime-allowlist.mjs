@@ -2,6 +2,12 @@
 // Keep development tooling, tests, documentation, server functions, and repository
 // metadata out of the public deployment artifact.
 export const PAGES_RUNTIME_FILES = [
+  'icons/violet-dineros.svg',
+  'icons/violet-dineros.png',
+  'violet-dineros/index.html',
+  'violet-dineros/styles.css',
+  'violet-dineros/app.js',
+  'violet-dineros/model.js',
   'index.html',
   'index-digital-clock.html',
   'manifest.webmanifest',
