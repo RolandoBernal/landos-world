@@ -44,14 +44,35 @@ function onboarding() {
   content.querySelector('#skip')?.addEventListener('click', () => { draft.payday = ''; finish(); });
 }
 function settings() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" aria-label="Back to Home">‹</button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><button class="primary">Save settings</button><button type="button" id="cancel">Back to Home</button></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" aria-label="Back to Home">‹</button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span aria-hidden="true">›</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><button class="primary">Save settings</button><button type="button" id="cancel">Back to Home</button></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
     if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); document.querySelector('#notice').textContent = 'Settings saved.'; focusHeading(); }
   };
+  content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusHeading(); };
   content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusHeading(); };
   content.querySelector('#cancel').onclick = () => { tab = 'Home'; render(); focusHeading(); };
+}
+function editStartingBalance() {
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" aria-label="Back to Settings">‹</button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
+  const back = () => { tab = 'Settings'; render(); content.querySelector('#edit-starting-balance').focus(); };
+  content.querySelector('#balance-back').onclick = back;
+  content.querySelector('#balance-cancel').onclick = back;
+  content.querySelector('form').onsubmit = event => {
+    event.preventDefault();
+    const amount = parseMoney(new FormData(event.target).get('startingBalance'));
+    const input = content.querySelector('#starting-balance');
+    if (amount === null) {
+      content.querySelector('#balance-error').textContent = 'Enter zero or a positive dollar amount with up to two decimal places.';
+      input.setAttribute('aria-invalid', 'true'); input.focus(); return;
+    }
+    input.removeAttribute('aria-invalid');
+    if (amount === state.balanceCents) { back(); return; }
+    if (save({ ...state, balanceCents: amount })) {
+      back(); document.querySelector('#notice').textContent = 'Starting Balance saved.';
+    }
+  };
 }
 const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 function render() {
@@ -61,6 +82,7 @@ function render() {
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusHeading(); });
+  if (tab === 'Balance') { editStartingBalance(); return; }
   if (tab === 'Settings') { settings(); return; }
   if (tab !== 'Home') {
     const details = {
@@ -81,7 +103,7 @@ window.addEventListener('pageshow', event => {
   if (event.persisted) window.LandosTheme?.init();
   render();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state && tab !== 'Settings') render(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab)) render(); });
 // Refresh calendar-day guidance while Home remains open across midnight.
 setInterval(() => { if (state && tab === 'Home' && !document.hidden && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
 let renderedDay = localToday();

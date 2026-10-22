@@ -23,7 +23,7 @@ Use the same URL/port to revisit your saved preview information.
 `localStorage` key: `lando-world:lwvd:v1`. One installation represents one user.
 The model stores first name, integer-cent opening/current balance, onboarding
 completion, payday anchor, and optional frequency. Opening balance is never income.
-No transaction ledger or balance adjustment exists in Sprint 1.
+No transaction ledger or balance-adjustment history exists.
 
 The daily guide divides the actual balance by local calendar days until payday,
 rounded to cents for display. Missing, today, or expired nonrecurring dates show
@@ -79,3 +79,17 @@ Focused browser coverage: `tests/browser/lwvd-theme.spec.js`, including preferen
 resolution before body creation, live System changes, launcher return/reentry,
 reloads, all tabs, onboarding in both themes, mobile overflow and unchanged raw
 financial/launcher preference values. Screenshots use synthetic browser data only.
+
+## Sprint 1.2 Starting Balance
+
+Settings → Your Money → Starting Balance opens a prefilled dollar input with
+Save and Cancel/Back. The editor uses the same `balanceCents` field as onboarding
+and Home; existing Sprint 1 data needs no migration. A changed amount replaces
+that value, and the next Home render uses it for the Money Story and daily guide.
+Unchanged Save, Cancel, and Back do not write. Invalid input and failed storage
+writes keep the editor open. Name, payday anchor, frequency, onboarding completion,
+launcher preferences and unrelated storage are preserved. No transactions,
+adjustment records or historical differences are created.
+
+Focused validation: `tests/browser/lwvd-starting-balance.spec.js` plus existing
+LWVD model and theme/navigation tests. Rolando confirmed physical-iPhone acceptance for this addition before release.
