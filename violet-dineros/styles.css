@@ -56,3 +56,10 @@ body[data-screen=home] #settings{margin-top:38px}
 :root[data-theme=dark] .card{background:#272031;border-color:#51405f}
 :root[data-theme=dark] button:focus-visible,:root[data-theme=dark] a:focus-visible,:root[data-theme=dark] input:focus-visible,:root[data-theme=dark] select:focus-visible{outline-color:#70dec4}
 :root[data-theme=dark] nav button{background:transparent;border:0}
+
+.balance-setting{width:100%;text-align:left;border:0;font-weight:400;color:inherit}
+.balance-setting .setting-label{display:block;font-size:.82rem;margin-bottom:2px}
+.balance-setting strong{font-size:.9rem;font-weight:400}
+.balance-setting .setting-icon img{width:24px;height:24px}
+:root[data-theme=dark] .balance-setting{background:#272031;color:#eee8ff}
+.balance-setting>div{flex:1;min-width:0}
