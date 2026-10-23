@@ -51,6 +51,8 @@ export const PAGES_RUNTIME_FILES = [
   'js/violet-futbol-game-tracker.js',
   'js/weather-app.js',
   'js/weather-service.js',
+  'fonts/geist-mono-variable.woff2',
+  'fonts/geist-mono-OFL.txt',
   'fonts/digital-7.ttf',
   'fonts/dm-sans-latin-ext.woff2',
   'fonts/dm-sans-latin.woff2',

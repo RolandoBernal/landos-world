@@ -257,7 +257,7 @@ for(const theme of ['light','dark']){
       const prefix=sheet(page).locator('.currency-input>span');await expect(prefix).toHaveText('$');await expect(prefix).toBeVisible();
       for(const value of ['', '10', '10.25']){await amount.fill(value);await expect(prefix).toBeVisible();await expect(amount).toHaveValue(value);}
       await expect(amount).toHaveAttribute('inputmode','decimal');await expect(amount).toHaveCSS('font-variant-numeric','tabular-nums');
-      expect(await amount.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('-apple-system');
+      expect(await amount.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('Geist Mono');
       expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
       for(const height of [320,844]){
         await page.evaluate(height=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>height},offsetTop:{configurable:true,get:()=>0}});window.visualViewport.dispatchEvent(new Event('resize'));},height);
@@ -278,7 +278,7 @@ for(const theme of ['light','dark']){
 for(const theme of ['light','dark'])test(`${theme} targeted numeric fonts, bullseye and Starting Balance prefix`,async({page})=>{
   await setup(page,theme);
   await expect(page.locator('.balance')).toHaveCSS('font-variant-numeric','tabular-nums');
-  expect(await page.locator('.balance').evaluate(el=>getComputedStyle(el).fontFamily)).toContain('-apple-system');
+  expect(await page.locator('.balance').evaluate(el=>getComputedStyle(el).fontFamily)).toContain('Geist Mono');
   expect(await page.locator('.greeting h1').evaluate(el=>getComputedStyle(el).fontFamily)).toContain('DM Sans');
   await expect(page.locator('.goal-star svg circle')).toHaveCount(3);await expect(page.locator('.goal-star svg path')).toHaveCount(0);
   await page.getByRole('button',{name:'Settings',exact:true}).click();
@@ -316,4 +316,29 @@ for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport,
   await page.keyboard.press('Tab');await page.getByRole('button',{name:'All',exact:true}).focus();await expect(page.getByRole('button',{name:'All',exact:true})).toHaveCSS('outline-style','solid');
   expect(await page.evaluate(k=>localStorage.getItem(k),key)).toBe(raw);
   for(const record of [{...before,balanceCents:0},{...before,balanceCents:Number.MAX_SAFE_INTEGER},{...before,balanceCents:0,transactions:[{id:'negative',type:'expense',amountCents:Number.MAX_SAFE_INTEGER,label:'Other',description:'',createdAt:new Date().toISOString()}]}]){await page.evaluate(({key,record})=>localStorage.setItem(key,JSON.stringify(record)),{key,record});await page.reload();await expect(page.locator('.balance')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+});
+
+test('Sprint 2.1.1 navigation follows the viewport for short and scrolling tabs; financial values load Geist Mono',async({page})=>{
+  const createdAt=new Date().toISOString();
+  await setup(page,'dark',Array.from({length:40},(_,i)=>({id:String(i),type:'income',amountCents:125,label:'Gift',description:`Gift ${i}`,createdAt})));
+  const before=await saved(page);
+  expect(await page.evaluate(async()=>{const faces=await document.fonts.load('16px "Geist Mono"');return faces.length>0&&faces.every(face=>face.status==='loaded');})).toBe(true);
+  await expect(page.locator('.guide .numeric')).toHaveCSS('font-family',/Geist Mono.*monospace/);
+  expect(await page.locator('.payday-card .numeric').first().evaluate(el=>getComputedStyle(el).fontFamily)).not.toContain('Geist Mono');
+  for(const height of [568,844,932]){
+    await page.setViewportSize({width:390,height});
+    for(const tab of ['Home','Activity','Goals','Insights','Settings']){
+      if(tab==='Settings')await home(page);
+      await page.getByRole('button',{name:tab,exact:true}).click();
+      if(tab==='Activity'){await page.getByLabel('Search activity').fill('missing');await expect(page.locator('.transaction-row')).toHaveCount(0);}
+      const check=async()=>{const geometry=await page.evaluate(()=>{const nav=document.querySelector('nav').getBoundingClientRect();return {bottom:nav.bottom,height:innerHeight,width:nav.width,position:getComputedStyle(document.querySelector('nav')).position,overflow:document.documentElement.scrollWidth>innerWidth};});expect(Math.abs(geometry.bottom-geometry.height)).toBeLessThanOrEqual(1);expect(geometry.width).toBe(390);expect(geometry.position).toBe('sticky');expect(geometry.overflow).toBe(false);};
+      for(const fraction of [0,0.5,1]){await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);await check();}
+      if(tab==='Activity'){
+        await page.getByLabel('Search activity').fill('');await expect(page.locator('.transaction-row')).toHaveCount(40);
+        await expect(page.locator('.transaction-amount').first()).toHaveCSS('font-family',/Geist Mono.*monospace/);
+        for(const fraction of [0,0.5,1]){await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);await check();}
+      }
+    }
+  }
+  expect(await saved(page)).toEqual(before);
 });
