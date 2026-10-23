@@ -8,7 +8,7 @@
 body[data-screen=home] #settings{margin-top:38px}
 
 /* The shared theme manager owns resolution, storage and color-scheme. */
-:root[data-theme=dark]{color:#eee8ff;background:#000}
+:root[data-theme=dark]{color:#eee8ff;background:#151020}
 :root[data-theme=dark] .shell{background:linear-gradient(135deg,#101019,#151020)}
 :root[data-theme=dark] p{color:#c1b8d9}
 :root[data-theme=dark] .ecosystem_nav_back,:root[data-theme=dark] #settings{color:#c19aff}
@@ -140,3 +140,35 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 .welcome .currency-input>input[name=balance]{text-align:left}
 :root[data-theme=dark] .currency-input>span{color:#c1b2d5}
 .numeric,.currency-input,input[inputmode=decimal],input[type=date],.story .balance,.transaction-amount,.detail-amount,.balance-setting strong{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;font-variant-numeric:tabular-nums}
+
+/* Sprint 2.1: root coverage follows the existing dynamic viewport in Safari/PWA. */
+html{min-height:100%}
+body{min-height:100vh;min-height:100dvh;background:inherit}
+.shell{min-height:100vh;min-height:100dvh}
+nav{background:#fff}
+:root[data-theme=dark] nav{background:#17131f}
+
+.settings-panel .setting-row{min-height:88px;padding:12px;gap:12px}
+.setting-row .setting-icon{width:40px;height:40px;flex-shrink:0}
+.setting-row>div:not(.setting-icon){flex:1;min-width:0;display:grid;gap:2px}
+.setting-row label,.balance-setting .setting-label{margin:0;line-height:1.25;font-size:.82rem}
+.setting-row input,.setting-row select,.balance-setting strong{min-height:44px;padding:5px 0;font-size:.9rem}
+.balance-setting strong{display:flex;align-items:center}
+.balance-setting>span:last-child{flex-shrink:0}
+.settings-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.settings-actions button{min-height:48px;line-height:1.3;padding:10px}
+.story>p{line-height:1.3}
+.story .balance{margin:2px 0;font-size:2.85rem}
+.daily-card .guide{font-size:1.3rem;line-height:1.25}
+.activity-search{position:relative}
+.activity-search>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:19px;height:19px;color:#675b80;pointer-events:none}
+.activity-search input{padding-left:42px}
+.activity-filters{gap:8px;margin:6px 0 18px}
+.activity-filters button{flex:0 1 auto;min-height:44px;padding:8px 12px;border:0;border-radius:0;background:transparent;color:#675b80;font-size:.82rem;font-weight:500;border-bottom:2px solid transparent}
+.activity-filters button[aria-pressed=true]{background:transparent;border-color:#7840d8;color:#4c1ba7;font-weight:750}
+:root[data-theme=dark] .activity-search>svg{color:#c1b2d5}
+:root[data-theme=dark] .activity-filters button{background:transparent;color:#c1b2d5}
+:root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:transparent;border-color:#bd92ff;color:#e1caff}
+body[data-screen=settings] .settings-title{margin-bottom:16px}
+body[data-screen=settings] .settings-panel h2{margin:10px 0 0}
+.settings-panel .hint{margin:4px 0}

@@ -170,3 +170,22 @@ and actions outside the scroller. Native selects are not programmatically scroll
 on focus; iOS controls their menu placement. Persistent dollar prefixes are visual
 only, and monetary/numeric values use the system font stack with tabular numerals.
 The Featured Goal uses an arrow-free bullseye; further icon refinement is deferred.
+
+
+## Sprint 2.1 UI polish and installed PWA acceptance
+
+The root/body and shell cover the dynamic viewport with theme-appropriate surfaces;
+navigation remains fixed and the page scrolls naturally. Settings rows share card
+metrics, and Save Settings / Back to Home share a nonsticky row. Back discards
+unsaved edits. Home uses “You have / [Current Balance] / right now.” with a more
+prominent Daily Guide. Activity keeps its native search field with a decorative
+search icon and compact text filters. Goals uses one arrow-free bullseye everywhere.
+Financial logic, saved records, transaction forms and Details are unchanged.
+
+Sprint 2.1 uses production-first physical-iPhone acceptance as explicitly requested.
+Automated geometry and browser tests do not establish installed-iPhone PWA PASS.
+Use the existing Lando’s World Settings → Application Status update mechanism,
+then reopen Violet Dineros. No reinstall, cache clearing or storage reset is needed.
+The existing service worker changes cache identity with each deployed full Git SHA;
+LWVD does not add a separate updater or caching system. Real-worker restart tests
+also verify that a prior LWVD record survives and the revised Home loads.
