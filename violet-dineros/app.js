@@ -105,40 +105,85 @@ function editStartingBalance() {
 }
 // Temporary read-only diagnostics: geometry only, never financial/storage data.
 const viewportDiagnostics = document.querySelector('#viewport-diagnostics');
-function refreshViewportDiagnostics() {
-  if (viewportDiagnostics.hidden || !viewportDiagnostics.open) return;
-  const root = document.documentElement, body = document.body, viewport = window.visualViewport;
-  const navigation = nav.getBoundingClientRect(), navStyle = getComputedStyle(nav);
-  const rows = ['LWVD Viewport Diagnostics — temporary', `Tab: ${tab}`,
-    `Display mode: ${matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? 'standalone PWA' : 'browser'}`,
-    `matchMedia standalone: ${matchMedia('(display-mode: standalone)').matches}`,
-    `navigator.standalone: ${navigator.standalone ?? 'unavailable'}`,
-    `window.innerWidth: ${innerWidth}`, `window.innerHeight: ${innerHeight}`,
-    `documentElement.clientWidth: ${root.clientWidth}`, `documentElement.clientHeight: ${root.clientHeight}`,
-    `visualViewport.width: ${viewport?.width ?? 'unavailable'}`, `visualViewport.height: ${viewport?.height ?? 'unavailable'}`,
-    `visualViewport.offsetTop: ${viewport?.offsetTop ?? 'unavailable'}`, `devicePixelRatio: ${devicePixelRatio}`,
-    `documentElement.scrollHeight: ${root.scrollHeight}`, `body.scrollHeight: ${body.scrollHeight}`, `window.scrollY: ${scrollY}`,
-    `Document overflows vertically: ${root.scrollHeight > root.clientHeight}`];
-  for (const selector of ['.shell', 'main']) {
-    const element = document.querySelector(selector), style = getComputedStyle(element), bounds = element.getBoundingClientRect();
-    rows.push(`${selector} rect top/bottom/height: ${bounds.top} / ${bounds.bottom} / ${bounds.height}`,
-      `${selector} height / min-height: ${style.height} / ${style.minHeight}`,
-      `${selector} overflow-x / overflow-y: ${style.overflowX} / ${style.overflowY}`, `${selector} position: ${style.position}`);
-  }
-  rows.push(`Navigation top: ${navigation.top}`, `Navigation bottom: ${navigation.bottom}`, `Navigation height: ${navigation.height}`,
-    `Gap to innerHeight: ${innerHeight - navigation.bottom}`, `Gap to clientHeight: ${root.clientHeight - navigation.bottom}`,
-    `Navigation position: ${navStyle.position}`, `Navigation padding-bottom: ${navStyle.paddingBottom}`,
-    `Safe-area inset bottom: ${document.querySelector('#viewport-safe-area').getBoundingClientRect().height}`,
-    `viewport-fit=cover: ${/viewport-fit\s*=\s*cover/i.test(document.querySelector('meta[name=viewport]')?.content || '')}`);
-  document.querySelector('#viewport-report').textContent = rows.join('\n');
+function viewportElementName(element) {
+  return element ? `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${Array.from(element.classList).slice(0,4).map(name => `.${name}`).join('')}` : 'none';
 }
-viewportDiagnostics.addEventListener('toggle', () => {
-  document.querySelector('#viewport-copy-status').textContent = '';
-  refreshViewportDiagnostics();
+function appendViewportElement(rows, label, element) {
+  if (!element) { rows.push(`${label}: missing`); return; }
+  const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+  rows.push(`${label}: ${viewportElementName(element)}; rect left/top/right/bottom/width/height: ${bounds.left} / ${bounds.top} / ${bounds.right} / ${bounds.bottom} / ${bounds.width} / ${bounds.height}`,
+    `${label} height / min-height: ${style.height} / ${style.minHeight}; position: ${style.position}; padding-bottom: ${style.paddingBottom}`,
+    `${label} background-color: ${style.backgroundColor}; background-image: ${style.backgroundImage}`,
+    `${label} overflow-x / overflow-y: ${style.overflowX} / ${style.overflowY}`);
+  const generated = [];
+  for (const pseudo of ['::before','::after']) {
+    const computed = getComputedStyle(element, pseudo);
+    if (!['none','normal'].includes(computed.content) && computed.display !== 'none') generated.push(`${pseudo}: background-color ${computed.backgroundColor}; background-image ${computed.backgroundImage}; position ${computed.position}; height ${computed.height}; padding-bottom ${computed.paddingBottom}`);
+  }
+  rows.push(`${label} generated pseudo-elements: ${generated.join(' | ') || 'none'}`);
+}
+function captureCollapsedViewportDiagnostics() {
+  if (viewportDiagnostics.hidden) return;
+  const wasOpen = viewportDiagnostics.open, focused = document.activeElement, previousScroll = {left:scrollX,top:scrollY};
+  viewportDiagnostics.open = false;
+  try {
+    const root = document.documentElement, body = document.body, viewport = window.visualViewport;
+    const navigation = nav.getBoundingClientRect(), navStyle = getComputedStyle(nav);
+    const safeArea = document.querySelector('#viewport-safe-area')?.getBoundingClientRect().height;
+    const rows = ['LWVD Viewport Diagnostics — temporary', 'Layout captured with diagnostics collapsed.', `Captured at: ${new Date().toISOString()}`, `Tab: ${tab}`,
+      `Display mode: ${matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? 'standalone PWA' : 'browser'}`,
+      `matchMedia standalone: ${matchMedia('(display-mode: standalone)').matches}`,
+      `navigator.standalone: ${navigator.standalone ?? 'unavailable'}`,
+      `window.innerWidth: ${innerWidth}`, `window.innerHeight: ${innerHeight}`,
+      `documentElement.clientWidth: ${root.clientWidth}`, `documentElement.clientHeight: ${root.clientHeight}`,
+      `visualViewport.width: ${viewport?.width ?? 'unavailable'}`, `visualViewport.height: ${viewport?.height ?? 'unavailable'}`,
+      `visualViewport.offsetTop: ${viewport?.offsetTop ?? 'unavailable'}`, `devicePixelRatio: ${devicePixelRatio}`,
+      `documentElement.scrollHeight: ${root.scrollHeight}`, `body.scrollHeight: ${body.scrollHeight}`, `window.scrollY: ${scrollY}`,
+      `Document overflows vertically: ${root.scrollHeight > root.clientHeight}`];
+    for (const selector of ['html','body','.shell','main','nav']) appendViewportElement(rows, selector, document.querySelector(selector));
+    rows.push(`Navigation top: ${navigation.top}`, `Navigation bottom: ${navigation.bottom}`, `Navigation height: ${navigation.height}`,
+      `Gap to innerHeight: ${innerHeight - navigation.bottom}`, `Gap to clientHeight: ${root.clientHeight - navigation.bottom}`,
+      `Navigation position: ${navStyle.position}`, `Navigation padding-bottom: ${navStyle.paddingBottom}`,
+      `Safe-area inset bottom: ${safeArea ?? 'unavailable'}`,
+      `viewport-fit=cover: ${/viewport-fit\s*=\s*cover/i.test(document.querySelector('meta[name=viewport]')?.content || '')}`);
+    const x = Math.max(0, Math.min(innerWidth - 1, navigation.left + navigation.width / 2));
+    const contentBottom = navigation.bottom - parseFloat(navStyle.paddingBottom);
+    const buttonBounds = nav.querySelector('button')?.getBoundingClientRect();
+    const samples = [['navigation content',buttonBounds ? buttonBounds.top + buttonBounds.height / 2 : navigation.top],
+      ['navigation bottom edge',navigation.bottom - 1], ['between navigation content and viewport bottom',(contentBottom + innerHeight) / 2],
+      ['above bottom safe-area boundary',safeArea === undefined ? undefined : innerHeight - safeArea - 1], ['near inner viewport bottom',innerHeight - 1], ['near client viewport bottom',root.clientHeight - 1]];
+    for (const [label,y] of samples) {
+      if (y === undefined) { rows.push(`Sample ${label}: unavailable (safe-area probe missing)`); continue; }
+      rows.push(`Sample ${label}: x=${x}, y=${y}`);
+      let top = null;
+      try { if (typeof document.elementFromPoint !== 'function') throw Error(); top = document.elementFromPoint(x,y); rows.push(`Topmost: ${viewportElementName(top)}`); }
+      catch { rows.push('elementFromPoint: unavailable'); }
+      try { if (typeof document.elementsFromPoint !== 'function') throw Error(); rows.push(`Stack (top 4): ${document.elementsFromPoint(x,y).slice(0,4).map(viewportElementName).join(' > ') || 'none'}`); }
+      catch { rows.push('elementsFromPoint: unavailable'); }
+      if (top) {
+        appendViewportElement(rows, 'Hit element', top);
+        for (let ancestor = top.parentElement, depth = 0; ancestor && depth < 3; ancestor = ancestor.parentElement, depth++) {
+          const style = getComputedStyle(ancestor);
+          rows.push(`Ancestor background: ${viewportElementName(ancestor)}; color ${style.backgroundColor}; image ${style.backgroundImage}`);
+        }
+      }
+    }
+    document.querySelector('#viewport-report').textContent = rows.join('\n');
+    document.querySelector('#viewport-copy-status').textContent = '';
+  } finally {
+    if (wasOpen) {
+      viewportDiagnostics.open = true;
+      if (viewportDiagnostics.contains(focused)) focused.focus({preventScroll:true});
+      window.scrollTo({...previousScroll,behavior:'instant'});
+    }
+  }
+}
+viewportDiagnostics.querySelector('summary').addEventListener('click', () => {
+  if (!viewportDiagnostics.open) captureCollapsedViewportDiagnostics();
 });
-document.querySelector('#viewport-refresh').onclick = refreshViewportDiagnostics;
+viewportDiagnostics.addEventListener('toggle', () => { if (!viewportDiagnostics.open) captureCollapsedViewportDiagnostics(); });
+document.querySelector('#viewport-refresh').onclick = captureCollapsedViewportDiagnostics;
 document.querySelector('#viewport-copy').onclick = async () => {
-  refreshViewportDiagnostics();
   const text = document.querySelector('#viewport-report').textContent;
   let copied = false;
   try { await navigator.clipboard.writeText(text); copied = true; } catch {
@@ -151,11 +196,11 @@ document.querySelector('#viewport-copy').onclick = async () => {
   }
   document.querySelector('#viewport-copy-status').textContent = copied ? 'Diagnostics copied.' : 'Copy unavailable. Read or screenshot the measurements below.';
 };
-window.addEventListener('orientationchange', () => requestAnimationFrame(refreshViewportDiagnostics));
+window.addEventListener('orientationchange', () => requestAnimationFrame(captureCollapsedViewportDiagnostics));
 const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 function render() {
   viewportDiagnostics.hidden = !state || !['Home','Activity','Goals','Insights'].includes(tab);
-  requestAnimationFrame(refreshViewportDiagnostics);
+  requestAnimationFrame(captureCollapsedViewportDiagnostics);
   if (!state) { onboarding(); return; }
   document.body.dataset.screen = tab.toLowerCase();
   gear.hidden = tab !== 'Home'; nav.hidden = false;
@@ -272,7 +317,7 @@ function fitSheetViewport() {
 }
 window.visualViewport?.addEventListener('resize', fitSheetViewport);
 window.visualViewport?.addEventListener('scroll', fitSheetViewport);
-window.addEventListener('resize', () => { fitSheetViewport(); refreshViewportDiagnostics(); });
+window.addEventListener('resize', () => { fitSheetViewport(); captureCollapsedViewportDiagnostics(); });
 document.documentElement.dataset.focusMode = 'pointer';
 document.addEventListener('keydown', event => {
   if (event.key === 'Tab' || event.key === 'Escape' || (['Enter', ' '].includes(event.key) && event.target.matches('button, a'))) document.documentElement.dataset.focusMode = 'keyboard';

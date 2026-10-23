@@ -223,7 +223,7 @@ viewport checks as physical-PWA acceptance or assume the root cause is known.
 
 A temporary “Viewport Diagnostics” disclosure is available above navigation on
 Home, Activity, Goals and Insights (scroll down to it on long pages). Open it,
-press Refresh, then Copy Diagnostics. Readings update when opening, on tab changes
+press Capture Collapsed Layout, then Copy Diagnostics. Readings update when opening, on tab changes
 and on resize/orientation events; there is no polling. The compact report popover
 is outside normal flow, so expanding it does not add report height or move the
 navigation. The small disclosure control itself occupies normal flow.
@@ -250,3 +250,34 @@ offline. Unnecessary heavy weights were reduced to 500 for headings, buttons,
 navigation and emphasized text; body/supporting text uses 400. No displayed UI
 retains a weight above 500; font-face range declarations still describe the
 available variable font. Families, numeric arithmetic and storage are unchanged.
+
+
+## Element-diagnostics follow-up
+
+The known iPhone inner/client viewport difference is evidence, not a confirmed
+cause. This update extends diagnostics only; no CSS, typography, layout, financial,
+transaction, storage or service-worker behavior changes are included.
+
+Reports are labeled “Layout captured with diagnostics collapsed.” Opening the
+existing disclosure captures before expansion. Capture Collapsed Layout closes
+it synchronously for measurement and restores the prior open/focus/scroll state
+before painting. Copy Diagnostics copies the captured report without resampling
+the expanded panel. Tab/orientation/resize captures use the same collapsed path.
+
+Six points are derived from actual navigation, viewport and safe-area geometry:
+inside navigation content, its bottom edge, between content and the viewport
+bottom, just above the safe-area boundary, and near the inner/client viewport
+bottoms. Each reports coordinates, top hit and a four-element hit stack, hit
+bounds/computed properties, and up to three ancestor backgrounds. Null hits and
+unsupported APIs are reported without inventing elements. A missing safe-area
+probe is marked unavailable and its dependent sample is omitted.
+
+The existing html, body, .shell, main and nav are also inspected for rectangles,
+height/min-height, background color/image, position, padding and overflow.
+Generated ::before/::after backgrounds are reported when present. No DOM text,
+input values, financial records, complete trees or browser storage are copied.
+
+After updating the installed PWA, open the existing Viewport Diagnostics control,
+press Capture Collapsed Layout, and copy the report. Repeat on Home, Activity,
+Goals and Insights at matching orientation and note any scroll differences.
+Keep these diagnostics until the real-device evidence has been reviewed.
