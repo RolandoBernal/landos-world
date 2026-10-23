@@ -103,8 +103,59 @@ function editStartingBalance() {
     }
   };
 }
+// Temporary read-only diagnostics: geometry only, never financial/storage data.
+const viewportDiagnostics = document.querySelector('#viewport-diagnostics');
+function refreshViewportDiagnostics() {
+  if (viewportDiagnostics.hidden || !viewportDiagnostics.open) return;
+  const root = document.documentElement, body = document.body, viewport = window.visualViewport;
+  const navigation = nav.getBoundingClientRect(), navStyle = getComputedStyle(nav);
+  const rows = ['LWVD Viewport Diagnostics — temporary', `Tab: ${tab}`,
+    `Display mode: ${matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? 'standalone PWA' : 'browser'}`,
+    `matchMedia standalone: ${matchMedia('(display-mode: standalone)').matches}`,
+    `navigator.standalone: ${navigator.standalone ?? 'unavailable'}`,
+    `window.innerWidth: ${innerWidth}`, `window.innerHeight: ${innerHeight}`,
+    `documentElement.clientWidth: ${root.clientWidth}`, `documentElement.clientHeight: ${root.clientHeight}`,
+    `visualViewport.width: ${viewport?.width ?? 'unavailable'}`, `visualViewport.height: ${viewport?.height ?? 'unavailable'}`,
+    `visualViewport.offsetTop: ${viewport?.offsetTop ?? 'unavailable'}`, `devicePixelRatio: ${devicePixelRatio}`,
+    `documentElement.scrollHeight: ${root.scrollHeight}`, `body.scrollHeight: ${body.scrollHeight}`, `window.scrollY: ${scrollY}`,
+    `Document overflows vertically: ${root.scrollHeight > root.clientHeight}`];
+  for (const selector of ['.shell', 'main']) {
+    const element = document.querySelector(selector), style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+    rows.push(`${selector} rect top/bottom/height: ${bounds.top} / ${bounds.bottom} / ${bounds.height}`,
+      `${selector} height / min-height: ${style.height} / ${style.minHeight}`,
+      `${selector} overflow-x / overflow-y: ${style.overflowX} / ${style.overflowY}`, `${selector} position: ${style.position}`);
+  }
+  rows.push(`Navigation top: ${navigation.top}`, `Navigation bottom: ${navigation.bottom}`, `Navigation height: ${navigation.height}`,
+    `Gap to innerHeight: ${innerHeight - navigation.bottom}`, `Gap to clientHeight: ${root.clientHeight - navigation.bottom}`,
+    `Navigation position: ${navStyle.position}`, `Navigation padding-bottom: ${navStyle.paddingBottom}`,
+    `Safe-area inset bottom: ${document.querySelector('#viewport-safe-area').getBoundingClientRect().height}`,
+    `viewport-fit=cover: ${/viewport-fit\s*=\s*cover/i.test(document.querySelector('meta[name=viewport]')?.content || '')}`);
+  document.querySelector('#viewport-report').textContent = rows.join('\n');
+}
+viewportDiagnostics.addEventListener('toggle', () => {
+  document.querySelector('#viewport-copy-status').textContent = '';
+  refreshViewportDiagnostics();
+});
+document.querySelector('#viewport-refresh').onclick = refreshViewportDiagnostics;
+document.querySelector('#viewport-copy').onclick = async () => {
+  refreshViewportDiagnostics();
+  const text = document.querySelector('#viewport-report').textContent;
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; } catch {
+    const previous = document.activeElement, textarea = document.createElement('textarea');
+    textarea.value = text; textarea.readOnly = true;
+    textarea.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(textarea); textarea.select();
+    try { copied = document.execCommand('copy'); } catch { /* Readings remain visible. */ }
+    textarea.remove(); previous?.focus({preventScroll:true});
+  }
+  document.querySelector('#viewport-copy-status').textContent = copied ? 'Diagnostics copied.' : 'Copy unavailable. Read or screenshot the measurements below.';
+};
+window.addEventListener('orientationchange', () => requestAnimationFrame(refreshViewportDiagnostics));
 const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 function render() {
+  viewportDiagnostics.hidden = !state || !['Home','Activity','Goals','Insights'].includes(tab);
+  requestAnimationFrame(refreshViewportDiagnostics);
   if (!state) { onboarding(); return; }
   document.body.dataset.screen = tab.toLowerCase();
   gear.hidden = tab !== 'Home'; nav.hidden = false;
@@ -221,7 +272,7 @@ function fitSheetViewport() {
 }
 window.visualViewport?.addEventListener('resize', fitSheetViewport);
 window.visualViewport?.addEventListener('scroll', fitSheetViewport);
-window.addEventListener('resize', fitSheetViewport);
+window.addEventListener('resize', () => { fitSheetViewport(); refreshViewportDiagnostics(); });
 document.documentElement.dataset.focusMode = 'pointer';
 document.addEventListener('keydown', event => {
   if (event.key === 'Tab' || event.key === 'Escape' || (['Enter', ' '].includes(event.key) && event.target.matches('button, a'))) document.documentElement.dataset.focusMode = 'keyboard';

@@ -233,13 +233,13 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
   expect(identity.pageMetadata.commitFull === identity.endpointMetadata.commitFull ? 'current' : 'available').toBe('current');
   fixtureNetworkUnavailable = true;
   expect(await page.evaluate(async () => {
-    const font = new FontFace('Offline Geist Probe', 'url(./fonts/geist-mono-variable.woff2)');
+    const font = new FontFace('Offline Geist Probe', 'url(./fonts/geist-mono-variable.woff2)', {weight:'500'});
     await font.load(); return font.status;
   })).toBe('loaded');
   fixtureNetworkUnavailable = false;
   await page.goto(`${baseUrl}/violet-dineros/index.html`);
   await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
-  expect(await page.evaluate(async()=>{const faces=await document.fonts.load('16px "Geist Mono"');return faces.length>0&&faces.every(face=>face.status==='loaded');})).toBe(true);
+  expect(await page.evaluate(async()=>{const faces=await document.fonts.load('500 16px "Geist Mono"');return faces.length>0&&faces.every(face=>face.status==='loaded');})).toBe(true);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(lwvdRecord);
 
 });

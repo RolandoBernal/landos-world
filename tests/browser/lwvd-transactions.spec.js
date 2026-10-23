@@ -342,3 +342,26 @@ test('Sprint 2.1.1 navigation follows the viewport for short and scrolling tabs;
   }
   expect(await saved(page)).toEqual(before);
 });
+
+for(const theme of ['light','dark'])test(`${theme} temporary viewport diagnostics report actual geometry, refresh and copy without financial data`,async({page})=>{
+  await setup(page,theme,[{id:'private-record',type:'income',amountCents:735,label:'Gift',description:'Private diary description',createdAt:new Date().toISOString()}]);
+  const before=await saved(page),diagnostics=page.locator('#viewport-diagnostics'),report=page.locator('#viewport-report');
+  const geometry=()=>page.evaluate(()=>({height:document.documentElement.scrollHeight,bottom:document.querySelector('nav').getBoundingClientRect().bottom}));
+  const closed=await geometry();await diagnostics.locator('summary').click();await expect(report).toBeVisible();
+  const opened=await geometry();expect(opened.height).toBe(closed.height);expect(opened.bottom).toBe(closed.bottom);
+  for(const tab of ['Home','Activity','Goals','Insights']){
+    await page.getByRole('button',{name:tab,exact:true}).click();await expect(report).toContainText(`Tab: ${tab}`);
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    const current=await page.evaluate(()=>({innerHeight,clientHeight:document.documentElement.clientHeight,scrollHeight:document.documentElement.scrollHeight,bottom:document.querySelector('nav').getBoundingClientRect().bottom,padding:getComputedStyle(document.querySelector('nav')).paddingBottom}));
+    await expect(report).toContainText(`window.innerHeight: ${current.innerHeight}`);await expect(report).toContainText(`documentElement.scrollHeight: ${current.scrollHeight}`);await expect(report).toContainText(`Navigation bottom: ${current.bottom}`);await expect(report).toContainText(`Gap to innerHeight: ${current.innerHeight-current.bottom}`);await expect(report).toContainText(`Gap to clientHeight: ${current.clientHeight-current.bottom}`);await expect(report).toContainText(`Navigation padding-bottom: ${current.padding}`);
+    for(const label of ['visualViewport.width:','visualViewport.height:','visualViewport.offsetTop:','devicePixelRatio:','.shell height / min-height:','main overflow-x / overflow-y:','Safe-area inset bottom:','viewport-fit=cover: true'])await expect(report).toContainText(label);
+  }
+  await page.setViewportSize({width:375,height:667});await expect(report).toContainText('window.innerHeight: 667');await page.evaluate(()=>dispatchEvent(new Event('orientationchange')));await expect(report).toContainText('window.innerWidth: 375');
+  await page.evaluate(()=>Object.defineProperty(navigator,'standalone',{configurable:true,value:true}));await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(report).toContainText('Display mode: standalone PWA');
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.copiedDiagnostics=text;}}}));await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();await expect(page.locator('#viewport-copy-status')).toHaveText('Diagnostics copied.');expect(await page.evaluate(()=>window.copiedDiagnostics)).toBe(await report.textContent());
+  const text=await report.textContent();for(const secret of ['Private diary description','private-record','Max','balanceCents','lando-world:lwvd:v1'])expect(text).not.toContain(secret);
+  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});document.execCommand=()=>{window.fallbackDiagnostics=document.querySelector('textarea').value;return true;};});await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();expect(await page.evaluate(()=>window.fallbackDiagnostics)).toBe(await report.textContent());
+  await page.evaluate(()=>{document.execCommand=()=>false;});await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();await expect(page.locator('#viewport-copy-status')).toContainText('Copy unavailable');await expect(report).toBeVisible();
+  await diagnostics.locator('summary').click();await expect(report).not.toBeVisible();expect(await saved(page)).toEqual(before);
+  await expect(page.locator('.balance')).toHaveCount(0);await home(page);await expect(page.locator('.balance')).toHaveCSS('font-weight','500');await expect(page.locator('.guide .numeric')).toHaveCSS('font-weight','500');await expect(page.locator('.greeting h1')).toHaveCSS('font-weight','500');await expect(page.getByRole('button',{name:'Add Money',exact:true})).toHaveCSS('font-weight','500');
+});
