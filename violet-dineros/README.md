@@ -2,7 +2,7 @@
 
 Your money. Your goals.
 
-Sprint 1 is a standalone vanilla HTML/CSS/JavaScript app at `/violet-dineros/`
+LWVD is a standalone vanilla HTML/CSS/JavaScript app at `/violet-dineros/`
 (or `/violet-dineros/index.html` on the safe local device server). It is registered in the existing À La Carte launcher and Settings → My Apps.
 LWVD is available through Show All Apps or its visibility toggle; Recommended Apps
 remains Digital Clock, Weather, and Lee-Lee’s Tracker. Existing saved selections
@@ -21,11 +21,12 @@ Use the same URL/port to revisit your saved preview information.
 ## Data and rules
 
 `localStorage` key: `lando-world:lwvd:v1`. One installation represents one user.
-The model stores first name, integer-cent opening/current balance, onboarding
-completion, payday anchor, and optional frequency. Opening balance is never income.
-No transaction ledger or balance-adjustment history exists.
+The model stores first name, integer-cent Starting Balance (`balanceCents`),
+onboarding completion, payday anchor, optional frequency, and (from Sprint 2)
+transactions. Starting Balance is never income. Current Balance is derived from
+Starting Balance plus income minus expenses; it is never stored independently.
 
-The daily guide divides the actual balance by local calendar days until payday,
+The daily guide divides `max(0, Current Balance)` by local calendar days until payday,
 rounded to cents for display. Missing, today, or expired nonrecurring dates show
 an invitation instead. Recurrence advances expired dates to today or the next
 future occurrence; it never deposits money. Monthly recurrence retains the original
@@ -48,8 +49,8 @@ returning users, Settings persistence, all tabs, missing payday, and overflow at
 320, 375, 390, 430, and 1280 pixels. Calendar tests cover today/past dates, DST,
 weekly/biweekly recurrence, year rollover, and monthly/leap-year clamping.
 
-Activity, Goals, Insights, quick actions, and motivation are honest coming-soon
-states. Rolando confirmed physical-iPhone acceptance before release. Standalone offline
+Goals, Insights, Can I Afford This?, and motivation remain honest coming-soon
+states. Activity and the Add Money/Add Expense actions are functional in Sprint 2. Rolando confirmed physical-iPhone acceptance before release. Standalone offline
 installation was not validated; Sprint 1 does not add a standalone manifest,
 updater, or service worker.
 
@@ -93,3 +94,79 @@ adjustment records or historical differences are created.
 
 Focused validation: `tests/browser/lwvd-starting-balance.spec.js` plus existing
 LWVD model and theme/navigation tests. Rolando confirmed physical-iPhone acceptance for this addition before release.
+
+## Sprint 2 transactions and Activity
+
+Add Money and Add Expense open opaque full-screen forms in a native dialog. Positive
+integer-cent amounts, controlled source/category labels, optional descriptions
+(up to 120 characters), stable random IDs, and original creation timestamps are
+saved in a `transactions` array within the existing `lando-world:lwvd:v1` record.
+Missing transactions means an empty history; loading legacy data writes nothing.
+The Starting Balance field and all previous settings remain compatible.
+
+Each successful action writes the entire record once before updating the screen.
+Expenses can make Current Balance negative; a future-payday guide then shows zero.
+No scheduled paycheck is deposited. Values exceeding exact safe-integer balance
+range are rejected instead of rounded or partially saved.
+
+Activity groups local dates newest first, with search and All/Money In/Expenses
+filters. Rows open details; edits reuse the form and retain type/ID/creation date.
+Only deletion asks for confirmation. Starting Balance edits recalculate the derived
+balance and leave transactions untouched.
+
+Successful adds, edits, and deletes show a noninteractive confirmation for 2.5
+seconds. There is no Undo action or history state; corrections remain available
+through Activity. Delete still requires confirmation. A stored-record check rejects
+stale writes. Read errors/malformed records fail closed without replacing data.
+Failed writes leave forms and saved balances intact and display a persistent error.
+
+Transaction forms preserve page scroll, lock background scrolling, trap focus
+using native dialog behavior, and restore focus/scroll on close. Scrollable fields
+are separated from the separate action area. The native dialog host resets browser
+default bounds; a top/left/width/height Visual Viewport frame, following LLT’s
+calculator pattern, contains the form above Safari’s keyboard and toolbar. Native
+nearest-field scrolling keeps focused fields in view. Add and Edit synchronously focus the amount
+after the dialog is visible; iOS may require one tap to activate the numeric
+keyboard. No timer or animation workaround forces keyboard activation.
+
+Activity rows have compact spacing, muted chevrons, explicit details labels, and
+pressed/focus states. Home retains the daily guide card/calculation without the
+removed disclaimer. The complete Sprint 2 implementation and subsequent UX corrections received
+Rolando’s explicit physical-iPhone PASS before release. Preview storage stays
+separate from production.
+
+Focused checks:
+- `node --test tests/lwvd.test.js tests/lwvd-transactions.test.js`
+- `npx playwright test tests/browser/lwvd-transactions.spec.js tests/browser/lwvd-starting-balance.spec.js`
+
+No goals/reserves, transfers, affordability, analytics, gamification, automatic
+income, cloud sync, account system, or other later-sprint features are introduced.
+
+## Accepted final iPhone corrections
+
+Read-only Money In and Expense Details use an opaque full-screen view. The existing
+Activity DOM is visually hidden while the native modal blocks its interaction.
+Information and Edit/Delete are centered together in the available area, with
+scrolling at small heights or larger text sizes. Close preserves Activity search,
+filters, page position and keyboard focus. Edit reuses the same single dialog
+host in form mode; no second interactive sheet is created.
+
+Quick Actions use hover styling only on hover-capable fine pointers and temporary
+`:active` feedback on touch. Keyboard `:focus-visible` remains available. The existing input-modality marker
+keeps control outlines keyboard-only across buttons, Activity rows, links, inputs,
+selects and navigation. Touch can retain logical focus without leaving a painted outline.
+
+Automated Chromium/mobile WebKit checks cover viewport resizing/dismissal, form
+field and action geometry, full-screen Details, 200% text scrolling, Activity state,
+touch highlight cleanup, keyboard focus, transactions and persistence. They do not
+verify a physical iPhone keyboard. Rolando confirmed physical-iPhone acceptance of the complete implementation.
+
+Final local spacing polish retains the existing viewport/form structure. Field
+rows do not shrink inside the scroller, the action area has a separate divider
+and padding, and form surfaces are opaque. Transaction selects use a 52px native
+control height, zero vertical padding and normal line-height. Details geometry,
+transactions, storage and calculations are unchanged. Add/Edit forms share the full-screen Details frame, with fields at the top
+and actions outside the scroller. Native selects are not programmatically scrolled
+on focus; iOS controls their menu placement. Persistent dollar prefixes are visual
+only, and monetary/numeric values use the system font stack with tabular numerals.
+The Featured Goal uses an arrow-free bullseye; further icon refinement is deferred.

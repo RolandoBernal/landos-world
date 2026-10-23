@@ -1,0 +1,288 @@
+import {test,expect} from '@playwright/test';
+const key='lando-world:lwvd:v1',launcher='landos_world_my_apps_v1';
+const preferences={schemaVersion:1,visibleAppIds:['digital-clock','violet-dineros'],appOrder:['digital-clock','violet-dineros','weather']};
+async function setup(page,theme='light',transactions) {
+  await page.setViewportSize({width:390,height:844});
+  const date=new Date();date.setDate(date.getDate()+3);const payday=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const initial={firstName:'Max',balanceCents:15000,payday,frequency:'monthly',onboarded:true,...(transactions?{transactions}:{})};
+  await page.addInitScript(({key,launcher,preferences,initial,theme})=>{
+    if(!localStorage.getItem('sprint2-seeded')){localStorage.setItem(key,JSON.stringify(initial));localStorage.setItem(launcher,JSON.stringify(preferences));localStorage.setItem('other-app-test','untouched');localStorage.setItem('landos_world_appearance_preference_v1',theme);localStorage.setItem('sprint2-seeded','true');}
+  },{key,launcher,preferences,initial,theme});
+  await page.goto('/violet-dineros/index.html');await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();return initial;
+}
+const saved=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
+const sheet=page=>page.getByRole('dialog');
+async function openAdd(page,type){await page.getByRole('button',{name:type==='income'?'Add Money':'Add Expense',exact:true}).click();await expect(sheet(page)).toBeVisible();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();}
+async function fillTransaction(page,type,amount,label,description=''){
+  await sheet(page).getByLabel('How much?',{exact:true}).fill(amount);
+  await sheet(page).getByLabel(type==='income'?'Where did it come from?':'Category',{exact:true}).selectOption(label);
+  await sheet(page).getByLabel(type==='income'?'Description (optional)':'What was it? (optional)',{exact:true}).fill(description);
+}
+async function add(page,type,amount,label,description=''){
+  await openAdd(page,type);await fillTransaction(page,type,amount,label,description);
+  await sheet(page).getByRole('button',{name:type==='income'?'Add Money':'Save Expense',exact:true}).click();await expect(sheet(page)).not.toBeVisible();
+}
+async function activity(page){await page.getByRole('button',{name:'Activity',exact:true}).click();}
+async function home(page){await page.getByRole('button',{name:'Home',exact:true}).click();}
+
+test('legacy data is not rewritten; income/expense, negative balances, guide and reload use cents',async({page})=>{
+  const initial=await setup(page);expect(await saved(page)).toEqual(initial);await expect(page.locator('.balance')).toHaveText('$150.00');
+  await expect(page.getByRole('button',{name:'Can I Afford This?',exact:false})).toBeDisabled();
+  await add(page,'income','30','Allowance');await expect(page.locator('.balance')).toHaveText('$180.00');await expect(page.locator('.guide')).toHaveText('$60.00 a day');
+  await add(page,'expense','6','Food','Coffee');await expect(page.locator('.balance')).toHaveText('$174.00');await expect(page.locator('.guide')).toHaveText('$58.00 a day');
+  await add(page,'expense','200','Shopping','New shirt');await expect(page.locator('.balance')).toHaveText('-$26.00');await expect(page.locator('.guide')).toHaveText('$0.00 a day');
+  const data=await saved(page);expect(data.balanceCents).toBe(15000);expect(data.transactions).toHaveLength(3);
+  const {transactions,...settings}=data;expect(settings).toEqual(initial);
+  await page.reload();await expect(page.locator('.balance')).toHaveText('-$26.00');expect(await saved(page)).toEqual(data);
+  await activity(page);await expect(page.locator('.transaction-row')).toHaveCount(3);expect(await page.locator('.transaction-row').allTextContents()).toEqual(expect.arrayContaining([expect.stringContaining('−$200.00'),expect.stringContaining('+$30.00')]));
+  expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),launcher)).toEqual(preferences);expect(await page.evaluate(()=>localStorage.getItem('other-app-test'))).toBe('untouched');
+});
+
+test('invalid, zero, negative and overprecision amounts and missing source are rejected; duplicate submit is guarded',async({page})=>{
+  await setup(page);await openAdd(page,'income');
+  for(const amount of ['0','-1','abc','1.234','1e2','']){
+    await sheet(page).getByLabel('How much?',{exact:true}).fill(amount);await sheet(page).getByRole('button',{name:'Add Money',exact:true}).click();await expect(page.locator('#transaction-error')).toContainText('greater than zero');expect((await saved(page)).transactions).toBeUndefined();
+  }
+  await sheet(page).getByLabel('How much?',{exact:true}).fill('1.25');await sheet(page).getByRole('button',{name:'Add Money',exact:true}).click();await expect(page.locator('#transaction-error')).toContainText('Choose');
+  await fillTransaction(page,'income','1.25','Gift');
+  await page.locator('#transaction-form').evaluate(form=>{form.requestSubmit();form.requestSubmit();});
+  await expect(sheet(page)).not.toBeVisible();expect((await saved(page)).transactions).toHaveLength(1);await expect(page.locator('.balance')).toHaveText('$151.25');
+});
+
+test('Activity local date groups, newest-first order, search, filters and details',async({page})=>{
+  const now=new Date(),yesterday=new Date(now);yesterday.setDate(now.getDate()-1);const earlier=new Date(now);earlier.setDate(now.getDate()-4);
+  const records=[{id:'a',type:'income',amountCents:3000,label:'Allowance',description:'',createdAt:earlier.toISOString()},{id:'b',type:'expense',amountCents:600,label:'Food',description:'Coffee',createdAt:yesterday.toISOString()},{id:'c',type:'expense',amountCents:2400,label:'Shopping',description:'New shirt',createdAt:now.toISOString()}];
+  await setup(page,'light',records);await activity(page);await expect(page.locator('.activity-group>h2').nth(0)).toHaveText('Today');await expect(page.locator('.activity-group>h2').nth(1)).toHaveText('Yesterday');await expect(page.locator('.transaction-row').first()).toContainText('New shirt');
+  await page.getByRole('button',{name:'Money In',exact:true}).click();await expect(page.locator('.transaction-row')).toHaveCount(1);await expect(page.locator('.transaction-row')).toContainText('Allowance');
+  await page.getByRole('button',{name:'Expenses',exact:true}).click();await expect(page.locator('.transaction-row')).toHaveCount(2);
+  await page.getByLabel('Search activity').fill(' COFFEE ');await expect(page.locator('.transaction-row')).toHaveCount(1);await page.locator('.transaction-row').click();await expect(sheet(page)).toContainText('Food');await expect(sheet(page)).toContainText('Coffee');await expect(sheet(page)).toContainText('Expense');
+  await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await page.getByLabel('Search activity').fill('missing');await expect(page.locator('#activity-list')).toContainText('No matching');
+  await page.getByLabel('Search activity').fill('food');await expect(page.locator('.transaction-row')).toHaveCount(1);
+});
+
+test('edit preserves ID/type/date and deletion still confirms and cancels',async({page})=>{
+  await setup(page);await add(page,'expense','6','Food','Coffee');const original=(await saved(page)).transactions[0];await activity(page);await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();
+  await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
+  await fillTransaction(page,'expense','8.50','Fun','Movie snack');await sheet(page).getByRole('button',{name:'Save Changes',exact:true}).click();
+  await expect(page.locator('.activity>h1')).toBeFocused();
+  const edited={...original,amountCents:850,label:'Fun',description:'Movie snack'};
+  expect((await saved(page)).transactions).toEqual([edited]);await expect(page.locator('#notice')).toHaveText('Changes saved.');
+  await home(page);await expect(page.locator('.balance')).toHaveText('$141.50');await expect(page.locator('.guide')).toHaveText('$47.17 a day');await activity(page);
+  await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(sheet(page)).toContainText('Your balance will be updated');expect((await saved(page)).transactions).toEqual([edited]);
+  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toEqual([edited]);await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();
+  await expect(page.locator('.transaction-row')).toHaveCount(0);await expect(page.locator('#notice')).toHaveText('Transaction deleted.');await home(page);await expect(page.locator('.balance')).toHaveText('$150.00');
+  await page.reload();expect((await saved(page)).transactions).toEqual([]);
+});
+
+test('Starting Balance changes preserve transactions and recalculate Current Balance',async({page})=>{
+  const initial=await setup(page);await add(page,'income','30','Allowance');await add(page,'expense','20','Food');const transactions=(await saved(page)).transactions;
+  await expect(page.locator('.balance')).toHaveText('$160.00');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('#edit-starting-balance')).toContainText('$150.00');await page.locator('#edit-starting-balance').click();await page.getByLabel('Starting Balance ($)',{exact:true}).fill('175');await page.getByRole('button',{name:'Save',exact:true}).click();
+  expect(await saved(page)).toEqual({...initial,balanceCents:17500,transactions});await home(page);await expect(page.locator('.balance')).toHaveText('$185.00');
+});
+
+test('stale saves cannot overwrite newer raw financial data',async({page})=>{
+  await setup(page);await openAdd(page,'income');await fillTransaction(page,'income','30','Gift');
+  const newer=await page.evaluate(key=>{const data=JSON.parse(localStorage.getItem(key));data.balanceCents=20000;localStorage.setItem(key,JSON.stringify(data));return data;},key);
+  await sheet(page).getByRole('button',{name:'Add Money',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('changed in another tab');expect(await saved(page)).toEqual(newer);
+});
+
+test('another tab updates the balance without losing transactions',async({page,context})=>{
+  await setup(page);await add(page,'income','30','Gift');const second=await context.newPage();await second.goto('/violet-dineros/index.html');await add(second,'expense','10','Gas');await expect(page.locator('.balance')).toHaveText('$170.00');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);expect((await saved(page)).transactions).toHaveLength(2);
+});
+
+test('storage failures preserve saved data, keep the sheet open and show no success or Undo',async({page})=>{
+  const initial=await setup(page);await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
+  await openAdd(page,'expense');await fillTransaction(page,'expense','20','Food');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');await expect(sheet(page)).toBeVisible();expect(await saved(page)).toEqual(initial);await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
+});
+
+for(const theme of ['light','dark','system']){
+  test(`bottom sheet and Activity work in ${theme} with mobile keyboard-size viewports`,async({page})=>{
+    await page.emulateMedia({colorScheme:'dark'});await setup(page,theme);await openAdd(page,'expense');
+    await expect(page.locator('html')).toHaveAttribute('data-theme',theme==='light'?'light':'dark');
+    for(const [width,height] of [[320,568],[390,400],[430,844]]){
+      await page.setViewportSize({width,height});await sheet(page).getByLabel('What was it? (optional)',{exact:true}).fill('A long description '.repeat(5));
+      await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).scrollIntoViewIfNeeded();
+      const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y+bounds.height).toBeLessThanOrEqual(height+1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    }
+    await page.setViewportSize({width:390,height:844});await fillTransaction(page,'expense','1.25','Other','Snack');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');
+    await activity(page);await expect(page.locator('.transaction-row')).toContainText('Snack');
+    for(const tab of ['Goals','Insights','Home'])await page.getByRole('button',{name:tab,exact:true}).click();
+    if(theme==='system'){await page.emulateMedia({colorScheme:'light'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');}
+  });
+}
+
+test('invalid stored transactions fail closed without replacing legacy settings',async({page})=>{
+  await setup(page);const raw=await page.evaluate(key=>{const data=JSON.parse(localStorage.getItem(key));data.transactions=[{amountCents:-10}];const raw=JSON.stringify(data);localStorage.setItem(key,raw);return raw;},key);await page.reload();await expect(page.getByRole('heading',{name:'Your saved information needs attention'})).toBeVisible();expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBe(raw);
+});
+
+
+test('success messages are noninteractive and expire at 2.5 seconds; errors remain',async({page})=>{
+  await setup(page);await page.clock.install();await add(page,'income','10','Gift');await expect(page.locator('#notice')).toHaveText('Money added.');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
+  await page.clock.fastForward(2499);await expect(page.locator('#notice')).toHaveText('Money added.');await page.clock.fastForward(1);await expect(page.locator('#notice')).toBeEmpty();
+  await add(page,'expense','2','Food');await expect(page.locator('#notice')).toHaveText('Expense saved.');await page.clock.fastForward(2500);await expect(page.locator('#notice')).toBeEmpty();
+  const before=await saved(page);await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
+  await openAdd(page,'expense');await fillTransaction(page,'expense','1','Other');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await page.clock.fastForward(3000);await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
+});
+
+test('failed edit and deletion keep the saved transaction unchanged',async({page})=>{
+  await setup(page);await add(page,'expense','6','Food','Coffee');const original=await saved(page);await activity(page);await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();
+  await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
+  await fillTransaction(page,'expense','9','Fun','Snack');await sheet(page).getByRole('button',{name:'Save Changes',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
+  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
+});
+
+
+
+
+test('repeated sheets restore focus and page position through top, middle and bottom scroll',async({page})=>{
+  await setup(page);await page.setViewportSize({width:320,height:568});
+  for(const fraction of [0,0.5,1]){
+    await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);
+    const opener=page.getByRole('button',{name:'Add Expense',exact:true});await opener.scrollIntoViewIfNeeded();
+    const before=await page.evaluate(()=>window.scrollY);
+    for(let cycle=0;cycle<2;cycle++){
+      await opener.click();await expect(sheet(page)).toBeVisible();
+      const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y+bounds.height).toBeLessThanOrEqual(569);
+      await page.keyboard.press('Escape');await expect(sheet(page)).not.toBeVisible();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');await expect(opener).toBeFocused();await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(before);
+    }
+  }
+  expect((await saved(page)).transactions).toBeUndefined();
+});
+
+test('Home has no disclaimer and compact Activity rows communicate interactive details',async({page})=>{
+  await setup(page);await expect(page.locator('main')).not.toContainText('A gentle guide, not a strict spending limit.');
+  await add(page,'expense','6','Food','Coffee');await activity(page);
+  const row=page.locator('.transaction-row');await expect(row).toHaveAccessibleName(/View transaction details: Coffee, Expense/);
+  await expect(row.locator('.transaction-chevron')).toHaveText('›');await expect(row.locator('.transaction-chevron')).toHaveAttribute('aria-hidden','true');
+  const bounds=await row.boundingBox(),amount=await row.locator('.transaction-amount').boundingBox(),chevron=await row.locator('.transaction-chevron').boundingBox();
+  expect(bounds.height).toBeGreaterThanOrEqual(44);expect(bounds.height).toBeLessThanOrEqual(64);expect(chevron.x).toBeGreaterThan(amount.x+amount.width+3);
+  await row.focus();await page.keyboard.press('Enter');await expect(sheet(page)).toContainText('Coffee');await expect(sheet(page).getByRole('button',{name:'Edit',exact:true})).toBeVisible();
+});
+
+for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Details']){
+  test(`${mode}: keyboard visual viewport keeps focused fields and actions visible`,async({page})=>{
+    const createdAt=new Date().toISOString();
+    await setup(page,'dark',[{id:'income',type:'income',amountCents:3000,label:'Allowance',description:'Pocket money',createdAt},{id:'expense',type:'expense',amountCents:600,label:'Food',description:'Coffee',createdAt}]);
+    if(mode.startsWith('Add')) await openAdd(page,mode==='Add Money'?'income':'expense');
+    else {
+      await activity(page);await page.locator(`[data-transaction-id="${mode==='Edit Money In'?'income':'expense'}"]`).click();
+      if(mode.startsWith('Edit'))await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();
+    }
+    await expect(page.locator('dialog[open]')).toHaveCount(1);
+    if(mode!=='Details')await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
+    // Model Safari's keyboard-only viewport resize: the layout viewport stays tall.
+    await page.evaluate(()=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>320},offsetTop:{configurable:true,get:()=>45}});window.visualViewport.dispatchEvent(new Event('resize'));});
+    const inside=async locator=>{const box=await locator.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(366);};
+    await inside(page.locator('.transaction-panel'));
+    if(mode==='Details')await sheet(page).locator('.sheet-actions').scrollIntoViewIfNeeded();
+    const controls=mode==='Details'?['Edit','Delete']:['Cancel',mode.startsWith('Edit')?'Save Changes':mode==='Add Money'?'Add Money':'Save Expense'];
+    for(const name of controls){await expect(sheet(page).getByRole('button',{name,exact:true})).toBeVisible();await inside(sheet(page).getByRole('button',{name,exact:true}));}
+    if(mode!=='Details'){
+      await inside(sheet(page).getByLabel('How much?',{exact:true}));
+      const description=sheet(page).getByLabel(mode.includes('Money')?'Description (optional)':'What was it? (optional)',{exact:true});await description.fill('A note with the text keyboard');await inside(description);
+      for(const name of controls)await inside(sheet(page).getByRole('button',{name,exact:true}));
+      expect(await page.locator('.sheet-fields').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+    }
+    expect(await page.evaluate(()=>document.body.style.overflow)).toBe('hidden');
+    const before=await page.evaluate(()=>window.scrollY);
+    await page.locator('nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement))).toBe(true);
+    await page.mouse.click(5,5);await expect(sheet(page)).toBeVisible();expect(await page.evaluate(()=>window.scrollY)).toBe(before);
+    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');
+    expect(await page.locator('#transaction-sheet').evaluate(el=>el.style.getPropertyValue('--sheet-height'))).toBe('');
+    expect((await saved(page)).transactions).toHaveLength(2);
+  });
+}
+
+for(const type of ['income','expense']){
+  test(`${type} Details is opaque, full-screen, centered and returns to filtered Activity`,async({page})=>{
+    const createdAt=new Date().toISOString(),label=type==='income'?'Gift':'Food';
+    await setup(page,'dark',[{id:'detail',type,amountCents:600,label,description:'Coffee',createdAt}]);await activity(page);
+    await page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true}).click();await page.getByLabel('Search activity').fill('Coffee');await page.locator('.transaction-row').click();
+    await expect(sheet(page)).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).not.toBeVisible();
+    const panel=await page.locator('.transaction-panel').boundingBox(),body=await page.locator('.details-body').boundingBox(),group=await page.locator('.details-centered').boundingBox();
+    expect(panel.x).toBe(0);expect(panel.y).toBe(0);expect(panel.width).toBe(390);expect(panel.height).toBe(844);
+    expect(Math.abs(group.y+group.height/2-body.y-body.height/2)).toBeLessThanOrEqual(1);
+    expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(33, 25, 44)');
+    await expect(sheet(page)).toContainText(type==='income'?'Money In':'Expense');await expect(sheet(page)).toContainText(label);await expect(sheet(page)).toContainText('Coffee');
+    await page.setViewportSize({width:320,height:360});await page.evaluate(()=>document.documentElement.style.fontSize='32px');await expect.poll(()=>page.locator('.transaction-frame').evaluate(el=>el.getBoundingClientRect().height)).toBe(360);
+    expect(await page.locator('.details-body').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+    const edit=sheet(page).getByRole('button',{name:'Edit',exact:true});await edit.scrollIntoViewIfNeeded();const box=await edit.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(360);
+    await page.evaluate(()=>document.documentElement.style.fontSize='');await page.setViewportSize({width:390,height:844});
+    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByLabel('Search activity')).toHaveValue('Coffee');await expect(page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.locator('.transaction-row')).toHaveCount(1);
+    await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();await expect(sheet(page)).toHaveAttribute('data-view','form');await expect(page.locator('dialog[open]')).toHaveCount(1);await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
+  });
+}
+
+test('keyboard dismissal restores the visible frame and form actions without moving the page',async({page})=>{
+  await setup(page);await openAdd(page,'expense');
+  await page.evaluate(()=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>300},offsetTop:{configurable:true,get:()=>70}});window.visualViewport.dispatchEvent(new Event('resize'));});
+  const frame=await page.locator('.transaction-frame').boundingBox();expect(frame.y).toBe(70);expect(frame.height).toBe(300);
+  await sheet(page).getByLabel('What was it? (optional)',{exact:true}).fill('Text keyboard');
+  await page.evaluate(()=>{delete window.visualViewport.height;delete window.visualViewport.offsetTop;window.visualViewport.dispatchEvent(new Event('resize'));});
+  await expect.poll(()=>page.locator('.transaction-frame').evaluate(el=>el.getBoundingClientRect().height)).toBe(844);
+  const save=await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).boundingBox();expect(save.y+save.height).toBeLessThanOrEqual(844);
+  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');expect((await saved(page)).transactions).toBeUndefined();
+});
+
+test('touch outlines clear app-wide, while keyboard focus remains visible',async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+  const page=await context.newPage();await setup(page);
+  for(const name of ['Add Money','Add Expense']){
+    const action=page.getByRole('button',{name,exact:true});await action.tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();await sheet(page).getByRole('button',{name:'Cancel',exact:true}).tap();
+    await expect(sheet(page)).not.toBeVisible();await expect(action).toHaveCSS('outline-style','none');await expect(action).toHaveCSS('box-shadow','none');await page.getByRole('heading',{name:'Hey, Max!'}).tap();await expect(action).toHaveCSS('box-shadow','none');
+  }
+  await add(page,'expense','6','Food','Coffee');
+  const activityButton=page.getByRole('button',{name:'Activity',exact:true});await activityButton.tap();await expect(activityButton).toHaveCSS('outline-style','none');
+  const row=page.locator('.transaction-row');await row.tap();await sheet(page).getByRole('button',{name:'Close',exact:true}).tap();await expect(row).toHaveCSS('outline-style','none');
+  await page.getByRole('button',{name:'Expenses',exact:true}).tap();await expect(page.getByRole('button',{name:'Expenses',exact:true})).toHaveCSS('outline-style','none');
+  await page.getByRole('button',{name:'Home',exact:true}).tap();await page.getByRole('button',{name:'Settings',exact:true}).tap();await page.locator('#edit-starting-balance').tap();await page.getByRole('button',{name:'Cancel',exact:true}).tap();await expect(page.locator('#edit-starting-balance')).toHaveCSS('outline-style','none');await page.getByRole('button',{name:'Home',exact:true}).tap();
+  await page.getByRole('button',{name:'Add Money',exact:true}).tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toHaveCSS('outline-style','none');
+  const source=sheet(page).getByLabel('Where did it come from?',{exact:true});await source.focus();await expect(source).toHaveCSS('outline-style','none');await page.keyboard.press('Tab');await source.focus();await expect(source).toHaveCSS('outline-style','solid');await sheet(page).getByRole('button',{name:'Cancel',exact:true}).tap();
+  const action=page.getByRole('button',{name:'Add Money',exact:true});await page.keyboard.press('Tab');await action.focus();await expect(action).toHaveCSS('outline-style','solid');await page.keyboard.press('Enter');await page.keyboard.press('Escape');await expect(action).toBeFocused();await expect(action).toHaveCSS('outline-style','solid');
+  await context.close();
+});
+
+
+for(const theme of ['light','dark']){
+  test(`${theme} full-screen forms keep intact fields separate from actions and center native select text`,async({page})=>{
+    const createdAt=new Date().toISOString();const records=[{id:'income',type:'income',amountCents:3000,label:'Allowance',description:'Gift',createdAt},{id:'expense',type:'expense',amountCents:600,label:'Food',description:'Coffee',createdAt}];
+    await setup(page,theme,records);const before=await saved(page);
+    for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense']){
+      const income=mode.includes('Money');
+      if(mode.startsWith('Add'))await openAdd(page,income?'income':'expense');
+      else{await activity(page);await page.locator(`[data-transaction-id="${income?'income':'expense'}"]`).click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();}
+      const amount=sheet(page).getByLabel('How much?',{exact:true});
+      await expect(amount).toBeFocused();
+      const prefix=sheet(page).locator('.currency-input>span');await expect(prefix).toHaveText('$');await expect(prefix).toBeVisible();
+      for(const value of ['', '10', '10.25']){await amount.fill(value);await expect(prefix).toBeVisible();await expect(amount).toHaveValue(value);}
+      await expect(amount).toHaveAttribute('inputmode','decimal');await expect(amount).toHaveCSS('font-variant-numeric','tabular-nums');
+      expect(await amount.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('-apple-system');
+      expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
+      for(const height of [320,844]){
+        await page.evaluate(height=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>height},offsetTop:{configurable:true,get:()=>0}});window.visualViewport.dispatchEvent(new Event('resize'));},height);
+        const panel=await page.locator('.transaction-panel').boundingBox();expect(panel.y).toBe(0);expect(panel.height).toBe(height);await expect(page.locator('.shell')).toBeHidden();
+        const select=sheet(page).getByLabel(income?'Where did it come from?':'Category',{exact:true});await select.selectOption(income?'Paycheck':'Shopping');
+        const metrics=await select.evaluate(el=>{const style=getComputedStyle(el);return {height:el.getBoundingClientRect().height,paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,lineHeight:style.lineHeight,value:el.value};});
+        expect(metrics.height).toBe(52);expect(metrics.paddingTop).toBe('0px');expect(metrics.paddingBottom).toBe('0px');expect(metrics.lineHeight).toBe('normal');expect(metrics.value).toBe(income?'Paycheck':'Shopping');
+        const description=sheet(page).getByLabel(income?'Description (optional)':'What was it? (optional)',{exact:true});await description.fill(height===320?'Long description '.repeat(7):'Short description');
+        const field=await description.boundingBox(),scroller=await page.locator('.sheet-fields').boundingBox(),footer=await page.locator('#transaction-form .sheet-actions').boundingBox();
+        expect(field.y).toBeGreaterThanOrEqual(scroller.y-1);expect(field.y+field.height).toBeLessThanOrEqual(scroller.y+scroller.height+1);expect(scroller.y+scroller.height).toBeLessThanOrEqual(footer.y+1);expect(footer.y+footer.height).toBeLessThanOrEqual(height);
+      }
+      await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await home(page);
+    }
+    expect(await saved(page)).toEqual(before);
+  });
+}
+
+for(const theme of ['light','dark'])test(`${theme} targeted numeric fonts, bullseye and Starting Balance prefix`,async({page})=>{
+  await setup(page,theme);
+  await expect(page.locator('.balance')).toHaveCSS('font-variant-numeric','tabular-nums');
+  expect(await page.locator('.balance').evaluate(el=>getComputedStyle(el).fontFamily)).toContain('-apple-system');
+  expect(await page.locator('.greeting h1').evaluate(el=>getComputedStyle(el).fontFamily)).toContain('DM Sans');
+  await expect(page.locator('.goal-star svg circle')).toHaveCount(3);await expect(page.locator('.goal-star svg path')).toHaveCount(0);
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.getByRole('button',{name:/Starting Balance/}).click();
+  await expect(page.locator('.currency-input>span')).toBeVisible();await expect(page.locator('#starting-balance')).toHaveValue('150.00');
+  await page.locator('#starting-balance').fill('10');await page.getByRole('button',{name:'Save',exact:true}).click();expect((await saved(page)).balanceCents).toBe(1000);
+});
