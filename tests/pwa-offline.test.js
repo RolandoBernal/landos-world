@@ -180,6 +180,7 @@ test('service worker precaches the app shell and app modules needed for offline 
     './js/road-bike-checklist.js',
     './js/maintenance-total.js',
     './js/maintenance-total-v2.js',
+    './fonts/geist-mono-variable.woff2',
     './fonts/digital-7.ttf',
     './fonts/dm-sans-latin.woff2',
     './fonts/dm-sans-latin-ext.woff2',

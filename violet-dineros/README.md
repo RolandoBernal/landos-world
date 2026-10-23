@@ -189,3 +189,27 @@ then reopen Violet Dineros. No reinstall, cache clearing or storage reset is nee
 The existing service worker changes cache identity with each deployed full Git SHA;
 LWVD does not add a separate updater or caching system. Real-worker restart tests
 also verify that a prior LWVD record survives and the revised Home loads.
+
+## Sprint 2.1.1 navigation and financial typography
+
+The previous fixed footer was anchored independently of document flow, while Goals
+and Insights supplied an extra content minimum height that Home/Activity did not.
+The Sprint 2.1 root-color change did not address that positioning difference on the
+installed iPhone. The existing shell now uses a flex column: main takes available
+space and navigation participates in normal flow with sticky bottom positioning.
+Window/document scrolling and the existing full-screen dialog frame remain intact.
+Navigation retains its safe-area padding; no spacer, overlay or viewport script is
+added. Focused tests compare its bottom edge with the viewport across every tab,
+short/long Activity and three iPhone heights at top, middle and bottom scroll.
+The precise installed-iOS viewport behavior still requires physical PWA acceptance.
+
+Financial values and currency inputs use one local variable Geist Mono WOFF2
+(100–900); labels, descriptions, dates and other UI typography are unchanged.
+Source: Vercel's `vercel/geist-font`, pinned revision
+`75d647056bcbd9eaba3a14b1b58290d0692685d6`,
+`fonts/GeistMono/webfonts/GeistMono[wght].woff2`.
+The original SIL Open Font License is included as `fonts/geist-mono-OFL.txt`.
+The Pages allowlist includes both files. The font is precached in the existing
+app cache; only this font's request uses that precached copy, so first-use offline
+loading works without changing other apps' font routing. Real-worker tests load
+it with the fixture network unavailable, then check LWVD and stored transactions.

@@ -58,6 +58,7 @@ const PRECACHE_URLS = [
   './js/road-bike-checklist.js',
   './js/maintenance-total.js',
   './js/maintenance-total-v2.js',
+  './fonts/geist-mono-variable.woff2',
   './fonts/digital-7.ttf',
   './fonts/dm-sans-latin.woff2',
   './fonts/dm-sans-latin-ext.woff2',
@@ -272,7 +273,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.destination === 'font') {
-    event.respondWith(cacheFirst(request, FONT_CACHE));
+    // Geist Mono is precached with the shell for LWVD's first offline font load.
+    const fontCache = url.origin === self.location.origin && url.pathname.endsWith('/fonts/geist-mono-variable.woff2') ? APP_CACHE : FONT_CACHE;
+    event.respondWith(cacheFirst(request, fontCache));
     return;
   }
 
