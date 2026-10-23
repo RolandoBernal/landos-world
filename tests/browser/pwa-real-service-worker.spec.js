@@ -176,6 +176,8 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
   });
   expect(await page.evaluate(() => window.LandoWorldBuildMetadata.environment)).toBe('legacy');
   expect(await page.evaluate(() => Boolean(window.LandosPWA))).toBe(false);
+  const lwvdRecord = {firstName:'Violet',balanceCents:10000,payday:'',frequency:'',onboarded:true,transactions:[{id:'preserved-income',type:'income',amountCents:350,label:'Gift',description:'Saved before update',createdAt:'2026-10-23T12:00:00.000Z'}]};
+  await page.evaluate(record=>localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(record)),lwvdRecord);
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
 
   serveDeployedWorker = true;
@@ -229,6 +231,9 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
   expect(deploymentRequests).toBeGreaterThan(0);
   expect(identity.endpointMetadata.commitFull).toBe(identity.pageMetadata.commitFull);
   expect(identity.pageMetadata.commitFull === identity.endpointMetadata.commitFull ? 'current' : 'available').toBe('current');
+  await page.goto(`${baseUrl}/violet-dineros/index.html`);
+  await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(lwvdRecord);
 
 });
 

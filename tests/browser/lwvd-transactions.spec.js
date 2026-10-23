@@ -118,7 +118,7 @@ test('invalid stored transactions fail closed without replacing legacy settings'
 
 
 test('success messages are noninteractive and expire at 2.5 seconds; errors remain',async({page})=>{
-  await setup(page);await page.clock.install();await add(page,'income','10','Gift');await expect(page.locator('#notice')).toHaveText('Money added.');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
+  await setup(page);const clockTime=new Date();await page.clock.install({time:clockTime});await page.clock.pauseAt(new Date(clockTime.getTime()+1000));await add(page,'income','10','Gift');await expect(page.locator('#notice')).toHaveText('Money added.');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
   await page.clock.fastForward(2499);await expect(page.locator('#notice')).toHaveText('Money added.');await page.clock.fastForward(1);await expect(page.locator('#notice')).toBeEmpty();
   await add(page,'expense','2','Food');await expect(page.locator('#notice')).toHaveText('Expense saved.');await page.clock.fastForward(2500);await expect(page.locator('#notice')).toBeEmpty();
   const before=await saved(page);await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
@@ -285,4 +285,35 @@ for(const theme of ['light','dark'])test(`${theme} targeted numeric fonts, bulls
   await page.getByRole('button',{name:/Starting Balance/}).click();
   await expect(page.locator('.currency-input>span')).toBeVisible();await expect(page.locator('#starting-balance')).toHaveValue('150.00');
   await page.locator('#starting-balance').fill('10');await page.getByRole('button',{name:'Save',exact:true}).click();expect((await saved(page)).balanceCents).toBe(1000);
+});
+
+for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport, conversational balance, Settings and Activity polish`,async({page})=>{
+  if(theme==='system')await page.emulateMedia({colorScheme:'dark'});
+  await setup(page,theme);const before=await saved(page);
+  const raw=await page.evaluate(k=>localStorage.getItem(k),key);
+  await expect(page.locator('.story')).toHaveText('You have$150.00right now.');
+  await expect(page.getByRole('heading',{name:'Your Money Story'})).toHaveCount(0);
+  expect(await page.locator('.guide').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(18.08);
+  const bullseye=await page.locator('.goal-star svg').innerHTML();
+  for(const width of [320,390,430]){
+    await page.setViewportSize({width,height:844});
+    for(const tab of ['Home','Activity','Goals','Insights']){
+      await page.getByRole('button',{name:tab,exact:true}).click();
+      const geometry=await page.evaluate(()=>({height:innerHeight,body:document.body.getBoundingClientRect().height,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom,rootColor:getComputedStyle(document.documentElement).backgroundColor,bodyColor:getComputedStyle(document.body).backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth}));
+      expect(geometry.body).toBeGreaterThanOrEqual(geometry.height-1);expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height-1);expect(Math.abs(geometry.nav-geometry.height)).toBeLessThanOrEqual(1);expect(geometry.overflow).toBe(false);expect(geometry.rootColor).not.toBe('rgb(0, 0, 0)');expect(geometry.bodyColor).toBe(geometry.rootColor);
+      expect(await page.locator('nav [data-tab="Goals"] svg').innerHTML()).toBe(bullseye);
+      if(tab==='Goals')expect(await page.locator('.empty-icon svg').innerHTML()).toBe(bullseye);
+    }
+  }
+  await home(page);await page.getByRole('button',{name:'Settings',exact:true}).click();
+  const rows=await page.locator('.settings-panel .setting-row').evaluateAll(rows=>rows.map(row=>({height:row.getBoundingClientRect().height,padding:getComputedStyle(row).padding,icon:row.querySelector('.setting-icon').getBoundingClientRect().width})));
+  expect(rows).toHaveLength(4);expect(new Set(rows.map(r=>r.padding)).size).toBe(1);expect(new Set(rows.map(r=>r.icon)).size).toBe(1);expect(Math.max(...rows.map(r=>r.height))-Math.min(...rows.map(r=>r.height))).toBeLessThan(2);
+  const actions=await page.locator('.settings-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {top:r.top,width:r.width,height:r.height,bottom:r.bottom};}));expect(actions[0].top).toBe(actions[1].top);expect(Math.abs(actions[0].width-actions[1].width)).toBeLessThan(1);expect(actions[0].height).toBe(actions[1].height);expect(actions[0].height).toBeGreaterThanOrEqual(44);
+  await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));const actionBottom=(await page.locator('.settings-actions').boundingBox()).y+(await page.locator('.settings-actions').boundingBox()).height;expect(actionBottom).toBeLessThanOrEqual((await page.locator('nav').boundingBox()).y-8);
+  await page.getByLabel('First name',{exact:true}).fill('Unsaved');await page.locator('#cancel').click();await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();expect(await saved(page)).toEqual(before);
+  await activity(page);await expect(page.locator('.activity-search svg')).toBeVisible();
+  for(const name of ['All','Money In','Expenses']){const filter=page.getByRole('button',{name,exact:true});await filter.click();await expect(filter).toHaveAttribute('aria-pressed','true');await expect(filter).toHaveCSS('background-color','rgba(0, 0, 0, 0)');expect((await filter.boundingBox()).height).toBeGreaterThanOrEqual(44);}
+  await page.keyboard.press('Tab');await page.getByRole('button',{name:'All',exact:true}).focus();await expect(page.getByRole('button',{name:'All',exact:true})).toHaveCSS('outline-style','solid');
+  expect(await page.evaluate(k=>localStorage.getItem(k),key)).toBe(raw);
+  for(const record of [{...before,balanceCents:0},{...before,balanceCents:Number.MAX_SAFE_INTEGER},{...before,balanceCents:0,transactions:[{id:'negative',type:'expense',amountCents:Number.MAX_SAFE_INTEGER,label:'Other',description:'',createdAt:new Date().toISOString()}]}]){await page.evaluate(({key,record})=>localStorage.setItem(key,JSON.stringify(record)),{key,record});await page.reload();await expect(page.locator('.balance')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
 });
