@@ -36,5 +36,37 @@ export function effectivePayday(anchor, frequency, today = localToday()) {
   return new Date(stamp).toISOString().slice(0, 10);
 }
 export function validState(data) {
-  return data && data.onboarded === true && typeof data.firstName === 'string' && data.firstName.trim().length > 0 && data.firstName.length <= 40 && Number.isSafeInteger(data.balanceCents) && data.balanceCents >= 0 && (!data.payday || dateParts(data.payday)) && ['', 'weekly', 'biweekly', 'monthly'].includes(data.frequency);
+  return data && data.onboarded === true && typeof data.firstName === 'string' && data.firstName.trim().length > 0 && data.firstName.length <= 40 && Number.isSafeInteger(data.balanceCents) && data.balanceCents >= 0 && (!data.payday || dateParts(data.payday)) && ['', 'weekly', 'biweekly', 'monthly'].includes(data.frequency) && (data.transactions === undefined || validTransactions(data.transactions)) && currentBalance(data) !== null;
+}
+
+export const TRANSACTION_LABELS = Object.freeze({
+  income: ['Allowance', 'Paycheck', 'Gift', 'Other'],
+  expense: ['Food', 'Shopping', 'Fun', 'Gas', 'Other'],
+});
+export function validTransactions(transactions) {
+  return Array.isArray(transactions) && new Set(transactions.map(t => t?.id)).size === transactions.length && transactions.every(t =>
+    t && typeof t.id === 'string' && t.id.length > 0 && TRANSACTION_LABELS[t.type]?.includes(t.label) &&
+    Number.isSafeInteger(t.amountCents) && t.amountCents > 0 && typeof t.description === 'string' && t.description.length <= 120 &&
+    typeof t.createdAt === 'string' && Number.isFinite(Date.parse(t.createdAt)));
+}
+export function currentBalance(data) {
+  const cents = (data.transactions || []).reduce((total, t) => total + BigInt(t.amountCents) * (t.type === 'income' ? 1n : -1n), BigInt(data.balanceCents));
+  return cents <= BigInt(Number.MAX_SAFE_INTEGER) && cents >= BigInt(Number.MIN_SAFE_INTEGER) ? Number(cents) : null;
+}
+export function dailyGuide(balance, days) {
+  return days > 0 ? Math.round(Math.max(0, balance) / days) : null;
+}
+export function activityGroups(transactions, { search = '', filter = 'all', now = new Date() } = {}) {
+  const query = search.trim().toLocaleLowerCase();
+  const today = localToday(now), yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  const groups = new Map();
+  transactions.map((t, index) => ({t, index})).filter(({t}) => (filter === 'all' || t.type === filter) &&
+    `${t.description} ${t.label}`.toLocaleLowerCase().includes(query))
+    .sort((a, b) => Date.parse(b.t.createdAt) - Date.parse(a.t.createdAt) || b.index - a.index)
+    .forEach(({t}) => {
+      const date = new Date(t.createdAt), key = localToday(date);
+      if (!groups.has(key)) groups.set(key, {date: key, label: key === today ? 'Today' : key === localToday(yesterday) ? 'Yesterday' : new Intl.DateTimeFormat('en-US', {month: 'short', day: 'numeric', year: 'numeric'}).format(date), transactions: []});
+      groups.get(key).transactions.push(t);
+    });
+  return [...groups.values()];
 }

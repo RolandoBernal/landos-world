@@ -1,11 +1,14 @@
-import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState } from './model.js';
+import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups } from './model.js';
 const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
-let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false;
-try { const stored = localStorage.getItem(STORAGE_KEY); if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
+let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
+let noticeTimer = null, sheetOpener = null, sheetScroll = null;
+let activitySearch = '', activityFilter = 'all';
+try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
  home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
  activity: '<rect x="5" y="3" width="15" height="19" rx="2"/><path d="M10 8h6M10 13h6M10 18h6M8 8h.01M8 13h.01M8 18h.01"/>',
+ target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
  goals: '<circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="m11 13 10-10m-5 1 4 0v4"/>',
  insights: '<path d="M3 21V13h4v8M10 21V8h4v13M17 21V3h4v18"/>',
  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2"/>',
@@ -17,16 +20,42 @@ const icons = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const plant = '<img class="plant" src="../icons/violet-dineros.svg" alt="" aria-hidden="true">';
+function announce(message) {
+  clearTimeout(noticeTimer);
+  const notice = document.querySelector('#notice'); notice.dataset.kind = 'success'; notice.textContent = message;
+  noticeTimer = setTimeout(() => { notice.textContent = ''; }, 2500);
+}
+function showSaveError(message) {
+  clearTimeout(noticeTimer);
+  document.querySelector('#notice').dataset.kind = 'error';
+  const dialog = document.querySelector('#transaction-sheet');
+  if (dialog?.open) {
+    let error = dialog.querySelector('.error');
+    if (!error) { error = document.createElement('p'); error.className = 'error'; error.setAttribute('role', 'alert'); (dialog.querySelector('.sheet-body') || dialog).appendChild(error); }
+    error.textContent = message;
+  }
+  document.querySelector('#notice').textContent = message;
+}
 function save(next) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); state = next; return true; }
-  catch { document.querySelector('#notice').textContent = 'Your changes could not be saved. Check that browser storage is available and try again.'; return false; }
+  if (!validState(next)) { showSaveError('This amount would make your balance too large to save. Try a smaller amount.'); return false; }
+  try {
+    if (localStorage.getItem(STORAGE_KEY) !== lastRaw) {
+      showSaveError('Your information changed in another tab. Reload before saving so those changes stay safe.'); return false;
+    }
+    const raw = JSON.stringify(next);
+    localStorage.setItem(STORAGE_KEY, raw);
+    state = next; lastRaw = raw; clearTimeout(noticeTimer); document.querySelector('#notice').textContent = ''; return true;
+  } catch {
+    showSaveError('Your changes could not be saved. Check that browser storage is available and try again.');
+    return false;
+  }
 }
 function focusHeading() { const h = content.querySelector('h1'); h.tabIndex = -1; h.focus(); }
 function onboarding() {
   gear.hidden = nav.hidden = true;
   if (storageBlocked) { content.innerHTML = '<section class="card"><h1>Your saved information needs attention</h1><p>We couldn’t read your local data. Please check browser storage and reload. Your saved information has not been replaced.</p></section>'; return; }
   document.body.dataset.screen = 'onboarding';
-  const fields = step === 1 ? `<div class="welcome-brand">${plant}<h2>Violet Dineros</h2><p>Your money. Your goals.</p></div><h1>Hey!</h1><p class="onboarding-question">Let’s make money<br>a little easier. 💜</p><label for="name">What’s your first name?</label><input id="name" name="firstName" autocomplete="given-name" maxlength="40" required value="${escape(draft.firstName)}">` : step === 2 ? `<h1>Your Money</h1><p class="onboarding-question">How much money<br>do you have right now?</p><p>This will be your starting balance.<br>It isn’t recorded as income.</p><label for="balance">Your money ($)</label><input id="balance" name="balance" inputmode="decimal" required placeholder="0.00" value="${escape(draft.balanceInput || '')}">` : `<h1>Next Payday</h1><p class="onboarding-question">When do you get<br>paid again?</p><p>This step is optional.<br>You can set or change it later<br>in Settings.</p><label for="payday">Next payday (optional)</label><input id="payday" name="payday" type="date" value="${draft.payday}">`;
+  const fields = step === 1 ? `<div class="welcome-brand">${plant}<h2>Violet Dineros</h2><p>Your money. Your goals.</p></div><h1>Hey!</h1><p class="onboarding-question">Let’s make money<br>a little easier. 💜</p><label for="name">What’s your first name?</label><input id="name" name="firstName" autocomplete="given-name" maxlength="40" required value="${escape(draft.firstName)}">` : step === 2 ? `<h1>Your Money</h1><p class="onboarding-question">How much money<br>do you have right now?</p><p>This will be your starting balance.<br>It isn’t recorded as income.</p><label for="balance">Your money ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="balance" name="balance" inputmode="decimal" required placeholder="0.00" value="${escape(draft.balanceInput || '')}"></div>` : `<h1>Next Payday</h1><p class="onboarding-question">When do you get<br>paid again?</p><p>This step is optional.<br>You can set or change it later<br>in Settings.</p><label for="payday">Next payday (optional)</label><input id="payday" name="payday" type="date" value="${draft.payday}">`;
   content.innerHTML = `<section class="welcome">${step > 1 ? `<div class="steps" aria-label="Step ${step} of 3">${[1, 2, 3].map(n => `<span class="${n === step ? 'active' : ''}">${n}</span>`).join('<i></i>')}</div>` : ''}<form>${fields}<p class="error" role="alert"></p>${step === 3 ? '<button class="text-button" type="button" id="skip">Skip for now</button>' : ''}<div class="form-actions">${step > 1 ? '<button class="text-button" type="button" id="back">Back</button>' : ''}<button class="primary">Continue</button></div></form></section>`;
   const finish = () => {
     content.innerHTML = `<section class="welcome complete">${plant}<h1>You’re all set!</h1><p>Your money journey<br>starts now.<br>Let’s do this! ✨</p><button class="primary" id="dashboard">Go to My Dashboard</button></section>`;
@@ -48,14 +77,14 @@ function settings() {
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
-    if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); document.querySelector('#notice').textContent = 'Settings saved.'; focusHeading(); }
+    if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); announce('Settings saved.'); focusHeading(); }
   };
   content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusHeading(); };
   content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusHeading(); };
   content.querySelector('#cancel').onclick = () => { tab = 'Home'; render(); focusHeading(); };
 }
 function editStartingBalance() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" aria-label="Back to Settings">‹</button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" aria-label="Back to Settings">‹</button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
   const back = () => { tab = 'Settings'; render(); content.querySelector('#edit-starting-balance').focus(); };
   content.querySelector('#balance-back').onclick = back;
   content.querySelector('#balance-cancel').onclick = back;
@@ -70,7 +99,7 @@ function editStartingBalance() {
     input.removeAttribute('aria-invalid');
     if (amount === state.balanceCents) { back(); return; }
     if (save({ ...state, balanceCents: amount })) {
-      back(); document.querySelector('#notice').textContent = 'Starting Balance saved.';
+      back(); announce('Starting Balance saved.');
     }
   };
 }
@@ -82,6 +111,7 @@ function render() {
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusHeading(); });
+  if (tab === 'Activity') { renderActivity(); return; }
   if (tab === 'Balance') { editStartingBalance(); return; }
   if (tab === 'Settings') { settings(); return; }
   if (tab !== 'Home') {
@@ -92,19 +122,145 @@ function render() {
     };
     content.innerHTML = `<section class="empty">${launcherBack}<h1>${tab}</h1><div class="empty-body"><div class="empty-icon">${icon(tab.toLowerCase())}</div><h2>${details[tab][0]}</h2><p>${details[tab][1]}</p></div></section>`; return;
   }
-  const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday);
+  const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday), balance = currentBalance(state);
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
-  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-labelledby="story-title"><div class="story"><h2 id="story-title">Your Money Story</h2><p class="balance">${money(state.balanceCents)}</p><p>You have ${money(state.balanceCents)} right now.</p></div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong>${days} ${days === 1 ? 'day' : 'days'}</strong><p>${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide">${money(Math.round(state.balanceCents / days))} a day</p><p>to make your money last.</p></div></div><p class="guidance-note">A gentle guide, not a strict spending limit.</p>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2><span>Coming soon</span></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button disabled><span>${icon(name)}</span>${label}<small>Coming soon</small></button>`).join('')}</div></section><section class="goal"><span class="goal-star">${icon('goals')}</span><div><h2>Featured Goal <span>(Coming Soon)</span></h2><p>Start saving for something awesome.</p></div></section><section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
+  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-labelledby="story-title"><div class="story"><h2 id="story-title">Your Money Story</h2><p class="balance">${money(balance)}</p><p>You have <span class="numeric">${money(balance)}</span> right now.</p></div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(balance, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'disabled' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}${name === 'afford' ? '<small>Coming soon</small>' : ''}</button>`).join('')}</div></section><section class="goal"><span class="goal-star">${icon('target')}</span><div><h2>Featured Goal <span>(Coming Soon)</span></h2><p>Start saving for something awesome.</p></div></section><section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
+  content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
 }
+function renderActivity() {
+  content.innerHTML = `${launcherBack}<section class="activity"><h1>Activity</h1><label for="activity-search">Search activity</label><input id="activity-search" type="search" placeholder="Search descriptions or categories" value="${escape(activitySearch)}"><div class="activity-filters" role="group" aria-label="Activity filters">${[['all', 'All'], ['income', 'Money In'], ['expense', 'Expenses']].map(([value, label]) => `<button type="button" data-filter="${value}" aria-pressed="${activityFilter === value}">${label}</button>`).join('')}</div><div id="activity-list"></div></section>`;
+  content.querySelector('#activity-search').oninput = event => { activitySearch = event.target.value; renderActivityRows(); };
+  content.querySelectorAll('[data-filter]').forEach(button => button.onclick = () => {
+    activityFilter = button.dataset.filter;
+    content.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    renderActivityRows();
+  });
+  renderActivityRows();
+}
+function renderActivityRows() {
+  const transactions = state.transactions || [];
+  const groups = activityGroups(transactions, { search: activitySearch, filter: activityFilter });
+  const list = content.querySelector('#activity-list');
+  if (!groups.length) {
+    list.innerHTML = `<div class="activity-empty"><div class="empty-icon">${icon('activity')}</div><h2>${transactions.length ? 'No matching activity yet.' : 'Your money activity starts here.'}</h2><p>${transactions.length ? 'Try another search or filter.' : 'Money you add and expenses you record will appear here.'}</p></div>`; return;
+  }
+  list.innerHTML = groups.map(group => `<section class="activity-group"><h2>${escape(group.label)}</h2><ul>${group.transactions.map(t => `<li><button class="transaction-row" type="button" data-transaction-id="${escape(t.id)}" aria-label="${escape(`View transaction details: ${t.description || t.label}, ${t.type === 'income' ? 'Money In +' : 'Expense −'}${money(t.amountCents)}, ${t.label}`)}"><span class="transaction-icon ${t.type}">${icon(t.type === 'income' ? 'plus' : 'expense')}</span><span class="transaction-text"><strong>${escape(t.description || t.label)}</strong><small>${t.type === 'income' ? 'Money In' : 'Expense'} · ${escape(t.label)}</small></span><strong class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${money(t.amountCents)}</strong><span class="transaction-chevron" aria-hidden="true">›</span></button></li>`).join('')}</ul></section>`).join('');
+  list.querySelectorAll('[data-transaction-id]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); showTransaction(button.dataset.transactionId); });
+}
+function openSheet(html, focusSelector = '#sheet-title', view = 'form') {
+  const dialog = document.querySelector('#transaction-sheet');
+  if (!dialog.open) {
+    sheetOpener = document.activeElement;
+    sheetScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
+    document.body.style.overflow = 'hidden';
+  }
+  dialog.dataset.view = view;
+  dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
+  if (!dialog.open) dialog.showModal();
+  fitSheetViewport();
+  dialog.querySelector(focusSelector).focus({preventScroll:true});
+}
+const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
+function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
+function closeSheet() { document.querySelector('#transaction-sheet').close(); }
+function commitTransactions(transactions, message) {
+  if (!save({ ...state, transactions })) return false;
+  render(); closeSheet(); announce(message); return true;
+}
+function openTransactionForm(type, id = null) {
+  const original = id ? (state.transactions || []).find(t => t.id === id) : null;
+  if (id && !original) return;
+  if (original) type = original.type;
+  const isIncome = type === 'income', title = original ? `Edit ${isIncome ? 'Money In' : 'Expense'}` : isIncome ? 'Add Money' : 'Add Expense';
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields"><label for="transaction-amount">How much?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="transaction-amount" autofocus name="amount" inputmode="decimal" autocomplete="off" required value="${original ? (original.amountCents / 100).toFixed(2) : ''}" placeholder="0.00" aria-describedby="transaction-error"></div><label for="transaction-label">${isIncome ? 'Where did it come from?' : 'Category'}</label><select id="transaction-label" name="label" required><option value="">Choose ${isIncome ? 'a source' : 'a category'}</option>${TRANSACTION_LABELS[type].map(label => `<option ${original?.label === label ? 'selected' : ''}>${label}</option>`).join('')}</select><label for="transaction-description">${isIncome ? 'Description' : 'What was it?'} (optional)</label><input id="transaction-description" name="description" maxlength="120" value="${escape(original?.description || '')}"><p class="error" id="transaction-error" role="alert"></p></div><div class="sheet-actions"><button class="primary" type="submit">${original ? 'Save Changes' : isIncome ? 'Add Money' : 'Save Expense'}</button><button type="button" id="transaction-cancel">Cancel</button></div></form>`, '#transaction-amount');
+  bindSheetClose(); document.querySelector('#transaction-cancel').onclick = closeSheet;
+  let submitted = false;
+  document.querySelector('#transaction-form').onsubmit = event => {
+    event.preventDefault(); if (submitted) return;
+    const data = new FormData(event.target), amount = parseMoney(data.get('amount')), label = data.get('label'), description = data.get('description').trim();
+    const error = document.querySelector('#transaction-error');
+    if (amount === null || amount <= 0) { error.textContent = 'Enter an amount greater than zero with up to two decimal places.'; document.querySelector('#transaction-amount').focus(); return; }
+    if (!TRANSACTION_LABELS[type].includes(label)) { error.textContent = `Choose ${isIncome ? 'where the money came from' : 'a category'}.`; document.querySelector('#transaction-label').focus(); return; }
+    if (description.length > 120) { error.textContent = 'Keep the description to 120 characters or fewer.'; return; }
+    const transaction = original ? { ...original, amountCents: amount, label, description } : {
+      id: Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
+      type, amountCents: amount, label, description, createdAt: new Date().toISOString(),
+    };
+    if (original && transaction.amountCents === original.amountCents && transaction.label === original.label && transaction.description === original.description) { closeSheet(); return; }
+    const transactions = original ? state.transactions.map(t => t.id === id ? transaction : t) : [...(state.transactions || []), transaction];
+    submitted = true;
+    if (!commitTransactions(transactions, original ? 'Changes saved.' : isIncome ? 'Money added.' : 'Expense saved.')) submitted = false;
+  };
+}
+function showTransaction(id) {
+  const transaction = (state.transactions || []).find(t => t.id === id); if (!transaction) return;
+  const isIncome = transaction.type === 'income';
+  openSheet(`${sheetHeading(isIncome ? 'Money In' : 'Expense')}<div class="sheet-body details-body"><div class="details-centered"><p class="detail-amount ${transaction.type}">${isIncome ? '+' : '−'}${money(transaction.amountCents)}</p><dl class="transaction-details"><dt>Type</dt><dd>${isIncome ? 'Money In' : 'Expense'}</dd><dt>${isIncome ? 'Source' : 'Category'}</dt><dd>${escape(transaction.label)}</dd>${transaction.description ? `<dt>Description</dt><dd>${escape(transaction.description)}</dd>` : ''}<dt>Date</dt><dd class="numeric">${escape(new Intl.DateTimeFormat('en-US', {dateStyle:'medium', timeStyle:'short'}).format(new Date(transaction.createdAt)))}</dd></dl><div class="sheet-actions"><button type="button" class="primary" id="transaction-edit">Edit</button><button type="button" id="transaction-delete">Delete</button></div></div></div>`, '#sheet-title', 'details');
+  bindSheetClose(); document.querySelector('#transaction-edit').onclick = () => openTransactionForm(transaction.type, id);
+  document.querySelector('#transaction-delete').onclick = () => {
+    openSheet(`${sheetHeading('Delete activity?')}<div class="sheet-body"><p>Delete this ${isIncome ? 'money entry' : 'expense'}? Your balance will be updated.</p></div><div class="sheet-actions"><button class="primary" type="button" id="confirm-delete">Delete</button><button type="button" id="cancel-delete">Cancel</button></div>`);
+    bindSheetClose(); document.querySelector('#cancel-delete').onclick = () => showTransaction(id);
+    let deleted = false;
+    document.querySelector('#confirm-delete').onclick = () => {
+      if (deleted) return; deleted = true;
+      if (!commitTransactions(state.transactions.filter(t => t.id !== id), 'Transaction deleted.')) deleted = false;
+    };
+  };
+}
+// The native top-layer host is reset to the layout viewport, like LLT's calculator.
+// Its inner frame follows Safari's actual visible rectangle, including keyboard changes.
+function fitSheetViewport() {
+  const dialog = document.querySelector('#transaction-sheet'); if (!dialog.open) return;
+  const viewport = window.visualViewport;
+  dialog.style.setProperty('--sheet-top', `${viewport?.offsetTop || 0}px`);
+  dialog.style.setProperty('--sheet-left', `${viewport?.offsetLeft || 0}px`);
+  dialog.style.setProperty('--sheet-width', `${viewport?.width || window.innerWidth}px`);
+  dialog.style.setProperty('--sheet-height', `${viewport?.height || window.innerHeight}px`);
+  dialog.querySelector('input:focus')?.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
+}
+window.visualViewport?.addEventListener('resize', fitSheetViewport);
+window.visualViewport?.addEventListener('scroll', fitSheetViewport);
+window.addEventListener('resize', fitSheetViewport);
+document.documentElement.dataset.focusMode = 'pointer';
+document.addEventListener('keydown', event => {
+  if (event.key === 'Tab' || event.key === 'Escape' || (['Enter', ' '].includes(event.key) && event.target.matches('button, a'))) document.documentElement.dataset.focusMode = 'keyboard';
+}, true);
+document.addEventListener('pointerdown', () => { document.documentElement.dataset.focusMode = 'pointer'; }, true);
+const transactionSheet = document.querySelector('#transaction-sheet');
+transactionSheet.addEventListener('focusin', event => {
+  if (event.target.matches('input')) event.target.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
+});
+transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
+transactionSheet.addEventListener('close', () => {
+  for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
+  if (sheetScroll) {
+    document.body.style.overflow = sheetScroll.overflow;
+    window.scrollTo({left: sheetScroll.x, top: sheetScroll.y, behavior:'instant'}); sheetScroll = null;
+  }
+  const target = sheetOpener?.isConnected ? sheetOpener : content.querySelector('h1');
+  if (target?.matches('h1')) target.tabIndex = -1;
+  target?.focus({preventScroll:true});
+  sheetOpener = null;
+});
+window.addEventListener('storage', event => {
+  if (event.key !== STORAGE_KEY && event.key !== null) return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY), next = JSON.parse(raw);
+    if (!validState(next)) throw Error();
+    state = next; lastRaw = raw;
+    if (transactionSheet.open) closeSheet();
+    render(); announce('Your money information was updated in another tab.');
+  } catch { showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
+});
 function openSettings() { tab = 'Settings'; render(); focusHeading(); }
 gear.onclick = openSettings;
 window.addEventListener('pageshow', event => {
   if (event.persisted) window.LandosTheme?.init();
   render();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab)) render(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open) render(); });
 // Refresh calendar-day guidance while Home remains open across midnight.
-setInterval(() => { if (state && tab === 'Home' && !document.hidden && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
+setInterval(() => { if (state && tab === 'Home' && !document.hidden && !document.querySelector('#transaction-sheet')?.open && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
 let renderedDay = localToday();
 render();
