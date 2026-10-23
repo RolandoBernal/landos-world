@@ -213,3 +213,40 @@ The Pages allowlist includes both files. The font is precached in the existing
 app cache; only this font's request uses that precached copy, so first-use offline
 loading works without changing other apps' font routing. Real-worker tests load
 it with the fixture network unavailable, then check LWVD and stored transactions.
+
+## Sprint 2.1.2 temporary viewport diagnostics and weight refinement
+
+The installed-iPhone viewport problem is still unresolved. This release does not
+attempt another positioning fix: existing shell heights, navigation positioning,
+safe-area rules and scroll behavior are unchanged. Do not interpret automated
+viewport checks as physical-PWA acceptance or assume the root cause is known.
+
+A temporary “Viewport Diagnostics” disclosure is available above navigation on
+Home, Activity, Goals and Insights (scroll down to it on long pages). Open it,
+press Refresh, then Copy Diagnostics. Readings update when opening, on tab changes
+and on resize/orientation events; there is no polling. The compact report popover
+is outside normal flow, so expanding it does not add report height or move the
+navigation. The small disclosure control itself occupies normal flow.
+
+The plain-text report contains only actual rendered environment/geometry:
+display mode including the iOS standalone fallback, window/document/visual viewport
+sizes, scroll heights and position, shell/main computed sizing/overflow/position,
+navigation bounds and gaps to both viewport heights, bottom padding, measured
+`env(safe-area-inset-bottom)`, and viewport-fit metadata. No financial record,
+name, browser storage contents, preference values or personal description is read.
+Clipboard copying uses the existing native Clipboard API approach with a temporary
+readonly textarea fallback; failure leaves the report visible for screenshots.
+Nothing is logged, persisted or transmitted by the diagnostics.
+
+Collect Home and Goals reports with the same device orientation and keyboard
+closed, and Activity if useful. Paste them back before another viewport correction
+is implemented. Keep diagnostics until those real-device measurements are reviewed.
+Use the existing installed-PWA Application Status update flow; do not reinstall,
+clear application storage or reset data.
+
+All financial values and currency inputs now use Geist Mono weight 500. Its
+existing local variable font supports 100–900; real-worker checks load weight 500
+offline. Unnecessary heavy weights were reduced to 500 for headings, buttons,
+navigation and emphasized text; body/supporting text uses 400. No displayed UI
+retains a weight above 500; font-face range declarations still describe the
+available variable font. Families, numeric arithmetic and storage are unchanged.
