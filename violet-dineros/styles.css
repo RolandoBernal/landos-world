@@ -178,6 +178,9 @@ body[data-screen=settings] .settings-panel h2{margin:10px 0 0}
 .shell{--shell-inline:22px;display:flex;flex-direction:column;padding-bottom:0}
 main{flex:1;min-width:0;align-content:start;padding-bottom:24px}
 nav{position:sticky;flex-shrink:0;width:calc(100% + var(--shell-inline) + var(--shell-inline));margin:0 calc(0px - var(--shell-inline));left:auto;right:auto}
+/* Installed iOS can underreport dvh at launch until the first root scroll.
+   Use the stable viewport for shell coverage; keep normal root scrolling/sticky nav. */
+@media(display-mode:standalone){body,.shell{min-height:100vh}}
 body[data-screen=onboarding] .shell{display:block}
 body[data-screen=onboarding] main{padding-bottom:0}
 @media(max-width:360px){.shell{--shell-inline:16px}}

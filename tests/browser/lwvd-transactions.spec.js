@@ -377,3 +377,31 @@ for(const theme of ['light','dark'])test(`${theme} temporary viewport diagnostic
   await diagnostics.locator('summary').click();await expect(report).not.toBeVisible();expect(await saved(page)).toEqual(before);
   await expect(page.locator('.balance')).toHaveCount(0);await home(page);await expect(page.locator('.balance')).toHaveCSS('font-weight','500');await expect(page.locator('.guide .numeric')).toHaveCSS('font-weight','500');await expect(page.locator('.greeting h1')).toHaveCSS('font-weight','500');await expect(page.getByRole('button',{name:'Add Money',exact:true})).toHaveCSS('font-weight','500');
 });
+
+test('standalone shell stays full height when launch dvh underreports by 33px',async({page})=>{
+  // Desktop engines do not reproduce the installed-iPhone viewport bug. Model
+  // only its smaller dvh and activate the real standalone CSS rule below.
+  await page.route('**/violet-dineros/styles.css',async route=>{
+    const response=await route.fetch();
+    const css=(await response.text()).replaceAll('min-height:100dvh','min-height:calc(100vh - 33px)');
+    await route.fulfill({response,body:css});
+  });
+  await setup(page,'dark');const before=await saved(page);
+  await page.evaluate(()=>{
+    const rules=[...document.styleSheets].flatMap(sheet=>[...sheet.cssRules]);
+    const standalone=rules.find(rule=>rule.conditionText==='(display-mode: standalone)');
+    if(!standalone)throw Error('Missing standalone viewport rule');
+    standalone.media.mediaText='all';
+  });
+  for(const height of [841,874]){
+    await page.setViewportSize({width:390,height});
+    for(const tab of ['Home','Activity','Goals','Insights']){
+      await page.getByRole('button',{name:tab,exact:true}).click();
+      await page.evaluate(()=>window.scrollTo(0,0));
+      const geometry=await page.evaluate(()=>({height:innerHeight,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom}));
+      expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height);
+      expect(geometry.nav).toBe(geometry.height);
+    }
+  }
+  expect(await saved(page)).toEqual(before);
+});
