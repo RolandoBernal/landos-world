@@ -291,7 +291,7 @@ for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport,
   if(theme==='system')await page.emulateMedia({colorScheme:'dark'});
   await setup(page,theme);const before=await saved(page);
   const raw=await page.evaluate(k=>localStorage.getItem(k),key);
-  await expect(page.locator('.story')).toHaveText('You have$150.00right now.');
+  await expect(page.locator('.story')).toHaveText('You have$150.00available to spend right now.');
   await expect(page.getByRole('heading',{name:'Your Money Story'})).toHaveCount(0);
   expect(await page.locator('.guide').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(18.08);
   const bullseye=await page.locator('.goal-star svg').innerHTML();
