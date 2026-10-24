@@ -27,7 +27,7 @@ async function home(page){await page.getByRole('button',{name:'Home',exact:true}
 
 test('legacy data is not rewritten; income/expense, negative balances, guide and reload use cents',async({page})=>{
   const initial=await setup(page);expect(await saved(page)).toEqual(initial);await expect(page.locator('.balance')).toHaveText('$150.00');
-  await expect(page.getByRole('button',{name:'Can I Afford This?',exact:false})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Can I Afford This?',exact:true})).toBeEnabled();
   await add(page,'income','30','Allowance');await expect(page.locator('.balance')).toHaveText('$180.00');await expect(page.locator('.guide')).toHaveText('$60.00 a day');
   await add(page,'expense','6','Food','Coffee');await expect(page.locator('.balance')).toHaveText('$174.00');await expect(page.locator('.guide')).toHaveText('$58.00 a day');
   await add(page,'expense','200','Shopping','New shirt');await expect(page.locator('.balance')).toHaveText('-$26.00');await expect(page.locator('.guide')).toHaveText('$0.00 a day');
