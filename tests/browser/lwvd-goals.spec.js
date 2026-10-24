@@ -78,3 +78,18 @@ test('goal purchase category uses the inset LLT chevron and remains a working na
  await expect(category).toHaveCSS('appearance','none');await expect(category).toHaveCSS('padding-inline-end','48px');const image=await category.evaluate(e=>getComputedStyle(e).backgroundImage);expect(image.match(/linear-gradient/g)).toHaveLength(2);
  await category.selectOption('Fun');await expect(category).toHaveValue('Fun');await page.screenshot({path:testInfo.outputPath('goal-purchase-select.png')});await page.getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toBeUndefined();
 });
+
+test('every goal form opens on its first input and Details keeps heading focus',async({page})=>{
+ await start(page);await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await expect(page.getByLabel('Goal name',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await create(page);
+ for(const [action,id] of [['Edit Goal','goal-name'],['Reserve Funds','goal-amount'],['Release Funds','goal-amount'],['Record Goal Purchase','goal-amount']]){
+  await manage(page);await expect(page.locator('#sheet-title')).toBeFocused();await page.getByRole('button',{name:action,exact:true}).click();await expect(page.locator(`#${id}`)).toBeFocused();await expect(page.locator(`#${id}`)).toBeInViewport();await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ }
+ expect((await saved(page)).transactions).toBeUndefined();expect((await saved(page)).goals[0].reservedCents).toBe(0);
+});
+
+test('onboarding, Settings and Starting Balance focus the first input on entry and return',async({page})=>{
+ await page.goto('/violet-dineros/index.html');await expect(page.getByLabel('What’s your first name?')).toBeFocused();await page.getByLabel('What’s your first name?').fill('Violet');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByLabel('Your money ($)').fill('100');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Next payday (optional)')).toBeFocused();await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Skip for now',exact:true}).click();await page.getByRole('button',{name:'Go to My Dashboard',exact:true}).click();
+ await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#edit-starting-balance').click();await expect(page.getByLabel('Starting Balance ($)',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#settings-back').click();
+ for(const action of ['Add Money','Add Expense']){await page.getByRole('button',{name:action,exact:true}).click();await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();}
+ expect((await saved(page)).transactions).toBeUndefined();
+});

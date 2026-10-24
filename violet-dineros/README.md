@@ -283,3 +283,10 @@ Home, Goals and Details. Goal Details reuses the full-screen transaction Details
 frame and a scrolling body, keeping its heading/close control visible and every
 action reachable at small heights or enlarged text. The purchase category retains
 its native select behavior with LLT's inset current-color dropdown indicator.
+
+Every LWVD form focuses its first enabled, editable field synchronously on open:
+onboarding steps, Settings, Starting Balance, Add/Edit Money or Expense, and
+Create/Edit Goal, Reserve/Release Funds and Record Goal Purchase. Page forms use
+native focus scrolling; dialog forms retain the existing viewport/scroll lock and
+close restoration. Read-only Details and confirmation screens keep heading focus.
+Installed-iPhone keyboard activation remains a physical-device acceptance check.
