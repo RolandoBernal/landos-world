@@ -190,21 +190,6 @@ body[data-screen=onboarding] main{padding-bottom:0}
 /* Sprint 2.1.2: lighter weights; no viewport or navigation rule changes. */
 h1,h2,strong,b{font-weight:500}
 .currency-input,input[inputmode=decimal],.story .balance,.guide .numeric,.transaction-amount,.detail-amount,.balance-setting strong{font-weight:500}
-#viewport-diagnostics{position:relative;flex-shrink:0;margin:0 0 4px;font-size:.75rem}
-#viewport-diagnostics[hidden]{display:none}
-#viewport-diagnostics summary{min-height:44px;padding:12px 0;cursor:pointer;font-weight:500;color:#675b80}
-#viewport-diagnostics small{font-size:inherit;font-weight:400}
-#viewport-diagnostics summary:focus-visible{outline:3px solid #197c70;outline-offset:-3px}
-.viewport-diagnostics-panel{position:absolute;bottom:100%;left:0;right:0;z-index:3;max-height:min(55dvh,460px);overflow:auto;padding:12px;border:1px solid #d6d0ea;border-radius:12px;background:#fcfaff;box-shadow:0 3px 15px #28133b24}
-.viewport-diagnostics-panel p{font-size:.75rem;margin:0 0 8px}
-.viewport-diagnostics-actions{display:flex;gap:8px;margin-bottom:8px}
-.viewport-diagnostics-actions button{flex:1;padding:8px;font-size:.75rem}
-#viewport-report{font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;user-select:text}
-#viewport-copy-status:empty{display:none}
-#viewport-safe-area{position:absolute;top:0;left:0;visibility:hidden;pointer-events:none;width:0;height:env(safe-area-inset-bottom,0px)}
-:root[data-theme=dark] #viewport-diagnostics summary{color:#c1b2d5}
-:root[data-theme=dark] #viewport-diagnostics summary:focus-visible{outline-color:#70dec4}
-:root[data-theme=dark] .viewport-diagnostics-panel{background:#21192c;border-color:#655477}
 
 /* Sprint 3 uses the existing shell and full-screen form host. */
 .settings-title .back-circle,:root[data-theme=dark] .settings-title .back-circle{display:grid;place-items:center;flex:0 0 50px;width:50px;height:50px;min-height:50px;padding:0;border:0;border-radius:50%;background:#ece1ff;color:#6326b5}
