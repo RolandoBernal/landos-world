@@ -208,3 +208,14 @@ h1,h2,strong,b{font-weight:500}
 
 /* Leave the full 3px outline plus 3px offset inside the clipped goal form. */
 #transaction-form.goal-form .sheet-actions{padding-inline:6px;padding-bottom:6px}
+
+/* Keep editable Settings values above iOS's focus-zoom threshold. */
+.setting-row input,.setting-row select{font-size:max(16px,1rem)}
+
+/* A single native button covers the compact card; progress stays semantic. */
+.featured{position:relative;padding:14px 42px 14px 14px;gap:10px}
+.featured h3{font-size:1rem;margin:2px 0 4px}
+.featured progress{margin:8px 0 0}
+.featured .goal-star svg{width:32px;height:32px}
+.featured #featured-goal{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:17px;background:transparent;box-shadow:none;text-align:right}
+#featured-goal>span{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:1.5rem;color:#8249f4}
