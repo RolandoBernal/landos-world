@@ -164,7 +164,7 @@ nav{background:#fff}
 .activity-search{position:relative}
 .activity-search>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:19px;height:19px;color:#675b80;pointer-events:none}
 .activity-search input{padding-left:42px}
-.activity-filters{gap:8px;margin:6px 0 18px}
+.activity-filters{justify-content:space-evenly;gap:8px;margin:6px 0 18px}
 .activity-filters button{flex:0 1 auto;min-height:44px;padding:8px 12px;border:0;border-radius:0;background:transparent;color:#675b80;font-size:.82rem;font-weight:500;border-bottom:2px solid transparent}
 .activity-filters button[aria-pressed=true]{background:transparent;border-color:#7840d8;color:#4c1ba7;font-weight:500}
 :root[data-theme=dark] .activity-search>svg{color:#c1b2d5}
@@ -205,3 +205,6 @@ h1,h2,strong,b{font-weight:500}
 .goal-details-body{flex:1}
 /* Match LLT's inset currentColor chevron while retaining the native select. */
 #goal-category{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+
+/* Leave the full 3px outline plus 3px offset inside the clipped goal form. */
+#transaction-form.goal-form .sheet-actions{padding-inline:6px;padding-bottom:6px}

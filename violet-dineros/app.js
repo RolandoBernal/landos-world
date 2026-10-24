@@ -150,7 +150,7 @@ function commitGoal(next, message) {
   render(); closeSheet(); announce(message); return true;
 }
 function goalForm(title, fields, button, submit) {
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`);
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`);
   bindSheetClose(); transactionSheet.querySelector('[data-cancel]').onclick = closeSheet;
   let submitted = false;
   transactionSheet.querySelector('form').onsubmit = event => {
