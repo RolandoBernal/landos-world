@@ -51,7 +51,15 @@ function save(next) {
     return false;
   }
 }
-function focusHeading() { const h = content.querySelector('h1'); h.tabIndex = -1; h.focus(); }
+function focusFirstField(root) {
+  const field = root.querySelector('form input:enabled:not([type=hidden]):not([readonly]), form select:enabled, form textarea:enabled:not([readonly])');
+  if (!field) return false;
+  field.focus({preventScroll:root !== content}); return true;
+}
+function focusPageStart() {
+  if (focusFirstField(content)) return;
+  const h = content.querySelector('h1'); h.tabIndex = -1; h.focus();
+}
 function onboarding() {
   gear.hidden = nav.hidden = true;
   if (storageBlocked) { content.innerHTML = '<section class="card"><h1>Your saved information needs attention</h1><p>We couldn’t read your local data. Please check browser storage and reload. Your saved information has not been replaced.</p></section>'; return; }
@@ -60,33 +68,34 @@ function onboarding() {
   content.innerHTML = `<section class="welcome">${step > 1 ? `<div class="steps" aria-label="Step ${step} of 3">${[1, 2, 3].map(n => `<span class="${n === step ? 'active' : ''}">${n}</span>`).join('<i></i>')}</div>` : ''}<form>${fields}<p class="error" role="alert"></p>${step === 3 ? '<button class="text-button" type="button" id="skip">Skip for now</button>' : ''}<div class="form-actions">${step > 1 ? '<button class="text-button" type="button" id="back">Back</button>' : ''}<button class="primary">Continue</button></div></form></section>`;
   const finish = () => {
     content.innerHTML = `<section class="welcome complete">${plant}<h1>You’re all set!</h1><p>Your money journey<br>starts now.<br>Let’s do this! ✨</p><button class="primary" id="dashboard">Go to My Dashboard</button></section>`;
-    content.querySelector('#dashboard').onclick = () => { if (save({ ...draft, balanceInput: undefined })) { render(); focusHeading(); } };
-    focusHeading();
+    content.querySelector('#dashboard').onclick = () => { if (save({ ...draft, balanceInput: undefined })) { render(); focusPageStart(); } };
+    focusPageStart();
   };
   content.querySelector('form').onsubmit = event => {
     event.preventDefault(); const data = new FormData(event.target);
     if (step === 1) { draft.firstName = data.get('firstName').trim(); if (!draft.firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; } }
     if (step === 2) { const amount = parseMoney(data.get('balance')); if (amount === null) { content.querySelector('.error').textContent = 'Enter a nonnegative dollar amount with up to two decimal places.'; return; } draft.balanceCents = amount; draft.balanceInput = data.get('balance'); }
     if (step === 3) { draft.payday = data.get('payday'); if (draft.payday && !dateParts(draft.payday)) return; finish(); return; }
-    step++; onboarding(); focusHeading();
+    step++; onboarding(); focusPageStart();
   };
-  content.querySelector('#back')?.addEventListener('click', () => { step--; onboarding(); focusHeading(); });
+  content.querySelector('#back')?.addEventListener('click', () => { step--; onboarding(); focusPageStart(); });
   content.querySelector('#skip')?.addEventListener('click', () => { draft.payday = ''; finish(); });
+  focusPageStart();
 }
 function settings() {
   content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span aria-hidden="true">›</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button><button type="button" id="cancel">Back to Home</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
-    if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); announce('Settings saved.'); focusHeading(); }
+    if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); announce('Settings saved.'); focusPageStart(); }
   };
-  content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusHeading(); };
-  content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusHeading(); };
-  content.querySelector('#cancel').onclick = () => { tab = 'Home'; render(); focusHeading(); };
+  content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusPageStart(); };
+  content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusPageStart(); };
+  content.querySelector('#cancel').onclick = () => { tab = 'Home'; render(); focusPageStart(); };
 }
 function editStartingBalance() {
   content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" class="back-circle" aria-label="Back to Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
-  const back = () => { tab = 'Settings'; render(); content.querySelector('#edit-starting-balance').focus(); };
+  const back = () => { tab = 'Settings'; render(); focusPageStart(); };
   content.querySelector('#balance-back').onclick = back;
   content.querySelector('#balance-cancel').onclick = back;
   content.querySelector('form').onsubmit = event => {
@@ -111,7 +120,7 @@ function render() {
   gear.hidden = tab !== 'Home'; nav.hidden = false;
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
-  nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusHeading(); });
+  nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
   if (tab === 'Activity') { renderActivity(); return; }
   if (tab === 'Goals') { renderGoals(); return; }
   if (tab === 'Balance') { editStartingBalance(); return; }
@@ -127,12 +136,12 @@ function render() {
   const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday), balance = currentBalance(state), available = availableBalance(state);
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
   content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Current balance"><div class="story"><p>You have</p><p class="balance">${money(balance)}</p><p>right now.</p>${reservedBalance(state) > 0n ? `<p><span class="numeric">${money(Number(reservedBalance(state)))}</span> reserved · <span class="numeric">${money(available)}</span> available to spend</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'disabled' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}${name === 'afford' ? '<small>Coming soon</small>' : ''}</button>`).join('')}</div></section>${featuredGoal()}<section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
-  content.querySelector('#featured-goal')?.addEventListener('click', () => { tab = 'Goals'; render(); focusHeading(); });
+  content.querySelector('#featured-goal')?.addEventListener('click', () => { tab = 'Goals'; render(); focusPageStart(); });
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
   content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
 }
 function goalProgress(goal) {
-  return `<p><span class="numeric">${money(goal.reservedCents)}</span> of <span class="numeric">${money(goal.targetCents)}</span> reserved${goal.reservedCents === goal.targetCents ? ' · Fully Funded' : ''}</p><progress max="${goal.targetCents}" value="${goal.reservedCents}" aria-label="${escape(goal.name)} funding progress"></progress>`;
+  return `<p><span class="numeric">${money(goal.reservedCents)}</span> of <span class="numeric">${money(goal.targetCents)}</span> reserved${goal.reservedCents === goal.targetCents ? ' · Fully Funded' : ''}</p><progress class="goal-progress" max="${goal.targetCents}" value="${goal.reservedCents}" aria-label="${escape(goal.name)} funding progress"></progress>`;
 }
 function featuredGoal() {
   const goal = (state.goals || []).find(g => !g.archived);
@@ -150,7 +159,7 @@ function commitGoal(next, message) {
   render(); closeSheet(); announce(message); return true;
 }
 function goalForm(title, fields, button, submit) {
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`);
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`);
   bindSheetClose(); transactionSheet.querySelector('[data-cancel]').onclick = closeSheet;
   let submitted = false;
   transactionSheet.querySelector('form').onsubmit = event => {
@@ -160,17 +169,22 @@ function goalForm(title, fields, button, submit) {
   };
 }
 function openGoalForm(goal = null) {
-  goalForm(goal ? 'Edit Goal' : 'Create Goal', `<label for="goal-name">Goal name</label><input id="goal-name" name="name" maxlength="80" value="${escape(goal?.name || '')}"><label for="goal-emoji">Emoji (optional)</label><input id="goal-emoji" name="emoji" value="${escape(goal?.emoji || '')}"><label for="goal-target">Target amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-target" name="target" inputmode="decimal" value="${goal ? (goal.targetCents / 100).toFixed(2) : ''}"></div>`, 'Save Goal', data => {
+  goalForm(goal ? 'Edit Goal' : 'Create Goal', `<label for="goal-name">Goal name</label><input id="goal-name" name="name" maxlength="80" value="${escape(goal?.name || '')}"><label for="goal-emoji">Emoji (optional)</label><input id="goal-emoji" name="emoji" value="${escape(goal?.emoji || '')}"><label for="goal-target">Target amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-target" name="target" inputmode="decimal" placeholder="1500.00" aria-describedby="goal-target-hint" value="${goal ? (goal.targetCents / 100).toFixed(2) : ''}"></div><p id="goal-target-hint" class="hint">Enter 1500 or 1500.50, without commas or a $ sign. Use a period for cents.</p>`, 'Save Goal', data => {
     const name = data.get('name').trim(), emoji = data.get('emoji').trim(), targetCents = parseMoney(data.get('target'));
     if (!name || name.length > 80) throw Error('Enter a goal name of 80 characters or fewer.');
     if ([...emoji].length > 16) throw Error('Use a short emoji, up to 16 characters.');
-    if (!targetCents) throw Error('Enter a target greater than zero with up to two decimal places.');
+    const target = transactionSheet.querySelector('#goal-target');
+    target.removeAttribute('aria-invalid');
+    if (!targetCents) {
+      target.setAttribute('aria-invalid', 'true'); target.focus();
+      throw Error('Enter a positive amount like 1500 or 1500.50. Do not include commas or a $ sign; use a period and up to two digits for cents.');
+    }
     return commitGoal(updateGoal(state, { ...(goal || {id: newId(), reservedCents: 0, archived: false}), name, emoji, targetCents }), 'Goal saved.');
   });
 }
 function showGoal(id) {
   const goal = (state.goals || []).find(g => g.id === id); if (!goal) return;
-  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`);
+  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body goal-details-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`, '#sheet-title', 'details');
   bindSheetClose(); transactionSheet.querySelector('#goal-edit').onclick = () => openGoalForm(goal);
   for (const action of ['reserve','release']) {
     transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
@@ -231,7 +245,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form') {
   dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
   if (!dialog.open) dialog.showModal();
   fitSheetViewport();
-  dialog.querySelector(focusSelector).focus({preventScroll:true});
+  if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
 }
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
 function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
@@ -327,7 +341,7 @@ window.addEventListener('storage', event => {
     render(); announce('Your money information was updated in another tab.');
   } catch { showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
 });
-function openSettings() { tab = 'Settings'; render(); focusHeading(); }
+function openSettings() { tab = 'Settings'; render(); focusPageStart(); }
 gear.onclick = openSettings;
 window.addEventListener('pageshow', event => {
   if (event.persisted) window.LandosTheme?.init();

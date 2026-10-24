@@ -270,3 +270,23 @@ The temporary Viewport Diagnostics control, report/copy code, event listeners,
 styles and measurement probe have been removed following acceptance of the
 standalone viewport fix in release 2026-10-24-50. The accepted `100vh` standalone
 coverage, sticky navigation, safe-area padding and dialog viewport handling remain.
+
+## Sprint 3 goal UI follow-up
+
+Create/Edit Goal explains the existing target entry format next to the field:
+`1500` or `1500.50`, without commas or a dollar sign. Invalid targets receive an
+explicit formatting error, invalid-field state and focus. Parsing and stored
+integer-cent values are unchanged.
+
+All goal progress bars use a purple empty track and teal funded portion, including
+Home, Goals and Details. Goal Details reuses the full-screen transaction Details
+frame and a scrolling body, keeping its heading/close control visible and every
+action reachable at small heights or enlarged text. The purchase category retains
+its native select behavior with LLT's inset current-color dropdown indicator.
+
+Every LWVD form focuses its first enabled, editable field synchronously on open:
+onboarding steps, Settings, Starting Balance, Add/Edit Money or Expense, and
+Create/Edit Goal, Reserve/Release Funds and Record Goal Purchase. Page forms use
+native focus scrolling; dialog forms retain the existing viewport/scroll lock and
+close restoration. Read-only Details and confirmation screens keep heading focus.
+Installed-iPhone keyboard activation remains a physical-device acceptance check.

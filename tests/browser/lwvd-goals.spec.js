@@ -36,3 +36,60 @@ test('failed and stale purchases leave goals and transactions intact',async({pag
  const before=await saved(page);await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('quota');};});await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
  await page.reload();await goals(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();await page.evaluate(key=>{const next=JSON.parse(localStorage.getItem(key));next.firstName='New name';localStorage.setItem(key,JSON.stringify(next));},key);await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('another tab');expect((await saved(page)).transactions).toBeUndefined();expect((await saved(page)).goals[0].reservedCents).toBe(6000);
 });
+
+test('goal target explains its format, focuses invalid input and saves exact cents after correction',async({page})=>{
+ await start(page);await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();
+ await page.getByLabel('Goal name',{exact:true}).fill('New iPhone');const target=page.getByLabel('Target amount ($)',{exact:true});
+ await expect(target).toHaveAttribute('aria-describedby','goal-target-hint');await expect(page.locator('#goal-target-hint')).toContainText('1500 or 1500.50, without commas or a $ sign');
+ for(const amount of ['1,500','$1500','0','1500.001']){
+  await target.fill(amount);await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(target).toBeFocused();await expect(target).toHaveAttribute('aria-invalid','true');await expect(page.getByRole('dialog').locator('.error')).toContainText('Do not include commas or a $ sign');expect((await saved(page)).goals).toBeUndefined();
+ }
+ await target.fill('1500.50');await page.getByRole('button',{name:'Save Goal',exact:true}).click();expect((await saved(page)).goals[0].targetCents).toBe(150050);
+ await page.locator('[data-goal]').click();await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await expect(target).toHaveValue('1500.50');await expect(page.getByRole('button',{name:'Close',exact:true})).toBeInViewport();await expect(page.locator('#goal-target-hint')).toBeVisible();
+});
+
+for(const theme of ['light','dark'])test(`${theme} goal progress has a purple empty track and teal fill on Home, Goals and Details`,async({page},testInfo)=>{
+ await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);
+ for(const amount of [0,40,80]){
+  if(amount)await reserve(page,'40');
+  for(const tab of ['Home','Goals']){
+   await page.getByRole('button',{name:tab,exact:true}).click();const progress=page.getByRole('progressbar');await expect(progress).toHaveAttribute('value',String(amount*100));await expect(progress).toHaveAttribute('max','8000');await expect(progress).toHaveCSS('background-color','rgb(129, 70, 203)');await expect(progress).toHaveCSS('color','rgb(46, 230, 197)');
+  }
+  await page.screenshot({path:testInfo.outputPath(`progress-${amount}.png`)});
+ }
+ await expect(page.locator('.goal-card')).toContainText('Fully Funded');await manage(page);await expect(page.getByRole('dialog').getByRole('progressbar')).toHaveAttribute('value','8000');
+});
+
+for(const theme of ['light','dark'])test(`${theme} Goal Details fills the visible frame and every action remains reachable at large text`,async({page},testInfo)=>{
+ await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);
+ await page.setViewportSize({width:320,height:568});await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await manage(page);
+ const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
+ for(const height of [568,400]){
+  await page.setViewportSize({width:320,height});await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>Math.round(e.getBoundingClientRect().height))).toBe(height);const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeLessThanOrEqual(1);expect(bounds.height).toBeLessThanOrEqual(height);expect(bounds.height).toBeGreaterThanOrEqual(height-1);
+  await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
+  for(const name of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){const button=dialog.getByRole('button',{name,exact:true});await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();}
+  expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
+ }
+ await page.screenshot({path:testInfo.outputPath('goal-details-large-text.png')});await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.shell')).toHaveCSS('visibility','visible');expect((await saved(page)).transactions).toBeUndefined();
+});
+
+test('goal purchase category uses the inset LLT chevron and remains a working native select',async({page},testInfo)=>{
+ await start(page);await goals(page);await create(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();const category=page.getByLabel('Category',{exact:true});await expect(page.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
+ await expect(category).toHaveCSS('appearance','none');await expect(category).toHaveCSS('padding-inline-end','48px');const image=await category.evaluate(e=>getComputedStyle(e).backgroundImage);expect(image.match(/linear-gradient/g)).toHaveLength(2);
+ await category.selectOption('Fun');await expect(category).toHaveValue('Fun');await page.screenshot({path:testInfo.outputPath('goal-purchase-select.png')});await page.getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toBeUndefined();
+});
+
+test('every goal form opens on its first input and Details keeps heading focus',async({page})=>{
+ await start(page);await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await expect(page.getByLabel('Goal name',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await create(page);
+ for(const [action,id] of [['Edit Goal','goal-name'],['Reserve Funds','goal-amount'],['Release Funds','goal-amount'],['Record Goal Purchase','goal-amount']]){
+  await manage(page);await expect(page.locator('#sheet-title')).toBeFocused();await page.getByRole('button',{name:action,exact:true}).click();await expect(page.locator(`#${id}`)).toBeFocused();await expect(page.locator(`#${id}`)).toBeInViewport();await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ }
+ expect((await saved(page)).transactions).toBeUndefined();expect((await saved(page)).goals[0].reservedCents).toBe(0);
+});
+
+test('onboarding, Settings and Starting Balance focus the first input on entry and return',async({page})=>{
+ await page.goto('/violet-dineros/index.html');await expect(page.getByLabel('What’s your first name?')).toBeFocused();await page.getByLabel('What’s your first name?').fill('Violet');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByLabel('Your money ($)').fill('100');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Next payday (optional)')).toBeFocused();await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Skip for now',exact:true}).click();await page.getByRole('button',{name:'Go to My Dashboard',exact:true}).click();
+ await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#edit-starting-balance').click();await expect(page.getByLabel('Starting Balance ($)',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#settings-back').click();
+ for(const action of ['Add Money','Add Expense']){await page.getByRole('button',{name:action,exact:true}).click();await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();}
+ expect((await saved(page)).transactions).toBeUndefined();
+});

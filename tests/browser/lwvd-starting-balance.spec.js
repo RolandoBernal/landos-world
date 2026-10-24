@@ -65,7 +65,7 @@ test('invalid amounts are rejected without writing, then a corrected value saves
 test('unchanged save, Cancel, Back and tab navigation do not update the balance',async ({page})=>{
   const initial = await setup(page); await openEditor(page);
   await page.getByRole('button',{name:'Save',exact:true}).click();
-  await expect(page.locator('#edit-starting-balance')).toBeFocused();
+  await expect(page.getByLabel('First name',{exact:true})).toBeFocused();
   for (const button of ['Cancel','Back to Settings']) {
     await openEditor(page); await page.getByLabel('Starting Balance ($)',{exact:true}).fill('999');
     await page.getByRole('button',{name:button,exact:true}).click();
