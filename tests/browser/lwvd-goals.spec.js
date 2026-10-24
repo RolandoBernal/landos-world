@@ -10,7 +10,7 @@ async function manage(page){await page.getByRole('button',{name:'Manage Goal: Bi
 async function reserve(page,amount){await manage(page);await page.getByRole('button',{name:'Reserve Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill(amount);await page.getByRole('button',{name:'Reserve',exact:true}).click();}
 test('goals lifecycle, accounting, featured selection and one purchase survive reload',async({page})=>{
  await start(page);expect(await saved(page)).toEqual(seed);await goals(page);await create(page);await reserve(page,'80');await expect(page.locator('.goal-card')).toContainText('Fully Funded');
- await page.getByRole('button',{name:'Home',exact:true}).click();await expect(page.locator('.balance')).toHaveText('$20.00');await expect(page.locator('.story')).toContainText('$80.00 saved for goals');await expect(page.locator('.guide')).toHaveText('$5.00 a day');await expect(page.locator('.featured')).toContainText('Bike');
+ await page.getByRole('button',{name:'Home',exact:true}).click();await expect(page.locator('.balance')).toHaveText('$20.00');await expect(page.locator('.story')).toContainText('Plus $80.00 saved for your goals.');await expect(page.locator('.guide')).toHaveText('$5.00 a day');await expect(page.locator('.featured')).toContainText('Bike');
  await goals(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();await page.getByLabel('Purchase amount ($)').fill('65');await page.locator('#transaction-form').evaluate(f=>{f.requestSubmit();f.requestSubmit();});
  const result=await saved(page);expect(result.transactions).toHaveLength(1);expect(result.transactions[0].amountCents).toBe(6500);expect(result.goals[0]).toMatchObject({archived:true,reservedCents:0});
  await page.reload();await expect(page.locator('.balance')).toHaveText('$35.00');await expect(page.locator('.featured')).not.toContainText('Bike');await page.getByRole('button',{name:'Activity',exact:true}).click();await expect(page.locator('.transaction-row')).toHaveCount(1);
@@ -95,10 +95,12 @@ test('onboarding, Settings and Starting Balance focus the first input on entry a
 });
 
 test('Home shows spendable money and compact featured card opens its specific goal by keyboard',async({page})=>{
- await start(page);await expect(page.locator('.story')).not.toContainText('saved for goals');await goals(page);await create(page);await reserve(page,'10');
+ await start(page);await expect(page.locator('.story')).not.toContainText('saved for your goals');await goals(page);await create(page);await reserve(page,'10');
  await page.getByRole('button',{name:'Home',exact:true}).click();const before=await saved(page);
- await expect(page.locator('.balance')).toHaveText('$90.00');await expect(page.locator('.story')).toContainText('$10.00 saved for goals');await expect(page.locator('.guide')).toHaveText('$22.50 a day');
+ await expect(page.locator('.balance')).toHaveText('$90.00');await expect(page.locator('.story')).toContainText('Plus $10.00 saved for your goals.');await expect(page.locator('.guide')).toHaveText('$22.50 a day');
  const card=page.getByRole('button',{name:'View Goal: Bike',exact:true});await expect(page.getByRole('button',{name:'View Goals',exact:true})).toHaveCount(0);
+ const cue=await card.locator('.navigation-chevron').boundingBox();expect(cue.width).toBe(38);expect(cue.height).toBe(38);
+ await expect(card.locator('svg')).toHaveCSS('width','24px');await expect(card.locator('svg')).toHaveCSS('stroke-width','2.25px');
  const bounds=await card.boundingBox();const parent=await page.locator('.featured').boundingBox();expect(bounds.width).toBeCloseTo(parent.width);expect(bounds.height).toBeCloseTo(parent.height);
  await card.focus();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();await expect(page.getByRole('dialog')).toContainText('Bike');await page.getByRole('button',{name:'Close',exact:true}).click();await expect(card).toBeFocused();
  await card.click();await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();expect(await saved(page)).toEqual(before);
@@ -109,6 +111,7 @@ test('LWVD editable controls retain focus, readable sizes and narrow viewport co
  await page.setViewportSize({width:390,height:844});await page.goto('/violet-dineros/index.html');await controls();await start(page);
  await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();
  for(const height of [844,400]){await page.setViewportSize({width:320,height});await controls();}
+ await expect(page.locator('#edit-starting-balance .navigation-chevron svg')).toHaveCSS('width','24px');await expect(page.locator('#settings-back')).toHaveCSS('width','50px');
  await page.locator('#edit-starting-balance').click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('#settings-back').click();
  await page.getByRole('button',{name:'Add Expense',exact:true}).click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await controls();
  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1, viewport-fit=cover');expect(await saved(page)).toEqual(seed);

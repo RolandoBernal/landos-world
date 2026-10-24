@@ -154,7 +154,8 @@ test('Home has no disclaimer and compact Activity rows communicate interactive d
   await setup(page);await expect(page.locator('main')).not.toContainText('A gentle guide, not a strict spending limit.');
   await add(page,'expense','6','Food','Coffee');await activity(page);
   const row=page.locator('.transaction-row');await expect(row).toHaveAccessibleName(/View transaction details: Coffee, Expense/);
-  await expect(row.locator('.transaction-chevron')).toHaveText('›');await expect(row.locator('.transaction-chevron')).toHaveAttribute('aria-hidden','true');
+  await expect(row.locator('.transaction-chevron svg')).toHaveAttribute('viewBox','0 0 24 24');await expect(row.locator('.transaction-chevron')).toHaveAttribute('aria-hidden','true');
+  await expect(row.locator('.navigation-chevron svg')).toHaveCSS('width','24px');
   const bounds=await row.boundingBox(),amount=await row.locator('.transaction-amount').boundingBox(),chevron=await row.locator('.transaction-chevron').boundingBox();
   expect(bounds.height).toBeGreaterThanOrEqual(44);expect(bounds.height).toBeLessThanOrEqual(64);expect(chevron.x).toBeGreaterThan(amount.x+amount.width+3);
   await row.focus();await page.keyboard.press('Enter');await expect(sheet(page)).toContainText('Coffee');await expect(sheet(page).getByRole('button',{name:'Edit',exact:true})).toBeVisible();
