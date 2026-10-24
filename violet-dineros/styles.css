@@ -244,3 +244,9 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] #afford-buy:disabled{background:#382e43;color:#bdafcd}
 /* Keep Add Expense's native category indicator visible in both themes. */
 #transaction-label{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+
+/* Inline payday editing retains the native picker and a visible control boundary. */
+.setting-row .payday-control{border:1px solid #d6d0ea;border-radius:8px;padding:8px 10px;min-height:44px;max-width:100%;text-align:left}
+.payday-control::-webkit-date-and-time-value{text-align:left;min-height:1.25em}
+.payday-control::-webkit-datetime-edit{padding:0;text-align:left}
+:root[data-theme=dark] .setting-row .payday-control{border-color:#756485}

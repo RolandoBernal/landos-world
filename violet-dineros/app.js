@@ -85,7 +85,7 @@ function onboarding() {
   focusPageStart();
 }
 function settings() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button><button type="button" id="cancel">Back to Home</button></div></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button><button type="button" id="cancel">Back to Home</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
@@ -281,8 +281,9 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form') {
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
 function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
 function closeSheet() { document.querySelector('#transaction-sheet').close(); }
-function commitTransactions(transactions, message) {
+function commitTransactions(transactions, message, onSaved) {
   if (!save({ ...state, transactions })) return false;
+  onSaved?.();
   render(); closeSheet(); announce(message); return true;
 }
 function openTransactionForm(type, id = null, affordabilityPrice = null) {
@@ -309,7 +310,13 @@ function openTransactionForm(type, id = null, affordabilityPrice = null) {
     if (original && transaction.amountCents === original.amountCents && transaction.label === original.label && transaction.description === original.description) { closeSheet(); return; }
     const transactions = original ? state.transactions.map(t => t.id === id ? transaction : t) : [...(state.transactions || []), transaction];
     submitted = true;
-    if (!commitTransactions(transactions, original ? 'Changes saved.' : isIncome ? 'Money added.' : 'Expense saved.')) submitted = false;
+    if (!commitTransactions(transactions, original ? 'Changes saved.' : isIncome ? 'Money added.' : 'Expense saved.', () => {
+      if (affordabilityPrice !== null) {
+        affordabilityInput = '';
+        tab = 'Home';
+        if (sheetScroll) sheetScroll = { ...sheetScroll, x: 0, y: 0 };
+      }
+    })) submitted = false;
   };
 }
 function showTransaction(id) {
