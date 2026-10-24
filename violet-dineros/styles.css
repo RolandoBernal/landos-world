@@ -195,4 +195,13 @@ h1,h2,strong,b{font-weight:500}
 .settings-title .back-circle,:root[data-theme=dark] .settings-title .back-circle{display:grid;place-items:center;flex:0 0 50px;width:50px;height:50px;min-height:50px;padding:0;border:0;border-radius:50%;background:#ece1ff;color:#6326b5}
 .back-circle svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 :root[data-theme=dark] .settings-title .back-circle{background:#3c2b51;color:#dfc6ff}
-.goal-list{display:grid;gap:14px;margin-top:20px}.goal-card h2,.featured h3{overflow-wrap:anywhere;margin:0 0 10px}.goal-actions{display:grid;gap:12px;margin-top:18px}.featured>div{width:100%;min-width:0}.featured button{margin-top:12px}.goal-card progress,.featured progress,#transaction-sheet progress{display:block;width:100%;height:12px;accent-color:#8146cb;margin:12px 0}.story .numeric,.goals .numeric,.goal-card .numeric,.featured .numeric,#transaction-sheet .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.goal-list{display:grid;gap:14px;margin-top:20px}.goal-card h2,.featured h3{overflow-wrap:anywhere;margin:0 0 10px}.goal-actions{display:grid;gap:12px;margin-top:18px}.featured>div{width:100%;min-width:0}.featured button{margin-top:12px}.goal-card progress,.featured progress,#transaction-sheet progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}.story .numeric,.goals .numeric,.goal-card .numeric,.featured .numeric,#transaction-sheet .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+
+/* Goal progress is explicit across engines, including an empty purple track. */
+.goal-progress{appearance:none;-webkit-appearance:none;border:0;border-radius:6px;overflow:hidden;background:#8146cb;color:#2ee6c5}
+.goal-progress::-webkit-progress-bar{background:#8146cb;border-radius:6px}
+.goal-progress::-webkit-progress-value{background:#2ee6c5;border-radius:6px}
+.goal-progress::-moz-progress-bar{background:#2ee6c5;border-radius:6px}
+.goal-details-body{flex:1}
+/* Match LLT's inset currentColor chevron while retaining the native select. */
+#goal-category{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}

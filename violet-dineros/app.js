@@ -132,7 +132,7 @@ function render() {
   content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
 }
 function goalProgress(goal) {
-  return `<p><span class="numeric">${money(goal.reservedCents)}</span> of <span class="numeric">${money(goal.targetCents)}</span> reserved${goal.reservedCents === goal.targetCents ? ' · Fully Funded' : ''}</p><progress max="${goal.targetCents}" value="${goal.reservedCents}" aria-label="${escape(goal.name)} funding progress"></progress>`;
+  return `<p><span class="numeric">${money(goal.reservedCents)}</span> of <span class="numeric">${money(goal.targetCents)}</span> reserved${goal.reservedCents === goal.targetCents ? ' · Fully Funded' : ''}</p><progress class="goal-progress" max="${goal.targetCents}" value="${goal.reservedCents}" aria-label="${escape(goal.name)} funding progress"></progress>`;
 }
 function featuredGoal() {
   const goal = (state.goals || []).find(g => !g.archived);
@@ -160,17 +160,22 @@ function goalForm(title, fields, button, submit) {
   };
 }
 function openGoalForm(goal = null) {
-  goalForm(goal ? 'Edit Goal' : 'Create Goal', `<label for="goal-name">Goal name</label><input id="goal-name" name="name" maxlength="80" value="${escape(goal?.name || '')}"><label for="goal-emoji">Emoji (optional)</label><input id="goal-emoji" name="emoji" value="${escape(goal?.emoji || '')}"><label for="goal-target">Target amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-target" name="target" inputmode="decimal" value="${goal ? (goal.targetCents / 100).toFixed(2) : ''}"></div>`, 'Save Goal', data => {
+  goalForm(goal ? 'Edit Goal' : 'Create Goal', `<label for="goal-name">Goal name</label><input id="goal-name" name="name" maxlength="80" value="${escape(goal?.name || '')}"><label for="goal-emoji">Emoji (optional)</label><input id="goal-emoji" name="emoji" value="${escape(goal?.emoji || '')}"><label for="goal-target">Target amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-target" name="target" inputmode="decimal" placeholder="1500.00" aria-describedby="goal-target-hint" value="${goal ? (goal.targetCents / 100).toFixed(2) : ''}"></div><p id="goal-target-hint" class="hint">Enter 1500 or 1500.50, without commas or a $ sign. Use a period for cents.</p>`, 'Save Goal', data => {
     const name = data.get('name').trim(), emoji = data.get('emoji').trim(), targetCents = parseMoney(data.get('target'));
     if (!name || name.length > 80) throw Error('Enter a goal name of 80 characters or fewer.');
     if ([...emoji].length > 16) throw Error('Use a short emoji, up to 16 characters.');
-    if (!targetCents) throw Error('Enter a target greater than zero with up to two decimal places.');
+    const target = transactionSheet.querySelector('#goal-target');
+    target.removeAttribute('aria-invalid');
+    if (!targetCents) {
+      target.setAttribute('aria-invalid', 'true'); target.focus();
+      throw Error('Enter a positive amount like 1500 or 1500.50. Do not include commas or a $ sign; use a period and up to two digits for cents.');
+    }
     return commitGoal(updateGoal(state, { ...(goal || {id: newId(), reservedCents: 0, archived: false}), name, emoji, targetCents }), 'Goal saved.');
   });
 }
 function showGoal(id) {
   const goal = (state.goals || []).find(g => g.id === id); if (!goal) return;
-  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`);
+  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body goal-details-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`, '#sheet-title', 'details');
   bindSheetClose(); transactionSheet.querySelector('#goal-edit').onclick = () => openGoalForm(goal);
   for (const action of ['reserve','release']) {
     transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
