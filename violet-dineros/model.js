@@ -1,5 +1,11 @@
 export const STORAGE_KEY = 'lando-world:lwvd:v1';
-export const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+export const money = cents => {
+  const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+  if (typeof cents !== 'bigint') return formatter.format(cents / 100);
+  const absolute = cents < 0n ? -cents : cents;
+  const formatted = formatter.formatToParts(absolute / 100n).map(part => part.type === 'fraction' ? String(absolute % 100n).padStart(2, '0') : part.value).join('');
+  return cents < 0n ? `-${formatted}` : formatted;
+};
 export function parseMoney(value) {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null;
   const [dollars, fraction = ''] = value.trim().split('.');
@@ -99,4 +105,18 @@ export function purchaseGoal(data, id, transaction) {
   const next = { ...data, goals: data.goals.map(g => g.id === id ? { ...g, archived: true, reservedCents: 0 } : g), transactions: [...(data.transactions || []), transaction] };
   if (!validState(next)) throw Error('This purchase could not be saved. Check the amount.');
   return next;
+}
+
+// Preview only: goal reservations never contribute to purchasing power.
+export function affordability(data, input) {
+  const priceCents = parseMoney(input);
+  if (!input.trim()) return {status: 'blank', affordable: false};
+  if (priceCents === null || priceCents <= 0) return {status: 'invalid', affordable: false};
+  const available = availableBalance(data);
+  const affordable = priceCents <= available;
+  // BigInt keeps shortages exact even for a legacy negative balance.
+  const difference = BigInt(available) - BigInt(priceCents);
+  return {status: affordable ? 'affordable' : 'unaffordable', affordable, priceCents,
+    remainingCents: affordable ? Number(difference) : null,
+    shortageCents: affordable ? null : -difference};
 }

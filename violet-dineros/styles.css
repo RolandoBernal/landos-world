@@ -223,3 +223,24 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] .navigation-chevron{color:#c9a8ff}
 #featured-goal>.navigation-chevron{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(130,73,244,.10)}
 :root[data-theme=dark] #featured-goal>.navigation-chevron{background:rgba(201,168,255,.12)}
+
+/* Affordability reuses the shell, circular back control and native expense form. */
+.affordability .settings-title{height:auto;min-height:50px;padding-left:54px;margin-bottom:20px}
+.affordability .settings-title h1{overflow-wrap:anywhere}
+.affordability .story{margin-bottom:20px}
+.affordability .afford-available{font-family:"Geist Mono",monospace;font-size:1.8rem;margin:4px 0;overflow-wrap:anywhere}
+.affordability form{gap:12px}
+.affordability input{font-size:max(16px,1.25rem)}
+.afford-result{padding:18px;border-radius:16px;background:#f0eaff;overflow-wrap:anywhere}
+.afford-result p{margin:0;font-size:.9rem}
+.afford-result .numeric{font-family:"Geist Mono",monospace}
+.afford-result[data-kind=affordable]{background:#d9faf3}
+.afford-result[data-kind=unaffordable],.afford-result[data-kind=invalid]{background:#fff0e2}
+#afford-buy{min-height:48px}
+#afford-buy:disabled{background:#e7e1ee;color:#6d617d;box-shadow:none}
+:root[data-theme=dark] .afford-result{background:#342744}
+:root[data-theme=dark] .afford-result[data-kind=affordable]{background:#204d40}
+:root[data-theme=dark] .afford-result:is([data-kind=unaffordable],[data-kind=invalid]){background:#4b3027}
+:root[data-theme=dark] #afford-buy:disabled{background:#382e43;color:#bdafcd}
+/* Keep Add Expense's native category indicator visible in both themes. */
+#transaction-label{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}

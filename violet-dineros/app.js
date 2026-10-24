@@ -1,8 +1,9 @@
-import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups, availableBalance, reservedBalance, fundedReservations, updateGoal, purchaseGoal } from './model.js';
+import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups, availableBalance, reservedBalance, fundedReservations, updateGoal, purchaseGoal, affordability } from './model.js';
 const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
-let activitySearch = '', activityFilter = 'all';
+let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
+let affordabilityRaw = null;
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
@@ -122,6 +123,7 @@ function render() {
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
+  if (tab === 'Afford') { renderAffordability(); return; }
   if (tab === 'Activity') { renderActivity(); return; }
   if (tab === 'Goals') { renderGoals(); return; }
   if (tab === 'Balance') { editStartingBalance(); return; }
@@ -136,10 +138,38 @@ function render() {
   }
   const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday), available = availableBalance(state);
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
-  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'disabled' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}${name === 'afford' ? '<small>Coming soon</small>' : ''}</button>`).join('')}</div></section>${featuredGoal()}<section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
+  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'id="check-affordability"' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}</button>`).join('')}</div></section>${featuredGoal()}<section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
   content.querySelector('#featured-goal')?.addEventListener('click', () => { const goal = (state.goals || []).find(g => !g.archived); if (goal) showGoal(goal.id); else { tab = 'Goals'; render(); focusPageStart(); } });
+  content.querySelector('#check-affordability').onclick = () => { affordabilityInput = ''; tab = 'Afford'; render(); window.scrollTo(0, 0); focusPageStart(); };
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
   content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
+}
+function renderAffordability() {
+  affordabilityRaw = lastRaw;
+  content.innerHTML = `${launcherBack}<section class="settings-panel affordability"><div class="settings-title"><button type="button" id="afford-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Can I Afford This?</h1></div><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><form novalidate><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></form></section>`;
+  const input = content.querySelector('#afford-price'), result = content.querySelector('#afford-result'), buy = content.querySelector('#afford-buy');
+  const update = () => {
+    affordabilityInput = input.value;
+    const check = affordability(state, input.value);
+    buy.disabled = !check.affordable;
+    result.dataset.kind = check.status;
+    input.setAttribute('aria-invalid', String(check.status === 'invalid'));
+    result.innerHTML = check.status === 'blank' ? '<h2>Something caught your eye?</h2><p>Enter its price to see how it fits.</p>' : check.status === 'invalid' ? '<h2>Let’s check that price.</h2><p>Use an amount greater than zero with up to two decimal places.</p>' : check.affordable ? `<h2>Yes, it fits!</h2><p>You’d have <span class="numeric">${money(check.remainingCents)}</span> left to spend.${check.remainingCents === 0 ? ' That uses all your available spending money.' : ''}</p>` : `<h2>Not quite yet.</h2><p>You’d need <span class="numeric">${money(check.shortageCents)}</span> more, keeping your goal savings safe.</p>`;
+  };
+  input.oninput = update; update();
+  content.querySelector('#afford-back').onclick = () => { affordabilityInput = ''; tab = 'Home'; render(); window.scrollTo(0, 0); content.querySelector('#check-affordability').focus({preventScroll:true}); };
+  content.querySelector('form').onsubmit = event => {
+    event.preventDefault();
+    if (transactionSheet.open) return;
+    if (!affordabilityIsCurrent(affordabilityRaw)) return;
+    const check = affordability(state, input.value); update();
+    if (check.affordable) { buy.focus({preventScroll:true}); openTransactionForm('expense', null, check.priceCents); }
+  };
+}
+function affordabilityIsCurrent(expectedRaw) {
+  try { if (localStorage.getItem(STORAGE_KEY) === expectedRaw) return true; } catch { /* Keep the preview read-only if storage is unavailable. */ }
+  showSaveError('Your money information changed or is unavailable. Reload to check the current available funds.');
+  return false;
 }
 function goalProgress(goal) {
   return `<p><span class="numeric">${money(goal.reservedCents)}</span> of <span class="numeric">${money(goal.targetCents)}</span> reserved${goal.reservedCents === goal.targetCents ? ' · Fully Funded' : ''}</p><progress class="goal-progress" max="${goal.targetCents}" value="${goal.reservedCents}" aria-label="${escape(goal.name)} funding progress"></progress>`;
@@ -255,12 +285,13 @@ function commitTransactions(transactions, message) {
   if (!save({ ...state, transactions })) return false;
   render(); closeSheet(); announce(message); return true;
 }
-function openTransactionForm(type, id = null) {
+function openTransactionForm(type, id = null, affordabilityPrice = null) {
   const original = id ? (state.transactions || []).find(t => t.id === id) : null;
   if (id && !original) return;
   if (original) type = original.type;
+  const previewRaw = lastRaw;
   const isIncome = type === 'income', title = original ? `Edit ${isIncome ? 'Money In' : 'Expense'}` : isIncome ? 'Add Money' : 'Add Expense';
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields"><label for="transaction-amount">How much?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="transaction-amount" autofocus name="amount" inputmode="decimal" autocomplete="off" required value="${original ? (original.amountCents / 100).toFixed(2) : ''}" placeholder="0.00" aria-describedby="transaction-error"></div><label for="transaction-label">${isIncome ? 'Where did it come from?' : 'Category'}</label><select id="transaction-label" name="label" required><option value="">Choose ${isIncome ? 'a source' : 'a category'}</option>${TRANSACTION_LABELS[type].map(label => `<option ${original?.label === label ? 'selected' : ''}>${label}</option>`).join('')}</select><label for="transaction-description">${isIncome ? 'Description' : 'What was it?'} (optional)</label><input id="transaction-description" name="description" maxlength="120" value="${escape(original?.description || '')}"><p class="error" id="transaction-error" role="alert"></p></div><div class="sheet-actions"><button class="primary" type="submit">${original ? 'Save Changes' : isIncome ? 'Add Money' : 'Save Expense'}</button><button type="button" id="transaction-cancel">Cancel</button></div></form>`, '#transaction-amount');
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields"><label for="transaction-amount">How much?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="transaction-amount" autofocus name="amount" inputmode="decimal" autocomplete="off" required value="${original ? (original.amountCents / 100).toFixed(2) : affordabilityPrice !== null ? String(Math.floor(affordabilityPrice / 100)) + '.' + String(affordabilityPrice % 100).padStart(2, '0') : ''}" placeholder="0.00" aria-describedby="transaction-error"></div><label for="transaction-label">${isIncome ? 'Where did it come from?' : 'Category'}</label><select id="transaction-label" name="label" required><option value="">Choose ${isIncome ? 'a source' : 'a category'}</option>${TRANSACTION_LABELS[type].map(label => `<option ${original?.label === label ? 'selected' : ''}>${label}</option>`).join('')}</select><label for="transaction-description">${isIncome ? 'Description' : 'What was it?'} (optional)</label><input id="transaction-description" name="description" maxlength="120" value="${escape(original?.description || '')}"><p class="error" id="transaction-error" role="alert"></p></div><div class="sheet-actions"><button class="primary" type="submit">${original ? 'Save Changes' : isIncome ? 'Add Money' : 'Save Expense'}</button><button type="button" id="transaction-cancel">Cancel</button></div></form>`, '#transaction-amount');
   bindSheetClose(); document.querySelector('#transaction-cancel').onclick = closeSheet;
   let submitted = false;
   document.querySelector('#transaction-form').onsubmit = event => {
@@ -268,6 +299,7 @@ function openTransactionForm(type, id = null) {
     const data = new FormData(event.target), amount = parseMoney(data.get('amount')), label = data.get('label'), description = data.get('description').trim();
     const error = document.querySelector('#transaction-error');
     if (amount === null || amount <= 0) { error.textContent = 'Enter an amount greater than zero with up to two decimal places.'; document.querySelector('#transaction-amount').focus(); return; }
+    if (affordabilityPrice !== null && (!affordabilityIsCurrent(previewRaw) || !affordability(state, data.get('amount')).affordable)) { error.textContent = 'This price must fit your current available spending money. Check the amount or cancel to try again.'; return; }
     if (!TRANSACTION_LABELS[type].includes(label)) { error.textContent = `Choose ${isIncome ? 'where the money came from' : 'a category'}.`; document.querySelector('#transaction-label').focus(); return; }
     if (description.length > 120) { error.textContent = 'Keep the description to 120 characters or fewer.'; return; }
     const transaction = original ? { ...original, amountCents: amount, label, description } : {
