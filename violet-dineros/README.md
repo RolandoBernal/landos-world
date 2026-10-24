@@ -281,3 +281,43 @@ After updating the installed PWA, open the existing Viewport Diagnostics control
 press Capture Collapsed Layout, and copy the report. Repeat on Home, Activity,
 Goals and Insights at matching orientation and note any scroll differences.
 Keep these diagnostics until the real-device evidence has been reviewed.
+
+## Sprint 3 Savings Goals
+
+Goals share the existing v1 record as an optional `goals` array. Missing goals
+means no goals; loading old data performs no migration or write. Each goal stores
+an ID, name, optional emoji, positive target in cents, reserved cents and archived
+flag. Create/edit, reserve/release, archive and confirmed permanent deletion use
+the existing atomic save, stale-record guard and full-screen native dialog.
+Archive/delete release all reserved money without changing transaction history.
+Lowering a target below its reservation requires releasing funds first.
+
+Option A: combined reservations cannot exceed nonnegative Current Balance, and a
+goal cannot reserve more than its target. Current Balance remains Starting Balance
+plus income minus expenses. Available to spend is Current Balance minus active
+reservations. Home shows total, reserved and available amounts when funds are
+reserved; Daily Guide divides available money by days until payday. Ordinary
+expenses, transaction edits/deletes and Starting Balance changes that would leave
+reservations unfunded require releasing funds first. With no reservations, existing
+negative-balance behavior remains supported.
+
+The first active goal in creation order is Featured Goal; no manual selection or
+new settings are added. Progress uses reserved/target cents and shows Fully Funded
+at equality. Archived goals remain manageable in Goals and are excluded from Home.
+
+Record Goal Purchase accepts a positive actual price up to that goal’s reservation
+plus unreserved available funds. Saving creates exactly one ordinary expense,
+archives the goal and releases its entire reservation in the same storage write.
+A cheaper purchase releases the unused remainder; a more expensive purchase can
+use available funds without using other goals’ reservations. Existing Activity
+edit/delete behavior applies to the expense; it does not reopen or re-reserve an
+archived goal. Deleting a goal never deletes its purchase expense.
+
+Settings and Starting Balance back buttons use a 50px lavender circular control
+with a centered SVG chevron and existing accessible destination label. Shared
+shell sizing, standalone `100vh` fix, sticky navigation and Geist Mono weights
+remain unchanged. Production-first installed-iPhone acceptance is still required
+after PR review, merge and the normal Pages deployment/update workflow.
+
+Additional validation: `node --test tests/lwvd-goals.test.js` and
+`npx playwright test tests/browser/lwvd-goals.spec.js`.
