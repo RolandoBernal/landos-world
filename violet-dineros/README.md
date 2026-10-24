@@ -214,35 +214,7 @@ app cache; only this font's request uses that precached copy, so first-use offli
 loading works without changing other apps' font routing. Real-worker tests load
 it with the fixture network unavailable, then check LWVD and stored transactions.
 
-## Sprint 2.1.2 temporary viewport diagnostics and weight refinement
-
-The installed-iPhone viewport problem is still unresolved. This release does not
-attempt another positioning fix: existing shell heights, navigation positioning,
-safe-area rules and scroll behavior are unchanged. Do not interpret automated
-viewport checks as physical-PWA acceptance or assume the root cause is known.
-
-A temporary “Viewport Diagnostics” disclosure is available above navigation on
-Home, Activity, Goals and Insights (scroll down to it on long pages). Open it,
-press Capture Collapsed Layout, then Copy Diagnostics. Readings update when opening, on tab changes
-and on resize/orientation events; there is no polling. The compact report popover
-is outside normal flow, so expanding it does not add report height or move the
-navigation. The small disclosure control itself occupies normal flow.
-
-The plain-text report contains only actual rendered environment/geometry:
-display mode including the iOS standalone fallback, window/document/visual viewport
-sizes, scroll heights and position, shell/main computed sizing/overflow/position,
-navigation bounds and gaps to both viewport heights, bottom padding, measured
-`env(safe-area-inset-bottom)`, and viewport-fit metadata. No financial record,
-name, browser storage contents, preference values or personal description is read.
-Clipboard copying uses the existing native Clipboard API approach with a temporary
-readonly textarea fallback; failure leaves the report visible for screenshots.
-Nothing is logged, persisted or transmitted by the diagnostics.
-
-Collect Home and Goals reports with the same device orientation and keyboard
-closed, and Activity if useful. Paste them back before another viewport correction
-is implemented. Keep diagnostics until those real-device measurements are reviewed.
-Use the existing installed-PWA Application Status update flow; do not reinstall,
-clear application storage or reset data.
+## Sprint 2.1.2 weight refinement
 
 All financial values and currency inputs now use Geist Mono weight 500. Its
 existing local variable font supports 100–900; real-worker checks load weight 500
@@ -252,32 +224,49 @@ retains a weight above 500; font-face range declarations still describe the
 available variable font. Families, numeric arithmetic and storage are unchanged.
 
 
-## Element-diagnostics follow-up
+## Sprint 3 Savings Goals
 
-The known iPhone inner/client viewport difference is evidence, not a confirmed
-cause. This update extends diagnostics only; no CSS, typography, layout, financial,
-transaction, storage or service-worker behavior changes are included.
+Goals share the existing v1 record as an optional `goals` array. Missing goals
+means no goals; loading old data performs no migration or write. Each goal stores
+an ID, name, optional emoji, positive target in cents, reserved cents and archived
+flag. Create/edit, reserve/release, archive and confirmed permanent deletion use
+the existing atomic save, stale-record guard and full-screen native dialog.
+Archive/delete release all reserved money without changing transaction history.
+Lowering a target below its reservation requires releasing funds first.
 
-Reports are labeled “Layout captured with diagnostics collapsed.” Opening the
-existing disclosure captures before expansion. Capture Collapsed Layout closes
-it synchronously for measurement and restores the prior open/focus/scroll state
-before painting. Copy Diagnostics copies the captured report without resampling
-the expanded panel. Tab/orientation/resize captures use the same collapsed path.
+Option A: combined reservations cannot exceed nonnegative Current Balance, and a
+goal cannot reserve more than its target. Current Balance remains Starting Balance
+plus income minus expenses. Available to spend is Current Balance minus active
+reservations. Home shows total, reserved and available amounts when funds are
+reserved; Daily Guide divides available money by days until payday. Ordinary
+expenses, transaction edits/deletes and Starting Balance changes that would leave
+reservations unfunded require releasing funds first. With no reservations, existing
+negative-balance behavior remains supported.
 
-Six points are derived from actual navigation, viewport and safe-area geometry:
-inside navigation content, its bottom edge, between content and the viewport
-bottom, just above the safe-area boundary, and near the inner/client viewport
-bottoms. Each reports coordinates, top hit and a four-element hit stack, hit
-bounds/computed properties, and up to three ancestor backgrounds. Null hits and
-unsupported APIs are reported without inventing elements. A missing safe-area
-probe is marked unavailable and its dependent sample is omitted.
+The first active goal in creation order is Featured Goal; no manual selection or
+new settings are added. Progress uses reserved/target cents and shows Fully Funded
+at equality. Archived goals remain manageable in Goals and are excluded from Home.
 
-The existing html, body, .shell, main and nav are also inspected for rectangles,
-height/min-height, background color/image, position, padding and overflow.
-Generated ::before/::after backgrounds are reported when present. No DOM text,
-input values, financial records, complete trees or browser storage are copied.
+Record Goal Purchase accepts a positive actual price up to that goal’s reservation
+plus unreserved available funds. Saving creates exactly one ordinary expense,
+archives the goal and releases its entire reservation in the same storage write.
+A cheaper purchase releases the unused remainder; a more expensive purchase can
+use available funds without using other goals’ reservations. Existing Activity
+edit/delete behavior applies to the expense; it does not reopen or re-reserve an
+archived goal. Deleting a goal never deletes its purchase expense.
 
-After updating the installed PWA, open the existing Viewport Diagnostics control,
-press Capture Collapsed Layout, and copy the report. Repeat on Home, Activity,
-Goals and Insights at matching orientation and note any scroll differences.
-Keep these diagnostics until the real-device evidence has been reviewed.
+Settings and Starting Balance back buttons use a 50px lavender circular control
+with a centered SVG chevron and existing accessible destination label. Shared
+shell sizing, standalone `100vh` fix, sticky navigation and Geist Mono weights
+remain unchanged. Production-first installed-iPhone acceptance is still required
+after PR review, merge and the normal Pages deployment/update workflow.
+
+Additional validation: `node --test tests/lwvd-goals.test.js` and
+`npx playwright test tests/browser/lwvd-goals.spec.js`.
+
+## Temporary diagnostics removed
+
+The temporary Viewport Diagnostics control, report/copy code, event listeners,
+styles and measurement probe have been removed following acceptance of the
+standalone viewport fix in release 2026-10-24-50. The accepted `100vh` standalone
+coverage, sticky navigation, safe-area padding and dialog viewport handling remain.

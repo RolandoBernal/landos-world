@@ -343,39 +343,17 @@ test('Sprint 2.1.1 navigation follows the viewport for short and scrolling tabs;
   expect(await saved(page)).toEqual(before);
 });
 
-for(const theme of ['light','dark'])test(`${theme} temporary viewport diagnostics report actual geometry, refresh and copy without financial data`,async({page})=>{
-  await setup(page,theme,[{id:'private-record',type:'income',amountCents:735,label:'Gift',description:'Private diary description',createdAt:new Date().toISOString()}]);
-  const before=await saved(page),diagnostics=page.locator('#viewport-diagnostics'),report=page.locator('#viewport-report');
-  const geometry=()=>page.evaluate(()=>({height:document.documentElement.scrollHeight,bottom:document.querySelector('nav').getBoundingClientRect().bottom}));
-  await page.evaluate(()=>{
-    const original=document.elementFromPoint.bind(document);window.collapsedHitChecks=[];
-    document.elementFromPoint=(x,y)=>{window.collapsedHitChecks.push({open:document.querySelector('#viewport-diagnostics').open,x,y});return original(x,y);};
-  });
-  const closed=await geometry();await diagnostics.locator('summary').click();await expect(report).toBeVisible();
-  await expect(report).toContainText('Layout captured with diagnostics collapsed.');
-  const opened=await geometry();expect(opened.height).toBe(closed.height);expect(opened.bottom).toBe(closed.bottom);
+for(const theme of ['light','dark'])test(`${theme} diagnostics are removed while navigation, data and financial weights remain intact`,async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await setup(page,theme);const before=await saved(page);
   for(const tab of ['Home','Activity','Goals','Insights']){
-    await page.getByRole('button',{name:tab,exact:true}).click();await expect(report).toContainText(`Tab: ${tab}`);
-    await page.getByRole('button',{name:'Capture Collapsed Layout',exact:true}).click();
-    const current=await page.evaluate(()=>({innerHeight,clientHeight:document.documentElement.clientHeight,scrollHeight:document.documentElement.scrollHeight,bottom:document.querySelector('nav').getBoundingClientRect().bottom,padding:getComputedStyle(document.querySelector('nav')).paddingBottom}));
-    await expect(report).toContainText(`window.innerHeight: ${current.innerHeight}`);await expect(report).toContainText(`documentElement.scrollHeight: ${current.scrollHeight}`);await expect(report).toContainText(`Navigation bottom: ${current.bottom}`);await expect(report).toContainText(`Gap to innerHeight: ${current.innerHeight-current.bottom}`);await expect(report).toContainText(`Gap to clientHeight: ${current.clientHeight-current.bottom}`);await expect(report).toContainText(`Navigation padding-bottom: ${current.padding}`);
-    for(const label of ['html background-color:','body background-color:','.shell background-color:','main background-color:','nav background-color:','background-image:','generated pseudo-elements:','Sample navigation content:','Sample navigation bottom edge:','Sample between navigation content and viewport bottom:','Sample above bottom safe-area boundary:','Sample near inner viewport bottom:','Sample near client viewport bottom:','Topmost:','Stack (top 4):','Hit element:','Ancestor background:'])await expect(report).toContainText(label);
-    expect(await page.evaluate(()=>window.collapsedHitChecks.every(sample=>sample.open===false))).toBe(true);
-    for(const label of ['visualViewport.width:','visualViewport.height:','visualViewport.offsetTop:','devicePixelRatio:','.shell height / min-height:','main overflow-x / overflow-y:','Safe-area inset bottom:','viewport-fit=cover: true'])await expect(report).toContainText(label);
+    await page.getByRole('button',{name:tab,exact:true}).click();
+    await expect(page.locator('#viewport-diagnostics,#viewport-safe-area')).toHaveCount(0);
+    await expect(page.getByText('Viewport Diagnostics',{exact:false})).toHaveCount(0);
   }
-  await page.setViewportSize({width:375,height:667});await expect(report).toContainText('window.innerHeight: 667');await page.evaluate(()=>dispatchEvent(new Event('orientationchange')));await expect(report).toContainText('window.innerWidth: 375');
-  await page.evaluate(()=>Object.defineProperty(navigator,'standalone',{configurable:true,value:true}));await page.getByRole('button',{name:'Capture Collapsed Layout',exact:true}).click();await expect(report).toContainText('Display mode: standalone PWA');
-  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.copiedDiagnostics=text;}}}));await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();await expect(page.locator('#viewport-copy-status')).toHaveText('Diagnostics copied.');expect(await page.evaluate(()=>window.copiedDiagnostics)).toBe(await report.textContent());
-  const captured=await report.textContent(),sampleCount=await page.evaluate(()=>window.collapsedHitChecks.length);
-  await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();expect(await report.textContent()).toBe(captured);expect(await page.evaluate(()=>window.collapsedHitChecks.length)).toBe(sampleCount);
-  const capturedAt=captured.match(/Captured at: (.+)/)[1];await page.getByRole('button',{name:'Capture Collapsed Layout',exact:true}).click();await expect(diagnostics).toHaveAttribute('open','');expect((await report.textContent()).match(/Captured at: (.+)/)[1]).not.toBe(capturedAt);
-  const text=await report.textContent();for(const secret of ['Private diary description','private-record','Max','balanceCents','lando-world:lwvd:v1'])expect(text).not.toContain(secret);
-  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});document.execCommand=()=>{window.fallbackDiagnostics=document.querySelector('textarea').value;return true;};});await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();expect(await page.evaluate(()=>window.fallbackDiagnostics)).toBe(await report.textContent());
-  await page.evaluate(()=>{document.execCommand=()=>false;});await page.getByRole('button',{name:'Copy Diagnostics',exact:true}).click();await expect(page.locator('#viewport-copy-status')).toContainText('Copy unavailable');await expect(report).toBeVisible();
-  await page.evaluate(()=>{document.elementFromPoint=undefined;document.elementsFromPoint=()=>{throw Error('unsupported');};document.querySelector('#viewport-safe-area').remove();});
-  await page.getByRole('button',{name:'Capture Collapsed Layout',exact:true}).click();await expect(report).toContainText('elementFromPoint: unavailable');await expect(report).toContainText('elementsFromPoint: unavailable');await expect(report).toContainText('Safe-area inset bottom: unavailable');await expect(report).toContainText('safe-area probe missing');
-  await diagnostics.locator('summary').click();await expect(report).not.toBeVisible();expect(await saved(page)).toEqual(before);
-  await expect(page.locator('.balance')).toHaveCount(0);await home(page);await expect(page.locator('.balance')).toHaveCSS('font-weight','500');await expect(page.locator('.guide .numeric')).toHaveCSS('font-weight','500');await expect(page.locator('.greeting h1')).toHaveCSS('font-weight','500');await expect(page.getByRole('button',{name:'Add Money',exact:true})).toHaveCSS('font-weight','500');
+  await page.setViewportSize({width:375,height:667});await page.evaluate(()=>dispatchEvent(new Event('orientationchange')));
+  await home(page);await expect(page.locator('.balance')).toHaveCSS('font-weight','500');await expect(page.locator('.guide .numeric')).toHaveCSS('font-weight','500');await expect(page.locator('.greeting h1')).toHaveCSS('font-weight','500');await expect(page.getByRole('button',{name:'Add Money',exact:true})).toHaveCSS('font-weight','500');
+  expect(await saved(page)).toEqual(before);expect(errors).toEqual([]);
 });
 
 test('standalone shell stays full height when launch dvh underreports by 33px',async({page})=>{

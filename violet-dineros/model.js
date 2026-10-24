@@ -36,7 +36,7 @@ export function effectivePayday(anchor, frequency, today = localToday()) {
   return new Date(stamp).toISOString().slice(0, 10);
 }
 export function validState(data) {
-  return data && data.onboarded === true && typeof data.firstName === 'string' && data.firstName.trim().length > 0 && data.firstName.length <= 40 && Number.isSafeInteger(data.balanceCents) && data.balanceCents >= 0 && (!data.payday || dateParts(data.payday)) && ['', 'weekly', 'biweekly', 'monthly'].includes(data.frequency) && (data.transactions === undefined || validTransactions(data.transactions)) && currentBalance(data) !== null;
+  return data && data.onboarded === true && typeof data.firstName === 'string' && data.firstName.trim().length > 0 && data.firstName.length <= 40 && Number.isSafeInteger(data.balanceCents) && data.balanceCents >= 0 && (!data.payday || dateParts(data.payday)) && ['', 'weekly', 'biweekly', 'monthly'].includes(data.frequency) && (data.transactions === undefined || validTransactions(data.transactions)) && currentBalance(data) !== null && (data.goals === undefined || validGoals(data.goals)) && fundedReservations(data);
 }
 
 export const TRANSACTION_LABELS = Object.freeze({
@@ -69,4 +69,34 @@ export function activityGroups(transactions, { search = '', filter = 'all', now 
       groups.get(key).transactions.push(t);
     });
   return [...groups.values()];
+}
+
+// Reservations are allocations, never transactions. Missing goals is legacy data.
+export function validGoals(goals) {
+  return Array.isArray(goals) && new Set(goals.map(g => g?.id)).size === goals.length && goals.every(g =>
+    g && typeof g.id === 'string' && g.id.length > 0 && typeof g.name === 'string' && g.name.trim().length > 0 && g.name.length <= 80 &&
+    typeof g.emoji === 'string' && [...g.emoji].length <= 16 && Number.isSafeInteger(g.targetCents) && g.targetCents > 0 &&
+    Number.isSafeInteger(g.reservedCents) && g.reservedCents >= 0 && g.reservedCents <= g.targetCents &&
+    typeof g.archived === 'boolean' && (!g.archived || g.reservedCents === 0));
+}
+export const reservedBalance = data => (data.goals || []).reduce((sum, g) => sum + BigInt(g.reservedCents), 0n);
+export const availableBalance = data => currentBalance(data) - Number(reservedBalance(data));
+export function fundedReservations(data) {
+  return reservedBalance(data) <= BigInt(Math.max(0, currentBalance(data)));
+}
+export function updateGoal(data, goal) {
+  const existing = (data.goals || []).find(g => g.id === goal.id);
+  const next = { ...data, goals: existing ? data.goals.map(g => g.id === goal.id ? goal : g) : [...(data.goals || []), goal] };
+  if (!validGoals(next.goals) || !fundedReservations(next)) throw Error('Keep reservations within the goal target and your available balance. Release funds before lowering a target.');
+  return next;
+}
+export function purchaseGoal(data, id, transaction) {
+  const goal = (data.goals || []).find(g => g.id === id && !g.archived);
+  if (!goal || transaction.type !== 'expense' || !validTransactions([transaction]) ||
+    (data.transactions || []).some(t => t.id === transaction.id) || transaction.amountCents > availableBalance(data) + goal.reservedCents) {
+    throw Error('The purchase must fit this goal’s reserved funds plus your available balance.');
+  }
+  const next = { ...data, goals: data.goals.map(g => g.id === id ? { ...g, archived: true, reservedCents: 0 } : g), transactions: [...(data.transactions || []), transaction] };
+  if (!validState(next)) throw Error('This purchase could not be saved. Check the amount.');
+  return next;
 }
