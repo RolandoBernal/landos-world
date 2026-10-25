@@ -772,7 +772,7 @@
   }
 
   function entryTypeUsesMealGuidance(type) {
-    return getEntryTypeConfig(type).mealGuidance === true;
+    return Boolean(type) && getEntryTypeConfig(type).mealGuidance === true;
   }
 
   function entryTypeUsesDoseGuidance(type) {
@@ -6290,7 +6290,7 @@
       lowGlucoseRoundId: options.lowGlucoseRoundId || (sameEditorSession ? previousEditor.lowGlucoseRoundId : null),
       id: record.id || null,
       eventType: normalizeEventType(record.eventType || options.eventType, record),
-      type: record.type || options.type || DEFAULT_ENTRY_TYPE,
+      type: record.type ?? options.type ?? '',
       // Form drafts describe the displayed values; rerenders must retain the saved
       // record that established this session's historical calculation authority.
       originalRecord: record.id
@@ -6335,7 +6335,7 @@
     const eventDate = record.date || getLocalDateKey(new Date(recordTimestamp));
     const eventTime = record.time || getLocalTimeKey(new Date(recordTimestamp));
     const eventConfig = getEventTypeConfig(currentEditor.eventType);
-    const contextType = normalizeRecordContext(currentEditor.type, currentEditor.eventType);
+    const contextType = currentEditor.type;
     const lowGlucose = contextType === 'Low Glucose';
     const showCarbEntry = eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
@@ -6490,7 +6490,9 @@
   function getEditorType(form) {
     const typeInput = form.elements.type;
     const eventType = getEditorEventType(form);
-    return normalizeRecordContext(typeInput?.value || currentEditor?.type, eventType);
+    const type = typeInput ? typeInput.value : currentEditor?.type;
+    const options = eventType === 'check-insulin' ? CHECK_CONTEXT_TYPES : getContextOptionsForEventType(eventType);
+    return options.includes(type) ? type : '';
   }
 
   function getEditorEventType(form) {
@@ -6928,7 +6930,9 @@
     const type = getEditorType(form);
     const requiresCarbs = eventType === 'meal' || ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const hasMealCarbs = !requiresCarbs || normalizeNumber(form.elements.mealCarbs?.value) != null;
-    saveButton.disabled = !(hasDate && hasTime && hasMealCarbs);
+    // Let an unset context reach our inline validation before native field checks.
+    saveButton.formNoValidate = !type;
+    saveButton.disabled = Boolean(type) && !(hasDate && hasTime && hasMealCarbs);
   }
 
   function removeCarbCalculatorRowFromTarget(target, root) {
@@ -7341,9 +7345,10 @@
     return `
       <label class="lee_lee_diabetes_field">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
-        <select class="lee_lee_diabetes_select" name="type">
+        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="lee-lee-context-error">
           ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
+        <span class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" id="lee-lee-context-error" data-context-error role="alert" hidden></span>
       </label>
     `;
   }
@@ -7360,19 +7365,18 @@
       : baseOptions;
     const dateKey = form?.elements.date?.value || '';
     const editingId = currentEditor?.id || null;
-    const selected = options.includes(selectedType) ? selectedType : getEventTypeConfig(normalizedEventType).defaultContext;
+    // Availability can disable a choice, but must never choose a different context.
+    const selected = options.includes(selectedType) ? selectedType : '';
     const loggedContexts = getLoggedSingleUseCheckContextsForDate(dateKey, editingId);
-    const firstAvailable = options.find((type) => !isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts)) || options[0] || selected;
-    const effectiveSelected = isContextUnavailableForCheckDate(selected, normalizedEventType, loggedContexts) ? firstAvailable : selected;
-    return options.map((type) => {
+    return [{ type: '', selected: !selected, disabled: false, label: 'Select a context…' }, ...options.map((type) => {
       const disabled = isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts);
       return {
         type,
         disabled,
-        selected: type === effectiveSelected,
+        selected: type === selected,
         label: disabled ? `${type} - ✓ Logged` : type,
       };
-    });
+    })];
   }
 
   function isContextUnavailableForCheckDate(type, eventType, loggedContexts) {
@@ -7462,7 +7466,7 @@
     renderEditor({
       mode: 'primary',
       type,
-      record: latestRecordForType(type) || { type },
+      record: latestRecordForType(type) || { type: '' },
     });
   }
 
@@ -7485,7 +7489,6 @@
   }
 
   function openEventEditor(eventType, draft = {}, navigationOptions = {}) {
-    const config = getEventTypeConfig(eventType);
     renderEditor({
       mode: 'log-entry',
       eventType,
@@ -7495,7 +7498,7 @@
       startAtTopBeforeFocus: navigationOptions.startAtTopBeforeFocus === true,
       record: {
         eventType,
-        type: normalizeRecordContext(draft.type || config.defaultContext, eventType),
+        type: '',
         ...draft,
       },
     });
@@ -8105,6 +8108,17 @@
   }
 
   function handleSave(form) {
+    if (!getEditorType(form)) {
+      const error = form.querySelector('[data-context-error]');
+      if (error) {
+        error.textContent = 'Select a context before saving.';
+        error.hidden = false;
+      }
+      form.elements.type?.setAttribute('aria-invalid', 'true');
+      form.elements.type?.focus();
+      form.elements.type?.closest('label')?.scrollIntoView({ block: 'center' });
+      return;
+    }
     if (getEditorType(form) === 'Low Glucose') { saveLowGlucoseEditor(form); return; }
     if (currentEditor?.id && hasDoseAffectingEditorChanges(form, currentEditor.originalRecord)) {
       if (!getHistoricalPlanForRecord(currentEditor.originalRecord)) {

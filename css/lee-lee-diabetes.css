@@ -3764,3 +3764,14 @@ dialog.lee_lee_diabetes_carb_calc_layer {
   background: transparent;
 }
 dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
+
+.lee_lee_diabetes_select[aria-invalid="true"] {
+  border-color: #fca5a5;
+  outline: 2px solid #fca5a5;
+  outline-offset: 2px;
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_select[aria-invalid="true"] {
+  border-color: #dc2626;
+  outline-color: #dc2626;
+}
