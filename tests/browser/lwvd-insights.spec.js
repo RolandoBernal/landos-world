@@ -18,6 +18,7 @@ for(const theme of ['light','dark'])test(`${theme} narrow layouts, tap targets, 
  await start(page);await page.evaluate(theme=>window.LandosTheme?.setPreference?.(theme),theme);await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.evaluate(()=>scrollTo(0,0));
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(await page.locator('[data-period=month]').evaluate(e=>getComputedStyle(e).borderBottomColor)).toBe('rgba(0, 0, 0, 0)');
  expect(await page.locator('.insight-filters').evaluate(e=>getComputedStyle(e).justifyContent)).toBe('space-evenly');
  for(const b of await page.locator('[data-period]').all()){const rect=await b.boundingBox();expect(rect.height).toBeGreaterThanOrEqual(44);}
  await expect(page.locator('.spending-chart')).toBeInViewport();await page.getByLabel('Purchase amount ($)',{exact:true}).fill('3');await expect(page.getByLabel('Purchase amount ($)',{exact:true})).toBeFocused();expect(await page.locator('#small-amount').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);

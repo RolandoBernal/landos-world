@@ -261,3 +261,5 @@ h1,h2,strong,b{font-weight:500}
 #small-frequency{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
 #small-result{padding:14px;border-radius:12px;background:#f2edff;min-height:52px}
 :root[data-theme=dark] .insight-card{background:#2a203e}:root[data-theme=dark] .your-insight{background:#173d37}:root[data-theme=dark] .small-purchases{background:#21192c;border-color:#51405f}:root[data-theme=dark] #small-result{background:#342744}:root[data-theme=dark] .chart-total small{color:#c1b2d5}
+:root[data-theme=dark] .insight-filters button{border-bottom-color:transparent}
+:root[data-theme=dark] .insight-filters button[aria-pressed=true]{border-bottom-color:#bd92ff}
