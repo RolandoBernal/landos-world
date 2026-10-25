@@ -5,7 +5,9 @@ async function start(page,data=seed){await page.clock.install({time:new Date('20
 test('shared filters, accessible chart and independent read-only what-if',async({page})=>{
  await start(page);const before=await page.evaluate(key=>localStorage.getItem(key),key);
  await expect(page.locator('h1')).toBeFocused();await expect(page.locator('.chart-total')).toContainText('$10.00');await expect(page.locator('.your-insight')).toContainText('Shopping');
- await page.getByLabel('Purchase amount ($)',{exact:true}).fill('2.50');await expect(page.locator('#small-result')).toContainText('$130.00');await page.getByLabel('How often?').selectOption('daily');await expect(page.locator('#small-result')).toContainText('$912.50');
+ await expect(page.locator('#small-result')).toHaveClass('small-result-empty');
+ await expect(page.locator('#small-result')).toContainText('Enter an amount to see how it adds up.');
+ await page.getByLabel('Purchase amount ($)',{exact:true}).fill('2.50');await expect(page.locator('#small-result')).not.toHaveClass('small-result-empty');await expect(page.locator('#small-result')).toContainText('$130.00');await page.getByLabel('How often?').selectOption('daily');await expect(page.locator('#small-result')).toContainText('$912.50');
  for(const [label,total] of [['All Time','$15.00'],['This Month','$10.00'],['Budget Period','$10.00']]){await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('.chart-total')).toContainText(total);await expect(page.locator('#small-result')).toContainText('$912.50');}
  await page.getByLabel('Purchase amount ($)',{exact:true}).fill('-5');await expect(page.locator('#small-result')).toContainText('positive amount');
  expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBe(before);
@@ -24,6 +26,16 @@ for(const theme of ['light','dark'])test(`${theme} narrow layouts, tap targets, 
  await expect(page.locator('.spending-chart')).toBeInViewport();await page.getByLabel('Purchase amount ($)',{exact:true}).fill('3');await expect(page.getByLabel('Purchase amount ($)',{exact:true})).toBeFocused();expect(await page.locator('#small-amount').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
  await page.locator('#small-hint').scrollIntoViewIfNeeded();await expect(page.locator('#small-hint')).toBeInViewport();await expect(page.locator('nav')).toBeInViewport();
  await page.screenshot({path:info.outputPath(`insights-${theme}-${width}.png`),fullPage:true});
+ await page.locator('#small-amount').fill('');
+ await expect(page.locator('#small-amount')).toBeFocused();
+ await expect(page.locator('#small-result')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+ await expect(page.locator('#small-result')).toHaveCSS('padding','0px');
+ await expect(page.locator('#small-result svg')).toHaveAttribute('aria-hidden','true');
+ const helper=await page.locator('#small-result').boundingBox(),select=await page.locator('#small-frequency').boundingBox();
+ expect(helper.y).toBeGreaterThanOrEqual(select.y+select.height);
+ expect(helper.y-select.y-select.height).toBeLessThanOrEqual(12);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath(`insights-empty-${theme}-${width}.png`),fullPage:true});
  }
 });
 

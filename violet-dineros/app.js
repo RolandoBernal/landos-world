@@ -8,6 +8,7 @@ let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
+ info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
  home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
  activity: '<rect x="5" y="3" width="15" height="19" rx="2"/><path d="M10 8h6M10 13h6M10 18h6M8 8h.01M8 13h.01M8 18h.01"/>',
  goals: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
@@ -419,5 +420,6 @@ function renderSmallResult() {
   const yearly = smallPurchaseCost(smallAmount, smallFrequency);
   const result = content.querySelector('#small-result');
   content.querySelector('#small-amount').setAttribute('aria-invalid', String(!!smallAmount.trim() && yearly === null));
-  result.innerHTML = yearly === null ? `<p>${smallAmount.trim() ? 'Enter a positive amount with up to two decimal places.' : 'Enter an amount to see how it adds up.'}</p>` : `<p>That’s <strong class="numeric">${money(yearly)}</strong> in a year.</p>`;
+  result.classList.toggle('small-result-empty', !smallAmount.trim());
+  result.innerHTML = yearly === null ? `<p>${smallAmount.trim() ? 'Enter a positive amount with up to two decimal places.' : `${icon('info')}<span>Enter an amount to see how it adds up.</span>`}</p>` : `<p>That’s <strong class="numeric">${money(yearly)}</strong> in a year.</p>`;
 }
