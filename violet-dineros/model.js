@@ -120,3 +120,41 @@ export function affordability(data, input) {
     remainingCents: affordable ? Number(difference) : null,
     shortageCents: affordable ? null : -difference};
 }
+
+// Read-only calendar periods derived from the saved recurring payday anchor.
+export function spendingPeriod(data, filter = 'budget', today = localToday()) {
+  if (filter === 'all') return {start: null, end: null};
+  if (filter === 'month') return {start: today.slice(0, 7) + '-01', end: today};
+  if (!dateParts(data.payday) || !['weekly', 'biweekly', 'monthly'].includes(data.frequency)) return null;
+  const anchor = dateParts(data.payday), current = dateParts(today);
+  let start;
+  if (data.frequency === 'monthly') {
+    const offset = (current.y - anchor.y) * 12 + current.m - anchor.m;
+    const occurrence = months => {
+      const date = new Date(anchor.stamp); date.setUTCDate(1); date.setUTCMonth(date.getUTCMonth() + months);
+      const last = new Date(date); last.setUTCMonth(last.getUTCMonth() + 1); last.setUTCDate(0);
+      date.setUTCDate(Math.min(anchor.d, last.getUTCDate())); return date.toISOString().slice(0, 10);
+    };
+    start = occurrence(offset);
+    if (start > today) start = occurrence(offset - 1);
+  } else {
+    const interval = (data.frequency === 'weekly' ? 7 : 14) * 86400000;
+    start = new Date(anchor.stamp + Math.floor((current.stamp - anchor.stamp) / interval) * interval).toISOString().slice(0, 10);
+  }
+  return {start, end: today};
+}
+export function spendingSummary(data, filter = 'budget', today = localToday()) {
+  const period = spendingPeriod(data, filter, today);
+  const expenses = period ? (data.transactions || []).filter(t => {
+    const day = localToday(new Date(t.createdAt));
+    return t.type === 'expense' && (!period.end || day <= period.end) && (!period.start || day >= period.start);
+  }) : [];
+  const categories = TRANSACTION_LABELS.expense.map(label => ({label, cents: expenses.filter(t => t.label === label).reduce((sum, t) => sum + BigInt(t.amountCents), 0n)})).filter(c => c.cents > 0n);
+  const total = categories.reduce((sum, c) => sum + c.cents, 0n);
+  return {period, categories, total, count: expenses.length};
+}
+export function smallPurchaseCost(input, frequency) {
+  const cents = parseMoney(input), yearly = {daily:365, weekly:52, monthly:12}[frequency];
+  if (cents === null || cents <= 0 || typeof yearly !== 'number') return null;
+  return BigInt(cents) * BigInt(yearly);
+}

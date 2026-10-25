@@ -1,9 +1,10 @@
-import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups, availableBalance, reservedBalance, fundedReservations, updateGoal, purchaseGoal, affordability } from './model.js';
+import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups, availableBalance, reservedBalance, fundedReservations, updateGoal, purchaseGoal, affordability, spendingSummary, smallPurchaseCost } from './model.js';
 const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
+let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
@@ -59,7 +60,7 @@ function focusFirstField(root) {
   field.focus({preventScroll:root !== content}); return true;
 }
 function focusPageStart() {
-  if (focusFirstField(content)) return;
+  if (tab !== 'Insights' && focusFirstField(content)) return;
   const h = content.querySelector('h1'); h.tabIndex = -1; h.focus();
 }
 function onboarding() {
@@ -125,17 +126,10 @@ function render() {
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
   if (tab === 'Afford') { renderAffordability(); return; }
   if (tab === 'Activity') { renderActivity(); return; }
+  if (tab === 'Insights') { renderInsights(); return; }
   if (tab === 'Goals') { renderGoals(); return; }
   if (tab === 'Balance') { editStartingBalance(); return; }
   if (tab === 'Settings') { settings(); return; }
-  if (tab !== 'Home') {
-    const details = {
-      Activity: ['Your activity history<br>is coming soon!', 'You’ll be able to see your income, expenses, and savings movements all in one place.'],
-      Goals: ['Start saving for<br>what you love!', 'Goal tracking, savings, and milestone celebrations are coming soon.'],
-      Insights: ['Your spending insights<br>are coming soon!', 'You’ll see helpful charts and personalized insights to understand your spending and make smarter choices.']
-    };
-    content.innerHTML = `<section class="empty">${launcherBack}<h1>${tab}</h1><div class="empty-body"><div class="empty-icon">${icon(tab.toLowerCase())}</div><h2>${details[tab][0]}</h2><p>${details[tab][1]}</p></div></section>`; return;
-  }
   const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday), available = availableBalance(state);
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
   content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'id="check-affordability"' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}</button>`).join('')}</div></section>${featuredGoal()}<section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
@@ -389,6 +383,41 @@ window.addEventListener('pageshow', event => {
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open) render(); });
 // Refresh calendar-day guidance while Home remains open across midnight.
-setInterval(() => { if (state && tab === 'Home' && !document.hidden && !document.querySelector('#transaction-sheet')?.open && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
+setInterval(() => { if (state && ['Home', 'Insights'].includes(tab) && !document.hidden && !document.querySelector('#transaction-sheet')?.open && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
 let renderedDay = localToday();
 render();
+
+function renderInsights() {
+  content.innerHTML = `${launcherBack}<section class="insights"><h1>Insights</h1><div class="activity-filters insight-filters" role="group" aria-label="Spending period">${[['budget','Budget Period'],['month','This Month'],['all','All Time']].map(([value,label]) => `<button type="button" data-period="${value}" aria-pressed="${insightFilter === value}">${label}</button>`).join('')}</div><div id="spending-report" aria-live="polite"></div><section class="insight-card small-purchases"><h2>Small Purchases, Big Impact</h2><p>A little purchase can add up. Try a what-if.</p><form id="small-purchase-form"><label for="small-amount">Purchase amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="small-amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(smallAmount)}" aria-describedby="small-result small-hint"></div><label for="small-frequency">How often?</label><select id="small-frequency">${[['daily','Every day'],['weekly','Every week'],['monthly','Every month']].map(([value,label]) => `<option value="${value}" ${smallFrequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select><div id="small-result" aria-live="polite"></div><p id="small-hint" class="hint">Just exploring. Nothing here is saved or changes your money. Yearly estimates use 365 days, 52 weeks, or 12 months.</p></form></section></section>`;
+  content.querySelectorAll('[data-period]').forEach(button => button.onclick = () => {
+    insightFilter = button.dataset.period;
+    content.querySelectorAll('[data-period]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+    renderSpendingReport();
+  });
+  content.querySelector('#small-purchase-form').onsubmit = event => event.preventDefault();
+  content.querySelector('#small-amount').oninput = event => { smallAmount = event.target.value; renderSmallResult(); };
+  content.querySelector('#small-frequency').onchange = event => { smallFrequency = event.target.value; renderSmallResult(); };
+  renderSpendingReport(); renderSmallResult();
+}
+function renderSpendingReport() {
+  const {period, categories, total, count} = spendingSummary(state, insightFilter);
+  const colors = ['#8950df','#198879','#d24487','#b37118','#6776cf'];
+  const dateLabel = day => new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',year:'numeric'}).format(new Date(`${day}T12:00:00`));
+  const range = !period ? 'Set a payday and pay frequency in Settings to see your budget period.' : period.start ? `${dateLabel(period.start)} – ${dateLabel(period.end)}` : 'All recorded expenses';
+  let offset = 0;
+  const segments = categories.map(category => {
+    const share = Number(category.cents * 1000000n / total) / 1000000;
+    const segment = `<circle cx="100" cy="100" r="76" pathLength="100" fill="none" stroke="${colors[TRANSACTION_LABELS.expense.indexOf(category.label)]}" stroke-width="27" stroke-dasharray="${share * 100} ${100 - share * 100}" stroke-dashoffset="${-offset}"/>`;
+    offset += share * 100; return segment;
+  }).join('');
+  const largest = categories.reduce((best, c) => !best || c.cents > best.cents ? c : best, null);
+  const tied = largest && categories.filter(c => c.cents === largest.cents).length > 1;
+  const observation = !period ? 'Choose This Month or All Time to explore your recorded spending.' : !count ? 'No expenses recorded for this period yet. Your spending story will grow as you record purchases.' : count < 2 ? 'One purchase is a start! Record a few more expenses to see which categories stand out.' : tied ? `Your biggest categories are tied at ${money(largest.cents)} each. Every recorded purchase helps you see where your money goes.` : `${largest.label} is your biggest spending category: ${money(largest.cents)}, about ${Number(largest.cents * 100n / total)}% of your recorded expenses this period. A useful place to look when deciding what matters to you.`;
+  content.querySelector('#spending-report').innerHTML = `<section class="insight-card"><h2>Spending Breakdown</h2><p class="hint">${range}</p>${total ? `<div class="spending-chart"><svg viewBox="0 0 200 200" role="img" aria-label="Spending by category. Total ${money(total)}. Category amounts listed below."><g transform="rotate(-90 100 100)">${segments}</g></svg><div class="chart-total"><span class="numeric">${money(total)}</span><small>Total spent</small></div></div><ul class="spending-legend">${categories.map(c => `<li><span class="category-label"><i style="background:${colors[TRANSACTION_LABELS.expense.indexOf(c.label)]}" aria-hidden="true"></i>${c.label}</span><span class="numeric">${money(c.cents)}</span></li>`).join('')}</ul>` : `<div class="spending-empty">${icon('insights')}<p>${period ? 'No spending to show yet.' : 'Budget period unavailable.'}</p></div>`}</section><section class="insight-card your-insight"><h2>Your Insight</h2><p>${observation}</p></section>`;
+}
+function renderSmallResult() {
+  const yearly = smallPurchaseCost(smallAmount, smallFrequency);
+  const result = content.querySelector('#small-result');
+  content.querySelector('#small-amount').setAttribute('aria-invalid', String(!!smallAmount.trim() && yearly === null));
+  result.innerHTML = yearly === null ? `<p>${smallAmount.trim() ? 'Enter a positive amount with up to two decimal places.' : 'Enter an amount to see how it adds up.'}</p>` : `<p>That’s <strong class="numeric">${money(yearly)}</strong> in a year.</p>`;
+}
