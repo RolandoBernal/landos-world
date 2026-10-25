@@ -29,7 +29,7 @@ test('all event types expose a selected placeholder without a fallback', () => {
   for (const event of ['check-insulin', 'meal', 'activity', 'note']) {
     const options = json(audit.getContextOptionStates(event, ''));
     assert.deepEqual(options.filter(o => o.selected).map(o => o.type), ['']);
-    assert.equal(options[0].label, 'Select a context…');
+    assert.equal(options[0].label, 'Choose a context to show the entry fields…');
   }
 });
 

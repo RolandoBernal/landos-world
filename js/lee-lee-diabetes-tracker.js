@@ -7353,10 +7353,11 @@
     return `
       <label class="lee_lee_diabetes_field${needsContext ? ' lee_lee_diabetes_context_pending' : ''}">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
-        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="${needsContext ? 'lee-lee-context-help ' : ''}lee-lee-context-error">
+        ${needsContext ? '<span class="lee_lee_diabetes_context_prompt">' : ''}
+        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="lee-lee-context-error">
           ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
-        ${needsContext ? '<span class="lee_lee_diabetes_help" id="lee-lee-context-help" data-context-help>Choose a context to show the fields for this entry.</span>' : ''}
+        ${needsContext ? '<span class="lee_lee_diabetes_context_prompt_text" aria-hidden="true">Choose a context to show the entry fields…</span></span>' : ''}
         <span class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" id="lee-lee-context-error" data-context-error role="alert" hidden></span>
       </label>
     `;
@@ -7377,7 +7378,7 @@
     // Availability can disable a choice, but must never choose a different context.
     const selected = options.includes(selectedType) ? selectedType : '';
     const loggedContexts = getLoggedSingleUseCheckContextsForDate(dateKey, editingId);
-    return [{ type: '', selected: !selected, disabled: false, label: 'Select a context…' }, ...options.map((type) => {
+    return [{ type: '', selected: !selected, disabled: false, label: 'Choose a context to show the entry fields…' }, ...options.map((type) => {
       const disabled = isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts);
       return {
         type,

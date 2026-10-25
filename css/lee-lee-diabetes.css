@@ -3779,3 +3779,38 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 .lee_lee_diabetes_context_pending .lee_lee_diabetes_select:not([aria-invalid="true"]) {
   border-color: var(--lee-lee-accent);
 }
+
+/* Let the blank native Context prompt wrap without duplicating its instruction. */
+.lee_lee_diabetes_context_prompt {
+  display: grid;
+  position: relative;
+  min-width: 0;
+}
+
+.lee_lee_diabetes_context_prompt > .lee_lee_diabetes_select,
+.lee_lee_diabetes_context_prompt_text {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.lee_lee_diabetes_context_prompt > .lee_lee_diabetes_select {
+  text-indent: -9999px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lee_lee_diabetes_context_prompt option {
+  text-indent: 0;
+}
+
+.lee_lee_diabetes_context_prompt_text {
+  pointer-events: none;
+  position: relative;
+  align-self: center;
+  padding: 0.75rem 3rem 0.75rem 0.75rem;
+  color: var(--lee-lee-text);
+  font-size: 1rem;
+  line-height: 1.4;
+}

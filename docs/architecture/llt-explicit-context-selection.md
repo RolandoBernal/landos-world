@@ -44,3 +44,9 @@ Follow-up validation:
 - Physical installed-iPhone acceptance and production approval remain pending. No merge or deployment.
 
 Focused follow-up browser command: `npx playwright test tests/browser/llt-explicit-context.spec.js tests/browser/llt-low-glucose.spec.js --config=playwright.llt-context.config.js --grep 'every new entry|scheduled contexts|unset Context|Carb Calculator integrates|saved initial and embedded recheck|manual ending'`.
+
+## PR #175 refinement: instruction in the placeholder
+
+The blank Context option now reads “Choose a context to show the entry fields…”. Removed the separate Context helper and its obsolete accessibility reference. The disabled calculator and its specific applicability explanation remain unchanged. A pointer-transparent, aria-hidden rendering of the native placeholder wraps inside the blank control at narrow widths; the native select retains its option text, keyboard/picker behavior, 16px typography and focus/error outlines. Chosen and saved contexts use the original control display. No automatic focus was added.
+
+Validation: 233 focused unit checks and 14 Chromium/iPhone WebKit checks passed, including required blank selection/no-write save validation, saved-context edits, duplicates, all seven contexts, draft retention, Low Glucose calculator/rechecks, keyboard navigation, and 320px/390px light/dark layouts. Text bounds and page width checks passed; 320px WebKit screenshot visually reviewed. Syntax/diff checks passed. Preview at http://127.0.0.1:8767/#/lee-lees-tracker remains available. Physical-iPhone acceptance remains pending; no merge or deployment.

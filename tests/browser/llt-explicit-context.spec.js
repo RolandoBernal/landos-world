@@ -28,7 +28,7 @@ const stored = page => page.evaluate(key => localStorage.getItem(key), key);
 async function newEntry(page) {
   await root(page).getByRole('button', { name: 'Log Entry', exact: true }).last().click();
   await expect(context(page)).toHaveValue('');
-  await expect(context(page).locator('option:checked')).toHaveText('Select a context…');
+  await expect(context(page).locator('option:checked')).toHaveText('Choose a context to show the entry fields…');
 }
 
 test('every new entry is unset; missing context blocks all writes with accessible inline feedback', async ({ page }, info) => {
@@ -102,8 +102,8 @@ test('unset Context explains calculator availability; chosen contexts keep their
   await newEntry(page);
   const helper = root(page).locator('[data-context-help]');
   const placeholder = root(page).locator('[data-context-calculator-placeholder]');
-  await expect(helper).toHaveText('Choose a context to show the fields for this entry.');
-  await expect(context(page)).toHaveAttribute('aria-describedby', /lee-lee-context-help/);
+  await expect(helper).toHaveCount(0);
+  await expect(context(page)).toHaveAttribute('aria-describedby', 'lee-lee-context-error');
   await expect(placeholder.getByRole('button')).toBeDisabled();
   await expect(placeholder).toContainText('meal, snack, or Low Glucose');
   await expect(root(page).locator('[name=mealCarbs]')).toHaveCount(0);
@@ -114,14 +114,24 @@ test('unset Context explains calculator availability; chosen contexts keep their
   expect(await page.evaluate(() => window.scrollY)).toBe(before);
   await root(page).locator('[name=notes]').fill('Keep focus and draft');
   await expect(root(page).locator('[name=notes]')).toBeFocused();
+  await root(page).locator('[name=notes]').blur();
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 700 });
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       await context(page).scrollIntoViewIfNeeded();
-      await expect(helper).toBeVisible();
+      await expect(helper).toHaveCount(0);
+      await expect(context(page).locator('option:checked')).toHaveText('Choose a context to show the entry fields…');
       await expect(placeholder).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await expect(root(page).locator('.lee_lee_diabetes_context_prompt_text')).toBeVisible();
+      expect(await root(page).locator('.lee_lee_diabetes_context_prompt_text').evaluate(el => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const text = range.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        return text.left >= box.left && text.right <= box.right && text.bottom <= box.bottom;
+      })).toBe(true);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: info.outputPath(`unset-context-${width}-${theme}.png`), fullPage: true });
     }
   }
@@ -140,5 +150,6 @@ test('unset Context explains calculator availability; chosen contexts keep their
   }
   await root(page).locator('[data-action=cancel]').click();
   await newEntry(page);
-  await expect(helper).toBeVisible();
+  await expect(helper).toHaveCount(0);
+  await expect(context(page).locator('option:checked')).toHaveText('Choose a context to show the entry fields…');
 });
