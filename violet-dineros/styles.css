@@ -263,3 +263,9 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] .insight-card{background:#2a203e}:root[data-theme=dark] .your-insight{background:#173d37}:root[data-theme=dark] .small-purchases{background:#21192c;border-color:#51405f}:root[data-theme=dark] #small-result{background:#342744}:root[data-theme=dark] .chart-total small{color:#c1b2d5}
 :root[data-theme=dark] .insight-filters button{border-bottom-color:transparent}
 :root[data-theme=dark] .insight-filters button[aria-pressed=true]{border-bottom-color:#bd92ff}
+
+/* Keep the blank calculator prompt quiet; retain the calculated result card. */
+#small-result.small-result-empty,:root[data-theme=dark] #small-result.small-result-empty{padding:0;border-radius:0;background:transparent;min-height:0}
+#small-result.small-result-empty p{display:flex;align-items:flex-start;gap:6px;font-size:.75rem;line-height:1.55;color:#675c8c}
+#small-result.small-result-empty svg{width:16px;height:16px;margin-top:1px}
+:root[data-theme=dark] #small-result.small-result-empty p{color:#c1b2d5}
