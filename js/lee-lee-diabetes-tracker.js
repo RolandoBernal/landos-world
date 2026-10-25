@@ -6338,6 +6338,7 @@
     const contextType = currentEditor.type;
     const lowGlucose = contextType === 'Low Glucose';
     const showCarbEntry = eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
+    const needsContext = !currentEditor.id && !contextType && currentEditor.mode !== 'low-glucose-recheck';
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor${currentEditor.preserveDocumentScrollOnViewportPan ? ' data-preserve-document-scroll-on-viewport-pan' : ''}>
@@ -6352,7 +6353,13 @@
               <input class="lee_lee_diabetes_input" name="bloodSugar" type="number" inputmode="numeric" min="0" step="1" autocomplete="off" value="${escapeHtml(record.bloodSugar ?? '')}">
             </label>
           ` : ''}
-          ${showCarbEntry ? renderMealCarbsSection(record) : ''}
+          ${needsContext ? `
+            <section class="lee_lee_diabetes_carb_entry" data-context-calculator-placeholder aria-labelledby="lee-lee-pending-calculator-title">
+              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-pending-calculator-title">Carb Calculator</h2>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" disabled aria-describedby="lee-lee-pending-calculator-help">Open Carb Calc</button>
+              <p class="lee_lee_diabetes_help" id="lee-lee-pending-calculator-help">Choose a meal, snack, or Low Glucose context to use the calculator.</p>
+            </section>
+          ` : showCarbEntry ? renderMealCarbsSection(record) : ''}
           ${eventConfig.fields.includes('activityDescription') ? `
             <label class="lee_lee_diabetes_field">
               Activity
@@ -7342,12 +7349,14 @@
   function renderTypeSelect(selectedType) {
     const eventType = currentEditor?.eventType || DEFAULT_EVENT_TYPE;
     const optionStates = getContextOptionStates(eventType, selectedType);
+    const needsContext = !currentEditor?.id && !selectedType;
     return `
-      <label class="lee_lee_diabetes_field">
+      <label class="lee_lee_diabetes_field${needsContext ? ' lee_lee_diabetes_context_pending' : ''}">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
-        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="lee-lee-context-error">
+        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="${needsContext ? 'lee-lee-context-help ' : ''}lee-lee-context-error">
           ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
+        ${needsContext ? '<span class="lee_lee_diabetes_help" id="lee-lee-context-help" data-context-help>Choose a context to show the fields for this entry.</span>' : ''}
         <span class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" id="lee-lee-context-error" data-context-error role="alert" hidden></span>
       </label>
     `;

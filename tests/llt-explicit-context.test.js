@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../js/lee-lee-carb-calculator.js', import.m
 const storageHarness = readFileSync(new URL('./lee-lees-tracker-storage.test.js', import.meta.url), 'utf8');
 const factories = storageHarness.slice(storageHarness.indexOf('function createLocalStorage'), storageHarness.indexOf('function sampleRecord'));
 const instrumented = source.replace('  window.LeeLeeTrackerStorage = {', `  window.LeeLeeTrackerStorage = {
-    audit: { getContextOptionStates, getEditorType, handleSave, entryTypeUsesDoseGuidance,
+    audit: { getContextOptionStates, getEditorType, handleSave, entryTypeUsesDoseGuidance, entryTypeUsesFoodCalculator,
       setRecords(value) { records = value; }, setEditor(value) { currentEditor = value; } },`);
 const factory = new Function('vm', 'trackerSource', 'Blob', factories + '\nreturn createTracker;')(vm, instrumented, Blob);
 const json = value => JSON.parse(JSON.stringify(value));
@@ -64,4 +64,10 @@ test('invalid save stops before record construction, storage, or Low Glucose dis
   assert.equal(error.hidden, false);
   assert.equal(focused, true);
   assert.deepEqual(localStorage.dump(), before);
+});
+
+test('calculator applicability retains Low Glucose and meal contexts only', () => {
+  const { audit } = setup();
+  for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack', 'Low Glucose']) assert.equal(audit.entryTypeUsesFoodCalculator(type), true);
+  for (const type of ['', 'Correction', 'Bedtime']) assert.equal(audit.entryTypeUsesFoodCalculator(type), false);
 });

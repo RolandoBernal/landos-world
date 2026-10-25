@@ -3775,3 +3775,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   border-color: #dc2626;
   outline-color: #dc2626;
 }
+
+.lee_lee_diabetes_context_pending .lee_lee_diabetes_select:not([aria-invalid="true"]) {
+  border-color: var(--lee-lee-accent);
+}

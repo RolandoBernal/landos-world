@@ -86,6 +86,7 @@ test('scheduled contexts remain disabled without fallback; edit retains saved co
   expect(await stored(page)).toBe(before);
   await root(page).locator('[data-action=cancel]').click();
   await root(page).locator('[data-action=edit-today-record]').first().click();
+  await expect(root(page).locator('[data-context-help], [data-context-calculator-placeholder]')).toHaveCount(0);
   const savedType = await context(page).inputValue();
   expect(['Breakfast','Lunch','Dinner','Bedtime']).toContain(savedType);
   await expect(context(page).locator(`option[value="${savedType}"]`)).toHaveJSProperty('disabled', false);
@@ -94,4 +95,50 @@ test('scheduled contexts remain disabled without fallback; edit retains saved co
   const after = JSON.parse(await stored(page)).records;
   expect(after).toHaveLength(4);
   expect(after.find(r => r.type === savedType).notes).toBe('note-only correction');
+});
+
+test('unset Context explains calculator availability; chosen contexts keep their original fields', async ({ page }, info) => {
+  await open(page);
+  await newEntry(page);
+  const helper = root(page).locator('[data-context-help]');
+  const placeholder = root(page).locator('[data-context-calculator-placeholder]');
+  await expect(helper).toHaveText('Choose a context to show the fields for this entry.');
+  await expect(context(page)).toHaveAttribute('aria-describedby', /lee-lee-context-help/);
+  await expect(placeholder.getByRole('button')).toBeDisabled();
+  await expect(placeholder).toContainText('meal, snack, or Low Glucose');
+  await expect(root(page).locator('[name=mealCarbs]')).toHaveCount(0);
+  // Investigate native select focus without adding an automatic-focus policy.
+  const before = await page.evaluate(() => window.scrollY);
+  await context(page).evaluate(el => el.focus({ preventScroll: true }));
+  await expect(context(page)).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  await root(page).locator('[name=notes]').fill('Keep focus and draft');
+  await expect(root(page).locator('[name=notes]')).toBeFocused();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 700 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      await context(page).scrollIntoViewIfNeeded();
+      await expect(helper).toBeVisible();
+      await expect(placeholder).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`unset-context-${width}-${theme}.png`), fullPage: true });
+    }
+  }
+  await context(page).focus();
+  await page.keyboard.press('Tab');
+  await expect(root(page).locator('[name=bloodSugar]')).toBeFocused();
+  for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Low Glucose', 'Correction', 'Bedtime']) {
+    await context(page).selectOption(type);
+    await expect(helper).toHaveCount(0);
+    await expect(placeholder).toHaveCount(0);
+    const usesCalculator = !['Correction', 'Bedtime'].includes(type);
+    await expect(root(page).locator('[data-action=open-carb-calculator]')).toHaveCount(usesCalculator ? 1 : 0);
+    await expect(root(page).locator('[name=mealCarbs]')).toHaveCount(usesCalculator ? 1 : 0);
+    if (usesCalculator) await expect(root(page).locator('[data-carb-entry] h2')).toHaveText(type === 'Low Glucose' ? 'Treatment Carbs' : 'Meal Carbs');
+    await expect(root(page).locator('[name=notes]')).toHaveValue('Keep focus and draft');
+  }
+  await root(page).locator('[data-action=cancel]').click();
+  await newEntry(page);
+  await expect(helper).toBeVisible();
 });
