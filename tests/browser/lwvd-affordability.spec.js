@@ -38,7 +38,7 @@ test('Buy It handoff scrolls every control at reduced and restored heights',asyn
  await start(page);await page.getByLabel('How much does it cost?').fill('25.50');await page.getByRole('button',{name:'Buy It',exact:true}).click();
  await page.setViewportSize({width:390,height:320});
  for(const control of await page.locator('#transaction-sheet input,#transaction-sheet select,#transaction-sheet button').all()){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
- await expect(page.locator('.sheet-fields')).toHaveCSS('overflow-y','visible');
+ await expect(page.locator('#transaction-sheet .sheet-fields')).toHaveCSS('overflow-y','visible');
  await page.getByLabel('What was it? (optional)').fill('A little treat');
  await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('button',{name:'Buy It',exact:true})).toBeFocused();expect(await saved(page)).toEqual(seed);

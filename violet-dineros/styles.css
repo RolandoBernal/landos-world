@@ -110,7 +110,7 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 @media(max-width:360px){.transaction-panel{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.transaction-row{gap:8px;padding:8px 10px}.transaction-amount{font-size:.82rem}.transaction-icon{width:30px;height:30px}.activity-filters{gap:6px}}
 
 /* Keep actions outside the scrolling field area, including keyboard-sized viewports. */
-#transaction-form{flex:1;display:flex;flex-direction:column;gap:0;min-height:0;overflow:hidden}
+:is(#transaction-form,#affordability-form){flex:1;display:flex;flex-direction:column;gap:0;min-height:0;overflow:hidden}
 .sheet-body{min-height:0;overflow:auto;overscroll-behavior:contain}
 .sheet-fields{display:grid;gap:10px;padding:2px 2px 4px}
 .sheet-fields .error{overflow-wrap:anywhere}
@@ -124,8 +124,8 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 /* Touch may retain logical focus, but only keyboard navigation paints control outlines. */
 :root[data-focus-mode=pointer] :where(button,a,input,select,textarea,[role=button],[tabindex]):focus{outline:none}
 /* Keep each field intact in the existing scroller, with a separate action area. */
-#transaction-form .sheet-fields{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;padding-bottom:12px;scroll-padding-block:4px 12px}
-#transaction-form .sheet-fields>*{flex-shrink:0}
+:is(#transaction-form,#affordability-form) .sheet-fields{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;padding-bottom:12px;scroll-padding-block:4px 12px}
+:is(#transaction-form,#affordability-form) .sheet-fields>*{flex-shrink:0}
 #transaction-form .sheet-actions{position:static;margin-top:0;padding-top:12px;border-top:1px solid #e5dbef}
 .sheet-fields select{height:52px;min-height:52px;padding:0 32px 0 12px;line-height:normal}
 :is(#transaction-sheet,#affordability-sheet)[data-view=form],:is(#transaction-sheet,#affordability-sheet)[data-view=form]::backdrop{background:#fcfaff}
@@ -223,10 +223,7 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] #featured-goal>.navigation-chevron{background:rgba(201,168,255,.12)}
 
 /* Affordability retains its read-only preview and native expense handoff. */
-.affordability .story{margin-bottom:20px}
 .affordability .afford-available{font-family:"Geist Mono",monospace;font-size:1.8rem;margin:4px 0;overflow-wrap:anywhere}
-.affordability form{gap:12px}
-.affordability input{font-size:max(16px,1.25rem)}
 .afford-result{padding:18px;border-radius:16px;background:#f0eaff;overflow-wrap:anywhere}
 .afford-result p{margin:0;font-size:.9rem}
 .afford-result .numeric{font-family:"Geist Mono",monospace}
@@ -285,7 +282,7 @@ body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hid
 body:has(:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm])[open])>.shell{display:none}
 :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
 :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(#transaction-form,#affordability-form,.sheet-body){flex:none;overflow:visible;max-height:none}
 :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
 :root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{border-color:#53405f}
 
@@ -306,4 +303,3 @@ body::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-
 body:has(#affordability-sheet[open]):not(:has(#transaction-sheet[open]))>.shell{display:contents}
 body:has(#affordability-sheet[open])>.shell>:is(header,main,nav){display:none}
 body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
-.affordability .story{flex-shrink:0}
