@@ -36,7 +36,7 @@ for (const [amount,cents,guide] of [['180.00',18000,'$60.00'],['120.00',12000,'$
     await page.getByLabel('Starting Balance ($)',{exact:true}).fill(amount);
     await page.getByRole('button',{name:'Save',exact:true}).click();
     await expect(page.locator('#edit-starting-balance')).toContainText((cents/100).toFixed(2));
-    expect(await stored(page)).toEqual({...initial,balanceCents:cents});
+    expect(await stored(page)).toEqual({...initial,balanceCents:cents,moneyProgress:expect.objectContaining({xp:0})});
     expect(await page.evaluate(()=>window.balanceWrites)).toBe(1);
     expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),launcherKey)).toEqual(preferences);
     expect(await page.evaluate(()=>localStorage.getItem('lwvd-unrelated-test-data'))).toBe('unchanged');
@@ -60,7 +60,7 @@ test('invalid amounts are rejected without writing, then a corrected value saves
   expect(await page.evaluate(()=>window.balanceWrites)).toBe(0);
   await page.getByLabel('Starting Balance ($)',{exact:true}).fill('175.25');
   await page.getByRole('button',{name:'Save',exact:true}).click();
-  expect(await stored(page)).toEqual({...initial,balanceCents:17525});
+  expect(await stored(page)).toEqual({...initial,balanceCents:17525,moneyProgress:expect.objectContaining({xp:0})});
 });
 test('unchanged save, Cancel, Back and tab navigation do not update the balance',async ({page})=>{
   const initial = await setup(page); await openEditor(page);

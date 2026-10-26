@@ -303,3 +303,10 @@ body::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-
 body:has(#affordability-sheet[open]):not(:has(#transaction-sheet[open]))>.shell{display:contents}
 body:has(#affordability-sheet[open])>.shell>:is(header,main,nav){display:none}
 body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
+
+.money-progress { padding: 16px; }
+.money-progress h2, .money-progress h3 { font-size: 1rem; margin: 0 0 .4rem; }
+.money-progress h3 { margin-top: 1rem; }
+.money-progress p { font-size: .82rem; margin: .35rem 0; overflow-wrap: anywhere; }
+.money-progress progress { display: block; width: 100%; height: .55rem; margin: .65rem 0; accent-color: var(--primary, #9565db); }
+.money-progress .progress-help { font-size: .75rem; line-height: 1.45; opacity: .75; }

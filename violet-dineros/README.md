@@ -290,3 +290,9 @@ Create/Edit Goal, Reserve/Release Funds and Record Goal Purchase. Page forms use
 native focus scrolling; dialog forms retain the existing viewport/scroll lock and
 close restoration. Read-only Details and confirmation screens keep heading focus.
 Installed-iPhone keyboard activation remains a physical-device acceptance check.
+
+### Money Progress
+
+Local motivational progress starts at zero; historical transactions and goal balances are not retroactively rewarded. Each new expense earns 10 XP regardless of amount, at most three per local day. Same-week matches (amount, category, trimmed case-insensitive description) are suppressed even after deletion; edits do not earn XP. This conservative rule can also suppress two genuinely identical purchases. Goal contributions earn 10 XP once per local day only when exceeding that goal’s previous highest reservation; releasing and replacing funds does not earn again. Goal IDs retain their high-water marks after deletion. Income, views, and financial calculations earn nothing.
+
+One challenge repeats each local Monday–Sunday: record three eligible expenses for a single 25 XP bonus. It does not require extra spending. The next week resets challenge progress and daily limits, preserving XP; moving the clock backward does not reopen older rewards. Every 100 XP advances a motivational level: Money Rookie, Budget Builder, then Savings Pro (continued levels keep that title). All progress is an optional field in the existing local save, written atomically with successful financial saves under the existing stale-tab guard. Failed saves cannot persist awards. No migration, network, or separate service is involved. Home views remain read-only.
