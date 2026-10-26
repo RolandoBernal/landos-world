@@ -81,9 +81,9 @@ body[data-screen=home] #settings{margin-top:38px}
 .transaction-amount{font-size:.9rem;flex-shrink:0;max-width:45%;overflow-wrap:anywhere}.transaction-amount.income,.detail-amount.income{color:#216c55}.transaction-amount.expense,.detail-amount.expense{color:#9a3264}
 .activity-empty{text-align:center;padding:30px 14px}.activity-empty h2{font-size:1.15rem}.activity-empty p{font-size:.85rem}
 /* Reset native dialog UA bounds; only the inner frame tracks the visible viewport. */
-#transaction-sheet{position:fixed;inset:0;margin:0;padding:0;border:0;width:100%;height:100%;max-width:none;max-height:none;overflow:hidden;overscroll-behavior:none;background:transparent;color:#170765}
-#transaction-sheet[open]{display:block}
-#transaction-sheet::backdrop{background:#160e295c}#transaction-sheet:focus{outline:none}
+:is(#transaction-sheet,#affordability-sheet){position:fixed;inset:0;margin:0;padding:0;border:0;width:100%;height:100%;max-width:none;max-height:none;overflow:hidden;overscroll-behavior:none;background:transparent;color:#170765}
+:is(#transaction-sheet,#affordability-sheet)[open]{display:block}
+:is(#transaction-sheet,#affordability-sheet)::backdrop{background:#160e295c}:is(#transaction-sheet,#affordability-sheet):focus{outline:none}
 .transaction-frame{position:absolute;top:var(--sheet-top,0px);left:var(--sheet-left,0px);width:var(--sheet-width,100%);height:var(--sheet-height,100dvh);display:flex;align-items:flex-end;justify-content:center;padding-top:max(12px,env(safe-area-inset-top));overflow:hidden}
 .transaction-panel{display:flex;flex-direction:column;width:min(100%,480px);max-height:100%;min-height:0;overflow:hidden;border:1px solid #ddd2ee;border-bottom:0;border-radius:24px 24px 0 0;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));background:#fcfaff;box-shadow:0 -10px 45px #28133b24}
 #transaction-sheet[data-view=details],#transaction-sheet[data-view=details]::backdrop{background:#fcfaff}
@@ -91,7 +91,7 @@ body[data-screen=home] #settings{margin-top:38px}
 .details-centered{flex-shrink:0;width:100%;margin-block:auto}
 body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transaction-sheet[open] #transaction-form)>.shell{visibility:hidden}
 .sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sheet-heading h2{font-size:1.3rem;margin:0}.sheet-heading h2:focus{outline:none}.sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
-#transaction-sheet label{font-size:.87rem;font-weight:500}.sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+:is(#transaction-sheet,#affordability-sheet) label{font-size:.87rem;font-weight:500}.sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.transaction-details dt{color:#675b80}.transaction-details dd{margin:0;overflow-wrap:anywhere}
 #notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
 :root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:#493061;color:#eee3ff;border-color:#a783ce}
@@ -102,7 +102,7 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 :root[data-theme=dark] .transaction-icon.expense{background:#542a45;color:#ffc1e0}
 :root[data-theme=dark] .transaction-amount.income,:root[data-theme=dark] .detail-amount.income{color:#96edcc}
 :root[data-theme=dark] .transaction-amount.expense,:root[data-theme=dark] .detail-amount.expense{color:#ffc1e0}
-:root[data-theme=dark] #transaction-sheet{color:#eee8ff}
+:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet){color:#eee8ff}
 :root[data-theme=dark] .transaction-panel{background:#21192c;border-color:#53405f}
 :root[data-theme=dark] #transaction-sheet[data-view=details],:root[data-theme=dark] #transaction-sheet[data-view=details]::backdrop{background:#21192c}
 :root[data-theme=dark] .sheet-heading button{background:transparent}
@@ -119,7 +119,7 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 :root[data-theme=dark] .transaction-chevron{color:#b5a3cb}
 :root[data-theme=dark] .transaction-row:active{background:#3c2e4b}
 #notice[data-kind=success]:not(:empty){left:16px;right:16px;width:max-content;max-width:calc(100% - 32px);padding:9px 14px;pointer-events:none;display:block;text-align:center}
-#transaction-sheet input:focus-visible,#transaction-sheet select:focus-visible{outline-offset:-3px}
+:is(#transaction-sheet,#affordability-sheet) input:focus-visible,:is(#transaction-sheet,#affordability-sheet) select:focus-visible{outline-offset:-3px}
 
 /* Touch may retain logical focus, but only keyboard navigation paints control outlines. */
 :root[data-focus-mode=pointer] :where(button,a,input,select,textarea,[role=button],[tabindex]):focus{outline:none}
@@ -128,9 +128,9 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 #transaction-form .sheet-fields>*{flex-shrink:0}
 #transaction-form .sheet-actions{position:static;margin-top:0;padding-top:12px;border-top:1px solid #e5dbef}
 .sheet-fields select{height:52px;min-height:52px;padding:0 32px 0 12px;line-height:normal}
-#transaction-sheet[data-view=form],#transaction-sheet[data-view=form]::backdrop{background:#fcfaff}
+:is(#transaction-sheet,#affordability-sheet)[data-view=form],:is(#transaction-sheet,#affordability-sheet)[data-view=form]::backdrop{background:#fcfaff}
 :root[data-theme=dark] #transaction-form .sheet-actions{border-color:#53405f}
-:root[data-theme=dark] #transaction-sheet[data-view=form],:root[data-theme=dark] #transaction-sheet[data-view=form]::backdrop{background:#21192c}
+:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet)[data-view=form],:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet)[data-view=form]::backdrop{background:#21192c}
 
 /* Currency adornments leave the native editable value and keyboard unchanged. */
 .currency-input{position:relative;min-width:0}
@@ -281,13 +281,13 @@ body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hid
 
 /* LLT standalone Carb Calc: natural-height wrappers and visible inner overflow.
    The document is the only scrolling surface, including heading and actions. */
-#transaction-sheet:not([data-view=confirm]){position:relative;inset:auto;height:auto;min-height:100dvh;overflow:visible;touch-action:auto}
-body:has(#transaction-sheet:not([data-view=confirm])[open])>.shell{display:none}
-#transaction-sheet:not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
-#transaction-sheet:not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
-#transaction-sheet:not([data-view=confirm]) :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
-#transaction-sheet:not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
-:root[data-theme=dark] #transaction-sheet:not([data-view=confirm]) .transaction-panel{border-color:#53405f}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]){position:relative;inset:auto;height:auto;min-height:100dvh;overflow:visible;touch-action:auto}
+body:has(:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm])[open])>.shell{display:none}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{border-color:#53405f}
 
 /* One painted document surface, including iOS keyboard overscroll and safe areas.
    Keep the standalone 100vh shell fallback above and native document scrolling. */
@@ -297,14 +297,13 @@ body,.shell,body[data-screen=settings] .shell,
 :root[data-theme=dark] .shell,:root[data-theme=dark] body[data-screen=settings] .shell{background:var(--app-surface)}
 /* Paint above scrolling content beneath the installed iPhone status bar. */
 body::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--app-surface);z-index:10;pointer-events:none}
-#transaction-sheet:not([data-view=confirm]) .transaction-frame:has(form){align-items:flex-start}
+:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame:has(form){align-items:flex-start}
 @media(display-mode:standalone){
- #transaction-sheet:not([data-view=confirm]),#transaction-sheet:not([data-view=confirm]) .transaction-frame{min-height:100vh}
+ :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]),:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame{min-height:100vh}
 }
-/* The affordability route shares the entry-panel treatment and document scroller. */
-body[data-screen=afford] .shell{padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
-body[data-screen=afford] main{display:flex;align-items:flex-start;justify-content:center;padding:0}
-.affordability.transaction-panel{max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px}
-.affordability .sheet-heading h1{font-size:1.3rem;margin:0}
-.affordability :is(input,button){scroll-margin-block:calc(12px + env(safe-area-inset-top)) calc(6.25rem + env(safe-area-inset-bottom))}
-:root[data-theme=dark] .affordability.transaction-panel{border-color:#53405f}
+/* Affordability uses the same dialog surface; keep its draft in place while
+   Add Expense is open so cancel returns to the unchanged preview. */
+body:has(#affordability-sheet[open]):not(:has(#transaction-sheet[open]))>.shell{display:contents}
+body:has(#affordability-sheet[open])>.shell>:is(header,main,nav){display:none}
+body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
+.affordability .story{flex-shrink:0}

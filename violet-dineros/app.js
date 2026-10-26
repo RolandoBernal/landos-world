@@ -58,7 +58,7 @@ function save(next) {
 function focusFirstField(root) {
   const field = root.querySelector('form input:enabled:not([type=hidden]):not([readonly]), form select:enabled, form textarea:enabled:not([readonly])');
   if (!field) return false;
-  field.focus({preventScroll:root !== content || tab === 'Afford'}); return true;
+  field.focus({preventScroll:root !== content}); return true;
 }
 function focusPageStart() {
   if (tab !== 'Insights' && focusFirstField(content)) return;
@@ -120,6 +120,7 @@ function editStartingBalance() {
 const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 function render() {
   if (!state) { onboarding(); return; }
+  if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
   document.body.dataset.screen = tab.toLowerCase();
   gear.hidden = tab !== 'Home'; nav.hidden = tab === 'Afford';
   gear.innerHTML = icon('settings');
@@ -135,14 +136,15 @@ function render() {
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
   content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'id="check-affordability"' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}</button>`).join('')}</div></section>${featuredGoal()}<section class="motivation"><span aria-hidden="true">✧</span><div><h2>Small steps count.</h2><p>XP, levels, and weekly challenges are coming soon.</p></div></section>`;
   content.querySelector('#featured-goal')?.addEventListener('click', () => { const goal = (state.goals || []).find(g => !g.archived); if (goal) showGoal(goal.id); else { tab = 'Goals'; render(); focusPageStart(); } });
-  content.querySelector('#check-affordability').onclick = () => { affordabilityInput = ''; tab = 'Afford'; render(); window.scrollTo(0, 0); focusPageStart(); };
+  content.querySelector('#check-affordability').onclick = event => { event.currentTarget.focus({preventScroll:true}); affordabilityInput = ''; tab = 'Afford'; render(); };
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
   content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
 }
 function renderAffordability() {
+  const preview = document.querySelector('#affordability-sheet');
   affordabilityRaw = lastRaw;
-  content.innerHTML = `<section class="transaction-panel affordability"><div class="sheet-heading"><h1>Can I Afford This?</h1><button type="button" id="afford-back" aria-label="Back to Home">×</button></div><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><form novalidate><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></form></section>`;
-  const input = content.querySelector('#afford-price'), result = content.querySelector('#afford-result'), buy = content.querySelector('#afford-buy');
+  showDocumentPanel(preview, `<div class="sheet-heading"><h2 id="afford-title" tabindex="-1">Can I Afford This?</h2><button type="button" id="afford-back" aria-label="Back to Home">×</button></div><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><form novalidate><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" autofocus name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></form>`, '#afford-title', 'affordability');
+  const input = preview.querySelector('#afford-price'), result = preview.querySelector('#afford-result'), buy = preview.querySelector('#afford-buy');
   const update = () => {
     affordabilityInput = input.value;
     const check = affordability(state, input.value);
@@ -152,8 +154,8 @@ function renderAffordability() {
     result.innerHTML = check.status === 'blank' ? '<h2>Something caught your eye?</h2><p>Enter its price to see how it fits.</p>' : check.status === 'invalid' ? '<h2>Let’s check that price.</h2><p>Use an amount greater than zero with up to two decimal places.</p>' : check.affordable ? `<h2>Yes, it fits!</h2><p>You’d have <span class="numeric">${money(check.remainingCents)}</span> left to spend.${check.remainingCents === 0 ? ' That uses all your available spending money.' : ''}</p>` : `<h2>Not quite yet.</h2><p>You’d need <span class="numeric">${money(check.shortageCents)}</span> more, keeping your goal savings safe.</p>`;
   };
   input.oninput = update; update();
-  content.querySelector('#afford-back').onclick = () => { affordabilityInput = ''; tab = 'Home'; render(); window.scrollTo(0, 0); content.querySelector('#check-affordability').focus({preventScroll:true}); };
-  content.querySelector('form').onsubmit = event => {
+  preview.querySelector('#afford-back').onclick = closeAffordability;
+  preview.querySelector('form').onsubmit = event => {
     event.preventDefault();
     if (transactionSheet.open) return;
     if (!affordabilityIsCurrent(affordabilityRaw)) return;
@@ -260,6 +262,20 @@ function renderActivityRows() {
   list.innerHTML = groups.map(group => `<section class="activity-group"><h2>${escape(group.label)}</h2><ul>${group.transactions.map(t => `<li><button class="transaction-row" type="button" data-transaction-id="${escape(t.id)}" aria-label="${escape(`View transaction details: ${t.description || t.label}, ${t.type === 'income' ? 'Money In +' : 'Expense −'}${money(t.amountCents)}, ${t.label}`)}"><span class="transaction-icon ${t.type}">${icon(t.type === 'income' ? 'plus' : 'expense')}</span><span class="transaction-text"><strong>${escape(t.description || t.label)}</strong><small>${t.type === 'income' ? 'Money In' : 'Expense'} · ${escape(t.label)}</small></span><strong class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${money(t.amountCents)}</strong><span class="transaction-chevron navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button></li>`).join('')}</ul></section>`).join('');
   list.querySelectorAll('[data-transaction-id]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); showTransaction(button.dataset.transactionId); });
 }
+// All three entry surfaces use the same native dialog opening, document-flow
+// wrappers, initial scroll position and field focus sequence.
+function showDocumentPanel(dialog, html, focusSelector, panelClass = '') {
+  dialog.dataset.view = 'form';
+  dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel ${panelClass}">${html}</section></div>`;
+  if (!dialog.open) dialog.show();
+  window.scrollTo({left:0, top:0, behavior:'instant'});
+  if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
+}
+function closeAffordability() {
+  affordabilityInput = ''; tab = 'Home'; render();
+  window.scrollTo({left:0, top:0, behavior:'instant'});
+  content.querySelector('#check-affordability').focus({preventScroll:true});
+}
 function openSheet(html, focusSelector = '#sheet-title', view = 'form', presentation = 'screen') {
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
@@ -272,13 +288,14 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   if (dialog.open && (dialog.dataset.view === 'confirm') !== compact) dialog.close();
   document.body.style.overflow = compact ? 'hidden' : sheetScroll.overflow;
   document.querySelector('.shell').inert = true;
+  document.querySelector('#affordability-sheet').inert = true;
   dialog.setAttribute('aria-modal', 'true');
   dialog.dataset.view = view;
   dialog.dataset.presentation = presentation;
+  if (!compact) { showDocumentPanel(dialog, html, focusSelector); dialog.dataset.view = view; return; }
   dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
-  if (!dialog.open) { if (compact) dialog.showModal(); else dialog.show(); }
-  if (compact) fitSheetViewport();
-  else window.scrollTo({left:0, top:0, behavior:'instant'});
+  if (!dialog.open) dialog.showModal();
+  fitSheetViewport();
   if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
 }
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
@@ -360,21 +377,26 @@ const transactionSheet = document.querySelector('#transaction-sheet');
 transactionSheet.addEventListener('focusin', event => {
   if (transactionSheet.dataset.view === 'confirm' && event.target.matches('input')) event.target.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
 });
-transactionSheet.addEventListener('keydown', event => {
-  if (transactionSheet.dataset.view === 'confirm') return;
-  if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
+function handleEntryKeys(event) {
+  const dialog = event.currentTarget;
+  if (dialog.dataset.view === 'confirm') return;
+  if (event.key === 'Escape') { event.preventDefault(); if (dialog === transactionSheet) closeSheet(); else closeAffordability(); }
   if (event.key !== 'Tab') return;
-  const controls = [...transactionSheet.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el => !el.disabled && el.tabIndex >= 0);
+  const controls = [...dialog.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el => !el.disabled && el.tabIndex >= 0);
   const first = controls[0], last = controls.at(-1);
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-});
+}
+transactionSheet.addEventListener('keydown', handleEntryKeys);
+document.querySelector('#affordability-sheet').addEventListener('keydown', handleEntryKeys);
+document.querySelector('#affordability-sheet').addEventListener('cancel', event => {event.preventDefault();closeAffordability();});
 transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
   document.querySelector('.shell').inert = false;
+  document.querySelector('#affordability-sheet').inert = false;
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
     document.body.style.overflow = sheetScroll.overflow;
