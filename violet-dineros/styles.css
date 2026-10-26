@@ -87,8 +87,6 @@ body[data-screen=home] #settings{margin-top:38px}
 .transaction-frame{position:absolute;top:var(--sheet-top,0px);left:var(--sheet-left,0px);width:var(--sheet-width,100%);height:var(--sheet-height,100dvh);display:flex;align-items:flex-end;justify-content:center;padding-top:max(12px,env(safe-area-inset-top));overflow:hidden}
 .transaction-panel{display:flex;flex-direction:column;width:min(100%,480px);max-height:100%;min-height:0;overflow:hidden;border:1px solid #ddd2ee;border-bottom:0;border-radius:24px 24px 0 0;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));background:#fcfaff;box-shadow:0 -10px 45px #28133b24}
 #transaction-sheet[data-view=details],#transaction-sheet[data-view=details]::backdrop{background:#fcfaff}
-#transaction-sheet:is([data-view=details], :has(#transaction-form)) .transaction-frame{padding-top:0;align-items:stretch}
-#transaction-sheet:is([data-view=details], :has(#transaction-form)) .transaction-panel{height:100%;border:0;border-radius:0;box-shadow:none;padding-top:max(22px,env(safe-area-inset-top))}
 .details-body{flex:1;display:flex;flex-direction:column}
 .details-centered{flex-shrink:0;width:100%;margin-block:auto}
 body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transaction-sheet[open] #transaction-form)>.shell{visibility:hidden}
@@ -282,3 +280,13 @@ body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hid
 #transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-frame{align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom))}
 #transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom:1px solid #ddd2ee;border-bottom-right-radius:24px;border-bottom-left-radius:24px}
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom-color:#53405f}
+
+/* LLT standalone Carb Calc: natural-height wrappers and visible inner overflow.
+   The document is the only scrolling surface, including heading and actions. */
+#transaction-sheet:not([data-view=confirm]){position:relative;inset:auto;height:auto;min-height:100dvh;overflow:visible;touch-action:auto}
+body:has(#transaction-sheet:not([data-view=confirm])[open])>.shell{display:none}
+#transaction-sheet:not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
+#transaction-sheet:not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
+#transaction-sheet:not([data-view=confirm]) :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+#transaction-sheet:not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+:root[data-theme=dark] #transaction-sheet:not([data-view=confirm]) .transaction-panel{border-color:#53405f}

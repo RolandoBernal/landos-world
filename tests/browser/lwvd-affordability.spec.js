@@ -30,16 +30,17 @@ for(const theme of ['light','dark'])test(`${theme} compact preview and expense f
   const back=page.locator('#afford-back');await back.scrollIntoViewIfNeeded();await expect(back).toBeInViewport();const box=await back.boundingBox();expect(box.width).toBe(50);expect(box.height).toBe(50);await expect(back.locator('svg')).toBeVisible();
   const buy=page.getByRole('button',{name:'Buy It',exact:true});await buy.scrollIntoViewIfNeeded();await expect(buy).toBeInViewport();expect((await buy.boundingBox()).height).toBeGreaterThanOrEqual(44);await buy.click();
   await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();const select=page.getByLabel('Category',{exact:true});expect(await select.evaluate(e=>getComputedStyle(e).backgroundImage)).toContain('linear-gradient');for(const control of await page.locator('dialog input,dialog select').all())expect(await control.evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
-  await expect(page.getByRole('button',{name:'Save Expense',exact:true})).toBeInViewport();await page.getByLabel('What was it? (optional)').fill('A long description '.repeat(6));await page.screenshot({path:testInfo.outputPath(`${theme}-${font}-${height}.png`)});await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(await saved(page)).toEqual(seed);
+  await page.getByRole('button',{name:'Save Expense',exact:true}).scrollIntoViewIfNeeded();await expect(page.getByRole('button',{name:'Save Expense',exact:true})).toBeInViewport();await page.getByLabel('What was it? (optional)').fill('A long description '.repeat(6));await page.screenshot({path:testInfo.outputPath(`${theme}-${font}-${height}.png`)});await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(await saved(page)).toEqual(seed);
  }
 });
 
-test('Buy It handoff follows the visual viewport through keyboard open and close',async({page})=>{
+test('Buy It handoff scrolls every control at reduced and restored heights',async({page})=>{
  await start(page);await page.getByLabel('How much does it cost?').fill('25.50');await page.getByRole('button',{name:'Buy It',exact:true}).click();
- const inside=async locator=>{const box=await locator.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(366);};
- await page.evaluate(()=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>320},offsetTop:{configurable:true,get:()=>45}});window.visualViewport.dispatchEvent(new Event('resize'));});
- await inside(page.locator('.transaction-panel'));await inside(page.getByLabel('How much?',{exact:true}));await page.getByLabel('What was it? (optional)').fill('A little treat');await inside(page.getByLabel('What was it? (optional)'));await inside(page.getByRole('button',{name:'Save Expense',exact:true}));
- await page.evaluate(()=>{delete window.visualViewport.height;delete window.visualViewport.offsetTop;window.visualViewport.dispatchEvent(new Event('resize'));});
+ await page.setViewportSize({width:390,height:320});
+ for(const control of await page.locator('dialog input,dialog select,dialog button').all()){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
+ await expect(page.locator('.sheet-fields')).toHaveCSS('overflow-y','visible');
+ await page.getByLabel('What was it? (optional)').fill('A little treat');
+ await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('button',{name:'Buy It',exact:true})).toBeFocused();expect(await saved(page)).toEqual(seed);
 });
 

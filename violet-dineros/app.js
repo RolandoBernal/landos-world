@@ -267,16 +267,23 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
     sheetScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
     document.body.style.overflow = 'hidden';
   }
+  // Long views use document flow, like LLT's standalone Carb Calc.
+  const compact = view === 'confirm';
+  if (dialog.open && (dialog.dataset.view === 'confirm') !== compact) dialog.close();
+  document.body.style.overflow = compact ? 'hidden' : sheetScroll.overflow;
+  document.querySelector('.shell').inert = true;
+  dialog.setAttribute('aria-modal', 'true');
   dialog.dataset.view = view;
   dialog.dataset.presentation = presentation;
   dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
-  if (!dialog.open) dialog.showModal();
-  fitSheetViewport();
+  if (!dialog.open) { if (compact) dialog.showModal(); else dialog.show(); }
+  if (compact) fitSheetViewport();
+  else window.scrollTo({left:0, top:0, behavior:'instant'});
   if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
 }
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
 function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
-function closeSheet() { document.querySelector('#transaction-sheet').close(); }
+function closeSheet() { document.querySelector('#transaction-sheet').close(); restoreSheet(); }
 function commitTransactions(transactions, message, onSaved) {
   if (!save({ ...state, transactions })) return false;
   onSaved?.();
@@ -321,7 +328,7 @@ function showTransaction(id) {
   openSheet(`${sheetHeading(isIncome ? 'Money In' : 'Expense')}<div class="sheet-body details-body"><div class="details-centered"><p class="detail-amount ${transaction.type}">${isIncome ? '+' : '−'}${money(transaction.amountCents)}</p><dl class="transaction-details"><dt>Type</dt><dd>${isIncome ? 'Money In' : 'Expense'}</dd><dt>${isIncome ? 'Source' : 'Category'}</dt><dd>${escape(transaction.label)}</dd>${transaction.description ? `<dt>Description</dt><dd>${escape(transaction.description)}</dd>` : ''}<dt>Date</dt><dd class="numeric">${escape(new Intl.DateTimeFormat('en-US', {dateStyle:'medium', timeStyle:'short'}).format(new Date(transaction.createdAt)))}</dd></dl><div class="sheet-actions"><button type="button" class="primary" id="transaction-edit">Edit</button><button type="button" id="transaction-delete">Delete</button></div></div></div>`, '#sheet-title', 'details');
   bindSheetClose(); document.querySelector('#transaction-edit').onclick = () => openTransactionForm(transaction.type, id);
   document.querySelector('#transaction-delete').onclick = () => {
-    openSheet(`${sheetHeading('Delete activity?')}<div class="sheet-body"><p>Delete this ${isIncome ? 'money entry' : 'expense'}? Your balance will be updated.</p></div><div class="sheet-actions"><button class="primary" type="button" id="confirm-delete">Delete</button><button type="button" id="cancel-delete">Cancel</button></div>`);
+    openSheet(`${sheetHeading('Delete activity?')}<div class="sheet-body"><p>Delete this ${isIncome ? 'money entry' : 'expense'}? Your balance will be updated.</p></div><div class="sheet-actions"><button class="primary" type="button" id="confirm-delete">Delete</button><button type="button" id="cancel-delete">Cancel</button></div>`, '#sheet-title', 'confirm', 'goal');
     bindSheetClose(); document.querySelector('#cancel-delete').onclick = () => showTransaction(id);
     let deleted = false;
     document.querySelector('#confirm-delete').onclick = () => {
@@ -330,10 +337,10 @@ function showTransaction(id) {
     };
   };
 }
-// The native top-layer host is reset to the layout viewport, like LLT's calculator.
-// Its inner frame follows Safari's actual visible rectangle, including keyboard changes.
+// Preserve the accepted short confirmation viewport treatment only.
 function fitSheetViewport() {
   const dialog = document.querySelector('#transaction-sheet'); if (!dialog.open) return;
+  if (dialog.dataset.view !== 'confirm') return;
   const viewport = window.visualViewport;
   dialog.style.setProperty('--sheet-top', `${viewport?.offsetTop || 0}px`);
   dialog.style.setProperty('--sheet-left', `${viewport?.offsetLeft || 0}px`);
@@ -351,12 +358,23 @@ document.addEventListener('keydown', event => {
 document.addEventListener('pointerdown', () => { document.documentElement.dataset.focusMode = 'pointer'; }, true);
 const transactionSheet = document.querySelector('#transaction-sheet');
 transactionSheet.addEventListener('focusin', event => {
-  if (event.target.matches('input')) event.target.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
+  if (transactionSheet.dataset.view === 'confirm' && event.target.matches('input')) event.target.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
+});
+transactionSheet.addEventListener('keydown', event => {
+  if (transactionSheet.dataset.view === 'confirm') return;
+  if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
+  if (event.key !== 'Tab') return;
+  const controls = [...transactionSheet.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el => !el.disabled && el.tabIndex >= 0);
+  const first = controls[0], last = controls.at(-1);
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
 });
 transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
-transactionSheet.addEventListener('close', () => {
+transactionSheet.addEventListener('close', restoreSheet);
+function restoreSheet() {
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
+  document.querySelector('.shell').inert = false;
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
     document.body.style.overflow = sheetScroll.overflow;
@@ -366,7 +384,7 @@ transactionSheet.addEventListener('close', () => {
   if (target?.matches('h1')) target.tabIndex = -1;
   target?.focus({preventScroll:true});
   sheetOpener = null;
-});
+}
 window.addEventListener('storage', event => {
   if (event.key !== STORAGE_KEY && event.key !== null) return;
   try {
