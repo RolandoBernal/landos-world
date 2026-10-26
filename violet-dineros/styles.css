@@ -222,9 +222,7 @@ h1,h2,strong,b{font-weight:500}
 #featured-goal>.navigation-chevron{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(130,73,244,.10)}
 :root[data-theme=dark] #featured-goal>.navigation-chevron{background:rgba(201,168,255,.12)}
 
-/* Affordability reuses the shell, circular back control and native expense form. */
-.affordability .settings-title{height:auto;min-height:50px;padding-left:54px;margin-bottom:20px}
-.affordability .settings-title h1{overflow-wrap:anywhere}
+/* Affordability retains its read-only preview and native expense handoff. */
 .affordability .story{margin-bottom:20px}
 .affordability .afford-available{font-family:"Geist Mono",monospace;font-size:1.8rem;margin:4px 0;overflow-wrap:anywhere}
 .affordability form{gap:12px}
@@ -290,3 +288,23 @@ body:has(#transaction-sheet:not([data-view=confirm])[open])>.shell{display:none}
 #transaction-sheet:not([data-view=confirm]) :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
 #transaction-sheet:not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
 :root[data-theme=dark] #transaction-sheet:not([data-view=confirm]) .transaction-panel{border-color:#53405f}
+
+/* One painted document surface, including iOS keyboard overscroll and safe areas.
+   Keep the standalone 100vh shell fallback above and native document scrolling. */
+:root{--app-surface:#fcfaff;background:var(--app-surface);scroll-padding-top:calc(12px + env(safe-area-inset-top))}
+:root[data-theme=dark]{--app-surface:#21192c;background:var(--app-surface)}
+body,.shell,body[data-screen=settings] .shell,
+:root[data-theme=dark] .shell,:root[data-theme=dark] body[data-screen=settings] .shell{background:var(--app-surface)}
+/* Paint above scrolling content beneath the installed iPhone status bar. */
+body::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--app-surface);z-index:10;pointer-events:none}
+#transaction-sheet:not([data-view=confirm]) .transaction-frame:has(form){align-items:flex-start}
+@media(display-mode:standalone){
+ #transaction-sheet:not([data-view=confirm]),#transaction-sheet:not([data-view=confirm]) .transaction-frame{min-height:100vh}
+}
+/* The affordability route shares the entry-panel treatment and document scroller. */
+body[data-screen=afford] .shell{padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+body[data-screen=afford] main{display:flex;align-items:flex-start;justify-content:center;padding:0}
+.affordability.transaction-panel{max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px}
+.affordability .sheet-heading h1{font-size:1.3rem;margin:0}
+.affordability :is(input,button){scroll-margin-block:calc(12px + env(safe-area-inset-top)) calc(6.25rem + env(safe-area-inset-bottom))}
+:root[data-theme=dark] .affordability.transaction-panel{border-color:#53405f}

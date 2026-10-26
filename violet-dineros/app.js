@@ -121,7 +121,7 @@ const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-
 function render() {
   if (!state) { onboarding(); return; }
   document.body.dataset.screen = tab.toLowerCase();
-  gear.hidden = tab !== 'Home'; nav.hidden = false;
+  gear.hidden = tab !== 'Home'; nav.hidden = tab === 'Afford';
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
@@ -141,7 +141,7 @@ function render() {
 }
 function renderAffordability() {
   affordabilityRaw = lastRaw;
-  content.innerHTML = `${launcherBack}<section class="settings-panel affordability"><div class="settings-title"><button type="button" id="afford-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Can I Afford This?</h1></div><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><form novalidate><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></form></section>`;
+  content.innerHTML = `<section class="transaction-panel affordability"><div class="sheet-heading"><h1>Can I Afford This?</h1><button type="button" id="afford-back" aria-label="Back to Home">×</button></div><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><form novalidate><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></form></section>`;
   const input = content.querySelector('#afford-price'), result = content.querySelector('#afford-result'), buy = content.querySelector('#afford-buy');
   const update = () => {
     affordabilityInput = input.value;
