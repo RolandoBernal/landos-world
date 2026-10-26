@@ -58,7 +58,7 @@ function save(next) {
 function focusFirstField(root) {
   const field = root.querySelector('form input:enabled:not([type=hidden]):not([readonly]), form select:enabled, form textarea:enabled:not([readonly])');
   if (!field) return false;
-  field.focus({preventScroll:root !== content}); return true;
+  field.focus({preventScroll:root !== content || tab === 'Afford'}); return true;
 }
 function focusPageStart() {
   if (tab !== 'Insights' && focusFirstField(content)) return;

@@ -47,3 +47,25 @@ test('Edit Expense keeps autofocus at safe top and paints status area while docu
  await page.screenshot({path:testInfo.outputPath('edit-expense-bottom.png')});
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
 });
+
+for (const theme of ['light','dark']) test(`${theme} affordability autofocus opens at the same safe top as transaction forms`,async({page})=>{
+ await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top,0px)','44px').replaceAll('env(safe-area-inset-top)','44px')});});
+ await page.goto('/violet-dineros/index.html');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
+ // Record focus options as WebKit viewport resizing cannot open a physical iOS keyboard.
+ await page.evaluate(()=>{const focus=HTMLElement.prototype.focus;window.affordFocusOptions=[];HTMLElement.prototype.focus=function(options){if(this.id==='afford-price')window.affordFocusOptions.push(options);return focus.call(this,options);};});
+ for(const height of [844,400]){
+  await page.setViewportSize({width:390,height});
+  const tops=[];
+  for(const action of ['Add Money','Add Expense','Can I Afford This?']){
+   await page.getByRole('button',{name:action,exact:true}).click();
+   const afford=action==='Can I Afford This?';
+   await expect(page.locator(afford?'#afford-price':'#transaction-amount')).toBeFocused();
+   tops.push((await page.locator(afford?'.affordability':'dialog .transaction-panel').boundingBox()).y);
+   expect(await page.evaluate(()=>scrollY)).toBe(0);
+   await page.getByRole('button',{name:afford?'Back to Home':'Cancel',exact:true}).click();
+  }
+  expect(tops).toEqual([44,44,44]);
+ }
+ expect(await page.evaluate(()=>window.affordFocusOptions)).toEqual([{preventScroll:true},{preventScroll:true}]);
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(seed);
+});
