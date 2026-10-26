@@ -185,7 +185,7 @@ function commitGoal(next, message) {
   render(); closeSheet(); announce(message); return true;
 }
 function goalForm(title, fields, button, submit) {
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`);
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`, '#sheet-title', 'form', 'goal');
   bindSheetClose(); transactionSheet.querySelector('[data-cancel]').onclick = closeSheet;
   let submitted = false;
   transactionSheet.querySelector('form').onsubmit = event => {
@@ -210,7 +210,7 @@ function openGoalForm(goal = null) {
 }
 function showGoal(id) {
   const goal = (state.goals || []).find(g => g.id === id); if (!goal) return;
-  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body goal-details-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`, '#sheet-title', 'details');
+  openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body goal-details-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`, '#sheet-title', 'details', 'goal');
   bindSheetClose(); transactionSheet.querySelector('#goal-edit').onclick = () => openGoalForm(goal);
   for (const action of ['reserve','release']) {
     transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
@@ -229,7 +229,7 @@ function showGoal(id) {
     });
   });
   for (const action of ['archive','delete']) transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
-    openSheet(`${sheetHeading(action === 'archive' ? 'Archive Goal?' : 'Delete Goal?')}<div class="sheet-body"><p>${action === 'archive' ? 'Archive' : 'Permanently delete'} ${escape(goal.name)} and release ${money(goal.reservedCents)}? Your total balance and existing expenses stay the same.</p></div><div class="sheet-actions"><button class="primary" id="confirm-goal">${action === 'archive' ? 'Archive' : 'Delete'}</button><button id="cancel-goal">Cancel</button></div>`);
+    openSheet(`${sheetHeading(action === 'archive' ? 'Archive Goal?' : 'Delete Goal?')}<div class="sheet-body"><p>${action === 'archive' ? 'Archive' : 'Permanently delete'} ${escape(goal.name)} and release ${money(goal.reservedCents)}? Your total balance and existing expenses stay the same.</p></div><div class="sheet-actions"><button class="primary" id="confirm-goal">${action === 'archive' ? 'Archive' : 'Delete'}</button><button id="cancel-goal">Cancel</button></div>`, '#sheet-title', 'confirm', 'goal');
     bindSheetClose(); transactionSheet.querySelector('#cancel-goal').onclick = () => showGoal(id);
     let submitted = false;
     transactionSheet.querySelector('#confirm-goal').onclick = () => {
@@ -260,7 +260,7 @@ function renderActivityRows() {
   list.innerHTML = groups.map(group => `<section class="activity-group"><h2>${escape(group.label)}</h2><ul>${group.transactions.map(t => `<li><button class="transaction-row" type="button" data-transaction-id="${escape(t.id)}" aria-label="${escape(`View transaction details: ${t.description || t.label}, ${t.type === 'income' ? 'Money In +' : 'Expense −'}${money(t.amountCents)}, ${t.label}`)}"><span class="transaction-icon ${t.type}">${icon(t.type === 'income' ? 'plus' : 'expense')}</span><span class="transaction-text"><strong>${escape(t.description || t.label)}</strong><small>${t.type === 'income' ? 'Money In' : 'Expense'} · ${escape(t.label)}</small></span><strong class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${money(t.amountCents)}</strong><span class="transaction-chevron navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button></li>`).join('')}</ul></section>`).join('');
   list.querySelectorAll('[data-transaction-id]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); showTransaction(button.dataset.transactionId); });
 }
-function openSheet(html, focusSelector = '#sheet-title', view = 'form') {
+function openSheet(html, focusSelector = '#sheet-title', view = 'form', presentation = 'screen') {
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
     sheetOpener = document.activeElement;
@@ -268,6 +268,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form') {
     document.body.style.overflow = 'hidden';
   }
   dialog.dataset.view = view;
+  dialog.dataset.presentation = presentation;
   dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
   if (!dialog.open) dialog.showModal();
   fitSheetViewport();

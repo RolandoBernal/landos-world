@@ -60,12 +60,12 @@ for(const theme of ['light','dark'])test(`${theme} goal progress has a purple em
  await expect(page.locator('.goal-card')).toContainText('Fully Funded');await manage(page);await expect(page.getByRole('dialog').getByRole('progressbar')).toHaveAttribute('value','8000');
 });
 
-for(const theme of ['light','dark'])test(`${theme} Goal Details fills the visible frame and every action remains reachable at large text`,async({page},testInfo)=>{
+for(const theme of ['light','dark'])test(`${theme} Goal Details retains the page and every action remains reachable at large text`,async({page},testInfo)=>{
  await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);
  await page.setViewportSize({width:320,height:568});await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await manage(page);
- const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
+ const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','visible');
  for(const height of [568,400]){
-  await page.setViewportSize({width:320,height});await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>Math.round(e.getBoundingClientRect().height))).toBe(height);const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeLessThanOrEqual(1);expect(bounds.height).toBeLessThanOrEqual(height);expect(bounds.height).toBeGreaterThanOrEqual(height-1);
+  await page.setViewportSize({width:320,height});await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>e.getBoundingClientRect().bottom)).toBeLessThanOrEqual(height);const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.height).toBeLessThanOrEqual(height);
   await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
   for(const name of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){const button=dialog.getByRole('button',{name,exact:true});await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();}
   expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
@@ -115,4 +115,41 @@ test('LWVD editable controls retain focus, readable sizes and narrow viewport co
  await page.locator('#edit-starting-balance').click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('#settings-back').click();
  await page.getByRole('button',{name:'Add Expense',exact:true}).click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await controls();
  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1, viewport-fit=cover');expect(await saved(page)).toEqual(seed);
+});
+
+for(const theme of ['light','dark'])test(`${theme} all Goals sheets retain the dimmed page in standalone and keyboard sized viewports`,async({page},testInfo)=>{
+ await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();const css=(await response.text()).replaceAll('env(safe-area-inset-top)','44px').replaceAll('env(safe-area-inset-bottom)','34px').replaceAll('min-height:100dvh','min-height:calc(100vh - 33px)');await route.fulfill({response,body:css});});
+ await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);const before=await saved(page);
+ // Model installed display mode and safe areas without changing production viewport metadata.
+ await page.evaluate(()=>{const rules=[...document.styleSheets].flatMap(s=>[...s.cssRules]);const standalone=rules.find(r=>r.conditionText==='(display-mode: standalone)');if(!standalone)throw Error('Missing standalone rule');standalone.conditionText='all';});
+ const dialog=page.getByRole('dialog');
+ async function check(label){
+  await expect(dialog).toHaveAttribute('data-presentation','goal');await expect(page.locator('.shell')).toHaveCSS('visibility','visible');await expect(dialog).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  const backdrop=await dialog.evaluate(e=>getComputedStyle(e,'::backdrop').backgroundColor);expect(backdrop).toBe('rgba(22, 14, 41, 0.36)');
+  const box=await page.locator('.transaction-panel').boundingBox();expect(box.y).toBeGreaterThanOrEqual(43);await expect(page.locator('.transaction-panel')).toHaveCSS('padding-bottom','58px');expect(box.y+box.height).toBeLessThanOrEqual(page.viewportSize().height+1);
+  await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
+  for(const button of await dialog.locator('.sheet-actions button').all()){await expect(button).toBeInViewport();expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);}
+  await page.screenshot({path:testInfo.outputPath(`${label}.png`)});
+ }
+ for(const [width,height] of [[390,844],[320,568],[320,400]]){
+  await page.setViewportSize({width,height});await page.getByRole('button',{name:'Create Goal',exact:true}).click();await check(`create-${width}-${height}`);await page.keyboard.press('Escape');
+  for(const action of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){
+   await manage(page);await check(`details-${width}-${height}`);await dialog.getByRole('button',{name:action,exact:true}).click();await check(`${action}-${width}-${height}`);
+   if(action==='Delete Goal'||action==='Archive Goal'){await expect(page.locator('#sheet-title')).toBeFocused();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveAttribute('data-view','details');}
+   await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  }
+ }
+ expect(await saved(page)).toEqual(before);await expect(page.locator('.shell')).toHaveCSS('visibility','visible');
+});
+
+for(const action of ['Create Goal','Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase'])test(`${action} follows keyboard-only viewport resize and restores page focus`,async({page})=>{
+ await start(page);await goals(page);await create(page);const before=await saved(page);const scroll=await page.evaluate(()=>scrollY);
+ const opener=page.locator(action==='Create Goal'?'#create-goal':'[data-goal]');await opener.focus();
+ await opener.press('Enter');if(action!=='Create Goal')await page.getByRole('button',{name:action,exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await page.evaluate(()=>{Object.defineProperties(visualViewport,{height:{configurable:true,get:()=>340},offsetTop:{configurable:true,get:()=>45}});visualViewport.dispatchEvent(new Event('resize'));});
+ await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>e.getBoundingClientRect().bottom)).toBeLessThanOrEqual(386);
+ for(const control of [dialog.getByRole('button',{name:'Close',exact:true}),...await dialog.locator('.sheet-actions button').all()]){const box=await control.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(386);}
+ const inputs=dialog.locator('input');await inputs.last().focus();await page.evaluate(()=>visualViewport.dispatchEvent(new Event('resize')));const field=await inputs.last().boundingBox();expect(field.y).toBeGreaterThanOrEqual(45);expect(field.y+field.height).toBeLessThanOrEqual(386);
+ await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;visualViewport.dispatchEvent(new Event('resize'));});await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(opener).toBeFocused();expect(await page.evaluate(()=>scrollY)).toBe(scroll);expect(await saved(page)).toEqual(before);
 });
