@@ -158,3 +158,48 @@ export function smallPurchaseCost(input, frequency) {
   if (cents === null || cents <= 0 || typeof yearly !== 'number') return null;
   return BigInt(cents) * BigInt(yearly);
 }
+
+// Motivation only. Financial calculations never read this optional local field.
+const HABIT_XP = 10, WEEKLY_XP = 25, WEEKLY_TARGET = 3, LEVEL_XP = 100;
+export function progressWeek(now = new Date()) {
+  const monday = new Date(now); monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7);
+  return localToday(monday);
+}
+const expenseSignature = t => JSON.stringify([t.amountCents, t.label, t.description.trim().toLocaleLowerCase()]);
+export function moneyProgress(data, now = new Date()) {
+  const week = progressWeek(now), saved = data.moneyProgress;
+  const initial = {xp: 0, week, count: 0, rewarded: false, signatures: (data.transactions || []).filter(t => t.type === 'expense' && progressWeek(new Date(t.createdAt)) === week).map(expenseSignature), day: localToday(now), expenses: 0, savings: false, peaks: Object.fromEntries((data.goals || []).map(g => [g.id, g.reservedCents]))};
+  if (!validMoneyProgress(saved)) return initial;
+  // Never reopen an old week after a clock change; a completed bonus stays closed.
+  const progress = structuredClone(saved);
+  if (week > progress.week) Object.assign(progress, {week, count: 0, rewarded: false, signatures: []});
+  if (localToday(now) > progress.day) Object.assign(progress, {day: localToday(now), expenses: 0, savings: false});
+  return progress;
+}
+export function awardMoneyProgress(before, next, now = new Date()) {
+  const p = moneyProgress(before || next, now), today = localToday(now);
+  const current = today === p.day && progressWeek(now) === p.week;
+  const ids = new Set((before?.transactions || []).map(t => t.id));
+  for (const t of next.transactions || []) {
+    if (t.type !== 'expense' || progressWeek(new Date(t.createdAt)) !== p.week) continue;
+    const signature = expenseSignature(t), seen = p.signatures.includes(signature);
+    if (!seen) p.signatures.push(signature);
+    if (!before || ids.has(t.id) || !current || seen || p.expenses >= WEEKLY_TARGET || localToday(new Date(t.createdAt)) !== today) continue;
+    p.xp += HABIT_XP; p.expenses++; p.count = Math.min(WEEKLY_TARGET, p.count + 1);
+    if (p.count === WEEKLY_TARGET && !p.rewarded) { p.xp += WEEKLY_XP; p.rewarded = true; }
+  }
+  for (const g of next.goals || []) {
+    const peak = p.peaks[g.id] || 0;
+    if (before && current && g.reservedCents > peak && !p.savings) { p.xp += HABIT_XP; p.savings = true; }
+    p.peaks[g.id] = Math.max(peak, g.reservedCents);
+  }
+  return {...next, moneyProgress: p};
+}
+export function progressLevel(xp) {
+  const level = Math.floor(xp / LEVEL_XP) + 1;
+  return {level, title: level === 1 ? 'Money Rookie' : level === 2 ? 'Budget Builder' : 'Savings Pro', earned: xp % LEVEL_XP, next: level * LEVEL_XP};
+}
+
+function validMoneyProgress(p) {
+  return p && Number.isSafeInteger(p.xp) && p.xp >= 0 && dateParts(p.week) && dateParts(p.day) && Number.isInteger(p.count) && p.count >= 0 && p.count <= 3 && typeof p.rewarded === 'boolean' && Number.isInteger(p.expenses) && p.expenses >= 0 && p.expenses <= 3 && typeof p.savings === 'boolean' && Array.isArray(p.signatures) && p.signatures.every(s => typeof s === 'string') && p.peaks && typeof p.peaks === 'object' && !Array.isArray(p.peaks) && Object.values(p.peaks).every(n => Number.isSafeInteger(n) && n >= 0);
+}

@@ -44,7 +44,7 @@ test('legacy data is not rewritten; income/expense, negative balances, guide and
   await add(page,'expense','6','Food','Coffee');await expect(page.locator('.balance')).toHaveText('$174.00');await expect(page.locator('.guide')).toHaveText('$58.00 a day');
   await add(page,'expense','200','Shopping','New shirt');await expect(page.locator('.balance')).toHaveText('-$26.00');await expect(page.locator('.guide')).toHaveText('$0.00 a day');
   const data=await saved(page);expect(data.balanceCents).toBe(15000);expect(data.transactions).toHaveLength(3);
-  const {transactions,...settings}=data;expect(settings).toEqual(initial);
+  const {transactions,moneyProgress,...settings}=data;expect(settings).toEqual(initial);
   await page.reload();await expect(page.locator('.balance')).toHaveText('-$26.00');expect(await saved(page)).toEqual(data);
   await activity(page);await expect(page.locator('.transaction-row')).toHaveCount(3);expect(await page.locator('.transaction-row').allTextContents()).toEqual(expect.arrayContaining([expect.stringContaining('−$200.00'),expect.stringContaining('+$30.00')]));
   expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),launcher)).toEqual(preferences);expect(await page.evaluate(()=>localStorage.getItem('other-app-test'))).toBe('untouched');
@@ -90,7 +90,7 @@ test('Starting Balance changes preserve transactions and recalculate Current Bal
   const initial=await setup(page);await add(page,'income','30','Allowance');await add(page,'expense','20','Food');const transactions=(await saved(page)).transactions;
   await expect(page.locator('.balance')).toHaveText('$160.00');
   await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('#edit-starting-balance')).toContainText('$150.00');await page.locator('#edit-starting-balance').click();await page.getByLabel('Starting Balance ($)',{exact:true}).fill('175');await page.getByRole('button',{name:'Save',exact:true}).click();
-  expect(await saved(page)).toEqual({...initial,balanceCents:17500,transactions});await home(page);await expect(page.locator('.balance')).toHaveText('$185.00');
+  expect(await saved(page)).toEqual({...initial,balanceCents:17500,transactions,moneyProgress:expect.objectContaining({xp:10})});await home(page);await expect(page.locator('.balance')).toHaveText('$185.00');
 });
 
 test('stale saves cannot overwrite newer raw financial data',async({page})=>{

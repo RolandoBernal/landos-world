@@ -24,7 +24,7 @@ test('goals lifecycle, accounting, featured selection and one purchase survive r
  await start(page);expect(await saved(page)).toEqual(seed);await goals(page);await create(page);await reserve(page,'80');await expect(page.locator('.goal-card')).toContainText('Fully Funded');
  await page.getByRole('button',{name:'Home',exact:true}).click();await expect(page.locator('.balance')).toHaveText('$20.00');await expect(page.locator('.story')).toContainText('Plus $80.00 saved for your goals.');await expect(page.locator('.guide')).toHaveText('$5.00 a day');await expect(page.locator('.featured')).toContainText('Bike');
  await goals(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();await page.getByLabel('Purchase amount ($)').fill('65');await page.locator('#transaction-form').evaluate(f=>{f.requestSubmit();f.requestSubmit();});
- const result=await saved(page);expect(result.transactions).toHaveLength(1);expect(result.transactions[0].amountCents).toBe(6500);expect(result.goals[0]).toMatchObject({archived:true,reservedCents:0});
+ const result=await saved(page);expect(result.moneyProgress.xp).toBe(20);expect(result.transactions).toHaveLength(1);expect(result.transactions[0].amountCents).toBe(6500);expect(result.goals[0]).toMatchObject({archived:true,reservedCents:0});
  await page.reload();await expect(page.locator('.balance')).toHaveText('$35.00');await expect(page.locator('.featured')).not.toContainText('Bike');await page.getByRole('button',{name:'Activity',exact:true}).click();await expect(page.locator('.transaction-row')).toHaveCount(1);
  await goals(page);await page.getByRole('button',{name:'Manage Archived Goal: Bike'}).click();await page.getByRole('button',{name:'Delete Goal',exact:true}).click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();await page.getByRole('button',{name:'Delete Goal',exact:true}).click();await page.getByRole('button',{name:'Delete',exact:true}).click();expect((await saved(page)).goals).toEqual([]);expect((await saved(page)).transactions).toHaveLength(1);expect(await page.evaluate(()=>localStorage.getItem('other-app'))).toBe('keep');
 });
@@ -65,7 +65,7 @@ for(const theme of ['light','dark'])test(`${theme} goal progress has a purple em
  for(const amount of [0,40,80]){
   if(amount)await reserve(page,'40');
   for(const tab of ['Home','Goals']){
-   await page.getByRole('button',{name:tab,exact:true}).click();const progress=page.getByRole('progressbar');await expect(progress).toHaveAttribute('value',String(amount*100));await expect(progress).toHaveAttribute('max','8000');await expect(progress).toHaveCSS('background-color','rgb(129, 70, 203)');await expect(progress).toHaveCSS('color','rgb(46, 230, 197)');
+   await page.getByRole('button',{name:tab,exact:true}).click();const progress=page.getByRole('progressbar',{name:'Bike funding progress'});await expect(progress).toHaveAttribute('value',String(amount*100));await expect(progress).toHaveAttribute('max','8000');await expect(progress).toHaveCSS('background-color','rgb(129, 70, 203)');await expect(progress).toHaveCSS('color','rgb(46, 230, 197)');
   }
   await page.screenshot({path:testInfo.outputPath(`progress-${amount}.png`)});
  }
