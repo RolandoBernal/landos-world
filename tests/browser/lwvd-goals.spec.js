@@ -177,3 +177,25 @@ for(const origin of ['Home','Goals'])test(`${origin} goal chains preserve origin
  await open();await page.getByRole('button',{name:'Reserve Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('10');await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(originHeading()).toBeVisible();
  await open();await page.getByRole('button',{name:'Release Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('5');await page.getByRole('button',{name:'Release',exact:true}).click();await expect(originHeading()).toBeVisible();expect((await saved(page)).goals[0].reservedCents).toBe(500);
 });
+
+for(const theme of ['light','dark'])test(`${theme} compact Goals confirmations center within the safe visual viewport with complete borders`,async({page},testInfo)=>{
+ await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top)','44px').replaceAll('env(safe-area-inset-bottom)','34px')});});
+ await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);const before=await saved(page);
+ for(const action of ['Archive Goal','Delete Goal']){
+  await manage(page);await page.getByRole('button',{name:action,exact:true}).click();
+  for(const [width,height,offset] of [[390,844,0],[320,400,0],[390,340,45]]){
+   await page.setViewportSize({width,height:844});
+   await page.evaluate(({height,offset})=>{Object.defineProperties(visualViewport,{height:{configurable:true,get:()=>height},offsetTop:{configurable:true,get:()=>offset}});visualViewport.dispatchEvent(new Event('resize'));},{height,offset});
+   const panel=page.locator('.transaction-panel');await expect.poll(()=>page.locator('.transaction-frame').evaluate(e=>Math.round(e.getBoundingClientRect().height))).toBe(height);
+   const box=await panel.boundingBox();expect(Math.abs(box.y+box.height/2-(offset+44+(height-44-34)/2))).toBeLessThanOrEqual(1);expect(box.y).toBeGreaterThanOrEqual(offset+44);expect(box.y+box.height).toBeLessThanOrEqual(offset+height-34);
+   await expect(panel).toHaveCSS('border-bottom-width','1px');await expect(panel).toHaveCSS('border-bottom-style','solid');await expect(panel).toHaveCSS('border-bottom-color',theme==='dark'?'rgb(83, 64, 95)':'rgb(221, 210, 238)');await expect(panel).toHaveCSS('border-bottom-left-radius','24px');await expect(panel).toHaveCSS('border-bottom-right-radius','24px');
+   for(const button of await page.getByRole('dialog').getByRole('button').all()){const b=await button.boundingBox();expect(b.y).toBeGreaterThanOrEqual(box.y);expect(b.y+b.height).toBeLessThanOrEqual(box.y+box.height);}
+   const body=page.locator('.sheet-body');
+   if(await body.evaluate(e=>e.scrollHeight>e.clientHeight)){await expect(body).toHaveCSS('overflow-y','auto');await body.evaluate(e=>{e.scrollTop=e.scrollHeight;});expect(await body.evaluate(e=>e.firstElementChild.getBoundingClientRect().bottom<=e.getBoundingClientRect().bottom+1)).toBe(true);await body.evaluate(e=>{e.scrollTop=0;});}
+   else expect(await body.evaluate(e=>e.firstElementChild.getBoundingClientRect().bottom<=e.getBoundingClientRect().bottom+1)).toBe(true);
+   await page.screenshot({path:testInfo.outputPath(`${theme}-${action}-${width}-${height}.png`)});
+  }
+  await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;visualViewport.dispatchEvent(new Event('resize'));});await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Close',exact:true}).click();
+ }
+ expect(await saved(page)).toEqual(before);
+});

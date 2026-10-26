@@ -277,3 +277,8 @@ body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hid
 #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm],
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#21192c}
+
+/* Keep compact Goals confirmations centered; full-screen forms retain their layout. */
+#transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-frame{align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+#transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom:1px solid #ddd2ee;border-bottom-right-radius:24px;border-bottom-left-radius:24px}
+:root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom-color:#53405f}
