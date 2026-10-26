@@ -60,10 +60,10 @@ for(const theme of ['light','dark'])test(`${theme} goal progress has a purple em
  await expect(page.locator('.goal-card')).toContainText('Fully Funded');await manage(page);await expect(page.getByRole('dialog').getByRole('progressbar')).toHaveAttribute('value','8000');
 });
 
-for(const theme of ['light','dark'])test(`${theme} Goal Details retains the page and every action remains reachable at large text`,async({page},testInfo)=>{
+for(const theme of ['light','dark'])test(`${theme} Goal Details reuses the full screen and every action remains reachable at large text`,async({page},testInfo)=>{
  await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);
  await page.setViewportSize({width:320,height:568});await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await manage(page);
- const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','visible');
+ const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
  for(const height of [568,400]){
   await page.setViewportSize({width:320,height});await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>e.getBoundingClientRect().bottom)).toBeLessThanOrEqual(height);const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.height).toBeLessThanOrEqual(height);
   await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
@@ -117,16 +117,16 @@ test('LWVD editable controls retain focus, readable sizes and narrow viewport co
  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1, viewport-fit=cover');expect(await saved(page)).toEqual(seed);
 });
 
-for(const theme of ['light','dark'])test(`${theme} all Goals sheets retain the dimmed page in standalone and keyboard sized viewports`,async({page},testInfo)=>{
+for(const theme of ['light','dark'])test(`${theme} all Goals views reuse existing screens and compact confirmations in standalone and keyboard sized viewports`,async({page},testInfo)=>{
  await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();const css=(await response.text()).replaceAll('env(safe-area-inset-top)','44px').replaceAll('env(safe-area-inset-bottom)','34px').replaceAll('min-height:100dvh','min-height:calc(100vh - 33px)');await route.fulfill({response,body:css});});
  await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);const before=await saved(page);
  // Model installed display mode and safe areas without changing production viewport metadata.
  await page.evaluate(()=>{const rules=[...document.styleSheets].flatMap(s=>[...s.cssRules]);const standalone=rules.find(r=>r.conditionText==='(display-mode: standalone)');if(!standalone)throw Error('Missing standalone rule');standalone.conditionText='all';});
  const dialog=page.getByRole('dialog');
  async function check(label){
-  await expect(dialog).toHaveAttribute('data-presentation','goal');await expect(page.locator('.shell')).toHaveCSS('visibility','visible');await expect(dialog).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
-  const backdrop=await dialog.evaluate(e=>getComputedStyle(e,'::backdrop').backgroundColor);expect(backdrop).toBe('rgba(22, 14, 41, 0.36)');
-  const box=await page.locator('.transaction-panel').boundingBox();expect(box.y).toBeGreaterThanOrEqual(43);await expect(page.locator('.transaction-panel')).toHaveCSS('padding-bottom','58px');expect(box.y+box.height).toBeLessThanOrEqual(page.viewportSize().height+1);
+  await expect(dialog).toHaveAttribute('data-presentation','goal');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');await expect(dialog).toHaveCSS('background-color',theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');
+  const backdrop=await dialog.evaluate(e=>getComputedStyle(e,'::backdrop').backgroundColor);expect(backdrop).toBe(theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');
+  const box=await page.locator('.transaction-panel').boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);await expect(page.locator('.transaction-panel')).toHaveCSS('padding-bottom','58px');expect(box.y+box.height).toBeLessThanOrEqual(page.viewportSize().height+1);
   await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
   for(const button of await dialog.locator('.sheet-actions button').all()){await expect(button).toBeInViewport();expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);}
   await page.screenshot({path:testInfo.outputPath(`${label}.png`)});
@@ -150,6 +150,30 @@ for(const action of ['Create Goal','Edit Goal','Reserve Funds','Release Funds','
  await page.evaluate(()=>{Object.defineProperties(visualViewport,{height:{configurable:true,get:()=>340},offsetTop:{configurable:true,get:()=>45}});visualViewport.dispatchEvent(new Event('resize'));});
  await expect.poll(()=>page.locator('.transaction-panel').evaluate(e=>e.getBoundingClientRect().bottom)).toBeLessThanOrEqual(386);
  for(const control of [dialog.getByRole('button',{name:'Close',exact:true}),...await dialog.locator('.sheet-actions button').all()]){const box=await control.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(386);}
- const inputs=dialog.locator('input');await inputs.last().focus();await page.evaluate(()=>visualViewport.dispatchEvent(new Event('resize')));const field=await inputs.last().boundingBox();expect(field.y).toBeGreaterThanOrEqual(45);expect(field.y+field.height).toBeLessThanOrEqual(386);
+ for(const input of await dialog.locator('input,select').all()){await input.focus();await page.evaluate(()=>visualViewport.dispatchEvent(new Event('resize')));const field=await input.boundingBox();expect(field.y).toBeGreaterThanOrEqual(45);expect(field.y+field.height).toBeLessThanOrEqual(386);}
  await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;visualViewport.dispatchEvent(new Event('resize'));});await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(opener).toBeFocused();expect(await page.evaluate(()=>scrollY)).toBe(scroll);expect(await saved(page)).toEqual(before);
+});
+
+for(const origin of ['Home','Goals'])test(`${origin} goal chains preserve origin through cancel, save and confirmations`,async({page},testInfo)=>{
+ await start(page);await goals(page);await create(page);await page.getByRole('button',{name:origin,exact:true}).click();
+ const open=()=>page.locator(origin==='Home'?'.featured button':'[data-goal]').click();
+ const originHeading=()=>page.getByRole('heading',{name:origin==='Home'?'Hey, Violet!':'Goals',exact:true});
+ for(const action of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){
+  await open();await page.getByRole('button',{name:action,exact:true}).click();
+  await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
+  if(action==='Edit Goal'){
+   await page.evaluate(()=>{Object.defineProperties(visualViewport,{height:{configurable:true,get:()=>340},offsetTop:{configurable:true,get:()=>45}});visualViewport.dispatchEvent(new Event('resize'));});
+   for(const input of await page.getByRole('dialog').locator('input').all()){
+    await input.focus();const box=await input.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(385);
+    await page.screenshot({path:testInfo.outputPath(`${origin}-${await input.getAttribute('id')}-keyboard.png`)});
+   }
+   await page.locator('#sheet-title').focus();await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;visualViewport.dispatchEvent(new Event('resize'));});
+  }
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  if(['Archive Goal','Delete Goal'].includes(action)){await expect(page.getByRole('heading',{name:'Goal Details',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();}
+  await expect(originHeading()).toBeVisible();
+ }
+ await open();await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await page.getByLabel('Goal name',{exact:true}).fill('New Bike');await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(originHeading()).toBeVisible();expect((await saved(page)).goals[0].name).toBe('New Bike');
+ await open();await page.getByRole('button',{name:'Reserve Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('10');await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(originHeading()).toBeVisible();
+ await open();await page.getByRole('button',{name:'Release Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('5');await page.getByRole('button',{name:'Release',exact:true}).click();await expect(originHeading()).toBeVisible();expect((await saved(page)).goals[0].reservedCents).toBe(500);
 });
