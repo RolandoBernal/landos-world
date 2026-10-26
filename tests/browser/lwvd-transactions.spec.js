@@ -1,4 +1,16 @@
 import {test,expect} from '@playwright/test';
+
+async function continuous(page) {
+ const dialog=page.getByRole('dialog');
+ for(const inner of await dialog.locator('.transaction-frame,.transaction-panel,#transaction-form,.sheet-body').all()) await expect(inner).toHaveCSS('overflow-y','visible');
+ await expect(dialog).toHaveCSS('position','relative');
+ await expect(page.locator('.transaction-panel')).toHaveCSS('border-radius','24px');
+ await expect(page.locator('.transaction-panel')).toHaveCSS('border-bottom-width','1px');
+ const controls=await dialog.locator('input,select,button').all();
+ for(const control of controls){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
+ await controls[0].scrollIntoViewIfNeeded();await expect(controls[0]).toBeInViewport();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+}
 const key='lando-world:lwvd:v1',launcher='landos_world_my_apps_v1';
 const preferences={schemaVersion:1,visibleAppIds:['digital-clock','violet-dineros'],appOrder:['digital-clock','violet-dineros','weather']};
 async function setup(page,theme='light',transactions) {
@@ -103,7 +115,7 @@ for(const theme of ['light','dark','system']){
     for(const [width,height] of [[320,568],[390,400],[430,844]]){
       await page.setViewportSize({width,height});await sheet(page).getByLabel('What was it? (optional)',{exact:true}).fill('A long description '.repeat(5));
       await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).scrollIntoViewIfNeeded();
-      const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y+bounds.height).toBeLessThanOrEqual(height+1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      await continuous(page);
     }
     await page.setViewportSize({width:390,height:844});await fillTransaction(page,'expense','1.25','Other','Snack');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');
     await activity(page);await expect(page.locator('.transaction-row')).toContainText('Snack');
@@ -162,7 +174,7 @@ test('Home has no disclaimer and compact Activity rows communicate interactive d
 });
 
 for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Details']){
-  test(`${mode}: keyboard visual viewport keeps focused fields and actions visible`,async({page})=>{
+  test(`${mode}: document scrolling reaches every field and action`,async({page})=>{
     const createdAt=new Date().toISOString();
     await setup(page,'dark',[{id:'income',type:'income',amountCents:3000,label:'Allowance',description:'Pocket money',createdAt},{id:'expense',type:'expense',amountCents:600,label:'Food',description:'Coffee',createdAt}]);
     if(mode.startsWith('Add')) await openAdd(page,mode==='Add Money'?'income':'expense');
@@ -172,23 +184,8 @@ for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Det
     }
     await expect(page.locator('dialog[open]')).toHaveCount(1);
     if(mode!=='Details')await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
-    // Model Safari's keyboard-only viewport resize: the layout viewport stays tall.
-    await page.evaluate(()=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>320},offsetTop:{configurable:true,get:()=>45}});window.visualViewport.dispatchEvent(new Event('resize'));});
-    const inside=async locator=>{const box=await locator.boundingBox();expect(box.y).toBeGreaterThanOrEqual(45);expect(box.y+box.height).toBeLessThanOrEqual(366);};
-    await inside(page.locator('.transaction-panel'));
-    if(mode==='Details')await sheet(page).locator('.sheet-actions').scrollIntoViewIfNeeded();
-    const controls=mode==='Details'?['Edit','Delete']:['Cancel',mode.startsWith('Edit')?'Save Changes':mode==='Add Money'?'Add Money':'Save Expense'];
-    for(const name of controls){await expect(sheet(page).getByRole('button',{name,exact:true})).toBeVisible();await inside(sheet(page).getByRole('button',{name,exact:true}));}
-    if(mode!=='Details'){
-      await inside(sheet(page).getByLabel('How much?',{exact:true}));
-      const description=sheet(page).getByLabel(mode.includes('Money')?'Description (optional)':'What was it? (optional)',{exact:true});await description.fill('A note with the text keyboard');await inside(description);
-      for(const name of controls)await inside(sheet(page).getByRole('button',{name,exact:true}));
-      expect(await page.locator('.sheet-fields').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
-    }
-    expect(await page.evaluate(()=>document.body.style.overflow)).toBe('hidden');
-    const before=await page.evaluate(()=>window.scrollY);
+    await page.setViewportSize({width:390,height:320});await continuous(page);
     await page.locator('nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement))).toBe(true);
-    await page.mouse.click(5,5);await expect(sheet(page)).toBeVisible();expect(await page.evaluate(()=>window.scrollY)).toBe(before);
     await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');
     expect(await page.locator('#transaction-sheet').evaluate(el=>el.style.getPropertyValue('--sheet-height'))).toBe('');
     expect((await saved(page)).transactions).toHaveLength(2);
@@ -196,18 +193,16 @@ for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Det
 }
 
 for(const type of ['income','expense']){
-  test(`${type} Details is opaque, full-screen, centered and returns to filtered Activity`,async({page})=>{
+  test(`${type} Details is opaque, rounded, centered and returns to filtered Activity`,async({page})=>{
     const createdAt=new Date().toISOString(),label=type==='income'?'Gift':'Food';
     await setup(page,'dark',[{id:'detail',type,amountCents:600,label,description:'Coffee',createdAt}]);await activity(page);
     await page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true}).click();await page.getByLabel('Search activity').fill('Coffee');await page.locator('.transaction-row').click();
     await expect(sheet(page)).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).not.toBeVisible();
-    const panel=await page.locator('.transaction-panel').boundingBox(),body=await page.locator('.details-body').boundingBox(),group=await page.locator('.details-centered').boundingBox();
-    expect(panel.x).toBe(0);expect(panel.y).toBe(0);expect(panel.width).toBe(390);expect(panel.height).toBe(844);
-    expect(Math.abs(group.y+group.height/2-body.y-body.height/2)).toBeLessThanOrEqual(1);
+    await continuous(page);
     expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(33, 25, 44)');
     await expect(sheet(page)).toContainText(type==='income'?'Money In':'Expense');await expect(sheet(page)).toContainText(label);await expect(sheet(page)).toContainText('Coffee');
-    await page.setViewportSize({width:320,height:360});await page.evaluate(()=>document.documentElement.style.fontSize='32px');await expect.poll(()=>page.locator('.transaction-frame').evaluate(el=>el.getBoundingClientRect().height)).toBe(360);
-    expect(await page.locator('.details-body').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+    await page.setViewportSize({width:320,height:360});await page.evaluate(()=>document.documentElement.style.fontSize='32px');await continuous(page);
+    expect(await page.evaluate(()=>document.scrollingElement.scrollHeight>innerHeight)).toBe(true);
     const edit=sheet(page).getByRole('button',{name:'Edit',exact:true});await edit.scrollIntoViewIfNeeded();const box=await edit.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(360);
     await page.evaluate(()=>document.documentElement.style.fontSize='');await page.setViewportSize({width:390,height:844});
     await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByLabel('Search activity')).toHaveValue('Coffee');await expect(page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.locator('.transaction-row')).toHaveCount(1);
@@ -215,14 +210,11 @@ for(const type of ['income','expense']){
   });
 }
 
-test('keyboard dismissal restores the visible frame and form actions without moving the page',async({page})=>{
+test('restoring viewport height preserves the continuous form',async({page})=>{
   await setup(page);await openAdd(page,'expense');
-  await page.evaluate(()=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>300},offsetTop:{configurable:true,get:()=>70}});window.visualViewport.dispatchEvent(new Event('resize'));});
-  const frame=await page.locator('.transaction-frame').boundingBox();expect(frame.y).toBe(70);expect(frame.height).toBe(300);
+  await page.setViewportSize({width:390,height:300});await continuous(page);
   await sheet(page).getByLabel('What was it? (optional)',{exact:true}).fill('Text keyboard');
-  await page.evaluate(()=>{delete window.visualViewport.height;delete window.visualViewport.offsetTop;window.visualViewport.dispatchEvent(new Event('resize'));});
-  await expect.poll(()=>page.locator('.transaction-frame').evaluate(el=>el.getBoundingClientRect().height)).toBe(844);
-  const save=await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).boundingBox();expect(save.y+save.height).toBeLessThanOrEqual(844);
+  await page.setViewportSize({width:390,height:844});await continuous(page);
   await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');expect((await saved(page)).transactions).toBeUndefined();
 });
 
@@ -246,7 +238,7 @@ test('touch outlines clear app-wide, while keyboard focus remains visible',async
 
 
 for(const theme of ['light','dark']){
-  test(`${theme} full-screen forms keep intact fields separate from actions and center native select text`,async({page})=>{
+  test(`${theme} continuous forms keep fields and actions in document flow and center native select text`,async({page})=>{
     const createdAt=new Date().toISOString();const records=[{id:'income',type:'income',amountCents:3000,label:'Allowance',description:'Gift',createdAt},{id:'expense',type:'expense',amountCents:600,label:'Food',description:'Coffee',createdAt}];
     await setup(page,theme,records);const before=await saved(page);
     for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense']){
@@ -261,14 +253,13 @@ for(const theme of ['light','dark']){
       expect(await amount.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('Geist Mono');
       expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
       for(const height of [320,844]){
-        await page.evaluate(height=>{Object.defineProperties(window.visualViewport,{height:{configurable:true,get:()=>height},offsetTop:{configurable:true,get:()=>0}});window.visualViewport.dispatchEvent(new Event('resize'));},height);
-        const panel=await page.locator('.transaction-panel').boundingBox();expect(panel.y).toBe(0);expect(panel.height).toBe(height);await expect(page.locator('.shell')).toBeHidden();
+        await page.setViewportSize({width:390,height});
+        await continuous(page);await expect(page.locator('.shell')).toBeHidden();
         const select=sheet(page).getByLabel(income?'Where did it come from?':'Category',{exact:true});await select.selectOption(income?'Paycheck':'Shopping');
         const metrics=await select.evaluate(el=>{const style=getComputedStyle(el);return {height:el.getBoundingClientRect().height,paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,lineHeight:style.lineHeight,value:el.value};});
         expect(metrics.height).toBe(52);expect(metrics.paddingTop).toBe('0px');expect(metrics.paddingBottom).toBe('0px');expect(metrics.lineHeight).toBe('normal');expect(metrics.value).toBe(income?'Paycheck':'Shopping');
         const description=sheet(page).getByLabel(income?'Description (optional)':'What was it? (optional)',{exact:true});await description.fill(height===320?'Long description '.repeat(7):'Short description');
-        const field=await description.boundingBox(),scroller=await page.locator('.sheet-fields').boundingBox(),footer=await page.locator('#transaction-form .sheet-actions').boundingBox();
-        expect(field.y).toBeGreaterThanOrEqual(scroller.y-1);expect(field.y+field.height).toBeLessThanOrEqual(scroller.y+scroller.height+1);expect(scroller.y+scroller.height).toBeLessThanOrEqual(footer.y+1);expect(footer.y+footer.height).toBeLessThanOrEqual(height);
+        await continuous(page);
       }
       await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await home(page);
     }
