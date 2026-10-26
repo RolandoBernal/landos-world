@@ -12,6 +12,7 @@ for (const theme of ['light','dark']) test(`compact Money Progress persists on n
   const progress=page.getByRole('region',{name:'Money Progress'});
   await expect(progress).toContainText('Level 1 · Money Rookie');
   await expect(progress).toContainText('0 XP total');
+  await expect(progress.locator('.progress-help')).toHaveText('Earn XP for tracking expenses and saving toward your goals. Small steps add up! ✨');
   await page.getByRole('button',{name:'Add Expense',exact:true}).click();
   const dialog=page.getByRole('dialog');
   await expect(dialog.getByLabel('How much?',{exact:true})).toBeFocused();
