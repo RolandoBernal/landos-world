@@ -79,7 +79,7 @@ for(const theme of ['light','dark']) test(`${theme} all entry panels share nativ
   await page.getByRole('button',{name:action,exact:true}).click();
   const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('open','');
   const input=dialog.locator('input[autofocus]');await expect(input).toBeFocused();
-  layouts.push(await dialog.evaluate(e=>[e,e.querySelector('.transaction-frame'),e.querySelector('.transaction-panel')].map(n=>{const s=getComputedStyle(n);return {position:s.position,overflow:s.overflowY,minHeight:s.minHeight,padding:s.padding,border:s.border,radius:s.borderRadius,align:s.alignItems};})));
+  layouts.push(await dialog.evaluate(e=>[e,e.querySelector('.transaction-frame'),e.querySelector('.transaction-panel'),e.querySelector('form'),e.querySelector('.sheet-body')].map(n=>{const s=getComputedStyle(n);return {position:s.position,overflow:s.overflowY,minHeight:s.minHeight,padding:s.padding,border:s.border,radius:s.borderRadius,align:s.alignItems};})));
   for(const height of [400,844]){
    await page.setViewportSize({width:390,height});
    for(const control of await dialog.locator('input,select,button').all()){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
@@ -89,5 +89,27 @@ for(const theme of ['light','dark']) test(`${theme} all entry panels share nativ
  }
  expect(layouts[1]).toEqual(layouts[0]);expect(layouts[2]).toEqual(layouts[0]);
  expect(await page.evaluate(()=>window.panelOpenings)).toEqual(['transaction-sheet','transaction-sheet','affordability-sheet']);
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(seed);
+});
+
+for(const theme of ['light','dark']) test(`${theme} focused price field matches the money and expense field geometry`,async({page},testInfo)=>{
+ await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top,0px)','44px').replaceAll('env(safe-area-inset-top)','44px')});});
+ await page.goto('/violet-dineros/index.html');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
+ for(const width of [320,390])for(const height of [844,400]){
+  await page.setViewportSize({width,height});
+  const fields=[];
+  for(const action of ['Add Money','Add Expense','Can I Afford This?']){
+   await page.getByRole('button',{name:action,exact:true}).click();
+   const dialog=page.getByRole('dialog'),field=dialog.locator('input[autofocus]');await expect(field).toBeFocused();
+   fields.push(await field.evaluate(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {top:r.top,left:r.left,width:r.width,height:r.height,font:s.fontSize};}));
+   expect(await page.evaluate(()=>scrollY)).toBe(0);
+   if(action==='Can I Afford This?'){
+    const available=dialog.locator('.story');expect((await available.boundingBox()).y).toBeGreaterThan((await field.boundingBox()).y);
+    await page.screenshot({path:testInfo.outputPath(`${theme}-${width}-${height}-opening.png`)});
+   }
+   await page.keyboard.press('Escape');
+  }
+  expect(fields[1]).toEqual(fields[0]);expect(fields[2]).toEqual(fields[0]);
+ }
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(seed);
 });
