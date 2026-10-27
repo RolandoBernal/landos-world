@@ -6,7 +6,33 @@
   const today=()=>new Date().toISOString().slice(0,10); const id=()=>`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
   const esc=(v='')=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
   function initial(){const bikes=seedBikes.map(([id,name,mileage])=>({id,category:'bikes',name,type:'Bicycle',currentMileage:mileage,active:true,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));const madone=bikes[0];return {version:1,bikes,components:components.map((name,i)=>({id:`madone-${name.toLowerCase()}`,assetId:madone.id,name,category:name,currentStatus:i===0?'Attention':'Current',lastService:i===0?'Replaced yesterday':'No record yet'})),records:[{id:'seed-brakes',assetId:'madone',componentId:'madone-brakes',taskType:'Replace',date:new Date(Date.now()-86400000).toISOString().slice(0,10),mileage:3150,cost:85,serviceProvider:'Local Bike Shop',notes:'Brake pads replaced.'},{id:'seed-chain',assetId:'madone',componentId:'madone-drivetrain',taskType:'Lubricate',date:'2026-08-18',mileage:3000,cost:0,serviceProvider:'',notes:'Chain cleaned and lubricated.'}]};}
-  function load(){try{const raw=localStorage.getItem(KEY);const v=raw&&JSON.parse(raw);return v?.version===1?v:initial()}catch{return initial()}} function save(){localStorage.setItem(KEY,JSON.stringify(state))} let state=load(),root;
+  let storageBlocked=false;
+  function load(){
+    try{
+      const raw=localStorage.getItem(KEY);
+      if(raw===null)return initial();
+      const value=JSON.parse(raw);
+      if(value?.version===1&&['bikes','components','records'].every(key=>Array.isArray(value[key])&&value[key].every(item=>item&&typeof item==='object'&&!Array.isArray(item))))return value;
+    }catch{}
+    storageBlocked=true;
+    return null;
+  }
+  function save(){if(storageBlocked)throw new Error('Stored maintenance data is protected.');localStorage.setItem(KEY,JSON.stringify(state))}
+  let state=load(),root;
+  function exportData(){
+    const message=root.querySelector('[data-export-status]');
+    try{
+      const raw=localStorage.getItem(KEY);
+      if(raw===null){message.textContent='No saved maintenance data to export.';return;}
+      const url=URL.createObjectURL(new Blob([raw],{type:'application/json'}));
+      const link=document.createElement('a');
+      link.href=url;link.download=`maintenance-total-${today()}.json`;
+      try{document.body.append(link);link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+      message.textContent='Export download requested.';
+    }catch{message.textContent='Unable to export maintenance data. Please try again.';}
+  }
+  const exportMarkup='<button type="button" class="imt_button" data-action="export">Download maintenance JSON</button><p class="imt_muted" data-export-status role="status"></p>';
+  function protectedStorage(){shell(`<header class="imt_header"><h1>iMaintenanceTotal</h1></header><section class="imt_section"><p role="alert">Stored maintenance data could not be read or is unsupported. Editing is disabled to protect it. You can download the stored value below.</p>${exportMarkup}</section>`,'more');root.querySelector('[data-action="export"]').onclick=exportData;}
   const bike=(assetId)=>state.bikes.find(b=>b.id===assetId); const comp=(componentId)=>state.components.find(c=>c.id===componentId);
   function status(b){const r=state.records.filter(x=>x.assetId===b.id&&!x.deletedAt).sort((a,z)=>z.date.localeCompare(a.date))[0];return r?.taskType==='Replace'?'Attention':'Current'}
   function navIcon(key){const paths={home:'<path d="m4 11 8-7 8 7v9H4z"/><path d="M9 20v-6h6v6"/>',history:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',add:'<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>',assets:'<circle cx="7" cy="16" r="3.5"/><circle cx="17" cy="16" r="3.5"/><path d="m7 16 3-7 3 7m-3-7h5l2 7M8 7h3"/>',more:'<circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>'};return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[key]}</svg>`}
@@ -33,6 +59,6 @@
     updateComponents(cid);
     assetSelect.onchange=()=>updateComponents();
   }
-  function render(page='home'){if(page==='add')return recordForm();if(page==='history')return history();if(page==='assets')return assets();if(page==='more')return shell('<header class="imt_header"><h1>More</h1></header><section class="imt_section"><h2>Settings</h2><p class="imt_muted">iMaintenanceTotal uses Pearl White and stores your maintenance data on this device.</p></section>','more');home()}
+  function render(page='home'){if(storageBlocked)return protectedStorage();if(page==='add')return recordForm();if(page==='history')return history();if(page==='assets')return assets();if(page==='more'){shell('<header class="imt_header"><h1>More</h1></header><section class="imt_section"><h2>Settings</h2><p class="imt_muted">iMaintenanceTotal uses Pearl White and stores your maintenance data on this device.</p>'+exportMarkup+'</section>','more');root.querySelector('[data-action="export"]').onclick=exportData;return;}home()}
   function init(){root=document.getElementById('maintenance-total-root');const globalToggle=document.getElementById('imt_settings_toggle');if(globalToggle)globalToggle.onclick=()=>render(globalToggle.getAttribute('aria-expanded')==='true'?'home':'more');if(root)render();} window.MaintenanceTotal={init,render};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
