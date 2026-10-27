@@ -1873,7 +1873,7 @@
             .rpc('update_lee_lee_record_with_version', createVersionedMutationArgs(remoteRecord, expectedVersion));
           if (error) throw error;
           const updatedRow = Array.isArray(data) ? data[0] : data;
-          if (!updatedRow) {
+          if (!updatedRow?.id) {
             if (attemptedOperation.type === 'soft-delete') {
               const remoteState = await inspectRemoteRecord(attemptedOperation.recordId);
               if (remoteState.state === 'absent') {
