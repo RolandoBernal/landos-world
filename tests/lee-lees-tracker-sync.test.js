@@ -2461,18 +2461,36 @@ test('two devices exchange initial episode, pending schedule, recheck and explic
   await b.repository.syncNow(); assert.equal(b.store.getDocument().records[0].lowGlucoseEpisode.closure.recheckId, 'round-b');
 });
 
-test('concurrent Low Glucose rechecks preserve authoritative remote round and create explicit review conflict', async () => {
-  const context = createSyncContext(); const base = lowGlucoseTestRecord();
-  const authoritative = structuredClone(base); authoritative.version = 2; authoritative.lowGlucoseEpisode.rechecks.push({ id: 'other-device-round', bloodSugar: 61, carbs: 15, recordTimestamp: '2026-08-01T13:15:00Z' });
-  const supabase = createMockSupabase([context.LeeLeeTrackerSync.sanitizeRecordForRemote(authoritative, 'user-1')]);
-  const device = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } }); device.navigator.onLine = false;
-  const repository = device.LeeLeeTrackerSync.createRepository(createDocumentStore({ records: [base] })); await repository.initialize();
-  const local = structuredClone(base); local.lowGlucoseEpisode.rechecks.push({ id: 'local-round', bloodSugar: 84, carbs: 0, recordTimestamp: '2026-08-01T13:15:00Z' });
-  repository.queueUpsert(local, base); device.navigator.onLine = true; await repository.processQueue();
-  assert.equal(supabase.client.rows[0].payload.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
-  const conflict = repository.getConflicts()[0]; assert.equal(conflict.localRecord.lowGlucoseEpisode.rechecks[0].id, 'local-round');
-  assert.equal(conflict.sharedRecord.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
-});
+for (const nullIdResponse of [false, true]) {
+  test(`concurrent Low Glucose rechecks preserve both versions for review with ${nullIdResponse ? 'an RPC object with id: null' : 'a null RPC response'}`, async () => {
+    const context = createSyncContext(); const base = lowGlucoseTestRecord();
+    const authoritative = structuredClone(base); authoritative.version = 2; authoritative.lowGlucoseEpisode.rechecks.push({ id: 'other-device-round', bloodSugar: 61, carbs: 15, recordTimestamp: '2026-08-01T13:15:00Z' });
+    const supabase = createMockSupabase([context.LeeLeeTrackerSync.sanitizeRecordForRemote(authoritative, 'user-1')]);
+    const rpc = supabase.client.rpc;
+    supabase.client.rpc = async (...args) => {
+      const result = await rpc(...args);
+      return nullIdResponse && args[0] === 'update_lee_lee_record_with_version' && result.data === null && !result.error
+        ? { data: { id: null, version: null, payload: null }, error: null }
+        : result;
+    };
+    const remoteBefore = JSON.stringify(supabase.client.rows[0]);
+    const device = createSyncContext({ supabase, config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' } }); device.navigator.onLine = false;
+    const repository = device.LeeLeeTrackerSync.createRepository(createDocumentStore({ records: [base] })); await repository.initialize();
+    const local = structuredClone(base); local.lowGlucoseEpisode.rechecks.push({ id: 'local-round', bloodSugar: 84, carbs: 0, recordTimestamp: '2026-08-01T13:15:00Z' });
+    const operation = repository.queueUpsert(local, base);
+    device.navigator.onLine = true; await repository.processQueue();
+    assert.equal(supabase.client.rows[0].payload.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
+    const conflict = repository.getConflicts()[0]; assert.equal(conflict.localRecord.lowGlucoseEpisode.rechecks[0].id, 'local-round');
+    assert.equal(conflict.sharedRecord.lowGlucoseEpisode.rechecks[0].id, 'other-device-round');
+    assert.equal(repository.getConflicts().length, 1);
+    assert.equal(JSON.stringify(conflict.localRecord), JSON.stringify(operation.payload));
+    assert.equal(JSON.stringify(conflict.operation.payload), JSON.stringify(operation.payload));
+    assert.equal(conflict.localRecord.version, base.version);
+    assert.equal(conflict.sharedRecord.version, authoritative.version);
+    assert.equal(JSON.stringify(supabase.client.rows[0]), remoteBefore);
+    assert.equal(repository.getRecordQueueSnapshot().length, 0);
+  });
+}
 
 test('same-device queued episode → pending reminder → recheck advances only its acknowledged predecessor version', async () => {
   const supabase = createMockSupabase();
