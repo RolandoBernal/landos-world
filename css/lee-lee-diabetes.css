@@ -3916,8 +3916,8 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button.is-active { background: var(--footer-selected); color: var(--footer-active); }
 .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_icon { width: 24px; height: 24px; color: inherit; }
 .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_sr_only { position: static; width: auto; height: auto; margin: 0; padding: 0; overflow: visible; clip: auto; white-space: normal; font-size: .68rem; line-height: 1.1; }
-.lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { width: 54px; height: 54px; min-height: 54px; border: 1px solid var(--lee-lee-border-strong); border-radius: 50%; background: var(--lee-lee-accent); color: #fff; box-shadow: none; }
-:root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { color: #fff; }
+.lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { width: auto; height: auto; min-height: 54px; align-self: stretch; justify-self: stretch; border: 0; border-radius: 28px; background: transparent; color: var(--footer-inactive); box-shadow: none; }
+:root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { color: var(--footer-inactive); }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon { color: inherit; }
 .lee_lee_diabetes_shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); scroll-padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
 /* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */

@@ -38,10 +38,12 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
   expect(metrics.bg).toBe(theme==='light'?'rgb(255, 255, 255)':'rgb(23, 25, 28)');
   if(app==='llt'){
    const plus=nav.getByRole('button',{name:'Log Entry',exact:true});
-   await expect(plus).toHaveCSS('background-color',theme==='light'?'rgb(9, 104, 195)':'rgb(58, 160, 255)');
-   await expect(plus).toHaveCSS('border-radius','50%');
-   await expect(plus.locator('svg')).toHaveCSS('color','rgb(255, 255, 255)');
-   expect((await plus.boundingBox()).width).toBe(54);
+   const today=nav.getByRole('button',{name:'Today',exact:true});
+   await expect(plus).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+   for(const property of ['color','border-radius','padding','gap','align-items','justify-content']){
+    await expect(plus).toHaveCSS(property,await today.evaluate((el,property)=>getComputedStyle(el).getPropertyValue(property),property));
+   }
+   await expect(plus.locator('svg')).toHaveCSS('color',await today.locator('svg').evaluate(el=>getComputedStyle(el).color));
    await expect(plus.locator('.lee_lee_diabetes_sr_only')).toBeVisible();
   }
   for(const b of metrics.buttons){expect(b.x).toBeGreaterThan(metrics.x);expect(b.y).toBeGreaterThan(metrics.y);expect(b.bottom).toBeLessThan(metrics.bottom);}
@@ -51,6 +53,13 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
    if(app==='llt'){
     const boxes=await nav.getByRole('button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right};}));
     for(let i=1;i<boxes.length;i++) expect(boxes[i].left).toBeGreaterThanOrEqual(boxes[i-1].right);
+    const layout=await nav.getByRole('button').evaluateAll(buttons=>buttons.map(b=>{
+     const rect=b.getBoundingClientRect(),icon=b.querySelector('svg').getBoundingClientRect(),label=b.querySelector('.lee_lee_diabetes_sr_only').getBoundingClientRect();
+     return {width:rect.width,height:rect.height,iconWidth:icon.width,iconHeight:icon.height,iconBottom:icon.bottom,labelTop:label.top,iconCenter:icon.x+icon.width/2,labelCenter:label.x+label.width/2};
+    }));
+    for(const item of layout){expect(item.width).toBeGreaterThanOrEqual(44);expect(item.height).toBeGreaterThanOrEqual(44);expect(item.labelTop).toBeGreaterThan(item.iconBottom);expect(Math.abs(item.iconCenter-item.labelCenter)).toBeLessThan(1);expect(item.iconWidth).toBe(24);expect(item.iconHeight).toBe(24);}
+    expect(Math.abs(layout[2].width-layout[0].width)).toBeLessThan(1);
+
    }
   }
   await page.setViewportSize({width:390,height:600});
