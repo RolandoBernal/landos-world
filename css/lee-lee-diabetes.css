@@ -303,6 +303,7 @@
 .lee_lee_diabetes_input:focus-visible,
 .lee_lee_diabetes_textarea:focus-visible,
 .lee_lee_diabetes_select:focus-visible,
+.lee_lee_diabetes_select[data-context-pending],
 .lee_lee_diabetes_history_date:focus-visible {
   outline: 2px solid var(--lee-lee-soft);
   outline-offset: 3px;

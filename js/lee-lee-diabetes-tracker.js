@@ -7341,7 +7341,7 @@
     return `
       <label class="lee_lee_diabetes_field">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
-        <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="lee-lee-context-error">
+        <select class="lee_lee_diabetes_select" name="type" ${!currentEditor?.id && !selectedType ? 'data-context-pending' : ''} aria-required="true" aria-describedby="lee-lee-context-error">
           ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
         <span class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" id="lee-lee-context-error" data-context-error role="alert" hidden></span>
@@ -11387,6 +11387,8 @@
           carbCalculatorRows: currentEditor.carbCalculatorRows,
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || null,
         });
+        const nextForm = root.querySelector('[data-lee-lee-editor]');
+        if (!currentEditor.id && getEditorType(nextForm)) nextForm.elements.bloodSugar?.focus();
         return;
       }
       updateEditorState(form);

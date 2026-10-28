@@ -31,7 +31,7 @@ async function newEntry(page) {
   await expect(context(page).locator('option:checked')).toHaveText('Choose a context...');
 }
 
-test('new entry requires context, never focuses an input, and blocks missing or invalid writes', async ({ page }) => {
+test('new entry requires context before focus handoff and blocks missing or invalid writes', async ({ page }) => {
   const remote = await open(page);
   await newEntry(page);
   const before = await stored(page);
@@ -56,7 +56,7 @@ test('new entry requires context, never focuses an input, and blocks missing or 
   }
   await context(page).selectOption('Correction');
   await expect(root(page).locator('[name=bloodSugar]')).toBeEnabled();
-  expect(await page.evaluate(() => document.activeElement.matches('input, textarea'))).toBe(false);
+  await expect(root(page).locator('[name=bloodSugar]')).toBeFocused();
   await expect(save(page)).toBeEnabled();
   await root(page).locator('[data-action=cancel]').click();
   await root(page).locator('.lee_lee_diabetes_bottom_nav [data-action=history]').click();
@@ -90,6 +90,8 @@ test('scheduled contexts remain disabled without fallback; edit retains saved co
   await expect(context(page).locator('option[value=""]')).toHaveCount(0);
   await expect(root(page).locator('[name=bloodSugar]')).toHaveValue('120');
   await expect(root(page).locator('[name=bloodSugar]')).toBeEnabled();
+  await expect(context(page)).not.toHaveAttribute('data-context-pending');
+  expect(await page.evaluate(() => document.activeElement.matches('input, textarea'))).toBe(false);
   const savedType = await context(page).inputValue();
   expect(['Breakfast','Lunch','Dinner','Bedtime']).toContain(savedType);
   await expect(context(page).locator(`option[value="${savedType}"]`)).toHaveJSProperty('disabled', false);
@@ -98,6 +100,10 @@ test('scheduled contexts remain disabled without fallback; edit retains saved co
   const after = JSON.parse(await stored(page)).records;
   expect(after).toHaveLength(4);
   expect(after.find(r => r.type === savedType).notes).toBe('note-only correction');
+  await root(page).locator('[data-action=edit-today-record]').first().click();
+  await context(page).selectOption('Correction');
+  expect(await page.evaluate(() => document.activeElement.matches('input, textarea'))).toBe(false);
+  await root(page).locator('[data-action=cancel]').click();
 });
 
 test('context fields and tools follow valid selections in light and dark mode', async ({ page }, info) => {
@@ -111,7 +117,7 @@ test('context fields and tools follow valid selections in light and dark mode', 
     await root(page).locator('[name=notes]').fill('Keep my draft');
     for (const type of ['Lunch', 'Dinner', 'Snacks', 'Low Glucose', 'Correction', 'Bedtime']) {
       await context(page).selectOption(type);
-      expect(await page.evaluate(() => document.activeElement.matches('input, textarea'))).toBe(false);
+      await expect(root(page).locator('[name=bloodSugar]')).toBeFocused();
       await expect(root(page).locator('[name=bloodSugar]')).toBeEnabled();
       const usesCalculator = !['Correction', 'Bedtime'].includes(type);
       await expect(root(page).locator('[data-action=open-carb-calculator]')).toHaveCount(usesCalculator ? 1 : 0);
@@ -119,6 +125,38 @@ test('context fields and tools follow valid selections in light and dark mode', 
       await expect(root(page).locator('[name=notes]')).toHaveValue('Keep my draft');
     }
     await page.screenshot({ path: info.outputPath(`selected-${theme}.png`), fullPage: true });
+    await root(page).locator('[data-action=cancel]').click();
+  }
+});
+
+test('pending Context matches the Blood Sugar focus ring without taking focus; handoff never repeats', async ({ page }, info) => {
+  await open(page);
+  const styles = locator => locator.evaluate(el => {
+    const s = getComputedStyle(el);
+    return Object.fromEntries(['borderColor', 'borderWidth', 'borderStyle', 'outlineColor', 'outlineWidth', 'outlineStyle', 'outlineOffset', 'borderRadius', 'marginTop', 'marginBottom'].map(key => [key, s[key]]));
+  });
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    await newEntry(page);
+    await expect(context(page)).toHaveAttribute('data-context-pending');
+    await expect(context(page)).not.toBeFocused();
+    await expect(root(page).locator('[name=bloodSugar]')).toBeDisabled();
+    const pendingStyle = await styles(context(page));
+    expect(pendingStyle.outlineWidth).toBe('2px');
+    await page.screenshot({ path: info.outputPath(`context-highlight-${theme}.png`), fullPage: true });
+    await context(page).selectOption('Correction');
+    const bloodSugar = root(page).locator('[name=bloodSugar]');
+    await expect(bloodSugar).toBeEnabled();
+    await expect(bloodSugar).toBeFocused();
+    await expect(context(page)).not.toHaveAttribute('data-context-pending');
+    expect(await styles(bloodSugar)).toEqual(pendingStyle);
+    await bloodSugar.fill('120');
+    const notes = root(page).locator('[name=notes]');
+    await notes.fill('Keep focus here');
+    await expect(notes).toBeFocused();
+    await page.waitForTimeout(200);
+    await expect(notes).toBeFocused();
+    await expect(bloodSugar).toHaveValue('120');
     await root(page).locator('[data-action=cancel]').click();
   }
 });
