@@ -198,6 +198,7 @@
   --imt-muted: #a1a5ad;
   --imt-nav-accent: #e5e7eb;
   --imt-nav-inactive: #8c939d;
+  --imt-nav-active-bg: #2a2c30;
   --imt-primary: #c0c4ca;
   --imt-primary-text: #08090b;
   --app-accent: var(--imt-nav-accent);
@@ -205,7 +206,7 @@
   margin-inline: auto;
   min-height: 100svh;
   padding-top: max(12px, env(safe-area-inset-top));
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  padding-bottom: calc(180px + env(safe-area-inset-bottom));
   background: var(--imt-bg);
   color: var(--imt-text);
   color-scheme: dark;
@@ -257,13 +258,53 @@
 .maintenance_total_view .imt_field label { font-size: .88rem; color: var(--imt-muted); }
 .maintenance_total_view .imt_field input,
 .maintenance_total_view .imt_field select,
-.maintenance_total_view .imt_field textarea { min-width: 0; max-width: 100%; background-color: var(--imt-raised); border-color: var(--imt-border); color: var(--imt-text); font-size: 16px; scroll-margin-block: 80px 120px; }
+.maintenance_total_view .imt_field textarea { min-width: 0; max-width: 100%; background-color: var(--imt-raised); border-color: var(--imt-border); color: var(--imt-text); font-size: 16px; scroll-margin-block: 80px 180px; }
 .maintenance_total_view :is(button, input, select, textarea, a):focus-visible { outline: 2px solid var(--imt-nav-accent); outline-offset: 3px; }
-.maintenance_total_view .imt_bottom_nav { width: min(100%, 430px); box-sizing: border-box; left: 50%; right: auto; transform: translateX(-50%); padding: 8px 8px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--imt-border); background: var(--imt-surface); }
-.maintenance_total_view .imt_nav_button { min-width: 0; min-height: 58px; padding: 4px 2px; color: var(--imt-nav-inactive); }
+/* Phase 1C: floating controls stay inside the centered phone shell. */
+.maintenance_total_view .imt_floating_controls {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100% - 32px), 398px);
+  pointer-events: none;
+}
+.maintenance_total_view .imt_bottom_nav {
+  position: static;
+  transform: none;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--imt-border);
+  border-radius: 36px;
+  background: var(--imt-surface);
+  box-shadow: 0 8px 28px #00000030;
+  pointer-events: auto;
+}
+.maintenance_total_view .imt_nav_button { min-width: 0; min-height: 54px; padding: 4px 2px; border-radius: 28px; color: var(--imt-nav-inactive); }
 .maintenance_total_view .imt_nav_icon { width: 24px; height: 24px; }
 .maintenance_total_view .imt_nav_label { display: block; font-size: .68rem; }
-.maintenance_total_view .imt_nav_button.is-active { color: var(--imt-nav-accent); }
+.maintenance_total_view .imt_nav_button.is-active { background: var(--imt-nav-active-bg); color: var(--imt-nav-accent); }
+.maintenance_total_view .imt_add_button {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--imt-border);
+  border-radius: 50%;
+  background: var(--imt-primary);
+  color: var(--imt-primary-text);
+  box-shadow: 0 6px 20px #00000030;
+  cursor: pointer;
+  pointer-events: auto;
+}
 .maintenance_total_view .imt_bike_visual { background: var(--imt-raised); }
 :root[data-theme="light"] .maintenance_total_view {
   --imt-bg: #f1f5fa;
@@ -274,6 +315,7 @@
   --imt-muted: #506078;
   --imt-nav-accent: #24272b;
   --imt-nav-inactive: #526171;
+  --imt-nav-active-bg: #e5e7eb;
   --imt-primary: #34373c;
   --imt-primary-text: #fff;
   background: var(--imt-bg);
@@ -308,3 +350,34 @@
 }
 :root[data-theme="light"] .maintenance_total_view .imt_back { color: var(--imt-text); }
 .maintenance_total_view .imt_back:hover { color: var(--imt-nav-accent); }
+
+:root[data-theme="light"] .maintenance_total_view .imt_nav_button.is-active { color: var(--imt-nav-accent); }
+
+/* Keep asset creation secondary to the floating Add action. */
+.maintenance_total_view .imt_button:is([data-action="add-bike"], [data-action="add-component"]) {
+  background: #24272b;
+  border-color: #44474c;
+  color: #e5e7eb;
+}
+:root[data-theme="light"] .maintenance_total_view .imt_button:is([data-action="add-bike"], [data-action="add-component"]) {
+  background: #edf2f8;
+  border-color: #a1a5ad;
+  color: #24272b;
+}
+
+/* A non-interactive veil spans the phone shell behind the opaque controls. */
+.maintenance_total_view .imt_floating_controls::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -16px;
+  bottom: calc(-12px - env(safe-area-inset-bottom));
+  width: calc(100% + 32px);
+  height: calc(100% + 12px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0%), rgb(0 0 0 / 90%) 100%);
+  pointer-events: none;
+}
+:root[data-theme="light"] .maintenance_total_view .imt_floating_controls::before {
+  background: linear-gradient(to bottom, transparent, rgb(241 245 250 / 85%) 100%);
+}
+:root[data-theme="light"] .maintenance_total_view .imt_bottom_nav { background: var(--imt-surface); }

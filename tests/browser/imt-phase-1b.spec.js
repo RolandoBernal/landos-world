@@ -11,9 +11,9 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
     expect(bounds.width).toBe(Math.min(width,430));
     expect(Math.abs(bounds.x-(width-bounds.width)/2)).toBeLessThan(1);
     const nav=await root.locator('.imt_bottom_nav').boundingBox();
-    expect(nav.width).toBe(bounds.width);
+    expect(nav.width).toBe(bounds.width - 32);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    for(const label of ['Home','History','Add','Assets','More']) await expect(root.locator('.imt_nav_label',{hasText:label})).toBeVisible();
+    for(const label of ['Home','History','Assets','More']) await expect(root.locator('.imt_nav_label',{hasText:label})).toBeVisible();
   }
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:info.outputPath('dark-home.png'),fullPage:true});
@@ -21,7 +21,7 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
   const add = root.locator('[data-imt-nav="add"]');
   await expect(add.locator('circle')).toHaveCount(0);
   await expect(add.locator('.imt_nav_icon')).toHaveCSS('width','24px');
-  await expect(add).toHaveCSS('color','rgb(229, 231, 235)');
+  await expect(add).toHaveCSS('color','rgb(8, 9, 11)');
   const assertBack = async () => {
     const back = root.locator('.imt_back');
     await expect(back).toHaveCSS('text-align','left');
