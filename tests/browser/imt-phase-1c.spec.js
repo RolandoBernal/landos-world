@@ -40,8 +40,9 @@ for (const theme of ['dark','light']) {
     await page.evaluate(()=>document.activeElement.blur());
     await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
     const save=root.getByRole('button',{name:'Save',exact:true});
-    const s=await save.boundingBox(), a=await add.boundingBox();
-    expect(s.y+s.height).toBeLessThan(a.y);
+    const s=await save.boundingBox(), n=await nav.boundingBox();
+    await expect(add).toHaveCount(0);
+    expect(s.y+s.height).toBeLessThan(n.y);
     await expect(save).toBeInViewport();
     await page.screenshot({path:info.outputPath(`${theme}-form-bottom.png`)});
     await save.click();

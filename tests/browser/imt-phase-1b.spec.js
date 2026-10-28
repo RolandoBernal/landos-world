@@ -17,11 +17,12 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
   }
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:info.outputPath('dark-home.png'),fullPage:true});
-  await root.getByRole('button',{name:'Add',exact:true}).click();
   const add = root.locator('[data-imt-nav="add"]');
   await expect(add.locator('circle')).toHaveCount(0);
   await expect(add.locator('.imt_nav_icon')).toHaveCSS('width','24px');
   await expect(add).toHaveCSS('color','rgb(8, 9, 11)');
+  await add.click();
+  await expect(add).toHaveCount(0);
   const assertBack = async () => {
     const back = root.locator('.imt_back');
     await expect(back).toHaveCSS('text-align','left');
