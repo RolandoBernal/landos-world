@@ -31,7 +31,7 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
   expect(metrics.width).toBe(358);expect(metrics.radius).toBe('36px');expect(metrics.height).toBe(68);
   expect(metrics.x).toBe(16);
   expect(metrics.bottom).toBe(832);expect(metrics.scrimTop).toBe(app==='llt'?'0px':'-1px');expect(metrics.scrimPointer).toBe('none');
-  expect(metrics.bg).toBe(theme==='light'?'rgb(255, 255, 255)':'rgb(23, 25, 28)');
+  expect(metrics.bg).toBe(theme==='light'?'rgb(255, 255, 255)':app==='lwvd'?'rgb(23, 19, 31)':'rgb(23, 25, 28)');
   if(app==='llt'){
    const plus=page.getByRole('button',{name:'Log Entry',exact:true});
    await expect(nav.getByRole('button',{name:'Log Entry',exact:true})).toHaveCount(0);
