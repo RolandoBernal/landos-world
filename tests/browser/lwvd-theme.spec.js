@@ -70,3 +70,40 @@ for (const tab of ['Home', 'Activity', 'Goals', 'Insights', 'Settings']) {
     expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),launcherKey)).toEqual(selection);
   });
 }
+
+for (const theme of ['dark', 'light']) test(`LWVD ${theme}: standalone viewport policy and visible footer gap match the launcher`, async ({page}) => {
+ await page.setViewportSize({width:390,height:844});await seed(page,theme);
+ await page.goto('/violet-dineros/index.html');
+ const reference=await page.evaluate(async()=>{
+  const html=await (await fetch('../index.html')).text();
+  return new DOMParser().parseFromString(html,'text/html').querySelector('meta[name=viewport]').content;
+ });
+ await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content',reference);
+ // Activate the shipped standalone rules; desktop WebKit cannot install an iOS PWA.
+ await page.evaluate(()=>{
+  for(const sheet of document.styleSheets) for(const rule of sheet.cssRules){
+   if(rule.conditionText==='(display-mode: standalone)')rule.media.mediaText='all';
+  }
+ });
+ const before=await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'));
+ for(const height of [568,844,932]){
+  await page.setViewportSize({width:390,height});
+  for(const name of ['Home','Activity','Goals','Insights']){
+   await page.locator('nav').getByRole('button',{name,exact:true}).click();
+   for(const fraction of [0,1]){
+    await page.evaluate(fraction=>{document.documentElement.style.scrollBehavior='auto';scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*fraction,behavior:'instant'});},fraction);
+    const geometry=await page.evaluate(()=>{
+     const nav=document.querySelector('nav'),r=nav.getBoundingClientRect(),v=visualViewport;
+     const probe=document.createElement('div');probe.style.paddingBottom='env(safe-area-inset-bottom)';document.body.append(probe);
+     const safe=parseFloat(getComputedStyle(probe).paddingBottom);probe.remove();
+     const parents=[];for(let el=nav.parentElement;el;el=el.parentElement)parents.push(getComputedStyle(el).transform);
+     return {gap:(v.offsetTop+v.height)-r.bottom,safe,parents,width:r.width,height:r.height,overflow:document.documentElement.scrollWidth>innerWidth};
+    });
+    expect(geometry.gap).toBeCloseTo(12+geometry.safe,1);expect(geometry.width).toBe(358);expect(geometry.height).toBe(68);
+    expect(geometry.parents.every(value=>value==='none')).toBe(true);expect(geometry.overflow).toBe(false);
+   }
+  }
+ }
+ expect(await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'))).toBe(before);
+ await page.screenshot({path:test.info().outputPath(`lwvd-standalone-${theme}.png`)});
+});
