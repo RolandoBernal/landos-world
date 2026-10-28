@@ -310,3 +310,74 @@ body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
 .money-progress p { font-size: .82rem; margin: .35rem 0; overflow-wrap: anywhere; }
 .money-progress progress { display: block; width: 100%; height: .55rem; margin: .65rem 0; accent-color: var(--primary, #9565db); }
 .money-progress .progress-help { font-size: .75rem; line-height: 1.45; opacity: .75; }
+
+/* Floating footer: iMT pill geometry and resolved-theme palette. */
+nav {
+  --footer-surface: #17191c;
+  --footer-border: #34373c;
+  --footer-inactive: #8c939d;
+  --footer-active: #e5e7eb;
+  --footer-selected: #2a2c30;
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100% - 32px), 398px);
+  max-width: none;
+  margin: 0;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--footer-border);
+  border-radius: 36px;
+  background: var(--footer-surface);
+  box-shadow: 0 8px 28px #00000030;
+  backdrop-filter: none;
+  isolation: isolate;
+}
+nav::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  left: -17px;
+  top: -1px;
+  bottom: calc(-13px - env(safe-area-inset-bottom));
+  width: calc(100% + 34px);
+  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 90%) 100%);
+  pointer-events: none;
+}
+nav button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: .2rem;
+  min-width: 0;
+  min-height: 54px;
+  padding: 4px 2px;
+  border-radius: 28px;
+  color: var(--footer-inactive);
+  font-size: .68rem;
+  line-height: 1.1;
+}
+nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
+:root:not([data-theme="dark"]) nav {
+  --footer-surface: #fff;
+  --footer-border: #ccd6e3;
+  --footer-inactive: #526171;
+  --footer-active: #24272b;
+  --footer-selected: #e5e7eb;
+  background: var(--footer-surface);
+  box-shadow: 0 8px 28px #00000030;
+}
+:root:not([data-theme="dark"]) nav::before { background: linear-gradient(to bottom, transparent, rgb(241 245 250 / 85%) 100%); }
+:root:not([data-theme="dark"]) nav button { color: var(--footer-inactive); }
+:root:not([data-theme="dark"]) nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
+nav button svg { width: 24px; height: 24px; }
+.shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+#notice:not(:empty) { bottom: calc(90px + env(safe-area-inset-bottom)); }
+/* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */
+nav::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--footer-surface); pointer-events: none; }
+:root[data-theme=dark] nav { background: var(--footer-surface); border-color: var(--footer-border); }
+:root[data-theme=dark] nav button { color: var(--footer-inactive); }
+:root[data-theme=dark] nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
