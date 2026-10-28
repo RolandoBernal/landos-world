@@ -187,3 +187,124 @@
   background-color: var(--color-surface-elevated);
   border-color: var(--color-border-strong);
 }
+
+/* Phase 1B: one phone-sized shell, using the shared resolved theme. */
+.maintenance_total_view {
+  --imt-bg: #08090b;
+  --imt-surface: #17191c;
+  --imt-raised: #24272b;
+  --imt-border: #34373c;
+  --imt-text: #f1f5fb;
+  --imt-muted: #a1a5ad;
+  --imt-nav-accent: #e5e7eb;
+  --imt-nav-inactive: #8c939d;
+  --imt-primary: #c0c4ca;
+  --imt-primary-text: #08090b;
+  --app-accent: var(--imt-nav-accent);
+  width: min(100%, 430px);
+  margin-inline: auto;
+  min-height: 100svh;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  background: var(--imt-bg);
+  color: var(--imt-text);
+  color-scheme: dark;
+  overflow-wrap: anywhere;
+}
+.maintenance_total_view .ecosystem_nav {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 12px;
+  padding: 0 16px;
+  background: transparent;
+  box-shadow: none;
+}
+.maintenance_total_view .ecosystem_nav_back { color: var(--imt-muted); }
+.maintenance_total_view .digit_clock_header,
+.maintenance_total_view .maintenance_total_app { width: 100%; padding-inline: 16px; }
+.maintenance_total_view .digit_clock_header { margin-bottom: 8px; }
+.maintenance_total_view .digit_clock_title { font-size: 1rem; color: var(--imt-text); }
+.maintenance_total_view .digit_clock_logo { width: 36px; height: 36px; }
+.maintenance_total_view .maintenance_total_shell { display: grid; gap: 16px; padding-top: 16px; }
+.maintenance_total_view .imt_header { gap: 12px; margin: 0 0 4px; }
+.maintenance_total_view .imt_header h1 { font-size: 1.65rem; line-height: 1.18; letter-spacing: -.035em; }
+.maintenance_total_view .imt_header h2 { font-size: 1.05rem; }
+.maintenance_total_view .imt_grid,
+.maintenance_total_view .imt_detail_hero { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.maintenance_total_view .imt_section { min-width: 0; padding: 16px; border: 1px solid var(--imt-border); background: var(--imt-surface); box-shadow: 0 8px 24px #00000018; border-radius: 18px; }
+.maintenance_total_view .imt_section > .imt_header { margin-bottom: 14px; }
+.maintenance_total_view .imt_card,
+.maintenance_total_view .imt_row,
+.maintenance_total_view .imt_stat { min-width: 0; background: var(--imt-raised); border-color: var(--imt-border); color: var(--imt-text); }
+.maintenance_total_view .imt_row > span:first-child { min-width: 0; }
+.maintenance_total_view .imt_card strong,
+.maintenance_total_view .imt_row strong { font-weight: 600; line-height: 1.4; }
+.maintenance_total_view .imt_meta,
+.maintenance_total_view .imt_muted,
+.maintenance_total_view .imt_empty { color: var(--imt-muted); line-height: 1.5; }
+.maintenance_total_view .imt_meta { display: block; margin-top: 3px; font-size: .82rem; }
+.maintenance_total_view .imt_button { background: var(--imt-primary); border-color: var(--imt-primary); color: var(--imt-primary-text); font-weight: 600; }
+.maintenance_total_view .imt_button--secondary,
+.maintenance_total_view .imt_icon_button { background: var(--imt-raised); border-color: var(--imt-border); color: var(--imt-text); }
+.maintenance_total_view .imt_back,
+.maintenance_total_view .imt_record_action { color: var(--imt-text); }
+.maintenance_total_view .imt_record_action--danger { color: #ffaaa7; }
+.maintenance_total_view .imt_record_card { flex-wrap: wrap; align-items: center; }
+.maintenance_total_view .imt_stat { padding: 10px; }
+.maintenance_total_view .imt_stat strong { font-size: 1rem; }
+.maintenance_total_view .imt_field { min-width: 0; }
+.maintenance_total_view .imt_field label { font-size: .88rem; color: var(--imt-muted); }
+.maintenance_total_view .imt_field input,
+.maintenance_total_view .imt_field select,
+.maintenance_total_view .imt_field textarea { min-width: 0; max-width: 100%; background-color: var(--imt-raised); border-color: var(--imt-border); color: var(--imt-text); font-size: 16px; scroll-margin-block: 80px 120px; }
+.maintenance_total_view :is(button, input, select, textarea, a):focus-visible { outline: 2px solid var(--imt-nav-accent); outline-offset: 3px; }
+.maintenance_total_view .imt_bottom_nav { width: min(100%, 430px); box-sizing: border-box; left: 50%; right: auto; transform: translateX(-50%); padding: 8px 8px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--imt-border); background: var(--imt-surface); }
+.maintenance_total_view .imt_nav_button { min-width: 0; min-height: 58px; padding: 4px 2px; color: var(--imt-nav-inactive); }
+.maintenance_total_view .imt_nav_icon { width: 24px; height: 24px; }
+.maintenance_total_view .imt_nav_label { display: block; font-size: .68rem; }
+.maintenance_total_view .imt_nav_button.is-active { color: var(--imt-nav-accent); }
+.maintenance_total_view .imt_bike_visual { background: var(--imt-raised); }
+:root[data-theme="light"] .maintenance_total_view {
+  --imt-bg: #f1f5fa;
+  --imt-surface: #fff;
+  --imt-raised: #edf2f8;
+  --imt-border: #ccd6e3;
+  --imt-text: #152338;
+  --imt-muted: #506078;
+  --imt-nav-accent: #24272b;
+  --imt-nav-inactive: #526171;
+  --imt-primary: #34373c;
+  --imt-primary-text: #fff;
+  background: var(--imt-bg);
+  color: var(--imt-text);
+  color-scheme: light;
+}
+:root[data-theme="light"] .maintenance_total_view .imt_record_action--danger { color: #b4232b; }
+:root[data-theme="light"] .maintenance_total_view .imt_empty { color: var(--imt-muted); }
+:root[data-theme="light"] .maintenance_total_view .imt_bike_visual { background: linear-gradient(135deg, #d7e6f5, #edf2f8); }
+
+:root[data-theme="dark"] .maintenance_total_view .digit_clock_menu_toggle {
+  background: var(--imt-raised);
+  border-color: var(--imt-border);
+  color: var(--imt-nav-accent);
+}
+
+.maintenance_total_view .imt_back {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: .92rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--imt-muted);
+}
+:root[data-theme="light"] .maintenance_total_view .imt_back { color: var(--imt-text); }
+.maintenance_total_view .imt_back:hover { color: var(--imt-nav-accent); }
