@@ -292,7 +292,7 @@ for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport,
     for(const tab of ['Home','Activity','Goals','Insights']){
       await page.getByRole('button',{name:tab,exact:true}).click();
       const geometry=await page.evaluate(()=>({height:innerHeight,body:document.body.getBoundingClientRect().height,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom,rootColor:getComputedStyle(document.documentElement).backgroundColor,bodyColor:getComputedStyle(document.body).backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth}));
-      expect(geometry.body).toBeGreaterThanOrEqual(geometry.height-1);expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height-1);expect(Math.abs(geometry.nav-geometry.height)).toBeLessThanOrEqual(1);expect(geometry.overflow).toBe(false);expect(geometry.rootColor).not.toBe('rgb(0, 0, 0)');expect(geometry.bodyColor).toBe(geometry.rootColor);
+      expect(geometry.body).toBeGreaterThanOrEqual(geometry.height-1);expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height-1);expect(Math.abs(geometry.nav-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.overflow).toBe(false);expect(geometry.rootColor).not.toBe('rgb(0, 0, 0)');expect(geometry.bodyColor).toBe(geometry.rootColor);
       expect(await page.locator('nav [data-tab="Goals"] svg').innerHTML()).toBe(bullseye);
       if(tab==='Goals')expect(await page.locator('.empty-icon svg').innerHTML()).toBe(bullseye);
     }
@@ -323,7 +323,7 @@ test('Sprint 2.1.1 navigation follows the viewport for short and scrolling tabs;
       if(tab==='Settings')await home(page);
       await page.getByRole('button',{name:tab,exact:true}).click();
       if(tab==='Activity'){await page.getByLabel('Search activity').fill('missing');await expect(page.locator('.transaction-row')).toHaveCount(0);}
-      const check=async()=>{const geometry=await page.evaluate(()=>{const nav=document.querySelector('nav').getBoundingClientRect();return {bottom:nav.bottom,height:innerHeight,width:nav.width,position:getComputedStyle(document.querySelector('nav')).position,overflow:document.documentElement.scrollWidth>innerWidth};});expect(Math.abs(geometry.bottom-geometry.height)).toBeLessThanOrEqual(1);expect(geometry.width).toBe(390);expect(geometry.position).toBe('sticky');expect(geometry.overflow).toBe(false);};
+      const check=async()=>{const geometry=await page.evaluate(()=>{const nav=document.querySelector('nav').getBoundingClientRect();return {bottom:nav.bottom,height:innerHeight,width:nav.width,position:getComputedStyle(document.querySelector('nav')).position,overflow:document.documentElement.scrollWidth>innerWidth};});expect(Math.abs(geometry.bottom-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.width).toBe(358);expect(geometry.position).toBe('fixed');expect(geometry.overflow).toBe(false);};
       for(const fraction of [0,0.5,1]){await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);await check();}
       if(tab==='Activity'){
         await page.getByLabel('Search activity').fill('');await expect(page.locator('.transaction-row')).toHaveCount(40);
@@ -370,7 +370,7 @@ test('standalone shell stays full height when launch dvh underreports by 33px',a
       await page.evaluate(()=>window.scrollTo(0,0));
       const geometry=await page.evaluate(()=>({height:innerHeight,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom}));
       expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height);
-      expect(geometry.nav).toBe(geometry.height);
+      expect(geometry.nav).toBe(geometry.height-12);
     }
   }
   expect(await saved(page)).toEqual(before);

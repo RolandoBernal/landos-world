@@ -1,0 +1,2 @@
+import { defineConfig, devices } from '@playwright/test';
+export default defineConfig({ testDir: './tests/browser', testMatch: ['floating-footer.spec.js', 'lwvd-theme.spec.js', 'lwvd-transactions.spec.js', 'llt-issue-20.spec.js'], use: { baseURL: 'http://127.0.0.1:8017' }, webServer: { command: 'node scripts/dev-local.mjs --port 8017 --quiet', url: 'http://127.0.0.1:8017', reuseExistingServer: false }, projects: [{name:'chromium',use:{...devices['Desktop Chrome']}},{name:'iphone-webkit',use:{...devices['iPhone 13']}}] });
