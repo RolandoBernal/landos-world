@@ -6336,8 +6336,7 @@
     const eventConfig = getEventTypeConfig(currentEditor.eventType);
     const contextType = currentEditor.type;
     const lowGlucose = contextType === 'Low Glucose';
-    const showCarbEntry = eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
-    const needsContext = !currentEditor.id && !contextType && currentEditor.mode !== 'low-glucose-recheck';
+    const showCarbEntry = !contextType || eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
       <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor${currentEditor.preserveDocumentScrollOnViewportPan ? ' data-preserve-document-scroll-on-viewport-pan' : ''}>
@@ -6352,13 +6351,7 @@
               <input class="lee_lee_diabetes_input" name="bloodSugar" type="number" inputmode="numeric" min="0" step="1" autocomplete="off" value="${escapeHtml(record.bloodSugar ?? '')}">
             </label>
           ` : ''}
-          ${needsContext ? `
-            <section class="lee_lee_diabetes_carb_entry" data-context-calculator-placeholder aria-labelledby="lee-lee-pending-calculator-title">
-              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-pending-calculator-title">Carb Calculator</h2>
-              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" disabled aria-describedby="lee-lee-pending-calculator-help">Open Carb Calc</button>
-              <p class="lee_lee_diabetes_help" id="lee-lee-pending-calculator-help">Choose a meal, snack, or Low Glucose context to use the calculator.</p>
-            </section>
-          ` : showCarbEntry ? renderMealCarbsSection(record) : ''}
+          ${showCarbEntry ? renderMealCarbsSection(record) : ''}
           ${eventConfig.fields.includes('activityDescription') ? `
             <label class="lee_lee_diabetes_field">
               Activity
@@ -6457,12 +6450,8 @@
       focusTarget(`[data-action="${options.focusAction}"]`);
     } else if (currentEditor.carbCalculatorOpen && previousCarbCalculatorFocus) {
       restoreCarbCalculatorFocus(root, previousCarbCalculatorFocus);
-    } else {
-      if (!currentEditor.carbCalculatorOpen) {
-        root.querySelector('[name="bloodSugar"], [name="mealCarbs"], [name="activityDescription"], [name="notes"]')?.focus({
-          preventScroll: options.startAtTopBeforeFocus === true,
-        });
-      }
+    } else if (currentEditor.mode === 'low-glucose-recheck') {
+      root.querySelector('[name="bloodSugar"]')?.focus({ preventScroll: options.startAtTopBeforeFocus === true });
     }
     if (options.restoreScrollSnapshot) {
       restoreScrollSnapshot(options.restoreScrollSnapshot);
@@ -6922,6 +6911,9 @@
     showEditorError(form, '');
     refreshCarbCalculator(form, options.preserveCarbRowId || '');
     updateContextSelectAvailability(form);
+    if (!getEditorType(form)) form.querySelectorAll('input:not([type="hidden"]), textarea, select:not([name="type"]), [data-action="open-carb-calculator"]').forEach(control => {
+      control.disabled = true;
+    });
     updateDoseHelper(form);
     updateEditorSaveState(form);
   }
@@ -6936,9 +6928,7 @@
     const type = getEditorType(form);
     const requiresCarbs = eventType === 'meal' || ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(type);
     const hasMealCarbs = !requiresCarbs || normalizeNumber(form.elements.mealCarbs?.value) != null;
-    // Let an unset context reach our inline validation before native field checks.
-    saveButton.formNoValidate = !type;
-    saveButton.disabled = Boolean(type) && !(hasDate && hasTime && hasMealCarbs);
+    saveButton.disabled = !(type && hasDate && hasTime && hasMealCarbs);
   }
 
   function removeCarbCalculatorRowFromTarget(target, root) {
@@ -7348,15 +7338,12 @@
   function renderTypeSelect(selectedType) {
     const eventType = currentEditor?.eventType || DEFAULT_EVENT_TYPE;
     const optionStates = getContextOptionStates(eventType, selectedType);
-    const needsContext = !currentEditor?.id && !selectedType;
     return `
-      <label class="lee_lee_diabetes_field${needsContext ? ' lee_lee_diabetes_context_pending' : ''}">
+      <label class="lee_lee_diabetes_field">
         ${eventType === 'meal' ? 'Meal Context' : 'Context'}
-        ${needsContext ? '<span class="lee_lee_diabetes_context_prompt">' : ''}
         <select class="lee_lee_diabetes_select" name="type" aria-required="true" aria-describedby="lee-lee-context-error">
           ${optionStates.map((option) => renderContextOption(option)).join('')}
         </select>
-        ${needsContext ? '<span class="lee_lee_diabetes_context_prompt_text" aria-hidden="true">Choose a context to show the entry fields…</span></span>' : ''}
         <span class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" id="lee-lee-context-error" data-context-error role="alert" hidden></span>
       </label>
     `;
@@ -7377,7 +7364,7 @@
     // Availability can disable a choice, but must never choose a different context.
     const selected = options.includes(selectedType) ? selectedType : '';
     const loggedContexts = getLoggedSingleUseCheckContextsForDate(dateKey, editingId);
-    return [{ type: '', selected: !selected, disabled: false, label: 'Choose a context to show the entry fields…' }, ...options.map((type) => {
+    return [...(editingId ? [] : [{ type: '', selected: !selected, disabled: true, label: 'Choose a context...' }]), ...options.map((type) => {
       const disabled = isContextUnavailableForCheckDate(type, normalizedEventType, loggedContexts);
       return {
         type,

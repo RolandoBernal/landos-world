@@ -2476,6 +2476,7 @@ test('LLT historical individual dose-field saves retain the historical snapshot 
     else if (change.label === 'Carb Calculator') {
       await form.getByRole('button', { name: 'Open Carb Calculator' }).click();
       const calculator = page.locator('[data-carb-calculator]');
+      await calculator.getByRole('button', { name: 'Remove Entry carbs', exact: true }).click();
       await calculator.getByRole('button', { name: 'Favorites', exact: true }).click();
       await calculator.getByRole('button', { name: /Issue 8.5 Food 20 g carbs/ }).click();
       await calculator.getByRole('button', { name: 'Use 20 g' }).click();
