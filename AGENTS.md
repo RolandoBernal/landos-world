@@ -23,3 +23,10 @@ For production-bound changes, use this default workflow unless Rolando explicitl
 - Treat direct-to-main pushes, merges, manual production deployments, and review bypasses as exceptions requiring explicit authorization for that specific situation. After an exception, return to this default workflow.
 
 For updater/offline architecture details, see [docs/architecture/deployed-release-updates.md](docs/architecture/deployed-release-updates.md) and [docs/architecture/offline.md](docs/architecture/offline.md).
+
+## iMT development preview
+
+For every iMT implementation, serve the active development checkout at exactly:
+`http://Rolandos-MacBook-Air.local:8000/#/maintenance-total`
+
+Use port 8000 with LAN access for the MacBook and iPhone (normally `node scripts/dev-iphone.mjs --port 8000`). Keep the hostname and port unchanged between iterations. If occupied, identify the existing server and its checkout; safely reuse or replace it only when appropriate. Never terminate unrelated processes. Verify the bookmarked URL serves the active checkout and include the working preview link in every implementation report.
