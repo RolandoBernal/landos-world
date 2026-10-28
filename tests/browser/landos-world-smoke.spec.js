@@ -5738,7 +5738,7 @@ for (const [preference, system, effective] of [
     expect(await cog.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
     await page.screenshot({path:`/tmp/lsw-cog-${preference}-${system}-${width}.png`});
     await page.goto('/#/lee-lees-tracker');
-    const add = page.locator('.lee_lee_diabetes_bottom_nav_button--primary');
+    const add = page.locator('.lee_lee_diabetes_floating_log');
     await expect(add).toBeVisible();
     await expect(add.locator('svg')).toHaveCSS('stroke', 'rgb(255, 255, 255)');
     await expect(add).toHaveCSS('background-color', effective === 'light' ? 'rgb(9, 104, 195)' : 'rgb(58, 160, 255)');

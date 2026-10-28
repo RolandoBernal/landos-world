@@ -74,6 +74,7 @@ for (const context of ['standalone', 'entry', 'edit']) {
       await root(page).locator('[name="notes"]').fill('Keep entry note');
       await root(page).locator('[data-action="open-carb-calculator"]').click();
     } else await enter(page, context);
+    await expect(root(page).locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
     // Edit begins with the entry's existing carb snapshot; clear only this scratch selection.
     if (context === 'edit') await root(page).locator('[data-action="remove-carb-calculator-row"]').click();
     const before = await stored(page);

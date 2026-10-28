@@ -4465,24 +4465,23 @@
   }
 
   function renderTrackerNav(active) {
+    const showLogAction = active !== 'settings' && currentEditor?.mode !== 'standalone-calculator'
+      && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     return `
       <div class="lee_lee_diabetes_nav_shell">
         <nav class="lee_lee_diabetes_bottom_nav" aria-label="Lee-Lee’s Tracker mobile navigation">
-          ${[
-            ...TRACKER_NAV_ITEMS.slice(0, 2),
-            ['log-entry', 'Log Entry'],
-            ...TRACKER_NAV_ITEMS.slice(2),
-          ].map(([action, label]) => `
+          ${TRACKER_NAV_ITEMS.map(([action, label]) => `
             <button
               type="button"
-              class="lee_lee_diabetes_bottom_nav_button ${action === 'log-entry' ? 'lee_lee_diabetes_bottom_nav_button--primary' : ''} ${active === action ? 'is-active' : ''}"
+              class="lee_lee_diabetes_bottom_nav_button ${active === action ? 'is-active' : ''}"
               data-action="${escapeHtml(action)}"
               aria-label="${escapeHtml(label)}"
               title="${escapeHtml(label)}"
-              ${action !== 'log-entry' ? `aria-current="${active === action ? 'page' : 'false'}"` : ''}
-            ><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon(action === 'log-entry' ? 'log' : action)}</span><span class="lee_lee_diabetes_sr_only">${escapeHtml(label)}</span></button>
+              aria-current="${active === action ? 'page' : 'false'}"
+            ><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon(action)}</span><span class="lee_lee_diabetes_sr_only">${escapeHtml(label)}</span></button>
           `).join('')}
         </nav>
+        ${showLogAction ? `<button type="button" class="lee_lee_diabetes_floating_log" data-action="log-entry" aria-label="Log Entry" title="Log Entry"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>` : ''}
       </div>
     `;
   }
