@@ -3862,9 +3862,9 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   position: fixed;
   left: 50%;
   right: auto;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  width: min(calc(100% - 32px), 398px);
+  width: min(calc(100% - 48px), 398px);
   max-width: none;
   margin: 0;
   gap: 4px;
@@ -3880,10 +3880,10 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   content: "";
   position: absolute;
   z-index: -2;
-  left: -17px;
+  left: -25px;
   top: -1px;
-  bottom: calc(-13px - env(safe-area-inset-bottom));
-  width: calc(100% + 34px);
+  bottom: calc(-17px - env(safe-area-inset-bottom));
+  width: calc(100% + 50px);
   background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 90%) 100%);
   pointer-events: none;
 }
@@ -3916,8 +3916,8 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button.is-active { background: var(--footer-selected); color: var(--footer-active); }
 .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_icon { width: 24px; height: 24px; color: inherit; }
 .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_sr_only { position: static; width: auto; height: auto; margin: 0; padding: 0; overflow: visible; clip: auto; white-space: normal; font-size: .68rem; line-height: 1.1; }
-.lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { width: 100%; min-height: 54px; border: 1px solid var(--footer-border); border-radius: 28px; background: #c0c4ca; color: #08090b; box-shadow: none; }
-:root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { background: #34373c; color: #fff; }
+.lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { width: 54px; height: 54px; min-height: 54px; border: 1px solid var(--lee-lee-border-strong); border-radius: 50%; background: var(--lee-lee-accent); color: #fff; box-shadow: none; }
+:root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary { color: #fff; }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon { color: inherit; }
 .lee_lee_diabetes_shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); scroll-padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
 /* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */
