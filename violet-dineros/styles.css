@@ -313,11 +313,11 @@ body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
 
 /* Floating footer: iMT pill geometry and resolved-theme palette. */
 nav {
-  --footer-surface: #17191c;
-  --footer-border: #34373c;
-  --footer-inactive: #8c939d;
-  --footer-active: #e5e7eb;
-  --footer-selected: #2a2c30;
+  --footer-surface: #17131f;
+  --footer-border: #383040;
+  --footer-inactive: #bdb0d5;
+  --footer-active: #c29bff;
+  --footer-selected: #342744;
   position: fixed;
   left: 50%;
   right: auto;
@@ -343,7 +343,7 @@ nav::before {
   top: -1px;
   bottom: calc(-13px - env(safe-area-inset-bottom));
   width: calc(100% + 34px);
-  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 90%) 100%);
+  background: linear-gradient(to bottom, transparent, rgb(33 25 44 / 90%) 100%);
   pointer-events: none;
 }
 nav button {
@@ -363,14 +363,14 @@ nav button {
 nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
 :root:not([data-theme="dark"]) nav {
   --footer-surface: #fff;
-  --footer-border: #ccd6e3;
-  --footer-inactive: #526171;
-  --footer-active: #24272b;
-  --footer-selected: #e5e7eb;
+  --footer-border: #ebe6f5;
+  --footer-inactive: #6660a4;
+  --footer-active: #6b1dff;
+  --footer-selected: #f0eaff;
   background: var(--footer-surface);
   box-shadow: 0 8px 28px #00000030;
 }
-:root:not([data-theme="dark"]) nav::before { background: linear-gradient(to bottom, transparent, rgb(241 245 250 / 85%) 100%); }
+:root:not([data-theme="dark"]) nav::before { background: linear-gradient(to bottom, transparent, rgb(252 250 255 / 85%) 100%); }
 :root:not([data-theme="dark"]) nav button { color: var(--footer-inactive); }
 :root:not([data-theme="dark"]) nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
 nav button svg { width: 24px; height: 24px; }

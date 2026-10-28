@@ -107,3 +107,27 @@ for (const theme of ['dark', 'light']) test(`LWVD ${theme}: standalone viewport 
  expect(await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'))).toBe(before);
  await page.screenshot({path:test.info().outputPath(`lwvd-standalone-${theme}.png`)});
 });
+
+for(const [preference,device,theme] of [['light','dark','light'],['dark','light','dark'],['system','light','light'],['system','dark','dark']]){
+ test(`original LWVD nav palette: ${preference} on ${device}`,async({page})=>{
+  await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:device});await seed(page,preference);
+  await page.goto('/violet-dineros/index.html');
+  const nav=page.locator('nav');
+  const expected=theme==='dark'?{surface:'rgb(23, 19, 31)',border:'rgb(56, 48, 64)',inactive:'rgb(189, 176, 213)',active:'rgb(194, 155, 255)',selected:'rgb(52, 39, 68)'}:{surface:'rgb(255, 255, 255)',border:'rgb(235, 230, 245)',inactive:'rgb(102, 96, 164)',active:'rgb(107, 29, 255)',selected:'rgb(240, 234, 255)'};
+  const before=await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'));
+  await expect(nav).toHaveCSS('background-color',expected.surface);await expect(nav).toHaveCSS('border-top-color',expected.border);
+  for(const name of ['Activity','Goals','Insights','Home']){
+   await nav.getByRole('button',{name,exact:true}).click();
+   const active=nav.locator('[aria-current=page]');await expect(active).toHaveAccessibleName(name);
+   await expect(active).toHaveCSS('color',expected.active);await expect(active.locator('svg')).toHaveCSS('color',expected.active);
+   await expect(active).toHaveCSS('background-color',expected.selected);
+   for(const inactive of await nav.locator('button:not([aria-current])').all()){
+    await expect(inactive).toHaveCSS('color',expected.inactive);await expect(inactive.locator('svg')).toHaveCSS('color',expected.inactive);
+   }
+   const r=await nav.boundingBox();expect(r).toEqual({x:16,y:764,width:358,height:68});
+  }
+  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1');
+  expect(await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'))).toBe(before);
+  await page.screenshot({path:test.info().outputPath(`lwvd-original-${preference}-${device}.png`)});
+ });
+}
