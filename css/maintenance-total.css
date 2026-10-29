@@ -55,13 +55,14 @@
 .imt_status--good { background: #123b2b; color: #a9e5c7; }
 .imt_status--upcoming { background: #4a3513; color: #ffe0a0; }
 .imt_status--attention { background: #562020; color: #ffc0b8; }
-.imt_button { min-height: 44px; padding: .75rem 1rem; border: 1px solid #f4f1ea; border-radius: 12px; background: #f4f1ea; color: #111; font: inherit; font-weight: 500; cursor: pointer; }
+.imt_button { min-height: 52px; padding: .75rem 1.15rem; border: 1px solid #f4f1ea; border-radius: 9999px; background: #f4f1ea; color: #111; font: inherit; font-weight: 500; cursor: pointer; }
 .imt_button--secondary { background: transparent; color: #fffdf7; }
 .imt_empty { padding: 1.5rem; color: #b9b8b3; text-align: center; }
 .imt_stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
 .imt_stat { padding: .8rem; border-radius: 12px; background: rgb(255 255 255 / 7%); }
 .imt_stat strong { display: block; font-size: 1.25rem; }
 .imt_form { display: grid; gap: .8rem; }
+.imt_form > .imt_button { width: 100%; min-height: 56px; }
 .imt_field { display: grid; gap: .35rem; }
 .imt_field label { font-weight: 500; }
 .imt_field input, .imt_field select, .imt_field textarea { width: 100%; min-height: 44px; box-sizing: border-box; padding: .75rem; border: 1px solid rgb(244 241 234 / 38%); border-radius: 10px; background: #161716; color: #fffdf7; font: inherit; }
@@ -95,6 +96,7 @@
 .imt_detail_hero { display: grid; gap: 1rem; }
 .imt_bike_visual { min-height: 9rem; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, #31312d, #151615); font-size: 4rem; }
 .imt_actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .9rem; }
+.imt_actions > .imt_button { min-height: 48px; }
 @media (min-width: 601px) { .imt_bottom_nav { width: min(100%, var(--landos-page-max-width)); box-sizing: border-box; right: 50%; left: 50%; transform: translateX(-50%); } }
 @media (max-width: 600px) { .imt_nav_button { min-height: 3.35rem; padding: .45rem .2rem; } .imt_nav_icon { width: 32px; height: 32px; } .imt_nav_label { display: none; } }
 @media (min-width: 700px) { .imt_grid { grid-template-columns: repeat(2, 1fr); } .imt_detail_hero { grid-template-columns: 1fr 1fr; } .imt_section--wide { grid-column: 1 / -1; } }
