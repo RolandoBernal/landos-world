@@ -381,3 +381,21 @@ nav::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radi
 :root[data-theme=dark] nav { background: var(--footer-surface); border-color: var(--footer-border); }
 :root[data-theme=dark] nav button { color: var(--footer-inactive); }
 :root[data-theme=dark] nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
+
+/* LWVD quick actions sit above the unchanged floating navigation pill. */
+.floating-actions{position:fixed;z-index:4;right:max(16px,calc((100vw - 398px)/2));bottom:calc(100px + env(safe-area-inset-bottom));width:56px}
+.floating-actions[hidden],body:has(dialog[open]) .floating-actions{display:none}
+#quick-actions-toggle{display:grid;place-items:center;width:56px;height:56px;padding:0;border:1px solid #b59ae7;border-radius:50%;background:#8055f5;color:#fff;box-shadow:0 6px 22px #35205240}
+#quick-actions-toggle span{display:grid;place-items:center;width:32px;height:32px;transform-origin:50% 50%;transition:transform 200ms ease-in-out}
+#quick-actions-toggle svg{display:block;width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square}
+.floating-actions:has([aria-expanded=true]) #quick-actions-toggle span{transform:rotate(45deg)}
+.floating-actions-menu{position:absolute;right:0;bottom:68px;width:205px;display:grid;gap:6px;padding:8px;border:1px solid #d6c5ee;border-radius:18px;background:#fcfaff;box-shadow:0 8px 28px #35205230;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity 200ms ease-in-out,transform 200ms ease-in-out,visibility 200ms}
+.floating-actions:has([aria-expanded=true]) .floating-actions-menu{opacity:1;visibility:visible;transform:translateY(0)}
+.floating-actions-menu button{text-align:center;min-height:44px;background:#f0eaff;color:#5820c8;border:0;border-radius:12px}
+:root[data-theme=dark] #quick-actions-toggle{background:#9868dc;border-color:#c29bff;color:#1b112b}
+:root[data-theme=dark] .floating-actions-menu{background:#21182d;border-color:#59416e}
+:root[data-theme=dark] .floating-actions-menu button{background:#342744;color:#e1c9ff}
+body[data-screen]:has(.floating-actions:not([hidden])) .shell{padding-bottom:calc(178px + env(safe-area-inset-bottom))}
+.settings-actions{grid-template-columns:1fr}
+.settings-actions button{scroll-margin-block:24px}
+@media(prefers-reduced-motion:reduce){#quick-actions-toggle span,.floating-actions-menu{transition:none}}
