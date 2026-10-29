@@ -44,7 +44,7 @@ test('standalone scratch retains state, stays separate from entry, clears and re
   await expect(page.locator('[data-dose-helper], [name="insulinUnits"], [data-save-record]')).toHaveCount(0);
   await page.locator('[data-standalone-calculator]').evaluate(form => form.requestSubmit());
   expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(before);
-  await page.locator('[data-carb-calculator] button[data-action="close-carb-calculator"]').first().click();
+  await page.locator('[data-action="close-carb-calculator"]').first().click();
   await page.getByRole('button', { name: 'Log Entry', exact: true }).click();
   await page.locator('[name="type"]').selectOption('Snacks');
   await page.locator('[name="notes"]').fill('Draft stays here');
@@ -80,7 +80,7 @@ test('invalid item edits cannot complete and cancel preserves entry carbs', asyn
   await expect(page.getByRole('button', { name: 'Save Item', exact: true })).toBeDisabled();
   await expect(page.locator('[data-carb-item-editor]')).toBeVisible();
   await page.locator('[data-action="cancel-carb-calculator-item-editor"]').first().click();
-  await page.locator('[data-carb-calculator] button[data-action="close-carb-calculator"]').click();
+  await page.locator('[data-action="close-carb-calculator"]').click();
   await expect(page.locator('[name="mealCarbs"]')).toHaveValue('30');
   expect(await stored(page)).toHaveLength(0);
 });
@@ -100,6 +100,8 @@ test('standalone reuses all library lists and saves reusable meals without clini
   await page.locator('[data-action="add-food-to-carb-calculator"][data-id="11111111-1111-4111-8111-111111111111"]').click();
   await expect(page.locator('[data-carb-calculator-total]')).toHaveText('12 g');
   await page.getByRole('button', { name: 'Edit Synthetic Food', exact: true }).click();
+  await page.locator('[name="carbItemQty"]').focus();
+  await page.locator('[name="carbItemQty"]').fill('');
   await page.locator('[name="carbItemQty"]').fill('0.5');
   await page.getByRole('button', { name: 'Save Item', exact: true }).click();
   await expect(page.locator('[data-carb-calculator-total]')).toHaveText('6 g');
@@ -119,7 +121,7 @@ test('standalone reuses all library lists and saves reusable meals without clini
     await expect(page.locator('[data-carb-calculator]')).not.toHaveAttribute('aria-modal', 'true');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await page.locator('[data-carb-calculator] button[data-action="close-carb-calculator"]').first().click();
+  await page.locator('[data-action="close-carb-calculator"]').first().click();
   await page.getByRole('button', { name: '+ Add New Meal', exact: true }).click();
   const builder = page.locator('[data-meal-builder]');
   await builder.getByLabel('Meal Name', { exact: true }).fill('Foods-created Meal');
@@ -130,3 +132,105 @@ test('standalone reuses all library lists and saves reusable meals without clini
   expect(await stored(page)).toHaveLength(0);
 
 });
+
+test('entry full-page calculator preserves every draft field across cancel, use and reopening', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.getByRole('button', { name: 'Log Entry', exact: true }).click();
+  await page.locator('[name="type"]').selectOption('Snacks');
+  const values = { date: '2026-10-28', time: '13:42', bloodSugar: '143', mealCarbs: '30', notes: 'Unsaved iPhone draft', insulinUnits: '2' };
+  for (const [name, value] of Object.entries(values)) await page.locator('[name="' + name + '"]').fill(value);
+  const before = await page.evaluate(key => localStorage.getItem(key), key);
+  const assertDraft = async (carbs = '30') => {
+    for (const [name, value] of Object.entries({ ...values, mealCarbs: carbs })) await expect(page.locator('[name="' + name + '"]')).toHaveValue(value);
+    await expect(page.locator('[name="type"]')).toHaveValue('Snacks');
+  };
+  await page.locator('[data-action="open-carb-calculator"]').click();
+  await expect(page.locator('dialog[data-carb-calculator-layer]')).toHaveCount(0);
+  await expect(page.locator('[data-editor-main]')).toBeHidden();
+  await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(0);
+  await expect(page.locator('[data-carb-calculator]')).toHaveClass(/--embedded/);
+  await manual(page, '4.5', 'Extra');
+  await expect(page.locator('[data-action="use-carb-calculator-total"]')).toHaveText('Use 34.5 g');
+  // A software-keyboard-sized viewport still uses ordinary document scrolling.
+  await page.setViewportSize({ width: 390, height: 430 });
+  await page.locator('[name="carbFoodSearch"]').focus();
+  await expect(page.locator('[name="carbFoodSearch"]')).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.body.style.position)).not.toBe('fixed');
+  await page.locator('[data-lee-lee-editor]').evaluate(form => form.requestSubmit());
+  expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(before);
+  await page.getByRole('button', { name: 'Cancel Carb Calculator', exact: true }).click();
+  await assertDraft();
+  expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(before);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-action="open-carb-calculator"]').click();
+  await expect(page.locator('[data-carb-calculator-row]')).toHaveCount(2);
+  await expect(page.locator('[data-action="use-carb-calculator-total"]')).toHaveText('Use 34.5 g');
+  await page.screenshot({ path: testInfo.outputPath('entry-fullscreen-iphone.png'), fullPage: true });
+  await page.locator('[data-action="use-carb-calculator-total"]').click();
+  await assertDraft('34.5');
+  expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(before);
+  await page.locator('[data-action="open-carb-calculator"]').click();
+  await expect(page.locator('[data-carb-calculator-row]')).toHaveCount(2);
+  await expect(page.locator('[data-carb-calculator-total]')).toHaveText('34.5 g');
+  await page.getByRole('button', { name: 'Cancel Carb Calculator', exact: true }).click();
+  await assertDraft('34.5');
+  await page.locator('[name="mealCarbs"]').fill('50');
+  await page.locator('[data-action="open-carb-calculator"]').click();
+  await expect(page.locator('[data-carb-calculator-row]')).toHaveCount(1);
+  await expect(page.locator('[data-carb-calculator-total]')).toHaveText('50 g');
+  await page.getByRole('button', { name: 'Cancel Carb Calculator', exact: true }).click();
+  await assertDraft('50');
+  expect(await stored(page)).toHaveLength(0);
+});
+
+for (const theme of ['light', 'dark']) {
+  test('matching full-page calculator presentation in ' + theme, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    const presentation = () => page.locator('[data-carb-calculator]').evaluate(calc => {
+      const properties = node => {
+        const css = getComputedStyle(node), rect = node.getBoundingClientRect();
+        return { x: rect.x, width: rect.width, font: css.font, color: css.color, padding: css.padding, margin: css.margin };
+      };
+      return {
+        heading: (() => { const { width, ...style } = properties(document.querySelector('.lee_lee_diabetes_top h1')); return style; })(),
+        support: (() => { const node = document.querySelector('.lee_lee_diabetes_page_support'); const { width, ...style } = properties(node); return { ...style, height: node.getBoundingClientRect().height }; })(),
+        intro: properties(calc.querySelector('.lee_lee_diabetes_carb_intro')),
+        search: properties(calc.querySelector('[name="carbFoodSearch"]')),
+        selection: properties(calc.querySelector('[data-carb-calculator-selection]')),
+        total: properties(calc.querySelector('[data-carb-calculator-total]')),
+      };
+    });
+    await scratch(page);
+    await manual(page, '12', 'Test amount');
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toBeVisible();
+    const standalone = await presentation();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: '/private/tmp/llt-visual-' + testInfo.project.name + '-' + theme + '-standalone.png' });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Log Entry', exact: true }).click();
+    await page.locator('[name="type"]').selectOption('Snacks');
+    await page.locator('[data-action="open-carb-calculator"]').click();
+    await manual(page, '12', 'Test amount');
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav, [data-foods-view-switcher]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Carb Calculator', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Cancel Carb Calculator' })).toBeVisible();
+    await expect(page.locator('[data-action="use-carb-calculator-total"]')).toHaveText('Use 12 g');
+    expect(await presentation()).toEqual(standalone);
+    await expect(page.locator('[data-lee-lee-editor]')).toHaveCSS('border-top-width', '0px');
+    await expect(page.locator('[data-lee-lee-editor]')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: '/private/tmp/llt-visual-' + testInfo.project.name + '-' + theme + '-entry.png' });
+    await page.setViewportSize({ width: 390, height: 430 });
+    await page.locator('[name="carbFoodSearch"]').focus();
+    await page.locator('[name="carbFoodSearch"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[name="carbFoodSearch"]')).toBeInViewport();
+    await page.locator('[name="carbFoodSearch"]').blur();
+    await page.locator('[data-action="use-carb-calculator-total"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-action="use-carb-calculator-total"]')).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
