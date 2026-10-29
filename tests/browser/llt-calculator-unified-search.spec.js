@@ -160,7 +160,8 @@ test('inline result selection retains the search input, and standalone never aff
   await expect(query).not.toBeFocused();
   await expect(query).toHaveValue('');
   await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('68 g');
-  await root(page).getByRole('navigation', { name: 'Lee-Lee’s Tracker mobile navigation' }).getByRole('button', { name: 'Log Entry', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Done', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
   await root(page).locator('[name="type"]').selectOption('Snacks');
   await root(page).locator('[data-action="open-carb-calculator"]').click();
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);

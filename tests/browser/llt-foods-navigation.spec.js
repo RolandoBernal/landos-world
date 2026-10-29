@@ -73,19 +73,20 @@ test('Foods defaults and bottom navigation preserve scratch rows without clinica
   expect(await data(page)).toEqual(before);
 });
 
-test('center plus and New/Edit Entry calculators remain isolated from Foods navigation', async ({ page }) => {
+test('New/Edit Entry calculators remain isolated from Foods navigation', async ({ page }) => {
   const seed = [{ id: 'synthetic-entry', type: 'Breakfast', bloodSugar: 120, mealCarbs: 21,
     insulinUnits: 3, administeredInsulinUnits: 3, notes: 'Preserve saved entry',
     recordTimestamp: new Date().toISOString(), timestamp: Date.now(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
   await open(page, seed); await foods(page); await calcTab(page).click(); await addManual(page, '18');
   const before = (await data(page)).records;
-  await nav(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Done', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
   await expect(root(page).getByRole('heading', { name: 'Log Entry', exact: true })).toBeVisible();
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);
   await root(page).locator('[name="type"]').selectOption('Snacks');
   await root(page).locator('[name="notes"]').fill('Keep this draft');
   await root(page).locator('[data-action="open-carb-calculator"]').click();
-  await expect(root(page).getByRole('dialog', { name: 'Carb Calculator', exact: true })).toBeVisible();
+  await expect(root(page).getByRole('region', { name: 'Carb Calculator', exact: true })).toBeVisible();
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);
   await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(0);
   await addManual(page, '7');
@@ -96,7 +97,7 @@ test('center plus and New/Edit Entry calculators remain isolated from Foods navi
   await root(page).locator('[data-action="cancel"]').click();
   await root(page).locator('[data-action="edit-today-record"]').click();
   await root(page).locator('[data-action="open-carb-calculator"]').click();
-  await expect(root(page).getByRole('dialog', { name: 'Carb Calculator', exact: true })).toBeVisible();
+  await expect(root(page).getByRole('region', { name: 'Carb Calculator', exact: true })).toBeVisible();
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);
   await expect(root(page).locator('[data-carb-calculator-total]')).toHaveText('21 g');
   await root(page).getByRole('button', { name: 'Cancel Carb Calculator' }).click();

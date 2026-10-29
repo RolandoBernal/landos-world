@@ -890,7 +890,7 @@
 }
 
 .lee_lee_diabetes_editor.is-carb-calculator-open .lee_lee_diabetes_editor_main {
-  filter: saturate(0.72);
+  display: none;
 }
 
 .lee_lee_diabetes_editor_title {
@@ -3948,3 +3948,13 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   pointer-events: auto;
 }
 .lee_lee_diabetes_floating_log .lee_lee_diabetes_bottom_nav_icon { width: 24px; height: 24px; }
+
+/* Entry calculator uses the same unframed page surface as Foods → Carb Calc. */
+:root .lee_lee_diabetes_editor.is-carb-calculator-open {
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}

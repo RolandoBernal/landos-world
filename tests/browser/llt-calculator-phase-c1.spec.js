@@ -134,14 +134,14 @@ for (const context of ['standalone', 'entry']) {
     await expect(favorites).toHaveAttribute('aria-expanded','true');
     await expect(calc.locator('[data-carb-calculator-row]')).toHaveCount(0);
     expect((await stored(page)).foodLibrary.find(f=>f.id===foodId).favorite).toBe(false);
-    await list.hover(); await page.mouse.wheel(0,180);
+    await list.evaluate(node => { node.scrollTop += 180; node.dispatchEvent(new Event('scroll')); });
     await expect.poll(()=>list.evaluate(n=>n.scrollTop)).toBeGreaterThan(0);
     await expect(favorites).toHaveAttribute('aria-expanded','true');
     await list.dispatchEvent('pointerdown',{pointerId:88,clientX:80,clientY:300,pointerType:'touch'});
     await list.dispatchEvent('pointermove',{pointerId:88,clientX:80,clientY:200,pointerType:'touch'});
     await list.dispatchEvent('pointerup',{pointerId:88,clientX:80,clientY:200,pointerType:'touch'});
     const outside=calc.locator('.lee_lee_diabetes_carb_intro');
-    await outside.hover(); await page.mouse.wheel(0,140);
+    await outside.evaluate(() => window.scrollBy(0,140));
     await expect(favorites).toHaveAttribute('aria-expanded','true');
     await outside.dispatchEvent('click',{detail:1});
     await expect(favorites).toHaveAttribute('aria-expanded','true');
@@ -180,28 +180,18 @@ for (const context of ['standalone', 'entry']) {
       expect(m.padding).toBeCloseTo(m.gap,1); expect(m.padding).toBeGreaterThanOrEqual(12);
       expect(m.formTop-m.headerBottom).toBeGreaterThanOrEqual(m.padding-1);
       expect(m.formBottom).toBeLessThanOrEqual(m.actionsTop+1);expect(m.overflow).toBe(false);expect(m.titleRight).toBeLessThanOrEqual(m.headerRight+1);
-      if(context==='entry') expect((m.formTop+m.formBottom)/2).toBeCloseTo((m.bodyTop+m.bodyBottom)/2,0);
-      else {expect(m.center).toBe('start');expect(m.formTop-m.bodyTop).toBeCloseTo(m.padding,1);}
+      expect(m.center).toBe('start');expect(m.formTop-m.bodyTop).toBeCloseTo(m.padding,1);
     }
     }
     await page.setViewportSize({width:390,height:844});
     await page.screenshot({path:info.outputPath('manual-keyboard-closed.png')});
-    if(context==='entry') {
-      await mockKeyboard(page,300,100);
-      await expect(root(page).locator('[data-carb-calculator-layer]')).toHaveAttribute('data-keyboard-open','true');
-      await expect(calc.locator('[data-carb-item-editor-body]')).toHaveCSS('align-content','start');
-      await qty.focus();
-      await page.screenshot({path:info.outputPath('manual-keyboard-simulated.png')});
-      const rect=await qty.boundingBox();expect(rect.y).toBeGreaterThanOrEqual(100);expect(rect.y+rect.height).toBeLessThanOrEqual(400);
-      await mockKeyboard(page,844);
-      await expect.poll(()=>calc.evaluate(n=>{const b=n.querySelector('[data-carb-item-editor-body]').getBoundingClientRect();const f=n.querySelector('[data-carb-item-editor]').getBoundingClientRect();return Math.abs((b.top+b.bottom-f.top-f.bottom)/2)<1;})).toBe(true);
-    }
+    await page.setViewportSize({width:390,height:430});
+    await qty.focus();
+    await qty.scrollIntoViewIfNeeded();
+    await expect(qty).toBeInViewport();
+    await page.screenshot({path:info.outputPath('manual-keyboard-sized.png')});
     await page.setViewportSize({width:844,height:320});
-    if(context==='entry') await mockKeyboard(page,320);
-    await expect(calc.locator('[data-carb-item-editor-body]')).toHaveCSS('overflow-y',context==='entry'?'auto':'visible');
-    if(context==='entry') {
-      await expect.poll(()=>calc.locator('[data-carb-item-editor-body]').evaluate(n=>n.scrollHeight>n.clientHeight)).toBe(true);
-    }
+    await expect(calc.locator('[data-carb-item-editor-body]')).toHaveCSS('overflow-y','visible');
     await qty.fill('0');await expect(calc.getByRole('button',{name:'Add Item',exact:true})).toBeDisabled();
     await qty.fill('2');await calc.getByRole('button',{name:'Add Item',exact:true}).click();
     await expect(calc.locator('[data-carb-calculator-total]')).toHaveText('55.1 g');

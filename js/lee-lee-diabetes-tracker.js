@@ -1271,6 +1271,14 @@
     });
   }
 
+  function renderCarbCalculatorPageTop(entry = false) {
+    return renderTrackerTop({
+      active: 'foods', kicker: '', title: 'Carb Calculator',
+      supportingText: 'Calculate carbs without logging an entry.',
+      calculatorCancel: entry,
+    });
+  }
+
   function renderStandaloneCarbCalculator(options = {}) {
     const root = getRoot();
     if (!root) return;
@@ -1284,7 +1292,7 @@
     currentEditor.carbCalculatorItemDraft = options.carbCalculatorItemDraft || (options.resumeSession ? state.carbCalculatorItemDraft : null) || null;
     currentEditor.carbCalculatorItemEditId = options.carbCalculatorItemEditId || (options.resumeSession ? state.carbCalculatorItemEditId : '') || '';
     bindCarbCalculatorSession(currentEditor, standaloneCarbCalculatorSession);
-    root.innerHTML = `${renderTrackerTop({ active: 'foods', kicker: '', title: 'Carb Calculator', supportingText: 'Calculate carbs without logging an entry.' })}
+    root.innerHTML = `${renderCarbCalculatorPageTop()}
       ${renderTrackerNav('foods')}
       ${renderFoodsViewSwitcher('carb-calc')}
       <section id="lee-lee-foods-panel" role="tabpanel" aria-labelledby="lee-lee-foods-tab" hidden></section>
@@ -4486,7 +4494,7 @@
     `;
   }
 
-  function renderTrackerTop({ active = 'today', kicker = formatDate(), title = 'Lee-Lee’s Tracker', supportingText = null } = {}) {
+  function renderTrackerTop({ active = 'today', kicker = formatDate(), title = 'Lee-Lee’s Tracker', supportingText = null, calculatorCancel = false } = {}) {
     const settingsActive = active === 'settings';
     const headerToggle = document.getElementById('lee_lee_settings_toggle');
     if (headerToggle) {
@@ -4500,8 +4508,9 @@
           <div class="lee_lee_diabetes_top_title_group">
             ${kicker ? `<p class="lee_lee_diabetes_date">${escapeHtml(kicker)}</p>` : ''}
             <h1 class="lee_lee_diabetes_title" id="lee-lee-diabetes-title">${escapeHtml(title)}</h1>
-            ${supportingText == null ? renderPersistenceStatus({ surface: active }) : `<p class="lee_lee_diabetes_page_support">${escapeHtml(supportingText)}</p>`}
+            ${calculatorCancel ? '' : supportingText == null ? renderPersistenceStatus({ surface: active }) : `<p class="lee_lee_diabetes_page_support">${escapeHtml(supportingText)}</p>`}
           </div>
+          ${calculatorCancel ? '<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>' : ''}
           <button
             type="button"
             class="lando_settings_link digit_clock_menu_toggle lee_lee_diabetes_settings_shortcut ${settingsActive ? 'is-active' : ''}"
@@ -4520,6 +4529,7 @@
             </svg>
           </button>
         </div>
+        ${calculatorCancel ? `<p class="lee_lee_diabetes_page_support">${escapeHtml(supportingText)}</p>` : ''}
       </section>
     `;
   }
@@ -5891,23 +5901,17 @@
     const activePicker = currentEditor?.carbCalculatorPicker || '';
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
-    const usesVisualViewportPanel = !standalone || Boolean(itemEditorMode);
+    const usesVisualViewportPanel = Boolean(itemEditorMode);
     const activeTitle = itemEditorMode ? (itemEditorMode === 'edit' ? (currentEditor.carbCalculatorItemDraft?.sourceType === 'meal' ? 'Edit Meal Amount' : currentEditor.carbCalculatorItemDraft?.sourceType === 'food' ? 'Edit Food Item' : 'Edit Manual Amount') : 'Add Manual Amount') : 'Carb Calculator';
     return `
-      <${standalone ? 'div' : 'dialog'} ${standalone ? '' : 'aria-labelledby="lee-lee-carb-calculator-title"'} class="lee_lee_diabetes_carb_calc_layer${standalone ? ' lee_lee_diabetes_carb_calc_layer--embedded' : ''}" data-carb-calculator-layer>
-        ${standalone ? '' : '<div class="lee_lee_diabetes_carb_calc_backdrop" data-action="close-carb-calculator" aria-hidden="true"></div>'}
+      <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>
         ${usesVisualViewportPanel ? '<div class="lee_lee_diabetes_carb_calc_visual_viewport" data-modal-visual-viewport>' : ''}
-        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared${standalone ? ' lee_lee_diabetes_carb_calculator--embedded' : ''}${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${standalone && !itemEditorMode ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
-          ${!standalone || itemEditorMode ? `<div class="lee_lee_diabetes_carb_calculator_header${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_header' : ''}">
-            ${itemEditorMode ? `
+        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared lee_lee_diabetes_carb_calculator--embedded${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${!itemEditorMode ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
+          ${itemEditorMode ? `<div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
               <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>
-            ` : `
-              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>
-              <button type="button" class="lee_lee_diabetes_timeline_edit" data-action="close-carb-calculator" aria-label="Cancel Carb Calculator">Cancel</button>
-            `}
           </div>` : ''}
-          <div class="lee_lee_diabetes_carb_calculator_body${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body${standalone ? '' : ' data-modal-scroll-container'}${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
+          <div class="lee_lee_diabetes_carb_calculator_body${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
             ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : `
                 <div class="lee_lee_diabetes_carb_intro">
                   <h3>What are you eating?</h3>
@@ -5925,7 +5929,7 @@
           ` : ''}
         </section>
         ${usesVisualViewportPanel ? '</div>' : ''}
-      </${standalone ? 'div' : 'dialog'}>
+      </div>
     `;
   }
 
@@ -6339,9 +6343,10 @@
     const showCarbEntry = !contextType || eventConfig.fields.includes('carbs') || entryTypeUsesFoodCalculator(contextType, currentEditor.eventType);
     const showLegacyEventSelect = currentEditor.id && currentEditor.eventType !== 'check-insulin';
     root.innerHTML = `
+      ${currentEditor.carbCalculatorOpen ? renderCarbCalculatorPageTop(true) : ''}
       <form class="lee_lee_diabetes_editor${currentEditor.carbCalculatorOpen ? ' is-carb-calculator-open' : ''}" data-lee-lee-editor${currentEditor.preserveDocumentScrollOnViewportPan ? ' data-preserve-document-scroll-on-viewport-pan' : ''}>
-        <div class="lee_lee_diabetes_editor_main" data-editor-main ${currentEditor.carbCalculatorOpen ? 'inert aria-hidden="true"' : ''}>
-          <h1 class="lee_lee_diabetes_editor_title" id="lee-lee-diabetes-title">${escapeHtml(currentEditor.mode === 'low-glucose-recheck' ? 'Record Recheck' : currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
+        <div class="lee_lee_diabetes_editor_main" data-editor-main ${currentEditor.carbCalculatorOpen ? 'hidden inert aria-hidden="true"' : ''}>
+          <h1 class="lee_lee_diabetes_editor_title" id="${currentEditor.carbCalculatorOpen ? 'lee-lee-entry-title' : 'lee-lee-diabetes-title'}">${escapeHtml(currentEditor.mode === 'low-glucose-recheck' ? 'Record Recheck' : currentEditor.id ? 'Edit Entry' : 'Log Entry')}</h1>
           ${showLegacyEventSelect ? renderEventTypeSelect(currentEditor.eventType) : `<input type="hidden" name="eventType" value="${escapeHtml(currentEditor.eventType)}">`}
           ${currentEditor.mode === 'low-glucose-recheck' ? '<input type="hidden" name="type" value="Low Glucose">' : renderTypeSelect(contextType)}
           <p class="lee_lee_diabetes_help lee_lee_diabetes_editor_error" data-editor-error role="alert" hidden>${escapeHtml(options.error || '')}</p>
@@ -6407,9 +6412,6 @@
       // before the initial focus can trigger native or shared focus-visibility scrolling.
       root.getBoundingClientRect();
       window.scrollTo?.(0, 0);
-    }
-    if (currentEditor.carbCalculatorOpen) {
-      enableCarbCalculatorModalViewport(currentEditor.carbCalculatorScrollSnapshot || getScrollSnapshot());
     }
     const focusTarget = (selector) => {
       const applyFocus = () => {
@@ -10158,25 +10160,6 @@
     }
   }
 
-  function trapCarbCalculatorFocus(event) {
-    if (currentEditor?.calculatorSession?.context === 'standalone' || currentEditor?.carbCalculatorOpen !== true || event.key !== 'Tab') return;
-    const root = getRoot();
-    const calculator = root?.querySelector('[data-carb-calculator]');
-    if (!calculator) return;
-    const controls = [...calculator.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-      .filter((element) => !element.disabled && element.offsetParent !== null);
-    if (!controls.length) return;
-    const first = controls[0];
-    const last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   function handleCarbCalculatorCarbsTab(event) {
     if (event.key !== 'Tab') return false;
     const calculator = event.target?.closest?.('[data-carb-calculator]');
@@ -11219,7 +11202,7 @@
         reviewPlanChange(event.target);
         return;
       }
-      if (currentEditor?.calculatorSession?.context === 'standalone') return;
+      if (currentEditor?.calculatorSession?.context === 'standalone' || currentEditor?.carbCalculatorOpen) return;
       handleSave(event.target);
     });
     root.addEventListener('scroll', (event) => {
@@ -11311,6 +11294,9 @@
       }
       if (event.target.name === 'mealCarbs') {
         currentEditor.mealComponents = [];
+        // A manually replaced total becomes the starting amount next time.
+        currentEditor.carbCalculatorRows = [];
+        currentEditor.calculatorSession.initialized = false;
       }
       if (event.target.name === 'insulinUnits') {
         form.dataset.userEditedInsulin = 'true';
@@ -11555,7 +11541,6 @@
       }
       if (event.defaultPrevented || handleCarbCalculatorCarbsTab(event)) return;
       trapHistorySheetFocus(event);
-      trapCarbCalculatorFocus(event);
     });
     window.addEventListener('storage', handleExternalStorageUpdate);
     window.addEventListener('online', () => {

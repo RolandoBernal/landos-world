@@ -1714,11 +1714,12 @@ test('manual amount uses the shared shell footer with balanced divider spacing',
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--item-editor > \.lee_lee_diabetes_carb_item_editor_actions \{[^}]*margin-top: 0\.05rem/);
 });
 
-test('entry calculator states retain one accessible dialog shell and active heading', () => {
-  assert.match(calculatorMarkup(), /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
-  assert.match(calculatorMarkup(), /<h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">Carb Calculator<\/h2>/);
+test('entry calculator states use the shared full-page region and active heading', () => {
+  assert.match(calculatorMarkup(), /<div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>/);
+  assert.match(calculatorMarkup(), /data-carb-calculator role="region" aria-labelledby="lee-lee-diabetes-title"/);
+  assert.match(trackerSource, /carbCalculatorOpen \? renderCarbCalculatorPageTop\(true\)/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*role="dialog"|data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"[^>]*aria-modal=/);
-  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
+  assert.doesNotMatch(calculatorMarkup(), /data-modal-scroll-container|<dialog/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"\$\{pickerKey === 'search' \? ' data-modal-scroll-container'/);
 });
 
@@ -1741,7 +1742,7 @@ test('carb calculator keeps compact content-sized geometry with bounded overflow
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_layer \{[\s\S]*padding: max\(0\.75rem, env\(safe-area-inset-top\)\)[\s\S]*max\(0\.75rem, env\(safe-area-inset-bottom\)\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*max-height: 100%[\s\S]*overflow: hidden/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator_body \{[\s\S]*overflow-y: auto[\s\S]*overscroll-behavior: contain/);
-  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
+  assert.doesNotMatch(calculatorMarkup(), /data-modal-scroll-container|<dialog/);
   assert.doesNotMatch(trackerSource, /data-carb-calculator data-modal-scroll-container/);
 });
 
@@ -1751,7 +1752,7 @@ test('carb calculator search shares the body scroll owner without changing modal
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_picker--search \{[^}]*overflow-y:\s*auto/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_picker \.lee_lee_diabetes_carb_library_list \{[\s\S]*display: grid[\s\S]*gap: 0\.55rem/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_picker \.lee_lee_diabetes_carb_library_list \{[^}]*overflow-y:\s*auto/);
-  assert.match(calculatorMarkup(), /data-carb-calculator-body data-modal-scroll-container/);
+  assert.doesNotMatch(calculatorMarkup(), /data-modal-scroll-container|<dialog/);
   assert.doesNotMatch(trackerSource, /data-carb-picker="\$\{escapeHtml\(pickerKey\)\}"\$\{pickerKey === 'search' \? ' data-modal-scroll-container'/);
   assert.doesNotMatch(cssSource, /\.lee_lee_diabetes_carb_calculator--picker-open/);
 });
@@ -2737,7 +2738,7 @@ test('meal and activity events render in today and reports with category fields'
   assert.match(trackerSource, /name="mealCarbs"/);
   assert.match(trackerSource, /name="activityDurationMinutes"/);
   assert.match(trackerSource, /Open Carb Calc/);
-  assert.match(calculatorMarkup(), /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
+  assert.match(calculatorMarkup(), /<div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>/);
   assert.match(trackerSource, /data-carb-calculator-layer/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_operator" aria-hidden="true">@/);
   assert.match(trackerSource, /lee_lee_diabetes_carb_calc_input/);
@@ -3275,14 +3276,14 @@ test('shared calculator sessions isolate working state and whitelist the entry r
 });
 
 
-test('standalone calculator is a non-modal region while entry subviews retain modal semantics', () => {
+test('standalone and entry calculator subviews share non-modal document layout', () => {
   for (const state of [{}, { carbCalculatorPicker: 'search' }, { carbCalculatorItemEditorMode: 'add' }]) {
     const standalone = calculatorMarkup('standalone', state);
     const entry = calculatorMarkup('entry', state);
     assert.match(standalone, /data-carb-calculator role="region"/);
     assert.doesNotMatch(standalone, /aria-modal="true"|data-modal-scroll-container|carb_calc_backdrop/);
-    assert.match(entry, /<dialog aria-labelledby="lee-lee-carb-calculator-title"[^>]*data-carb-calculator-layer>/);
-    assert.match(entry, /data-carb-calculator-body data-modal-scroll-container/);
+    assert.match(entry, /<div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>/);
+    assert.doesNotMatch(entry, /data-modal-scroll-container|<dialog/);
   }
 });
 
