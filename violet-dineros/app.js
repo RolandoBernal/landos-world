@@ -88,7 +88,7 @@ function onboarding() {
   focusPageStart();
 }
 function settings() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button><button type="button" id="cancel">Back to Home</button></div></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
@@ -96,7 +96,6 @@ function settings() {
   };
   content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusPageStart(); };
   content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusPageStart(); };
-  content.querySelector('#cancel').onclick = () => { tab = 'Home'; render(); focusPageStart(); };
 }
 function editStartingBalance() {
   content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" class="back-circle" aria-label="Back to Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
@@ -119,11 +118,41 @@ function editStartingBalance() {
   };
 }
 const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
+const quickActions = document.createElement('div');
+quickActions.className = 'floating-actions';
+quickActions.hidden = true;
+quickActions.innerHTML = `<div id="quick-actions-menu" class="floating-actions-menu" inert aria-label="Quick actions"><button type="button" data-transaction-type="income">Add Money</button><button type="button" data-transaction-type="expense">Add Expense</button><button type="button" id="check-affordability">Can I Afford This?</button></div><button type="button" id="quick-actions-toggle" aria-label="Quick actions" aria-expanded="false" aria-controls="quick-actions-menu"><span aria-hidden="true"><svg viewBox="0 0 32 32" width="32" height="32" focusable="false"><path d="M16 6v20M6 16h20"/></svg></span></button>`;
+document.querySelector('.shell').append(quickActions);
+const quickToggle = quickActions.querySelector('#quick-actions-toggle');
+function closeQuickActions() {
+  quickToggle.setAttribute('aria-expanded', 'false');
+  quickActions.querySelector('#quick-actions-menu').inert = true;
+}
+quickToggle.onclick = () => {
+  const open = quickToggle.getAttribute('aria-expanded') !== 'true';
+  quickToggle.setAttribute('aria-expanded', String(open));
+  quickActions.querySelector('#quick-actions-menu').inert = !open;
+};
+quickActions.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => {
+  closeQuickActions(); quickToggle.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType);
+});
+quickActions.querySelector('#check-affordability').onclick = () => {
+  closeQuickActions(); quickToggle.focus({preventScroll:true}); affordabilityInput = ''; tab = 'Afford'; render();
+};
+document.addEventListener('pointerdown', event => { if (!quickActions.contains(event.target)) closeQuickActions(); });
+document.addEventListener('focusin', event => { if (!quickActions.contains(event.target)) closeQuickActions(); });
+quickActions.addEventListener('keydown', event => {
+  if (event.key === 'Escape') { closeQuickActions(); quickToggle.focus({preventScroll:true}); }
+});
+window.addEventListener('hashchange', closeQuickActions);
+window.addEventListener('popstate', closeQuickActions);
 function render() {
+  closeQuickActions();
+  quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
   if (!state) { onboarding(); return; }
   if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
   document.body.dataset.screen = tab.toLowerCase();
-  gear.hidden = tab !== 'Home'; nav.hidden = tab === 'Afford';
+  gear.hidden = tab !== 'Home'; nav.hidden = ['Afford', 'Settings'].includes(tab);
   gear.innerHTML = icon('settings');
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
@@ -135,11 +164,9 @@ function render() {
   if (tab === 'Settings') { settings(); return; }
   const payday = effectivePayday(state.payday, state.frequency), days = daysUntil(payday), available = availableBalance(state);
   const paydayLabel = dateParts(payday) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${payday}T12:00:00`)) : '';
-  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section><section aria-label="Quick actions"><div class="section-title"><h2>Quick Actions</h2></div><div class="quick">${[['plus', 'Add Money'], ['expense', 'Add Expense'], ['afford', 'Can I Afford This?']].map(([name, label]) => `<button ${name === 'afford' ? 'id="check-affordability"' : `data-transaction-type="${name === 'plus' ? 'income' : 'expense'}"`}><span>${icon(name)}</span>${label}</button>`).join('')}</div></section>${featuredGoal()}${moneyProgressSection()}`;
+  content.innerHTML = `<div class="greeting">${launcherBack}<h1>Hey, ${escape(state.firstName)}!</h1><p>Your money. Your goals.</p></div><section class="money-story" aria-label="Available to spend"><div class="story"><p>You have</p><p class="balance">${money(available)}</p><p>available to spend right now.</p>${reservedBalance(state) > 0n ? `<p>Plus <span class="numeric">${money(Number(reservedBalance(state)))}</span> saved for your goals.</p>` : ''}</div>${days > 0 ? `<div class="payday-grid"><div class="payday-card"><span class="calendar-icon">${icon('calendar')}</span><div><p>Next paycheck in</p><strong><span class="numeric">${days}</span> ${days === 1 ? 'day' : 'days'}</strong><p class="numeric">${paydayLabel}</p></div></div><div class="daily-card"><p>Aim for about</p><p class="guide"><span class="numeric">${money(dailyGuide(available, days))}</span> a day</p><p>to make your money last.</p></div></div>` : `<div class="payday-prompt ${days !== null ? 'expired' : ''}"><div><span class="calendar-icon">${icon('calendar')}</span><p>${days === null ? 'Set your next payday<br>to see your daily guide.' : days === 0 ? 'Your payday is today.<br>Update your payday to see your daily guide.' : 'Your payday has passed.<br>Update your payday to see your daily guide.'}</p></div><button class="primary" id="set-payday">${days === null ? 'Set Payday' : 'Update Payday'}</button></div>`}</section>${featuredGoal()}${moneyProgressSection()}`;
   content.querySelector('#featured-goal')?.addEventListener('click', () => { const goal = (state.goals || []).find(g => !g.archived); if (goal) showGoal(goal.id); else { tab = 'Goals'; render(); focusPageStart(); } });
-  content.querySelector('#check-affordability').onclick = event => { event.currentTarget.focus({preventScroll:true}); affordabilityInput = ''; tab = 'Afford'; render(); };
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
-  content.querySelectorAll('[data-transaction-type]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); openTransactionForm(button.dataset.transactionType); });
 }
 function renderAffordability() {
   const preview = document.querySelector('#affordability-sheet');
@@ -275,7 +302,7 @@ function showDocumentPanel(dialog, html, focusSelector, panelClass = '') {
 function closeAffordability() {
   affordabilityInput = ''; tab = 'Home'; render();
   window.scrollTo({left:0, top:0, behavior:'instant'});
-  content.querySelector('#check-affordability').focus({preventScroll:true});
+  quickToggle.focus({preventScroll:true});
 }
 function openSheet(html, focusSelector = '#sheet-title', view = 'form', presentation = 'screen') {
   const dialog = document.querySelector('#transaction-sheet');
