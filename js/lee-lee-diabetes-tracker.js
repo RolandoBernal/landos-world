@@ -6120,7 +6120,7 @@
     const itemName = item.name || (item.sourceType === 'food' ? 'Food item' : 'Manual Amount');
     const removeLabel = `Remove ${itemName}`;
     const editLabel = `Edit ${itemName}`;
-    const sourceParts = [item.servingLabel, item.brand, item.sourceNameSnapshot].filter(Boolean);
+    const sourceParts = [item.servingLabel, item.brand, item.sourceNameSnapshot, `${formatCarbAmount(item.carbs || 0)} g per ${item.sourceType === 'meal' ? 'saved amount' : 'serving'}`].filter(Boolean);
     return `
       <div class="lee_lee_diabetes_carb_calc_row" data-carb-calculator-row data-carb-row-id="${escapeHtml(item.id)}">
         <span class="lee_lee_diabetes_carb_calc_qty lee_lee_diabetes_numeric">${escapeHtml(item.qty)}</span>
@@ -6141,6 +6141,11 @@
           <button type="button" class="lee_lee_diabetes_icon_button lee_lee_diabetes_icon_button--danger" data-action="remove-carb-calculator-row" data-carb-row-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(removeLabel)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>
           </button>
+        </div>
+        <div class="lee_lee_diabetes_carb_quantity_controls" role="group" aria-label="Quantity for ${escapeHtml(itemName)}">
+          <button type="button" class="lee_lee_diabetes_icon_button" data-action="decrease-carb-calculator-quantity" data-carb-row-id="${escapeHtml(item.id)}" aria-label="Decrease quantity for ${escapeHtml(itemName)}" ${Number(item.qty) <= 1 ? 'disabled' : ''}>−</button>
+          <output class="lee_lee_diabetes_numeric" aria-label="Quantity">${escapeHtml(item.qty)}</output>
+          <button type="button" class="lee_lee_diabetes_icon_button" data-action="increase-carb-calculator-quantity" data-carb-row-id="${escapeHtml(item.id)}" aria-label="Increase quantity for ${escapeHtml(itemName)}" ${Number(item.qty) >= CARB_CALCULATOR_MAX_QTY ? 'disabled' : ''}>+</button>
         </div>
       </div>
     `;
@@ -10731,6 +10736,15 @@
       }
       if (action === 'close-carb-calculator') {
         closeCarbCalculator(root, target);
+        return;
+      }
+      if (action === 'increase-carb-calculator-quantity' || action === 'decrease-carb-calculator-quantity') {
+        const form = target.closest('[data-lee-lee-editor]');
+        if (!form || !currentEditor) return;
+        currentEditor.carbCalculatorRows = getCarbCalculatorRowsFromState().map(row => row.id === target.dataset.carbRowId
+          ? { ...row, qty: String(normalizeCarbCalculatorQuantity(Math.max(1, Number(row.qty) + (action === 'increase-carb-calculator-quantity' ? 1 : -1)))) }
+          : row);
+        renderCarbCalculatorMainFromForm(form, { focus: `[data-action="${action}"]${getCarbRowSelector(target.dataset.carbRowId)}` });
         return;
       }
       if (action === 'remove-carb-calculator-row') {
