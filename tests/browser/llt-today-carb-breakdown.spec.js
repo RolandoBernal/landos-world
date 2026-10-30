@@ -78,7 +78,7 @@ for (const width of [320, 393, 768, 1280, 852]) {
     await page.locator('[data-action="history-date"]').first().click();
     await expect(page.locator('.lee_lee_diabetes_timeline_item--history').first()).toBeVisible();
     expect(await page.locator('.lee_lee_diabetes_timeline_item--history').allTextContents()).toEqual(expect.arrayContaining([expect.any(String)]));
-    expect((await page.locator('.lee_lee_diabetes_timeline_item--history').allTextContents()).join('')).not.toContain('Suggested carb coverage');
+    expect((await page.locator('.lee_lee_diabetes_timeline_item--history').allTextContents()).join('')).toContain('Suggested carb coverage');
     await expect(page.locator('.lee_lee_diabetes_timeline_item--history .lee_lee_diabetes_food_contributions')).toHaveCount(0);
   });
 }
@@ -130,7 +130,7 @@ async function saveModalEntry(page, actual) {
 }
 
 for (const [width, actual] of [[320, 0], [393, 10.5], [768, 8.5], [1280, null], [852, 10.5]]) {
-  test(`Complete Issue 13 runtime modal at ${width}px actual ${actual}`, async ({ page }) => {
+  test(`Complete Issue 13 runtime modal at ${width}px actual ${actual}`, async ({ page, browserName }) => {
     await page.setViewportSize({ width, height: width === 852 ? 393 : 900 });
     await page.goto('/#/lee-lees-tracker');
     const modal = await saveModalEntry(page, actual);
@@ -141,7 +141,13 @@ for (const [width, actual] of [[320, 0], [393, 10.5], [768, 8.5], [1280, null], 
     const start = modal.getByRole('button', { name: 'Start 15-Min Timer', exact: true });
     await expect(start).toBeFocused();
     const done = modal.getByRole('button', { name: 'Done', exact: true });
-    await page.keyboard.press('Tab');
+    // WebKit uses Option+Tab to include buttons in sequential keyboard navigation.
+    const nextControl = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+    await page.keyboard.press(nextControl);
+    await expect(done).toBeFocused();
+    await page.keyboard.press(browserName === 'webkit' ? 'Alt+Shift+Tab' : 'Shift+Tab');
+    await expect(start).toBeFocused();
+    await page.keyboard.press(nextControl);
     await expect(done).toBeFocused();
     const panel = modal.locator('section');
     expect(await panel.evaluate(n => { const r = n.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; })).toBe(true);

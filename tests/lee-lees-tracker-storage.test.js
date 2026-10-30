@@ -592,7 +592,7 @@ test('an explicitly saved bedtime value of 15 is never automatically rewritten',
   assert.equal(loaded.insulinPlans[0].insulinCarbRatioGrams, 15);
 });
 
-test('Issue 13 Today carb coverage uses saved raw component and leaves History unchanged', () => {
+test('Issue 13 Today and History carb coverage use saved raw component', () => {
   const { reports } = createTracker();
   const base = sampleRecord({ eventType: 'check-insulin', mealCarbs: 36, rawCarbDose: 3,
     suggestedCarbDoseUnits: 9, suggestedTotalUnits: 8, administeredInsulinUnits: 7,
@@ -602,7 +602,7 @@ test('Issue 13 Today carb coverage uses saved raw component and leaves History u
   const original = JSON.stringify(base);
   const today = reports.renderTimelineItem(base);
   assert.match(today, /Suggested carb coverage: <span[^>]*>3<\/span> units/);
-  assert.doesNotMatch(reports.renderHistoryRecord(base), /Suggested carb coverage/);
+  assert.match(reports.renderHistoryRecord(base), /Suggested carb coverage: <span[^>]*>3<\/span> units/);
   assert.equal(JSON.stringify(base), original);
   for (const type of ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Snacks']) {
     assert.match(reports.renderTimelineItem({ ...base, type }), /Suggested carb coverage:/);
