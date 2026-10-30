@@ -4119,3 +4119,5 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 .lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_row_total { grid-area: 1 / 2; }
 .lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_actions { grid-area: 2 / 2; }
 .lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_quantity_controls { grid-area: 2 / 1; }
+
+.lee_lee_diabetes_insulin_given { color: var(--lee-lee-text); font-weight: 400; }

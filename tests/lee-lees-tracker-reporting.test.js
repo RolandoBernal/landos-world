@@ -2799,7 +2799,7 @@ test('canonical entry cards render check insulin dinner once in today and histor
   for (const html of [todayHtml, historyHtml]) {
     assert.equal(countOccurrences(stripHtml(html), '269 mg/dL'), 1);
     assert.equal(countOccurrences(html, 'Dinner'), 1);
-    assert.match(html, /<div class="lee_lee_diabetes_timeline_notes"><span class="lee_lee_diabetes_numeric">8<\/span> units(?: given)?<\/div>/);
+    assert.match(html, /<div class="lee_lee_diabetes_timeline_notes"><span class="lee_lee_diabetes_insulin_given"><span class="lee_lee_diabetes_numeric">8<\/span> units(?: given)?<\/span><\/div>/);
     assert.equal(countOccurrences(stripHtml(html), 'Given: 8 units · Suggested: 8 units · 6 units base + 2 units correction'), 1);
     assert.doesNotMatch(html, /<strong>Value:<\/strong>|<strong>Blood sugar:<\/strong>|<strong>Insulin given:<\/strong>|<strong>Suggested:<\/strong>/);
   }

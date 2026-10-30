@@ -4275,7 +4275,8 @@
           : '');
       return [
         carbs && carbs !== primary ? renderCarbs(record.mealCarbs) : '',
-        actualInsulin && actualInsulin !== primary ? `${renderInsulin(getRecordActualInsulin(record))}${today ? ' given' : ''}` : '',
+        actualInsulin && actualInsulin !== primary ? `<span class="lee_lee_diabetes_insulin_given">${renderInsulin(getRecordActualInsulin(record))}${today ? ' given' : ''}</span>` : '',
+        renderEntryDoseBreakdown(record),
         foodSummary,
         renderMealDoseSummary(record),
         escapeHtml(record.notes || ''),
@@ -4420,18 +4421,38 @@
     return `Suggested carb coverage: ${approximate ? '≈ ' : ''}${renderInsulin(raw)}`;
   }
 
+  function renderEntryDoseBreakdown(record) {
+    // Display saved components only; never derive a suggestion from insulin given.
+    if (record.type === BEDTIME_CONTEXT_TYPE) return '';
+    const parts = [];
+    const savedAmount = value => value != null && value !== '' && Number.isFinite(Number(value));
+    if (savedAmount(record.suggestedCarbDoseUnits)) parts.push(`${renderInsulin(record.suggestedCarbDoseUnits)} carbs`);
+    else if (savedAmount(record.rawCarbDose)) parts.push(`${renderInsulin(record.rawCarbDose)} carbs (before rounding)`);
+    else if (savedAmount(record.suggestedBaseUnits)) parts.push(`${renderInsulin(record.suggestedBaseUnits)} base`);
+    if (savedAmount(record.suggestedCorrectionUnits)) parts.push(`${renderInsulin(record.suggestedCorrectionUnits)} correction`);
+    if (!parts.length) return '';
+    const details = [];
+    if (savedAmount(record.rawAggregateDose) && savedAmount(record.roundedBaseDose)) {
+      details.push(`Before rounding: ${renderInsulin(record.rawAggregateDose)} → ${renderInsulin(record.roundedBaseDose)} rounded`);
+    }
+    if (record.temporaryEatingAdjustmentApplied === true && savedAmount(record.temporaryEatingAdjustmentUnits)) {
+      details.push(`Temporary eating adjustment: +${renderInsulin(record.temporaryEatingAdjustmentUnits)}`);
+    }
+    return `Dose breakdown: ${parts.join(' + ')}${details.length ? ` · ${details.join(' · ')}` : ''}`;
+  }
+
   function renderEntryCardContent(record, { today = false } = {}) {
     if (isLowGlucoseRecord(record)) return renderLowGlucoseCard(record, { interactive: today || ['history', 'history-day'].includes(currentEditor?.mode) });
     const content = getEntryCardContent(record);
     const renderedPrimary = getRenderedRecordPrimaryValue(record);
-    const primary = today && record.eventType === 'check-insulin'
+    const primary = record.eventType === 'check-insulin'
       && content.primary && content.primary === formatInsulin(getRecordActualInsulin(record))
-      ? `${renderedPrimary} given` : renderedPrimary;
+      ? `<span class="lee_lee_diabetes_insulin_given">${renderedPrimary}${today ? ' given' : ''}</span>` : renderedPrimary;
     const secondary = getRenderedRecordSecondaryLines(record, { today });
-    const coverage = today ? renderTodayCarbCoverage(record) : '';
+    const coverage = renderTodayCarbCoverage(record);
     if (coverage) {
       const carbLineIndex = secondary.indexOf(renderCarbs(record.mealCarbs));
-      if (carbLineIndex >= 0) secondary[carbLineIndex] += ` · ${coverage}`;
+      if (carbLineIndex >= 0) secondary.splice(carbLineIndex + 1, 0, coverage);
       else secondary.unshift(coverage);
     }
     return `
