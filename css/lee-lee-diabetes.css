@@ -4078,3 +4078,44 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 
 /* Tighten only the gap before Favorite; retain its existing bottom clearance. */
 .lee_lee_diabetes_food_editor_fields > .lee_lee_diabetes_checkline { margin-block-start: calc(.25rem - var(--llt-field-group-gap)); }
+
+/* Normal dose information uses the same neutral surface in both themes. */
+.lee_lee_diabetes_dose_card:not(.lee_lee_diabetes_dose_card--notice),
+:root[data-theme="light"] .lee_lee_diabetes_dose_card:not(.lee_lee_diabetes_dose_card--notice) {
+  background: var(--lee-lee-panel);
+  border-color: var(--lee-lee-border);
+}
+.lee_lee_diabetes_dose_card:not(.lee_lee_diabetes_dose_card--notice) .lee_lee_diabetes_dose_label {
+  color: var(--lee-lee-soft);
+}
+.lee_lee_diabetes_carb_quantity_controls {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .35rem;
+}
+.lee_lee_diabetes_carb_quantity_controls output { min-width: 3ch; text-align: center; }
+.lee_lee_diabetes_carb_calc_grid .lee_lee_diabetes_carb_quantity_controls .lee_lee_diabetes_icon_button {
+  inline-size: 44px;
+  block-size: 44px;
+  min-height: 44px;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 999px;
+  color: var(--lee-lee-soft);
+}
+.lee_lee_diabetes_carb_quantity_controls button:disabled { opacity: .4; }
+
+/* Keep item names and actions readable beside the new inline stepper. */
+.lee_lee_diabetes_carb_calc_grid > .lee_lee_diabetes_carb_calc_heading { display: none; }
+.lee_lee_diabetes_carb_calc_row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .35rem;
+}
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_qty,
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_operator,
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_carbs { display: none; }
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_item { grid-area: 1 / 1; }
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_row_total { grid-area: 1 / 2; }
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_calc_actions { grid-area: 2 / 2; }
+.lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_quantity_controls { grid-area: 2 / 1; }

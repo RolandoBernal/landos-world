@@ -157,10 +157,10 @@ for (const context of ['standalone', 'entry']) {
       for (const width of [320, 390, 768, 1280]) {
         await page.setViewportSize({ width, height: 844 });
         const metrics = await root(page).locator('[data-carb-calculator-row]').evaluateAll(nodes => nodes.map(n => {
-          const parts = ['qty','item','operator','carbs','row_total','actions'].map(c => n.querySelector(`.lee_lee_diabetes_carb_calc_${c}`).getBoundingClientRect());
+          const parts = ['item','row_total','actions'].map(c => n.querySelector(`.lee_lee_diabetes_carb_calc_${c}`).getBoundingClientRect());
           return { parts: parts.map(r => ({left:r.left,right:r.right,top:r.top,bottom:r.bottom})), buttons: [...n.querySelectorAll('button')].map(b => ({w:b.getBoundingClientRect().width,h:b.getBoundingClientRect().height})) };
         }));
-        for (const row of metrics) { for (let i=1;i<row.parts.length;i++) expect(row.parts[i-1].right).toBeLessThanOrEqual(row.parts[i].left+1); expect(row.parts[5].top).toBeLessThan(row.parts[1].bottom); for (const b of row.buttons) { expect(b.w).toBeGreaterThanOrEqual(44); expect(b.h).toBeGreaterThanOrEqual(44); } }
+        for (const row of metrics) { expect(row.parts[0].right).toBeLessThanOrEqual(row.parts[1].left+1); expect(row.parts[2].top).toBeGreaterThanOrEqual(row.parts[0].bottom); for (const b of row.buttons) { expect(b.w).toBeGreaterThanOrEqual(44); expect(b.h).toBeGreaterThanOrEqual(44); } }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await root(page).locator('[data-carb-calculator-selection]').scrollIntoViewIfNeeded();
         await page.screenshot({ path: info.outputPath(`selected-${theme}-${width}.png`) });
