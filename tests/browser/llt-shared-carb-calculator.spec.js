@@ -117,13 +117,14 @@ test('standalone reuses all library lists and saves reusable meals without clini
     await page.screenshot({ path: testInfo.outputPath(`shared-calculator-${theme}.png`) });
     const bounds = await page.locator('[data-carb-calculator]').boundingBox();
     expect(bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
-    await expect(page.locator('[data-foods-view-switcher]')).toBeVisible();
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(0);
     await expect(page.locator('[data-carb-calculator]')).not.toHaveAttribute('aria-modal', 'true');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.locator('[data-action="close-carb-calculator"]').first().click();
   await page.getByRole('button', { name: '+ Add New Meal', exact: true }).click();
   const builder = page.locator('[data-meal-builder]');
+  await expect(builder.getByLabel('Meal Name', { exact: true })).toBeFocused();
   await builder.getByLabel('Meal Name', { exact: true }).fill('Foods-created Meal');
   await builder.getByLabel('Meal Carbs', { exact: true }).fill('25');
   await builder.getByRole('button', { name: 'Save Meal', exact: true }).click();
@@ -206,7 +207,7 @@ for (const theme of ['light', 'dark']) {
     });
     await scratch(page);
     await manual(page, '12', 'Test amount');
-    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toBeVisible();
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(0);
     const standalone = await presentation();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: '/private/tmp/llt-visual-' + testInfo.project.name + '-' + theme + '-standalone.png' });

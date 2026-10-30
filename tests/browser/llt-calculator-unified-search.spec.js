@@ -42,7 +42,7 @@ async function seed(page) {
 async function enter(page, context) {
   if (context === 'standalone') {
     await root(page).getByRole('button', { name: 'Foods', exact: true }).click();
-    await root(page).getByRole('tab', { name: 'Carb Calc', exact: true }).click();
+    await root(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
   } else {
     await root(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
     await root(page).locator('[name="type"]').selectOption('Snacks');
@@ -117,35 +117,27 @@ for (const context of ['standalone', 'entry']) {
   });
 }
 
-test('dynamic headings are unique and the switcher stays in document flow at top/middle/bottom', async ({ page }, testInfo) => {
+test('dynamic headings are unique and calculator controls stay unobstructed at top/middle/bottom', async ({ page }, testInfo) => {
   await seed(page); await page.setViewportSize({ width: 320, height: 740 });
   await root(page).getByRole('button', { name: 'Foods', exact: true }).click();
   await expect(root(page).getByRole('heading', { name: 'Foods', exact: true })).toBeVisible();
   await expect(root(page).locator('.lee_lee_diabetes_date')).toHaveText('Food Library');
-  await root(page).getByRole('tab', { name: 'Carb Calc', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
   await expect(root(page).getByRole('heading', { name: 'Carb Calculator', exact: true })).toHaveCount(1);
   await expect(root(page).locator('.lee_lee_diabetes_page_support')).toHaveText('Calculate carbs without logging an entry.');
   await expect(root(page).getByRole('button', { name: 'Back to Foods', exact: true })).toHaveCount(0);
   await manual(page, '10');
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-    const anchor = await root(page).locator('[data-foods-view-switcher]').evaluate(node => node.getBoundingClientRect().top + scrollY);
+    await expect(root(page).locator('.lee_lee_diabetes_nav_shell, .lee_lee_diabetes_floating_log')).toHaveCount(0);
     for (const fraction of [0, 0.5, 1]) {
       await page.evaluate(fraction => scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * fraction), fraction);
-      const metrics = await root(page).locator('[data-foods-view-switcher]').evaluate(node => ({
-        top: node.getBoundingClientRect().top + scrollY, position: getComputedStyle(node).position,
-        bottom: node.getBoundingClientRect().bottom,
-        contentTop: document.querySelector('#lee-lee-carb-calc-panel').getBoundingClientRect().top,
-        overflow: document.documentElement.scrollWidth > innerWidth,
-      }));
-      expect(metrics.position).toBe('static'); expect(metrics.top).toBeCloseTo(anchor, 0);
-      expect(metrics.bottom).toBeLessThanOrEqual(metrics.contentTop);
-      expect(metrics.overflow).toBe(false);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({ path: testInfo.outputPath(`unified-${theme}.png`), fullPage: true });
   }
-  await root(page).getByRole('tab', { name: 'Foods', exact: true }).click();
+  await root(page).getByRole('button', { name: 'Done', exact: true }).click();
   await expect(root(page).getByRole('heading', { name: 'Foods', exact: true })).toBeVisible();
 });
 
@@ -177,7 +169,7 @@ test('compact selected-item table and equal segments fit phone, tablet and deskt
   await root(page).getByRole('button', { name: /^Add meal Cub Meal/ }).click();
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    const tabs = await root(page).locator('[role="tab"]').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
+    const tabs = await root(page).locator('[data-carb-calculator-selection] > .lee_lee_diabetes_actions > button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
     expect(tabs[0]).toBeCloseTo(tabs[1], 0);
     const row = root(page).locator('[data-carb-calculator-row]');
     const metrics = await row.evaluate(node => {

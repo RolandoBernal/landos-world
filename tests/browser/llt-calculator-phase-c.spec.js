@@ -42,7 +42,7 @@ async function seed(page) {
 async function enter(page, context) {
   if (context === 'standalone') {
     await root(page).getByRole('button', { name: 'Foods', exact: true }).click();
-    await root(page).getByRole('tab', { name: 'Carb Calc', exact: true }).click();
+    await root(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
   } else {
     await root(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
     await root(page).locator('[name="type"]').selectOption('Snacks');

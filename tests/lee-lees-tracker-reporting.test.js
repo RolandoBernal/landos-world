@@ -1586,7 +1586,7 @@ test('temporary adjustment settings reuse contained numeric controls and respons
   assert.match(inlineInputRule, /max-width: 5\.5rem/);
   const datesRule = getCssRuleBody('.lee_lee_diabetes_temporary_adjustment_dates');
   assert.match(datesRule, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*\.lee_lee_diabetes_temporary_adjustment_dates[\s\S]*grid-template-columns: 1fr/);
+  assert.match(cssSource, /@container llt \(max-width: 640px\)[\s\S]*\.lee_lee_diabetes_temporary_adjustment_dates[\s\S]*grid-template-columns: 1fr/);
   assert.match(cssSource, /\.lee_lee_diabetes_temporary_adjustment_checkline[\s\S]*justify-content: flex-start/);
 });
 
@@ -1730,7 +1730,7 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
   assert.match(cssSource, /\.lee_lee_diabetes_icon_button svg \{[\s\S]*stroke: currentColor/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.75ch[\s\S]*border: 0[\s\S]*border-bottom: 0[\s\S]*background: transparent/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_cell--qty \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.5ch[\s\S]*max-width: 2\.5ch/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--app-accent-rgb, 58 160 255\) \/ 14%\)[\s\S]*outline: 2px solid/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--app-accent-rgb, 255 159 10\) \/ 14%\)[\s\S]*outline: 2px solid/);
   assert.doesNotMatch(cssSource, /decrement-carb-row|increment-carb-row|lee_lee_diabetes_quantity_control/);
 });
 
@@ -2612,7 +2612,7 @@ test('Entry Saved confirmation uses an opaque compact theme surface and centered
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--saved[\s\S]*max-width: 100%/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_panel--stop-confirm[\s\S]*max-width: 100%/);
   assert.match(cssSource, /\.lee_lee_diabetes_pre_meal_timer_stop_actions \.lee_lee_diabetes_button[\s\S]*width: 100%/);
-  assert.match(cssSource, /@media \(min-width: 768px\)[\s\S]*\.lee_lee_diabetes_pre_meal_timer_success_actions \.lee_lee_diabetes_button \{ width: min\(100%, 14rem\); margin-inline: auto; \}/);
+  assert.match(cssSource, /@container llt \(min-width: 768px\)[\s\S]*\.lee_lee_diabetes_pre_meal_timer_success_actions \.lee_lee_diabetes_button \{ width: min\(100%, 14rem\); margin-inline: auto; \}/);
   assert.doesNotMatch(savedRule, /background: var\(--lee-lee-panel-strong\)/);
 });
 
@@ -2954,7 +2954,8 @@ test('today activity helper returns only current-day active records newest first
 
 test('today UI uses one log-entry CTA and responsive navigation contracts', () => {
   assert.match(trackerSource, /Today’s Activity/);
-  assert.match(trackerSource, /\['log-entry', 'Log Entry'\]/);
+  assert.match(trackerSource, /class="lee_lee_diabetes_floating_log" data-action="log-entry"/);
+  assert.match(trackerSource, /\['open-standalone-carb-calculator', 'Carb Calc'\]/);
   assert.doesNotMatch(trackerSource, /lee_lee_diabetes_today_actions/);
   assert.match(trackerSource, /id="lee-lee-diabetes-title">Log Entry<\/h1>/);
   assert.doesNotMatch(trackerSource, />\+ Add Event<\/button>/);

@@ -85,12 +85,12 @@
 }
 
 .app_theme--lee-lees-tracker {
-  --app-accent: #3aa0ff;
-  --app-accent-rgb: 58 160 255;
-  --app-accent-soft: #c6f2ff;
-  --app-accent-bg: #071c3b;
-  --app-accent-deep: #0b49b5;
-  --app-accent-contrast: #041326;
+  --app-accent: #FF9F0A;
+  --app-accent-rgb: 255 159 10;
+  --app-accent-soft: #FF9F0A;
+  --app-accent-bg: #1C1C1E;
+  --app-accent-deep: #343436;
+  --app-accent-contrast: #000000;
 }
 
 .app_theme--violet-sprints {
@@ -167,12 +167,12 @@
 }
 
 :root[data-theme="light"] .app_theme--lee-lees-tracker {
-  --app-accent: #0968c3;
-  --app-accent-rgb: 9 104 195;
-  --app-accent-soft: #074f93;
-  --app-accent-bg: #e7f4ff;
-  --app-accent-deep: #b7dcff;
-  --app-accent-contrast: #ffffff;
+  --app-accent: #FF9F0A;
+  --app-accent-rgb: 255 159 10;
+  --app-accent-soft: #8A4B00;
+  --app-accent-bg: #FFF3DF;
+  --app-accent-deep: #F2E3CE;
+  --app-accent-contrast: #000000;
 }
 
 :root[data-theme="light"] .app_theme--violet-sprints {
@@ -232,12 +232,12 @@
 }
 
 #lando-launcher .app_theme--lee-lees-tracker {
-  --app-accent: #3aa0ff;
-  --app-accent-rgb: 58 160 255;
-  --app-accent-soft: #c6f2ff;
-  --app-accent-bg: #071c3b;
-  --app-accent-deep: #0b49b5;
-  --app-accent-contrast: #041326;
+  --app-accent: #FF9F0A;
+  --app-accent-rgb: 255 159 10;
+  --app-accent-soft: #FF9F0A;
+  --app-accent-bg: #1C1C1E;
+  --app-accent-deep: #343436;
+  --app-accent-contrast: #000000;
 }
 
 #lando-launcher .app_theme--violet-sprints {
