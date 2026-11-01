@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+async function quickAction(page,name){await page.locator('#quick-actions-toggle').click();await page.getByRole('button',{name,exact:true}).click();}
 
 async function continuous(page) {
  const dialog=page.getByRole('dialog');
@@ -31,7 +32,7 @@ test('goals lifecycle, accounting, featured selection and one purchase survive r
 test('limits, edit, release, archive and protected spending',async({page})=>{
  await start(page);await goals(page);await create(page);await reserve(page,'81');await expect(page.getByRole('dialog').locator('.error')).toContainText('within');await page.getByRole('button',{name:'Cancel',exact:true}).click();await reserve(page,'60');
  await manage(page);await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await page.getByLabel('Target amount ($)').fill('50');await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('Release');await page.getByLabel('Target amount ($)').fill('90');await page.getByRole('button',{name:'Save Goal',exact:true}).click();
- await page.getByRole('button',{name:'Home',exact:true}).click();await page.getByRole('button',{name:'Add Expense',exact:true}).click();await page.getByLabel('How much?',{exact:true}).fill('41');await page.getByLabel('Category',{exact:true}).selectOption('Food');await page.getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('Release goal funds');await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.getByRole('button',{name:'Home',exact:true}).click();await quickAction(page,'Add Expense');await page.getByLabel('How much?',{exact:true}).fill('41');await page.getByLabel('Category',{exact:true}).selectOption('Food');await page.getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('release $1.00');await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await goals(page);await manage(page);await page.getByRole('button',{name:'Release Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('10');await page.getByRole('button',{name:'Release',exact:true}).click();expect((await saved(page)).goals[0].reservedCents).toBe(5000);
  await manage(page);await page.getByRole('button',{name:'Archive Goal',exact:true}).click();await page.getByRole('button',{name:'Archive',exact:true}).click();expect((await saved(page)).goals[0]).toMatchObject({archived:true,reservedCents:0});expect((await saved(page)).transactions).toBeUndefined();
 });
@@ -102,7 +103,7 @@ test('every goal form opens on its first input and Details keeps heading focus',
 test('onboarding, Settings and Starting Balance focus the first input on entry and return',async({page})=>{
  await page.goto('/violet-dineros/index.html');await expect(page.getByLabel('What’s your first name?')).toBeFocused();await page.getByLabel('What’s your first name?').fill('Violet');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByLabel('Your money ($)').fill('100');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Next payday (optional)')).toBeFocused();await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Skip for now',exact:true}).click();await page.getByRole('button',{name:'Go to My Dashboard',exact:true}).click();
  await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#edit-starting-balance').click();await expect(page.getByLabel('Starting Balance ($)',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#settings-back').click();
- for(const action of ['Add Money','Add Expense']){await page.getByRole('button',{name:action,exact:true}).click();await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();}
+ for(const action of ['Add Money','Add Expense']){await quickAction(page,action);await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();}
  expect((await saved(page)).transactions).toBeUndefined();
 });
 
@@ -125,7 +126,7 @@ test('LWVD editable controls retain focus, readable sizes and narrow viewport co
  for(const height of [844,400]){await page.setViewportSize({width:320,height});await controls();}
  await expect(page.locator('#edit-starting-balance .navigation-chevron svg')).toHaveCSS('width','24px');await expect(page.locator('#settings-back')).toHaveCSS('width','50px');
  await page.locator('#edit-starting-balance').click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('#settings-back').click();
- await page.getByRole('button',{name:'Add Expense',exact:true}).click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await controls();
+ await quickAction(page,'Add Expense');await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await controls();
  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1, viewport-fit=cover');expect(await saved(page)).toEqual(seed);
 });
 

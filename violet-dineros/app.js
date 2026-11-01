@@ -24,24 +24,40 @@ const icons = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const plant = '<img class="plant" src="../icons/violet-dineros.svg" alt="" aria-hidden="true">';
-function announce(message) {
+function dismissNotice() {
   clearTimeout(noticeTimer);
-  const notice = document.querySelector('#notice'); notice.dataset.kind = 'success'; notice.textContent = message;
-  noticeTimer = setTimeout(() => { notice.textContent = ''; }, 2500);
+  const notice = document.querySelector('#notice');
+  notice.replaceChildren();
+  document.querySelector('.shell').append(notice);
 }
-function showSaveError(message) {
-  clearTimeout(noticeTimer);
-  document.querySelector('#notice').dataset.kind = 'error';
-  const dialog = document.querySelector('#transaction-sheet');
-  if (dialog?.open) {
-    let error = dialog.querySelector('.error');
-    if (!error) { error = document.createElement('p'); error.className = 'error'; error.setAttribute('role', 'alert'); (dialog.querySelector('.sheet-body') || dialog).appendChild(error); }
-    error.textContent = message;
+function showNotice(message, kind, duration) {
+  dismissNotice();
+  const notice = document.querySelector('#notice');
+  notice.dataset.kind = kind;
+  const text = document.createElement('span'); text.textContent = message;
+  const close = document.createElement('button');
+  close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification'); close.textContent = '×';
+  close.onclick = dismissNotice;
+  notice.append(text, close);
+  const dialog = document.querySelector('#transaction-sheet[open],#affordability-sheet[open]');
+  if (dialog) {
+    const error = dialog.querySelector('.error');
+    (error || dialog.querySelector('.sheet-body') || dialog).append(notice);
   }
-  document.querySelector('#notice').textContent = message;
+  noticeTimer = setTimeout(dismissNotice, duration);
+}
+document.addEventListener('submit', dismissNotice, true);
+function announce(message) { showNotice(message, 'success', 2500); }
+function showSaveError(message) { showNotice(message, 'error', 6000); }
+// The existing reservation guard supplies the proposed state, including edits/deletions.
+function insufficientFundsMessage(next) {
+  const shortage = -BigInt(availableBalance(next));
+  const reserved = reservedBalance(next);
+  if (shortage <= reserved) return `You need ${money(shortage)} more for this purchase. You could release ${money(shortage)} from your savings goals, then try again.`;
+  return `Even releasing all your savings wouldn't cover this purchase. You'd still be ${money(shortage - reserved)} short.`;
 }
 function save(next) {
-  if (reservedBalance(next) > 0n && !fundedReservations(next)) { showSaveError('Release goal funds first. This change would spend money reserved for your goals.'); return false; }
+  if (reservedBalance(next) > 0n && !fundedReservations(next)) { showSaveError(insufficientFundsMessage(next)); return false; }
   if (!validState(next)) { showSaveError('This amount would make your balance too large to save. Try a smaller amount.'); return false; }
   try {
     if (localStorage.getItem(STORAGE_KEY) !== lastRaw) {
@@ -50,7 +66,7 @@ function save(next) {
     next = awardMoneyProgress(state, next);
     const raw = JSON.stringify(next);
     localStorage.setItem(STORAGE_KEY, raw);
-    state = next; lastRaw = raw; clearTimeout(noticeTimer); document.querySelector('#notice').textContent = ''; return true;
+    state = next; lastRaw = raw; dismissNotice(); return true;
   } catch {
     showSaveError('Your changes could not be saved. Check that browser storage is available and try again.');
     return false;
@@ -129,6 +145,7 @@ function closeQuickActions() {
   quickActions.querySelector('#quick-actions-menu').inert = true;
 }
 quickToggle.onclick = () => {
+  dismissNotice();
   const open = quickToggle.getAttribute('aria-expanded') !== 'true';
   quickToggle.setAttribute('aria-expanded', String(open));
   quickActions.querySelector('#quick-actions-menu').inert = !open;
@@ -146,7 +163,26 @@ quickActions.addEventListener('keydown', event => {
 });
 window.addEventListener('hashchange', closeQuickActions);
 window.addEventListener('popstate', closeQuickActions);
+let scrollAnchor = 0;
+function showFloatingNav() {
+  document.body.classList.remove('nav-scroll-hidden');
+  scrollAnchor = Math.max(0, window.scrollY);
+}
+window.addEventListener('scroll', () => {
+  if (nav.hidden || document.querySelector('dialog[open]')) return;
+  const y = Math.max(0, Math.min(window.scrollY, document.documentElement.scrollHeight - innerHeight));
+  if (y <= 12) showFloatingNav();
+  else if (Math.abs(y - scrollAnchor) >= 12) {
+    document.body.classList.toggle('nav-scroll-hidden', y > scrollAnchor);
+    scrollAnchor = y;
+    closeQuickActions();
+  }
+}, {passive:true});
+document.addEventListener('focusin', event => {
+  if (event.target.closest('nav,.floating-actions')) showFloatingNav();
+});
 function render() {
+  dismissNotice(); showFloatingNav();
   closeQuickActions();
   quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
   if (!state) { onboarding(); return; }
@@ -305,6 +341,7 @@ function closeAffordability() {
   quickToggle.focus({preventScroll:true});
 }
 function openSheet(html, focusSelector = '#sheet-title', view = 'form', presentation = 'screen') {
+  dismissNotice();
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
     sheetOpener = document.activeElement;
@@ -328,7 +365,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
 }
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
 function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
-function closeSheet() { document.querySelector('#transaction-sheet').close(); restoreSheet(); }
+function closeSheet() { dismissNotice(); document.querySelector('#transaction-sheet').close(); restoreSheet(); }
 function moneyProgressSection() {
   const p = moneyProgress(state), level = progressLevel(p.xp);
   return `<section class="money-progress card" aria-label="Money Progress"><h2>Money Progress</h2><p><strong>Level ${level.level} · ${level.title}</strong></p><p>${p.xp} XP total · ${level.next - p.xp} XP to Level ${level.level + 1}</p><progress max="100" value="${level.earned}" aria-label="Progress toward next level"></progress><h3>This week’s challenge</h3><p>Record 3 expenses this week <strong>+25 XP</strong></p><p>${p.count} of 3 completed${p.rewarded ? ' · Complete! Reward earned.' : ''}</p><progress max="3" value="${p.count}" aria-label="Weekly expense challenge"></progress><p class="progress-help">Earn XP for tracking expenses and saving toward your goals. Small steps add up! ✨</p></section>`;
@@ -352,7 +389,8 @@ function openTransactionForm(type, id = null, affordabilityPrice = null) {
     const data = new FormData(event.target), amount = parseMoney(data.get('amount')), label = data.get('label'), description = data.get('description').trim();
     const error = document.querySelector('#transaction-error');
     if (amount === null || amount <= 0) { error.textContent = 'Enter an amount greater than zero with up to two decimal places.'; document.querySelector('#transaction-amount').focus(); return; }
-    if (affordabilityPrice !== null && (!affordabilityIsCurrent(previewRaw) || !affordability(state, data.get('amount')).affordable)) { error.textContent = 'This price must fit your current available spending money. Check the amount or cancel to try again.'; return; }
+    if (affordabilityPrice !== null && !affordabilityIsCurrent(previewRaw)) return;
+    if (affordabilityPrice !== null && !affordability(state, data.get('amount')).affordable) { error.textContent = 'This price must fit your current available spending money. Check the amount or cancel to try again.'; return; }
     if (!TRANSACTION_LABELS[type].includes(label)) { error.textContent = `Choose ${isIncome ? 'where the money came from' : 'a category'}.`; document.querySelector('#transaction-label').focus(); return; }
     if (description.length > 120) { error.textContent = 'Keep the description to 120 characters or fewer.'; return; }
     const transaction = original ? { ...original, amountCents: amount, label, description } : {
