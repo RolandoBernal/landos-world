@@ -1,4 +1,12 @@
 @font-face {
+  font-family: "Geist Mono";
+  src: url('../fonts/geist-mono-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'DM Sans';
   font-style: normal;
   font-weight: 400 700;
@@ -203,7 +211,7 @@
 .lee_lee_diabetes_pre_meal_timer_success_countdown { display: flex; align-items: center; justify-content: center; gap: .7rem; margin: 1.05rem 0 .8rem; padding: 0; color: var(--lee-lee-soft); }
 .lee_lee_diabetes_pre_meal_timer_success_countdown .lee_lee_diabetes_pre_meal_timer_large { color: var(--lee-lee-text); font-size: clamp(2.4rem, 12vw, 4rem); }
 .lee_lee_diabetes_pre_meal_timer_success_icon { display: grid; place-items: center; inline-size: 2.25rem; block-size: 2.25rem; border-radius: 50%; background: rgb(var(--app-accent-rgb, 255 159 10) / 20%); font-size: 1.2rem; }
-.lee_lee_diabetes_pre_meal_timer_success_hint { margin: 0 0 1rem; color: var(--lee-lee-muted); }
+.lee_lee_diabetes_pre_meal_timer_success_hint { margin: 0 0 1rem; color: var(--lee-lee-muted); font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
 .lee_lee_diabetes_actions.lee_lee_diabetes_pre_meal_timer_success_actions { display: grid; grid-template-columns: 1fr; gap: .65rem; width: 100%; margin-top: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: 100%; min-height: 2.9rem; }
 @container llt (min-width: 768px) {
