@@ -8,6 +8,7 @@ async function open(page,raw){
   await expect(page.locator('#maintenance-total-root')).toBeVisible();
 }
 const root=page=>page.locator('#maintenance-total-root');
+async function bikes(page){await page.getByRole('button',{name:'Garage',exact:true}).click();await page.getByRole('button',{name:'Open Bikes'}).click();}
 async function stored(page){return page.evaluate(key=>localStorage.getItem(key),KEY);}
 async function download(page,testInfo,raw){
   const pending=page.waitForEvent('download');
@@ -38,7 +39,7 @@ for(const [label,raw] of [['malformed','{broken'],['empty',''],['unsupported-ver
   });
 }
 test('missing storage exports no samples and retains bicycle creation',async({page})=>{
-  await open(page,null);await expect(root(page).getByRole('button',{name:/Madone/})).toBeVisible();
+  await open(page,null);await bikes(page);await expect(root(page).getByRole('button',{name:/Madone/})).toBeVisible();
   await page.locator('#imt_settings_toggle').click();
   let downloads=0;page.on('download',()=>downloads++);
   await root(page).getByRole('button',{name:'Download maintenance JSON'}).click();
@@ -50,7 +51,7 @@ test('missing storage exports no samples and retains bicycle creation',async({pa
   expect(JSON.parse(await stored(page)).bikes.at(-1).name).toBe('New bicycle');
 });
 test('existing bicycle, component and maintenance add/edit/filter/delete workflows preserve IDs and extra fields',async({page})=>{
-  await open(page,JSON.stringify(fixture));
+  await open(page,JSON.stringify(fixture));await bikes(page);
   await root(page).getByRole('button',{name:/Test bicycle/}).click();
   await root(page).locator('header').getByRole('button',{name:'Edit',exact:true}).click();
   await root(page).getByLabel('Name *',{exact:true}).fill('Edited bicycle');await root(page).getByRole('button',{name:'Save',exact:true}).click();
