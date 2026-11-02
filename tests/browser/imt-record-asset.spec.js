@@ -20,6 +20,8 @@ test('general Add requires an asset and persists the chosen bike across reload a
 });
 test('component context is visible and changing assets clears the old component', async ({ page }) => {
   await page.goto('/#/maintenance-total');
+  await page.getByRole('button',{name:'Garage',exact:true}).click();
+  await page.getByRole('button',{name:'Open Bikes'}).click();
   await page.locator('[data-bike="madone"]').click();
   await page.locator('[data-component="madone-brakes"]').click();
   await page.getByRole('button', { name: '＋ Add Service Record' }).click();

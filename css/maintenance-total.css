@@ -333,3 +333,35 @@
 .maintenance_total_view :is(.imt_back, .imt_record_action) { background: transparent; }
 
 :root[data-theme="light"] .maintenance_total_view .imt_floating_controls::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 85%, transparent) 100%); }
+
+/* Step 3: Today and Plan use the existing theme tokens and floating controls. */
+.maintenance_total_view .imt_health { display:grid;grid-template-columns:100px minmax(0,1fr);gap:18px;align-items:center;background:#14211E;color:#F2F4F0;border-radius:26px;padding:20px;margin-bottom:14px; }
+.maintenance_total_view .imt_health h2 { margin:0 0 8px;font-size:1.1rem;color:inherit; }
+.maintenance_total_view .imt_health p { margin:4px 0;color:#B9C4BD;font-size:.82rem; }
+.maintenance_total_view .imt_health_ring { width:100px;height:100px;position:relative; }
+.maintenance_total_view .imt_health_ring svg { width:100%;height:100%; }
+.maintenance_total_view .imt_health_ring > div { position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center; }
+.maintenance_total_view .imt_health_ring strong { font-size:1.5rem; }
+.maintenance_total_view .imt_health_ring span { font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:#B9C4BD; }
+.maintenance_total_view .imt_today_stats { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px; }
+.maintenance_total_view .imt_today_stats .imt_stat { display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px; }
+.maintenance_total_view .imt_today_stats strong { font-size:1.3rem; }
+.maintenance_total_view .imt_today_stats span { color:var(--ink2);font-size:.8rem; }
+.maintenance_total_view .imt_task { display:flex;gap:11px;align-items:flex-start;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:14px;margin:10px 0;box-shadow:0 2px 8px rgba(20,33,30,.04); }
+.maintenance_total_view .imt_task_icon { width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:11px;background:#0E4A44;color:#fff;font-weight:800;font-size:.8rem; }
+.maintenance_total_view .imt_category--cars { background:#3A7CA5; }
+.maintenance_total_view .imt_category--household { background:#B7791F; }
+.maintenance_total_view .imt_task_body { min-width:0;flex:1;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_task_link { border:0;background:transparent;color:var(--ink);font:inherit;font-weight:700;padding:4px 0;text-align:left;cursor:pointer; }
+.maintenance_total_view .imt_task .imt_status { display:inline-flex;margin-top:8px; }
+.maintenance_total_view .imt_task p { margin:5px 0 0; }
+.maintenance_total_view .imt_task_done { flex:none;width:34px;height:34px;display:grid;place-items:center;border:2px solid var(--line2);border-radius:50%;background:var(--surface);color:var(--ink);font:inherit;font-weight:700;cursor:pointer; }
+.maintenance_total_view .imt_task_done:hover { background:var(--teal-soft); }
+.maintenance_total_view .imt_task_done:disabled { opacity:.5; }
+.maintenance_total_view .imt_status--neutral { background:var(--surface2);color:var(--ink2); }
+@media (max-width:360px) {
+  .maintenance_total_view .imt_health { grid-template-columns:85px minmax(0,1fr);gap:10px;padding:14px; }
+  .maintenance_total_view .imt_health_ring { width:85px;height:85px; }
+  .maintenance_total_view .imt_task { padding:10px;gap:8px; }
+  .maintenance_total_view .imt_task_icon { width:30px;height:30px; }
+}
