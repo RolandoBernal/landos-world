@@ -365,3 +365,44 @@
   .maintenance_total_view .imt_task { padding:10px;gap:8px; }
   .maintenance_total_view .imt_task_icon { width:30px;height:30px; }
 }
+
+/* Step 4: Garage uses real assets and derived task health. */
+.maintenance_total_view .imt_garage_filters { display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px; }
+.maintenance_total_view .imt_garage_filters button { border:1px solid var(--line);background:var(--surface2);color:var(--ink2);border-radius:99px;padding:9px 14px;min-height:40px;font:inherit;font-size:.85rem;font-weight:700;cursor:pointer; }
+.maintenance_total_view .imt_garage_filters [aria-pressed="true"] { background:var(--ink);color:var(--surface);border-color:var(--ink); }
+.maintenance_total_view .imt_garage_cards { display:grid;gap:10px; }
+.maintenance_total_view .imt_asset_card { width:100%;min-width:0;text-align:left;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:14px;font:inherit;box-shadow:0 1px 3px rgba(20,33,30,.08);cursor:pointer;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_asset_card:hover { border-color:var(--line2); }
+.maintenance_total_view .imt_asset_top { display:flex;gap:11px;align-items:center; }
+.maintenance_total_view .imt_asset_icon { width:46px;height:46px;border-radius:14px;display:grid;place-items:center;color:#fff;background:var(--asset-accent);font-weight:800;font-size:.85rem;flex:none; }
+.maintenance_total_view .imt_asset_name { min-width:0;flex:1; }
+.maintenance_total_view .imt_asset_name > strong { font-size:1rem;display:block;line-height:1.2; }
+.maintenance_total_view .imt_asset_percent { font-size:1rem;flex:none; }
+.maintenance_total_view .imt_asset_healthbar { display:block;height:6px;background:var(--surface3);border-radius:99px;overflow:hidden;margin:12px 0 7px; }
+.maintenance_total_view .imt_asset_healthbar > span { display:block;height:100%;border-radius:99px;background:var(--asset-accent); }
+.maintenance_total_view .imt_asset_next { display:block;margin-top:12px;font-size:.85rem;color:var(--ink2); }
+.maintenance_total_view .imt_asset_next strong { color:var(--ink); }
+.maintenance_total_view .imt_asset_open { display:block;text-align:right;margin-top:8px;font-size:.8rem;font-weight:700;color:var(--ink2); }
+.maintenance_total_view .imt_garage_hero { background:#14211E;color:#fff;border-radius:26px;padding:18px; }
+.maintenance_total_view .imt_garage_hero .imt_header { display:flex;gap:10px;align-items:center; }
+.maintenance_total_view .imt_garage_hero h1 { min-width:0;flex:1;font-size:1.3rem;margin:0;color:inherit;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_garage_hero p { color:#B9C4BD;font-size:.85rem;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_garage_hero .imt_asset_healthbar { background:rgba(255,255,255,.12); }
+.maintenance_total_view .imt_garage_hero .imt_asset_healthbar > span { background:#E9A23B; }
+.maintenance_total_view .imt_garage_hero .imt_button { background:rgba(255,255,255,.08);color:#fff;border-color:#9DB0A8;flex:none; }
+.maintenance_total_view .imt_garage_hero .imt_stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px; }
+.maintenance_total_view .imt_garage_hero .imt_stat { background:rgba(255,255,255,.08);border:0;border-radius:12px;padding:10px;min-width:0;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_garage_hero .imt_stat > span { color:#B9C4BD;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em; }
+.maintenance_total_view .imt_garage_hero .imt_stat strong { color:#fff;font-size:.85rem;display:block;margin-top:4px; }
+.maintenance_total_view .imt_asset_task { display:flex;gap:10px;align-items:center;flex-wrap:wrap; }
+.maintenance_total_view .imt_asset_task > strong { flex:1;min-width:0;overflow-wrap:anywhere; }
+.maintenance_total_view .imt_asset_task p { width:100%;margin:0; }
+.maintenance_total_view .imt_lifetime { display:flex;flex-direction:column;gap:5px;margin:10px 0 16px; }
+.maintenance_total_view .imt_lifetime > strong { font-size:1.4rem; }
+.maintenance_total_view [data-mileage-field][hidden] { display:none; }
+@media (max-width:360px) {
+  .maintenance_total_view .imt_garage_hero { padding:14px; }
+  .maintenance_total_view .imt_garage_hero .imt_header { flex-wrap:wrap; }
+  .maintenance_total_view .imt_garage_hero .imt_stats { gap:5px; }
+  .maintenance_total_view .imt_garage_hero .imt_stat { padding:8px; }
+}

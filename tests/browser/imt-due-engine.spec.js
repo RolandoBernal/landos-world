@@ -9,7 +9,7 @@ const fixture={version:1,unknown:{preserve:true},bikes:[{id:'a',name:'Actual Bik
   {id:'unscheduled',assetId:'a',name:'No interval'},
 ],records:['overdue','due','soon','current'].map((id,i)=>({id:'record-'+id,assetId:'a',componentId:id,date:'2026-01-01',mileage:id==='overdue'?499:500,cost:i,serviceProvider:'Original provider',taskType:'Inspect',custom:'keep'}))};
 async function open(page,data=fixture){await page.clock.install({time:new Date('2026-11-02T12:00:00-06:00')});await page.addInitScript(({key,raw})=>{if(!sessionStorage.getItem('seeded')){localStorage.setItem(key,raw);sessionStorage.setItem('seeded','yes');}},{key,raw:JSON.stringify(data)});await page.goto('/#/maintenance-total');}
-async function garage(page){await page.locator('[data-imt-nav="assets"]').click();await page.getByRole('button',{name:'Open Bikes'}).click();await page.locator('[data-bike="a"]').click();}
+async function garage(page){await page.locator('[data-imt-nav="assets"]').click();await page.locator('[data-bike="a"]').click();}
 for(const theme of ['light','dark','system'])test(`Today, Done, reload, undo, nav geometry and ${theme}`,async({page},info)=>{
   await open(page);await page.emulateMedia({colorScheme:'dark'});await page.evaluate(t=>window.LandosTheme.setPreference(t),theme);
   await expect(page.locator('html')).toHaveAttribute('data-theme',theme==='system'?'dark':theme);
@@ -38,7 +38,7 @@ test('interval edit keeps legacy data and new components capture creation baseli
   let saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.components[0]).toMatchObject({intervalMiles:800,intervalMonths:6,estCost:0,estMinutes:15,currentStatus:'Attention',lastService:'Legacy text',custom:42});expect(saved.records).toEqual(fixture.records);
   await page.locator('[data-action="back"]').click();await page.locator('[data-action="add-component"]').click();await page.getByLabel('Component name *',{exact:true}).fill('New task');await page.getByLabel('Service interval (miles)',{exact:true}).fill('500');await page.getByRole('button',{name:'Save',exact:true}).click();await page.clock.runFor(500);
   saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.components.at(-1)).toMatchObject({name:'New task',mileageAtCreation:1000,intervalMiles:500});
-  await page.locator('[data-component]').last().click();await expect(page.locator('.imt_status').first()).toHaveText('Current');await expect(page.locator('#maintenance-total-root')).toContainText('Based on task creation; no service record yet.');
+  await page.locator(`[data-component="${saved.components.at(-1).id}"]`).click();await expect(page.locator('.imt_status').first()).toHaveText('Current');await expect(page.locator('#maintenance-total-root')).toContainText('Based on task creation; no service record yet.');
 });
 test('Plan calendar grouping and time-first/mileage-first reasons',async({page})=>{
   const dates=['2026-10-01','2026-10-09','2026-10-16','2026-11-01'];const cs=dates.map((date,i)=>({id:'c'+i,assetId:'a',name:'Task '+i,intervalMonths:1}));const rs=dates.map((date,i)=>({id:'r'+i,assetId:'a',componentId:'c'+i,date,mileage:1000}));await open(page,{...fixture,components:cs,records:rs});await page.getByRole('button',{name:'Plan',exact:true}).click();
