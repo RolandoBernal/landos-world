@@ -19,7 +19,7 @@ async function download(page,testInfo,raw){
 }
 test('download uses current raw storage, preserving formatting, IDs, deleted records and unknown fields',async({page},testInfo)=>{
   await open(page,JSON.stringify(fixture));
-  await root(page).getByRole('button',{name:'More',exact:true}).click();
+  await page.locator('#imt_settings_toggle').click();
   const raw=' \n'+JSON.stringify({...fixture,records:[...fixture.records,{id:'deleted-id',deletedAt:'2026-10-02'}],unknown:{updated:'é 🚲'}})+'\n';
   await page.evaluate(({key,raw})=>localStorage.setItem(key,raw),{key:KEY,raw});
   await download(page,testInfo,raw);
@@ -27,8 +27,9 @@ test('download uses current raw storage, preserving formatting, IDs, deleted rec
 for(const [label,raw] of [['malformed','{broken'],['empty',''],['unsupported-version','{"version":2}'],['invalid-shape','{"version":1,"bikes":{},"components":[],"records":[]}']]){
   test(`${label} storage stays protected through navigation and reload and can be exported`,async({page},testInfo)=>{
     await open(page,raw);
-    for(const name of ['Home','History','Add','Assets','More']){
-      await root(page).getByRole('button',{name,exact:true}).click();
+    for(const name of ['Today','History','Add','Garage','Settings']){
+      if(name==='Settings')await page.locator('#imt_settings_toggle').click();
+      else await root(page).getByRole('button',{name,exact:true}).click();
       await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');
       await expect(root(page).locator('form')).toHaveCount(0);expect(await stored(page)).toBe(raw);
     }
@@ -38,11 +39,11 @@ for(const [label,raw] of [['malformed','{broken'],['empty',''],['unsupported-ver
 }
 test('missing storage exports no samples and retains bicycle creation',async({page})=>{
   await open(page,null);await expect(root(page).getByRole('button',{name:/Madone/})).toBeVisible();
-  await root(page).getByRole('button',{name:'More',exact:true}).click();
+  await page.locator('#imt_settings_toggle').click();
   let downloads=0;page.on('download',()=>downloads++);
   await root(page).getByRole('button',{name:'Download maintenance JSON'}).click();
   await expect(root(page).getByRole('status')).toContainText('No saved maintenance data');expect(await stored(page)).toBeNull();expect(downloads).toBe(0);
-  await root(page).getByRole('button',{name:'Home',exact:true}).click();
+  await page.locator('#imt_settings_toggle').click();
   await root(page).getByRole('button',{name:'＋ Add bike',exact:true}).click();
   await root(page).getByLabel('Name *',{exact:true}).fill('New bicycle');await root(page).getByRole('button',{name:'Save',exact:true}).click();
   await expect(root(page).getByRole('button',{name:/New bicycle/})).toBeVisible();
@@ -57,15 +58,15 @@ test('existing bicycle, component and maintenance add/edit/filter/delete workflo
   await root(page).getByRole('button',{name:/Chain/}).click();
   await root(page).locator('header').getByRole('button',{name:'Edit',exact:true}).click();
   await root(page).getByLabel('Notes',{exact:true}).fill('Component edited');await root(page).getByRole('button',{name:'Save',exact:true}).click();
-  await expect(root(page).getByRole('heading',{name:'Edited bicycle',exact:true})).toBeVisible();
-  await root(page).getByRole('button',{name:/Chain/}).click();
+  await expect(root(page).getByRole('heading',{name:'Chain',exact:true})).toBeVisible();
   await root(page).getByRole('button',{name:'＋ Add Service Record',exact:true}).click();
   await expect(root(page).getByLabel('Asset *',{exact:true})).toHaveValue('bike-original');
   await expect(root(page).getByLabel('Component (optional)',{exact:true})).toHaveValue('component-original');
   await root(page).getByLabel('Task *',{exact:true}).selectOption('Inspect');
   await root(page).getByLabel('Date *',{exact:true}).fill('2026-10-27');
   await root(page).getByLabel('Notes',{exact:true}).fill('New record');await root(page).getByRole('button',{name:'Save',exact:true}).click();
-  await expect(root(page).getByRole('heading',{name:'Maintenance History'})).toBeVisible();
+  await expect(root(page).getByRole('heading',{name:'Chain',exact:true})).toBeVisible();
+  await root(page).getByRole('button',{name:'History',exact:true}).click();
   await root(page).getByLabel('Filter by bike').selectOption('bike-original');
   await expect(root(page).locator('.imt_record_card')).toHaveCount(2);
   await root(page).locator('[data-edit-record="record-original"]').click();
