@@ -406,3 +406,16 @@
   .maintenance_total_view .imt_garage_hero .imt_stats { gap:5px; }
   .maintenance_total_view .imt_garage_hero .imt_stat { padding:8px; }
 }
+
+/* Step 5: recorded costs and service history use the shared KeepUp tokens. */
+.maintenance_total_view .imt_year_total { font-size: clamp(2rem, 9vw, 3rem); font-weight: 700; }
+.maintenance_total_view .imt_cost_row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: .65rem; align-items: center; margin: .85rem 0; font-size: .85rem; }
+.maintenance_total_view .imt_cost_track { height: 8px; border-radius: 8px; overflow: hidden; background: var(--surface2); }
+.maintenance_total_view .imt_cost_track i { display: block; height: 100%; border-radius: inherit; }
+.maintenance_total_view .imt_record_card { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-left: 4px solid var(--asset-accent); gap: .65rem; align-items: start; }
+.maintenance_total_view .imt_record_cost { text-align: right; font-size: .9rem; }
+.maintenance_total_view .imt_record_actions { grid-column: 1 / -1; justify-content: flex-end; }
+.maintenance_total_view .imt_record_summary { min-width: 0; overflow-wrap: anywhere; }
+.maintenance_total_view .imt_form :disabled { opacity: .65; }
+
+.maintenance_total_view .imt_history_icon { display: inline-grid; place-items: center; width: 30px; height: 30px; margin: 0 .5rem .4rem 0; border-radius: 10px; background: var(--asset-accent); color: #FFFFFF; font-size: .75rem; font-weight: 700; vertical-align: middle; }
