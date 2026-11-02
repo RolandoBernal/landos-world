@@ -38,10 +38,10 @@ for(const raw of ['{broken','', 'null','[]','{"version":2}', '{"version":1}',JSO
     a.export();assert.equal(await a.downloads[0].blob.text(),raw);assert.equal(a.stored(),raw);assert.deepEqual(a.writes,[]);
   });
 }
-test('missing storage retains initial behavior, export does not persist samples',()=>{
-  const a=app(null);assert.match(a.root.innerHTML,/Madone/);a.api.render('more');a.export();
+test('missing storage starts empty and supports saving the first asset',()=>{
+  const a=app(null);assert.doesNotMatch(a.root.innerHTML,/Madone/);a.api.render('more');a.export();
   assert.equal(a.downloads.length,0);assert.match(a.root.querySelector('[data-export-status]').textContent,/No saved/);assert.deepEqual(a.writes,[]);
-  a.api.render('home');a.addBike();assert.equal(JSON.parse(a.stored()).bikes.at(-1).name,'New bike');
+  a.api.render('home');a.addBike();assert.deepEqual(JSON.parse(a.stored()).bikes.map(b=>b.name),['New bike']);
 });
 test('valid saves preserve existing IDs and unknown fields',()=>{
   const data={...valid,bikes:[{id:'keep-id',active:true,name:'Bike',custom:42}],components:[{id:'keep-component',assetId:'keep-id',custom:true}],records:[{id:'keep-record',assetId:'keep-id',date:'2026-01-01',custom:'yes'}]};

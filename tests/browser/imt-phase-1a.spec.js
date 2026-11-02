@@ -38,12 +38,12 @@ for(const [label,raw] of [['malformed','{broken'],['empty',''],['unsupported-ver
     await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');expect(await stored(page)).toBe(raw);
   });
 }
-test('missing storage exports no samples and retains bicycle creation',async({page})=>{
-  await open(page,null);await bikes(page);await expect(root(page).getByRole('button',{name:/Madone/})).toBeVisible();
+test('missing storage starts with an empty Garage and supports the first asset',async({page})=>{
+  await open(page,null);await bikes(page);await expect(root(page).locator('.imt_asset_card')).toHaveCount(0);
   await page.locator('#imt_settings_toggle').click();
   let downloads=0;page.on('download',()=>downloads++);
   await root(page).getByRole('button',{name:'Download maintenance JSON'}).click();
-  await expect(root(page).getByRole('status')).toContainText('No saved maintenance data');expect(await stored(page)).toBeNull();expect(downloads).toBe(0);
+  await expect(root(page).locator('[data-export-status]')).toContainText('No saved maintenance data');expect(await stored(page)).toBeNull();expect(downloads).toBe(0);
   await page.locator('#imt_settings_toggle').click();
   await root(page).getByRole('button',{name:'＋ Add asset',exact:true}).click();
   await root(page).getByLabel('Name *',{exact:true}).fill('New bicycle');await root(page).getByRole('button',{name:'Save',exact:true}).click();
