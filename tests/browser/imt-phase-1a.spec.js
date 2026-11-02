@@ -8,7 +8,7 @@ async function open(page,raw){
   await expect(page.locator('#maintenance-total-root')).toBeVisible();
 }
 const root=page=>page.locator('#maintenance-total-root');
-async function bikes(page){await page.getByRole('button',{name:'Garage',exact:true}).click();await page.getByRole('button',{name:'Open Bikes'}).click();}
+async function bikes(page){await page.getByRole('button',{name:'Garage',exact:true}).click();}
 async function stored(page){return page.evaluate(key=>localStorage.getItem(key),KEY);}
 async function download(page,testInfo,raw){
   const pending=page.waitForEvent('download');
@@ -45,7 +45,7 @@ test('missing storage exports no samples and retains bicycle creation',async({pa
   await root(page).getByRole('button',{name:'Download maintenance JSON'}).click();
   await expect(root(page).getByRole('status')).toContainText('No saved maintenance data');expect(await stored(page)).toBeNull();expect(downloads).toBe(0);
   await page.locator('#imt_settings_toggle').click();
-  await root(page).getByRole('button',{name:'＋ Add bike',exact:true}).click();
+  await root(page).getByRole('button',{name:'＋ Add asset',exact:true}).click();
   await root(page).getByLabel('Name *',{exact:true}).fill('New bicycle');await root(page).getByRole('button',{name:'Save',exact:true}).click();
   await expect(root(page).getByRole('button',{name:/New bicycle/})).toBeVisible();
   expect(JSON.parse(await stored(page)).bikes.at(-1).name).toBe('New bicycle');

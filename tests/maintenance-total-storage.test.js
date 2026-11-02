@@ -46,7 +46,7 @@ test('missing storage retains initial behavior, export does not persist samples'
 test('valid saves preserve existing IDs and unknown fields',()=>{
   const data={...valid,bikes:[{id:'keep-id',active:true,name:'Bike',custom:42}],components:[{id:'keep-component',assetId:'keep-id',custom:true}],records:[{id:'keep-record',assetId:'keep-id',date:'2026-01-01',custom:'yes'}]};
   const a=app(JSON.stringify(data));a.addBike();const saved=JSON.parse(a.stored());
-  assert.deepEqual(saved.bikes[0],data.bikes[0]);assert.deepEqual(saved.components,data.components);assert.deepEqual(saved.records,data.records);assert.deepEqual(saved.extra,data.extra);
+  assert.deepEqual(saved.bikes[0],data.bikes[0]);assert.deepEqual(saved.components.filter(c=>c.assetId==='keep-id'),data.components);assert.equal(saved.components.length,data.components.length+7);assert.ok(saved.components.slice(data.components.length).every(c=>c.assetId===saved.bikes.at(-1).id));assert.deepEqual(saved.records,data.records);assert.deepEqual(saved.extra,data.extra);
 });
 test('unreadable storage blocks editing and reports export failure without writes',()=>{
   const a=app(null,{readError:true});assert.match(a.root.innerHTML,/Editing is disabled/);a.export();

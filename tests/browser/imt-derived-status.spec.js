@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 const key='lando-world:maintenance-total:v1';
 const fixture={version:1,unknown:{keep:true},bikes:[{id:'a',name:'Actual asset',active:true,currentMileage:100},{id:'b',name:'Other asset',active:true}],components:[{id:'c',assetId:'a',name:'Chain',currentStatus:'Attention',lastService:'Hand entered fiction',extra:42},{id:'empty',assetId:'a',name:'No logs',currentStatus:'Current'}],records:[{id:'older',assetId:'a',componentId:'c',date:'2026-01-01',taskType:'Inspect',cost:25},{id:'latest',assetId:'a',componentId:'c',date:'2026-10-01',taskType:'Replace',cost:0,mileage:0,serviceProvider:'Real provider'},{id:'deleted',assetId:'a',componentId:'c',date:'2026-11-01',taskType:'Repair',deletedAt:'yes'},{id:'wrong-asset',assetId:'b',componentId:'c',date:'2026-11-02',taskType:'Clean'}]};
 async function open(page){await page.addInitScript(({key,raw})=>{if(!localStorage.getItem(key))localStorage.setItem(key,raw)},{key,raw:JSON.stringify(fixture)});await page.goto('/#/maintenance-total');}
-async function component(page){await page.locator('[data-imt-nav="assets"]').click();await page.getByRole('button',{name:'Open Bikes'}).click();await page.locator('[data-bike="a"]').click();await page.locator('[data-component="c"]').click();}
+async function component(page){await page.locator('[data-imt-nav="assets"]').click();await page.locator('[data-bike="a"]').click();await page.locator('[data-component="c"]').click();}
 for(const theme of ['light','dark','system']) test(`derived records, safe navigation and mobile ${theme}`,async({page},info)=>{
   await page.setViewportSize({width:390,height:844});await open(page);
   await page.emulateMedia({colorScheme:'dark'});await page.evaluate(t=>window.LandosTheme.setPreference(t),theme);
@@ -20,7 +20,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
   page.once('dialog',d=>d.accept());await page.locator('[data-delete-record="older"]').click();await expect(page.getByRole('heading',{name:'Chain',exact:true})).toBeVisible();await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('2025-01-01');
   page.once('dialog',d=>d.accept());await page.locator('[data-delete-record="latest"]').click();await expect(page.locator('.imt_status').first()).toHaveText('No service record');
   await page.screenshot({path:info.outputPath(`${theme}-component.png`),fullPage:true});
-  await page.locator('[data-action="back"]').click();await expect(page.getByRole('heading',{name:'Actual asset',exact:true})).toBeVisible();await page.locator('[data-action="home"]').click();await expect(page.getByRole('heading',{name:'Bikes',exact:true})).toBeVisible();
+  await page.locator('[data-action="back"]').click();await expect(page.getByRole('heading',{name:'Actual asset',exact:true})).toBeVisible();await page.locator('[data-action="home"]').click();await expect(page.getByRole('heading',{name:'Garage',exact:true})).toBeVisible();
   await page.locator('[data-imt-nav="history"]').click();await expect(page.locator('.imt_record_card').first()).toContainText('Other asset');
   await page.getByLabel('Filter by bike').selectOption('b');await page.locator('[data-edit-record="wrong-asset"]').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by bike')).toHaveValue('b');
   await page.locator('#imt_settings_toggle').click();await page.locator('#imt_settings_toggle').click();await expect(page.getByLabel('Filter by bike')).toHaveValue('b');
