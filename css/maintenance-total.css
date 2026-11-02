@@ -32,14 +32,32 @@
   --shadow-sm:0 6px 20px rgba(20,33,30,.08);
 }
 .clock_utility_card--maintenance-total {
-  border-color: #f4f1ea;
-  background: radial-gradient(circle at 20% 15%, rgb(244 241 234 / 18%), transparent 42%), linear-gradient(145deg, #101112, #252522);
-  color: #fffdf7;
+  --imt-launcher-ink: #edefea;
+  --imt-launcher-action: #4db8aa;
+  --imt-launcher-action-ink: #0d1311;
+  --utility-accent-soft: var(--imt-launcher-action);
+  border-color: #35463f;
+  background: linear-gradient(145deg, #17211d, #0d1311);
+  color: var(--imt-launcher-ink);
 }
+
 .clock_utility_card--maintenance-total .clock_utility_title,
-.clock_utility_card--maintenance-total .clock_utility_description { color: #fffdf7; }
-.clock_utility_card--maintenance-total .clock_launch_btn { border-color: #fffdf7; background: #f4f1ea; color: #111; }
+.clock_utility_card--maintenance-total .clock_utility_description {
+  color: var(--imt-launcher-ink);
+}
+
+.clock_utility_card--maintenance-total .clock_launch_btn {
+  border-color: var(--imt-launcher-action);
+  background: var(--imt-launcher-action);
+  color: var(--imt-launcher-action-ink);
+}
+
 .clock_utility_card--maintenance-total .clock_utility_icon { width: clamp(68px, 18vw, 78px); height: clamp(68px, 18vw, 78px); object-fit: contain; }
+/* Tint the shared artwork on both surfaces while retaining its shading. */
+.clock_utility_card--maintenance-total .clock_utility_icon,
+.maintenance_total_view .digit_clock_logo {
+  filter: grayscale(1) sepia(1) saturate(1.65) hue-rotate(118deg) brightness(.82);
+}
 .app_theme select {
   -webkit-appearance: none;
   appearance: none;
