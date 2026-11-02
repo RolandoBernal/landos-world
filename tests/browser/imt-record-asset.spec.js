@@ -1,5 +1,16 @@
 import { test, expect } from '@playwright/test';
 const key = 'lando-world:maintenance-total:v1';
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(key => {
+    if (localStorage.getItem(key) !== null) return;
+    localStorage.setItem(key, JSON.stringify({
+      version: 1,
+      bikes: ['madone', 'mandalorian', 'el-viento'].map(id => ({ id, name: id, active: true })),
+      components: [{ id: 'madone-brakes', assetId: 'madone', name: 'Brakes' }],
+      records: [],
+    }));
+  }, key);
+});
 test('general Add requires an asset and persists the chosen bike across reload and edit', async ({ page }) => {
   await page.goto('/#/maintenance-total');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -8,7 +19,7 @@ test('general Add requires an asset and persists the chosen bike across reload a
   await page.getByLabel('Record type *', { exact: true }).selectOption('Clean');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect(await asset.evaluate(el => el.validity.valueMissing)).toBe(true);
-  expect(await page.evaluate(k => localStorage.getItem(k), key)).toBeNull();
+  expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).records, key)).toEqual([]);
   await asset.selectOption('mandalorian');
   await page.getByLabel('Record type *', { exact: true }).selectOption('Clean');
   await page.getByRole('button', { name: 'Save', exact: true }).click();

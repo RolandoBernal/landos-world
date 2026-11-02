@@ -1,23 +1,21 @@
 (() => {
   const KEY='lando-world:maintenance-total:v1';
   const taskTypes=['Inspect','Clean','Lubricate','Replace','Repair','Service','Tune-up','Custom'];
-  const components=['Brakes','Drivetrain','Tires','Wheels','Cockpit'];
-  const seedBikes=[['madone','Madone',3200],['mandalorian','Mandalorian',1250],['el-viento','El Viento',800],['top-ganna','Top Ganna',420]];
   const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}; const id=()=>`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
   const esc=(v='')=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-  function initial(){const bikes=seedBikes.map(([id,name,mileage])=>({id,category:'bikes',name,type:'Bicycle',currentMileage:mileage,active:true,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));const madone=bikes[0];return {version:1,bikes,components:components.map((name,i)=>({id:`madone-${name.toLowerCase()}`,assetId:madone.id,name,category:name,currentStatus:i===0?'Attention':'Current',lastService:i===0?'Replaced yesterday':'No record yet'})),records:[{id:'seed-brakes',assetId:'madone',componentId:'madone-brakes',taskType:'Replace',date:new Date(Date.now()-86400000).toISOString().slice(0,10),mileage:3150,cost:85,serviceProvider:'Local Bike Shop',notes:'Brake pads replaced.'},{id:'seed-chain',assetId:'madone',componentId:'madone-drivetrain',taskType:'Lubricate',date:'2026-08-18',mileage:3000,cost:0,serviceProvider:'',notes:'Chain cleaned and lubricated.'}]};}
+  const emptyState=()=>({version:1,bikes:[],components:[],records:[]});
   let storageBlocked=false;
   function load(){
     try{
       const raw=localStorage.getItem(KEY);
-      if(raw===null)return initial();
+      if(raw===null)return emptyState();
       const value=JSON.parse(raw);
       if(value?.version===1&&['bikes','components','records'].every(key=>Array.isArray(value[key])&&value[key].every(item=>item&&typeof item==='object'&&!Array.isArray(item))))return value;
     }catch{}
     storageBlocked=true;
     return null;
   }
-  function save(){if(storageBlocked)throw new Error('Stored maintenance data is protected.');localStorage.setItem(KEY,JSON.stringify(state))}
+  function save(value=state){if(storageBlocked)throw new Error('Stored maintenance data is protected.');localStorage.setItem(KEY,JSON.stringify(value))}
   let state=load(),root;
   function exportData(){
     const message=root.querySelector('[data-export-status]');
@@ -30,6 +28,79 @@
       try{document.body.append(link);link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
       message.textContent='Export download requested.';
     }catch{message.textContent='Unable to export maintenance data. Please try again.';}
+  }
+  function validBackup(value){
+    const requiredText=value=>typeof value==='string'&&value.trim()!=='';
+    const optionalText=value=>value==null||typeof value==='string';
+    const optionalNumber=value=>value==null||value===''||nonnegative(value)!==null;
+    function validRows(rows,fields,numbers,validate){
+      if(!Array.isArray(rows))return false;
+      const ids=new Set();
+      return rows.every(row=>{
+        if(!row||typeof row!=='object'||Array.isArray(row)||!requiredText(row.id)||ids.has(row.id))return false;
+        ids.add(row.id);
+        return [...fields,'notes','createdAt','updatedAt'].every(key=>optionalText(row[key]))
+          &&numbers.every(key=>optionalNumber(row[key]))&&validate(row);
+      });
+    }
+    // Legacy history can contain links to assets or components that no longer exist.
+    return value?.version===1
+      &&validRows(value.bikes,['category','type','brand','model','starterTemplateDecision'],['currentMileage'],
+        b=>requiredText(b.name)&&(b.active==null||typeof b.active==='boolean'))
+      &&validRows(value.components,['category','lastDoneDate'],['intervalMiles','intervalMonths','estCost','estMinutes','mileageAtCreation','lastDoneMileage'],
+        c=>requiredText(c.assetId)&&requiredText(c.name))
+      &&validRows(value.records,['componentId','taskType','serviceProvider','deletedAt'],['mileage','cost'],
+        r=>requiredText(r.assetId)&&typeof r.date==='string'&&r.date.length===10&&dateValue(r.date)!==null);
+  }
+  async function restoreData(event){
+    const input=event.currentTarget;
+    const file=input.files[0];
+    input.value='';
+    if(!file)return;
+    const button=root.querySelector('[data-action="restore"]');
+    const message=root.querySelector('[data-restore-status]');
+    button.disabled=true;
+    message.textContent='';
+    let raw,value;
+    try{
+      raw=await file.text();
+      value=JSON.parse(raw);
+    }catch{
+      message.textContent='Unable to read this file as maintenance JSON.';
+      return;
+    }finally{
+      button.disabled=false;
+    }
+    if(!root.contains(input)||!input.isConnected)return;
+    if(!validBackup(value)){
+      message.textContent='Select a valid version 1 iMT maintenance JSON backup.';
+      return;
+    }
+    if(!load())return protectedStorage();
+    if(!window.confirm("Restore this backup? This replaces only this installation’s iMT assets, components, and maintenance records."))return;
+    if(!load())return protectedStorage();
+    try{
+      localStorage.setItem(KEY,raw);
+    }catch{
+      message.textContent='Unable to restore maintenance data. Please try again.';
+      return;
+    }
+    state=value;
+    settingsReturn=home;
+    message.textContent='iMT data has been restored.';
+  }
+  function resetData(){
+    if(!window.confirm('Permanently delete all iMT assets, components, and maintenance records from this browser or installed PWA? This cannot be undone. Other apps and devices are unaffected.'))return;
+    if(!load())return protectedStorage();
+    const empty=emptyState();
+    const message=root.querySelector('[data-reset-status]');
+    try{save(empty);}catch{
+      message.textContent='Unable to reset maintenance data. Please try again.';
+      return;
+    }
+    state=empty;
+    settingsReturn=home;
+    message.textContent='iMT data has been reset.';
   }
   const exportMarkup='<button type="button" class="imt_button" data-action="export">Download maintenance JSON</button><p class="imt_muted" data-export-status role="status"></p>';
   function protectedStorage(){shell(`<header class="imt_header"><h1>iMaintenanceTotal</h1></header><section class="imt_section"><p role="alert">Stored maintenance data could not be read or is unsupported. Editing is disabled to protect it. You can download the stored value below.</p>${exportMarkup}</section>`,'more');root.querySelector('[data-action="export"]').onclick=exportData;}
@@ -202,7 +273,7 @@
     }
     updateComponents(cid);assetSelect.onchange=()=>updateComponents();componentSelect.onchange=defaults;
   }
-  function render(page='home'){if(storageBlocked)return protectedStorage();if(page==='add')return recordForm();if(page==='history')return history();if(page==='assets')return assets();if(page==='plan')return plan();if(page==='more'){settingsReturn=currentView;shell('<header class="imt_header"><h1>Settings</h1></header><section class="imt_section"><h2>Settings</h2><p class="imt_muted">iMaintenanceTotal stores your maintenance data on this device.</p>'+exportMarkup+'</section>','more');root.querySelector('[data-action="export"]').onclick=exportData;const close=root.querySelector('[aria-label="Close Settings"]');if(close)close.onclick=settingsReturn;return;}home()}
+  function render(page='home'){if(storageBlocked)return protectedStorage();if(page==='add')return recordForm();if(page==='history')return history();if(page==='assets')return assets();if(page==='plan')return plan();if(page==='more'){settingsReturn=currentView;shell('<header class="imt_header"><h1>Settings</h1></header><section class="imt_section"><h2>Settings</h2><p class="imt_muted">iMaintenanceTotal stores your maintenance data on this device.</p>'+exportMarkup+'<button type="button" class="imt_button" data-action="restore">Restore maintenance JSON</button><input type="file" accept=".json,application/json" data-restore-file hidden><p class="imt_muted" data-restore-status role="status"></p></section><section class="imt_section"><h2>Reset maintenance data</h2><p class="imt_muted">Permanently clear iMT assets, components, and history on this installation.</p><button type="button" class="imt_button" data-action="reset">Reset iMT Data</button><p class="imt_muted" data-reset-status role="status"></p></section>','more');root.querySelector('[data-action="reset"]').onclick=resetData;const restoreFile=root.querySelector('[data-restore-file]');restoreFile.onchange=restoreData;root.querySelector('[data-action="restore"]').onclick=()=>restoreFile.click();root.querySelector('[data-action="export"]').onclick=exportData;const close=root.querySelector('[aria-label="Close Settings"]');if(close)close.onclick=()=>settingsReturn();return;}home()}
   // Match LLT/LWVD's clamped scroll anchor and 12px movement threshold.
   function updateFloatingNavOnScroll(){
     const nav=root?.querySelector('.imt_floating_controls');
