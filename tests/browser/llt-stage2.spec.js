@@ -199,8 +199,8 @@ test('all native LLT dropdowns have readable opaque options in Dark and Light', 
         color: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor, disabled: node.disabled,
       })));
       for (const option of options) {
-        expect(option.background).toBe(theme === 'dark' ? 'rgb(28, 28, 30)' : 'rgb(255, 255, 255)');
-        expect(option.color).toBe(option.disabled ? (theme === 'dark' ? 'rgb(161, 161, 166)' : 'rgb(99, 99, 102)') : (theme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(28, 28, 30)'));
+        expect(option.background).toBe(theme === 'dark' ? 'rgb(26, 32, 44)' : 'rgb(255, 255, 255)');
+        expect(option.color).toBe(option.disabled ? (theme === 'dark' ? 'rgb(160, 174, 192)' : 'rgb(94, 109, 126)') : (theme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(22, 26, 29)'));
       }
     }
   }

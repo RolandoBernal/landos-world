@@ -232,11 +232,11 @@
 }
 
 #lando-launcher .app_theme--lee-lees-tracker {
-  --app-accent: #FF9F0A;
-  --app-accent-rgb: 255 159 10;
-  --app-accent-soft: #FF9F0A;
-  --app-accent-bg: #1C1C1E;
-  --app-accent-deep: #343436;
+  --app-accent: #0DB02B;
+  --app-accent-rgb: 13 176 43;
+  --app-accent-soft: #7ABE59;
+  --app-accent-bg: #1A202C;
+  --app-accent-deep: #2D3748;
   --app-accent-contrast: #000000;
 }
 

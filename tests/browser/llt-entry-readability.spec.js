@@ -49,13 +49,13 @@ for (const theme of ['dark', 'light']) {
    for(const given of await cards.locator('.lee_lee_diabetes_insulin_given').all()) {
     const style = await given.evaluate(n=>({weight:getComputedStyle(n).fontWeight,color:getComputedStyle(n).color,primary:getComputedStyle(n.closest('.lee_lee_diabetes_shell')).getPropertyValue('--lee-lee-text').trim()}));
     expect(style.weight).toBe('400');
-    expect(style.color).toBe(theme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(28, 28, 30)');
+    expect(style.color).toBe(theme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(22, 26, 29)');
    }
    for(const type of ['Breakfast','Snacks']) {
     const card=cards.filter({has:page.locator('.lee_lee_diabetes_timeline_type',{hasText:type})});
     const breakdown=card.locator('.lee_lee_diabetes_timeline_notes').filter({hasText:'Dose breakdown:'});
     await expect(breakdown).toHaveText(`Dose breakdown: 1.5 units carbs + ${type === 'Breakfast' ? 2 : 0} units correction`);
-    expect(await breakdown.evaluate(n=>getComputedStyle(n).color)).toBe(theme === 'dark' ? 'rgb(161, 161, 166)' : 'rgb(99, 99, 102)');
+    expect(await breakdown.evaluate(n=>getComputedStyle(n).color)).toBe(theme === 'dark' ? 'rgb(160, 174, 192)' : 'rgb(94, 109, 126)');
     expect(await breakdown.evaluate(n=>Boolean(n.previousElementSibling.querySelector('.lee_lee_diabetes_insulin_given')))).toBe(true);
    }
    for(const type of ['Correction','Bedtime']) await expect(cards.filter({has:page.locator('.lee_lee_diabetes_timeline_type',{hasText:type})})).not.toContainText('Dose breakdown:');
