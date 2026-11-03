@@ -1152,6 +1152,8 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       const route = normalizeRouteFromHash();
       updateEcosystemAppState(route);
       const shouldResetScroll = shouldResetForInitialRoute(route);
+      const enteringTracker = route === 'lee-lees-tracker'
+        && document.getElementById('lee-lees-tracker-view')?.hidden;
       let activeView;
       if (LANDO_ACTIVE_ROUTES.has(route)) {
         if (route === 'lee-lees-tracker') window.LeeLeeTrackerAccess?.enter?.();
@@ -1172,6 +1174,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           resetEcosystemScrollPosition(activeView);
         });
       }
+      if (enteringTracker) window.LeeLeeTrackerAccess?.resetTodayEntryScroll?.();
       pendingEcosystemScrollReset = false;
     }
 

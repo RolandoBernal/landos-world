@@ -479,6 +479,18 @@
     if (nav) nav.dataset.scrollAnchor = '0';
   }
 
+  function resetTodayEntryScroll() {
+    const reset = () => {
+      if (currentEditor || window.location.hash.replace(/^#\/?/, '') !== 'lee-lees-tracker'
+        || document.getElementById('lee-lees-tracker-view')?.hidden) return;
+      const root = getRoot();
+      if (root) resetTrackerScreenScroll(root);
+    };
+    reset();
+    // Reassert once after Safari has had a chance to restore the prior scroll.
+    requestAnimationFrame(reset);
+  }
+
   function renderTrackerScreen(root, markup) {
     const screen = getTrackerScreenKey();
     const changed = screen !== lastRenderedTrackerScreen;
@@ -10523,15 +10535,7 @@
     const recheckAccess = (event) => {
       updateAccessBoundary(syncRepository?.getSyncStatus?.() || syncStatus);
       if (!shouldShowProtectedApp()) renderInitialRoute();
-      else if (event?.type === 'pageshow' && !currentEditor
-        && window.location.hash.replace(/^#\/?/, '') === 'lee-lees-tracker') {
-        // Safari may present a restored position after Today first renders.
-        // Reassert once after presentation; ordinary user scrolling is unchanged.
-        resetTrackerScreenScroll(root);
-        requestAnimationFrame(() => {
-          if (!currentEditor && !document.getElementById('lee-lees-tracker-view')?.hidden) resetTrackerScreenScroll(root);
-        });
-      }
+      else if (event?.type === 'pageshow') resetTodayEntryScroll();
     };
     window.addEventListener('hashchange', recheckAccess);
     window.addEventListener('pageshow', recheckAccess);
@@ -11755,6 +11759,7 @@
 
   window.LeeLeeTrackerAccess = {
     getState: resolveAccess,
+    resetTodayEntryScroll,
     enter() {
       updateAccessBoundary(syncRepository?.getSyncStatus?.() || syncStatus);
       if (!shouldShowProtectedApp() || getGateRoot()?.querySelector('[data-auth-form], [data-access-gate]')) renderInitialRoute();
