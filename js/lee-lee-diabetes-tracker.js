@@ -1319,6 +1319,14 @@
           ${renderCarbCalculator(currentEditor.carbCalculatorRows)}
         </form>
       </section>`);
+    if (currentEditor.carbCalculatorMealEditorOpen) {
+      showSavedMealDialog(root);
+      return;
+    }
+    if (options.focusAction === 'open-carb-meal-editor') {
+      root.querySelector('[data-action="open-carb-meal-editor"]')?.focus({ preventScroll: true });
+      return;
+    }
     const focus = options.focusFoodsView ? '#lee-lee-diabetes-title' : options.carbCalculatorPickerFocus || (currentEditor.carbCalculatorItemEditorMode
       ? '[name="carbItemCarbs"]' : '[name="carbFoodSearch"]');
     const target = root.querySelector(focus);
@@ -6119,19 +6127,28 @@
     `;
   }
 
+  function showSavedMealDialog(root) {
+    const dialog = root.querySelector('.lee_lee_diabetes_carb_meal_dialog');
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      dialog.querySelector('[data-action="cancel-carb-meal-editor"]').click();
+    });
+    dialog.showModal();
+  }
+
   function renderSavedMealEditorPanel(rows = []) {
     const total = calculateCarbCalculatorMealTotal(rows);
     return `
-      <section class="lee_lee_diabetes_carb_editor_panel" aria-labelledby="lee-lee-carb-meal-editor-title">
+      <dialog class="lee_lee_diabetes_carb_editor_panel lee_lee_diabetes_carb_meal_dialog" aria-labelledby="lee-lee-carb-meal-editor-title">
         <h3 id="lee-lee-carb-meal-editor-title">Save as My Meal</h3>
         ${foodLibraryError ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(foodLibraryError)}</p>` : ''}
-        <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(currentEditor?.carbCalculatorMealNameDraft || '')}" required></label>
+        <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" autofocus maxlength="80" autocomplete="off" value="${escapeHtml(currentEditor?.carbCalculatorMealNameDraft || '')}" required></label>
         <p class="lee_lee_diabetes_help">${renderCarbs(total)}</p>
         <div class="lee_lee_diabetes_actions">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-meal-editor">Cancel</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save My Meal</button>
         </div>
-      </section>
+      </dialog>
     `;
   }
 
@@ -6502,19 +6519,19 @@
       requestAnimationFrame(applyFocus);
       window.setTimeout(applyFocus, 0);
     };
-    if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
+    if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorMealEditorOpen) {
+      showSavedMealDialog(root);
+    } else if (options.focusAction) {
+      focusTarget(`[data-action="${options.focusAction}"]`);
+    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
       focusTarget(currentEditor.carbCalculatorPickerFocus);
       currentEditor.carbCalculatorPickerFocus = '';
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode) {
       focusTarget('[name="carbItemCarbs"]');
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorFoodEditorOpen) {
       focusTarget('[name="foodName"]');
-    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorMealEditorOpen) {
-      focusTarget('[name="savedMealName"]');
     } else if (currentEditor.carbCalculatorOpen && (currentEditor.carbCalculatorPicker === 'search' || !previousEditor?.carbCalculatorOpen)) {
       focusTarget('[name="carbFoodSearch"]');
-    } else if (options.focusAction) {
-      focusTarget(`[data-action="${options.focusAction}"]`);
     } else if (currentEditor.carbCalculatorOpen && previousCarbCalculatorFocus) {
       restoreCarbCalculatorFocus(root, previousCarbCalculatorFocus);
     } else if (currentEditor.mode === 'low-glucose-recheck') {
@@ -7402,6 +7419,7 @@
       carbCalculatorMealEditorOpen: currentEditor.carbCalculatorMealEditorOpen,
       carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
       preventFocusScroll: true,
+      focusAction: result.error ? undefined : 'open-carb-meal-editor',
     });
   }
 
@@ -10857,6 +10875,7 @@
           carbCalculatorMealEditorOpen: currentEditor.carbCalculatorMealEditorOpen,
           carbCalculatorScrollSnapshot: currentEditor?.carbCalculatorScrollSnapshot || getScrollSnapshot(),
           preventFocusScroll: true,
+          focusAction: action === 'cancel-carb-meal-editor' ? 'open-carb-meal-editor' : undefined,
         });
         return;
       }
@@ -11513,6 +11532,7 @@
       }
     });
     root.addEventListener('keydown', (event) => {
+      if (currentEditor?.carbCalculatorMealEditorOpen) return;
       const lowDialog = root.querySelector('[data-low-dialog]');
       if (lowDialog && event.key === 'Escape') {
         event.preventDefault();
