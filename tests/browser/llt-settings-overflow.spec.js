@@ -73,6 +73,10 @@ for (const width of [320, 390]) for (const theme of ['light', 'dark']) {
     await page.locator('#lee_lee_settings_toggle').click();
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     await page.locator('[data-settings-accordion]').evaluateAll(nodes => nodes.forEach(node => node.open = true));
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(document.getAnimations().filter(animation => animation.transitionProperty === 'transform').map(animation => animation.finished));
+    });
     const overflow = async selector => page.locator(selector).evaluateAll(nodes => nodes.filter(node => {
       if (!node.getClientRects().length || getComputedStyle(node).overflowX === 'hidden' || getComputedStyle(node).clip !== 'auto' || getComputedStyle(node).opacity === '0') return false;
       const r = node.getBoundingClientRect();

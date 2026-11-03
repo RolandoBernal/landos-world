@@ -63,6 +63,8 @@ const PRECACHE_URLS = [
   './fonts/dm-sans-latin.woff2',
   './fonts/dm-sans-latin-ext.woff2',
   './fonts/roboto-mono-regular.ttf',
+  './fonts/montserrat-latin.woff2',
+  './fonts/montserrat-latin-ext.woff2',
   './icons/landos-world.svg',
   './icons/landos-world-192-v2.png',
   './icons/landos-world-512-v2.png',
