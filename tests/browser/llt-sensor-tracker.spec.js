@@ -339,14 +339,10 @@ test("tracked sensor disclosure is user controlled, keyboard accessible and resp
     expect(geometry.overflow).toBe(false);
     expect(geometry.first.clip || geometry.second.clip).toBe(false);
     expect(geometry.first.height).toBeGreaterThanOrEqual(44);
-    if (width<=640) {
-      expect(geometry.second.y).toBeGreaterThan(geometry.first.y);
-      expect(Math.abs(geometry.first.width-geometry.width)).toBeLessThan(2);
-      expect(Math.abs(geometry.second.width-geometry.width)).toBeLessThan(2);
-    } else {
-      expect(geometry.first.y).toBe(geometry.second.y);
-      expect(geometry.first.width).toBeLessThan(geometry.width);
-    }
+    // The 480px LLT shell keeps the card inside its stacking container query.
+    expect(geometry.second.y).toBeGreaterThanOrEqual(geometry.first.y + geometry.first.height);
+    expect(Math.abs(geometry.first.width - geometry.width)).toBeLessThan(2);
+    expect(Math.abs(geometry.second.width - geometry.width)).toBeLessThan(2);
     await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
     await page.screenshot({path:`/private/tmp/llt-accordion-expanded-${width}.png`});
     await summary.click();
