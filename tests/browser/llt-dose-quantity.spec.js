@@ -86,7 +86,7 @@ for (const theme of ['dark', 'light']) {
     // Presentation-only fixture avoids bypassing any real insulin verification gate.
     await page.locator('#lee-lee-diabetes-root').evaluate(root => root.insertAdjacentHTML('beforeend', '<section class="lee_lee_diabetes_dose_card"><div class="lee_lee_diabetes_dose_label">Suggested dose</div><div class="lee_lee_diabetes_dose_total">Synthetic dose</div><p>Explanatory text</p></section><section class="lee_lee_diabetes_dose_card lee_lee_diabetes_dose_card--notice lee_lee_diabetes_dose_card--verification-warning">Warning</section>'));
     const colors = await page.locator('.lee_lee_diabetes_dose_card').evaluateAll(nodes => nodes.map(n => {const s=getComputedStyle(n); return {bg:s.backgroundColor,border:s.borderTopColor};}));
-    expect(colors[0].bg).toBe(theme === 'dark' ? 'rgb(28, 28, 30)' : 'rgb(255, 255, 255)');
+    expect(colors[0].bg).toBe(theme === 'dark' ? 'rgb(26, 32, 44)' : 'rgb(255, 255, 255)');
     expect(colors[0].border).not.toBe(colors[1].border);
     await page.screenshot({ path: testInfo.outputPath('dose.png'), fullPage: true });
   });

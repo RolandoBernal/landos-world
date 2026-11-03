@@ -43,18 +43,44 @@
   object-fit: contain;
 }
 
-.lee_lee_diabetes_shell {
-  --lee-lee-bg: #000000;
-  --lee-lee-panel: #1C1C1E;
-  --lee-lee-panel-strong: #343436;
-  --lee-lee-border: rgb(255 255 255 / 15%);
-  --lee-lee-border-strong: rgb(var(--app-accent-rgb, 255 159 10) / 38%);
+/* Sensor dialogs mount under body and share the LLT palette. */
+#lee-lees-tracker-view,
+.llt_sensor_dialog {
+  --lee-lee-bg: #171923;
+  --lee-lee-panel: #1A202C;
+  --lee-lee-panel-strong: #2D3748;
+  --lee-lee-border-strong: rgb(var(--lee-lee-accent-rgb) / 40%);
+  --lee-lee-border: rgb(255 255 255 / 12%);
   --lee-lee-text: #FFFFFF;
-  --lee-lee-muted: #A1A1A6;
-  --lee-lee-soft: var(--app-accent-soft, #FF9F0A);
-  --lee-lee-accent: var(--app-accent, #FF9F0A);
-  --lee-lee-blue: var(--app-accent, #FF9F0A);
-  --lee-lee-green: #9dffcf;
+  --lee-lee-muted: #A0AEC0;
+  --lee-lee-soft: rgb(var(--lee-lee-accent-rgb) / 14%);
+  --lee-lee-accent: #0DB02B;
+  --lee-lee-blue: #106BAD;
+  --lee-lee-green: #7ABE59;
+  --lee-lee-accent-rgb: 13 176 43;
+  --lee-lee-accent-deep: #025F1D;
+  --lee-lee-warning: #F8AD3E;
+  --lee-lee-warning-text: var(--lee-lee-warning);
+  --lee-lee-danger: #AD1010;
+  --lee-lee-danger-text: #FF9C9C;
+  --lee-lee-focus: 0 0 0 0.2rem rgb(89 166 24 / 25%);
+}
+
+#lee-lees-tracker-view .ecosystem_nav_back {
+  color: var(--lee-lee-accent);
+}
+
+:root[data-theme="light"] #lee-lees-tracker-view .ecosystem_nav_back {
+  color: #137D00;
+}
+
+@media (hover: hover) {
+  #lee-lees-tracker-view .ecosystem_nav_back:hover {
+    text-decoration: underline;
+  }
+}
+
+.lee_lee_diabetes_shell {
   --llt-ui-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
   --llt-field-label-size: 0.92rem;
@@ -91,16 +117,18 @@
   font-family: var(--llt-numeric-font);
 }
 
-:root[data-theme="light"] .lee_lee_diabetes_shell {
-  --lee-lee-bg: #F5F5F7;
-  --lee-lee-panel: rgb(255 255 255 / 88%);
-  --lee-lee-panel-strong: rgb(250 250 252 / 96%);
-  --lee-lee-border: rgb(60 60 67 / 16%);
-  --lee-lee-border-strong: rgb(var(--app-accent-rgb, 138 75 0) / 40%);
-  --lee-lee-text: #1C1C1E;
-  --lee-lee-muted: #636366;
-  --lee-lee-soft: var(--app-accent-soft, #8A4B00);
-  --lee-lee-green: #13794a;
+:root[data-theme="light"] #lee-lees-tracker-view,
+:root[data-theme="light"] .llt_sensor_dialog {
+  --lee-lee-bg: #F4F3EA;
+  --lee-lee-panel: #FFFFFF;
+  --lee-lee-panel-strong: #F5F4EA;
+  --lee-lee-border: #DCDBDA;
+  --lee-lee-text: #161A1D;
+  --lee-lee-muted: #5E6D7E;
+  --lee-lee-soft: rgb(var(--lee-lee-accent-rgb) / 10%);
+  --lee-lee-green: #137D00;
+  --lee-lee-warning-text: #795000;
+  --lee-lee-danger-text: var(--lee-lee-danger);
 }
 
 .lee_lee_diabetes_loading,
@@ -135,7 +163,7 @@
 
 .lee_lee_diabetes_date {
   margin: 0;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 1rem;
   font-weight: 500;
 }
@@ -162,20 +190,20 @@
   padding: .85rem 1rem;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 1.1rem;
-  background: linear-gradient(135deg, rgb(var(--app-accent-rgb, 255 159 10) / 18%), var(--lee-lee-panel));
+  background: linear-gradient(135deg, rgb(var(--lee-lee-accent-rgb) / 18%), var(--lee-lee-panel));
   color: inherit;
   text-align: left;
   cursor: pointer;
   box-shadow: 0 .5rem 1.25rem rgb(0 0 0 / 10%);
   transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
-.lee_lee_diabetes_pre_meal_timer_card:hover { border-color: var(--lee-lee-accent); box-shadow: 0 .7rem 1.5rem rgb(0 0 0 / 16%); transform: translateY(-1px); }
+.lee_lee_diabetes_pre_meal_timer_card:hover { border-color: var(--lee-lee-green); box-shadow: 0 .7rem 1.5rem rgb(0 0 0 / 16%); transform: translateY(-1px); }
 .lee_lee_diabetes_shell .lee_lee_diabetes_pre_meal_timer_card { font: inherit; }
 .lee_lee_diabetes_pre_meal_timer_card:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 3px; }
 .lee_lee_diabetes_pre_meal_timer_card strong,
 .lee_lee_diabetes_pre_meal_timer_card small { display: block; }
 .lee_lee_diabetes_pre_meal_timer_card small { margin-top: .2rem; opacity: .72; }
-.lee_lee_diabetes_pre_meal_timer_icon { display: grid; place-items: center; inline-size: 2.35rem; block-size: 2.35rem; border-radius: .8rem; background: rgb(var(--app-accent-rgb, 255 159 10) / 22%); color: var(--lee-lee-soft); font-size: 1.25rem; }
+.lee_lee_diabetes_pre_meal_timer_icon { display: grid; place-items: center; inline-size: 2.35rem; block-size: 2.35rem; border-radius: .8rem; background: rgb(var(--lee-lee-accent-rgb) / 22%); color: var(--lee-lee-green); font-size: 1.25rem; }
 .lee_lee_diabetes_pre_meal_timer_value,
 .lee_lee_diabetes_pre_meal_timer_large,
 .lee_lee_diabetes_pre_meal_timer_conflict_time { font-family: var(--llt-numeric-font); font-variant-numeric: tabular-nums; }
@@ -189,13 +217,13 @@
 .lee_lee_diabetes_pre_meal_timer_panel--saved { width: min(100%, 22rem); max-width: 100%; max-height: none; overflow: visible; padding: 1.5rem 1.25rem max(1.35rem, env(safe-area-inset-bottom)); border-color: var(--lee-lee-border-strong); border-radius: 1.35rem; background: var(--lee-lee-bg); box-shadow: 0 1rem 3rem rgb(0 0 0 / 38%); }
 .lee_lee_diabetes_pre_meal_timer_panel h1 { margin: .65rem 0 .25rem; font-size: clamp(1.35rem, 5vw, 1.8rem); }
 .lee_lee_diabetes_pre_meal_timer_header { display: grid; grid-template-columns: 2.5rem 1fr 2.5rem; align-items: center; min-height: 2.5rem; color: var(--lee-lee-muted); font-size: .82rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.lee_lee_diabetes_pre_meal_timer_back { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; border: 0; border-radius: 50%; background: transparent; color: var(--lee-lee-soft); font-size: 1.9rem; cursor: pointer; }
+.lee_lee_diabetes_pre_meal_timer_back { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; border: 0; border-radius: 50%; background: transparent; color: var(--lee-lee-green); font-size: 1.9rem; cursor: pointer; }
 .lee_lee_diabetes_pre_meal_timer_back:focus-visible { outline: 3px solid var(--lee-lee-soft); outline-offset: 2px; }
-.lee_lee_diabetes_pre_meal_timer_status_icon { display: grid; place-items: center; inline-size: 3.2rem; block-size: 3.2rem; margin: .55rem auto 0; border-radius: 50%; background: rgb(var(--app-accent-rgb, 255 159 10) / 18%); color: var(--lee-lee-soft); font-size: 1.45rem; }
+.lee_lee_diabetes_pre_meal_timer_status_icon { display: grid; place-items: center; inline-size: 3.2rem; block-size: 3.2rem; margin: .55rem auto 0; border-radius: 50%; background: rgb(var(--lee-lee-accent-rgb) / 18%); color: var(--lee-lee-green); font-size: 1.45rem; }
 .lee_lee_diabetes_pre_meal_timer_status_icon.is-success,
-.lee_lee_diabetes_pre_meal_timer_status_icon.is-complete { background: rgb(20 180 112 / 18%); color: var(--lee-lee-green); }
-.lee_lee_diabetes_pre_meal_timer_status_icon.is-conflict { background: rgb(245 158 11 / 18%); color: #f59e0b; }
-.lee_lee_diabetes_pre_meal_timer_ring { display: grid; place-items: center; inline-size: min(62vw, 15rem); aspect-ratio: 1; margin: 1rem auto; padding: .65rem; border-radius: 50%; background: conic-gradient(var(--lee-lee-accent) var(--timer-progress, 0%), rgb(var(--app-accent-rgb, 255 159 10) / 15%) 0); }
+.lee_lee_diabetes_pre_meal_timer_status_icon.is-complete { background: color-mix(in srgb, var(--lee-lee-green) 18%, transparent); color: var(--lee-lee-green); }
+.lee_lee_diabetes_pre_meal_timer_status_icon.is-conflict { background: color-mix(in srgb, var(--lee-lee-warning) 18%, transparent); color: var(--lee-lee-warning-text); }
+.lee_lee_diabetes_pre_meal_timer_ring { display: grid; place-items: center; inline-size: min(62vw, 15rem); aspect-ratio: 1; margin: 1rem auto; padding: .65rem; border-radius: 50%; background: conic-gradient(var(--lee-lee-accent) var(--timer-progress, 0%), rgb(var(--lee-lee-accent-rgb) / 15%) 0); }
 .lee_lee_diabetes_pre_meal_timer_ring_inner { display: grid; place-items: center; align-content: center; inline-size: 100%; block-size: 100%; border-radius: 50%; background: var(--lee-lee-panel-strong); }
 .lee_lee_diabetes_pre_meal_timer_large { font-size: clamp(2.8rem, 14vw, 4.5rem); line-height: 1; }
 .lee_lee_diabetes_pre_meal_timer_ring_inner span,
@@ -203,14 +231,14 @@
 .lee_lee_diabetes_pre_meal_timer_message { margin: .35rem auto; color: var(--lee-lee-text); font-size: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_background_note { max-width: 25rem; margin: .75rem auto 1rem; color: var(--lee-lee-muted); font-size: .8rem; }
 .lee_lee_diabetes_pre_meal_timer_source { display: grid; gap: .55rem; margin: 1rem 0; padding: .9rem 1rem; border: 1px solid var(--lee-lee-border); border-radius: 1rem; background: var(--lee-lee-panel); text-align: left; }
-.lee_lee_diabetes_pre_meal_timer_source_context { margin: 0 0 .2rem; color: var(--lee-lee-soft); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.lee_lee_diabetes_pre_meal_timer_source_context { margin: 0 0 .2rem; color: var(--lee-lee-green); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .lee_lee_diabetes_pre_meal_timer_source div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_source dt { opacity: .72; }
 .lee_lee_diabetes_pre_meal_timer_source dd { min-width: 0; margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 .lee_lee_diabetes_pre_meal_timer_source_time { color: var(--lee-lee-muted); font-size: .9rem; font-weight: 600; }
-.lee_lee_diabetes_pre_meal_timer_success_countdown { display: flex; align-items: center; justify-content: center; gap: .7rem; margin: 1.05rem 0 .8rem; padding: 0; color: var(--lee-lee-soft); }
+.lee_lee_diabetes_pre_meal_timer_success_countdown { display: flex; align-items: center; justify-content: center; gap: .7rem; margin: 1.05rem 0 .8rem; padding: 0; color: var(--lee-lee-green); }
 .lee_lee_diabetes_pre_meal_timer_success_countdown .lee_lee_diabetes_pre_meal_timer_large { color: var(--lee-lee-text); font-size: clamp(2.4rem, 12vw, 4rem); }
-.lee_lee_diabetes_pre_meal_timer_success_icon { display: grid; place-items: center; inline-size: 2.25rem; block-size: 2.25rem; border-radius: 50%; background: rgb(var(--app-accent-rgb, 255 159 10) / 20%); font-size: 1.2rem; }
+.lee_lee_diabetes_pre_meal_timer_success_icon { display: grid; place-items: center; inline-size: 2.25rem; block-size: 2.25rem; border-radius: 50%; background: rgb(var(--lee-lee-accent-rgb) / 20%); font-size: 1.2rem; }
 .lee_lee_diabetes_pre_meal_timer_success_hint { margin: 0 0 1rem; color: var(--lee-lee-muted); font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
 .lee_lee_diabetes_actions.lee_lee_diabetes_pre_meal_timer_success_actions { display: grid; grid-template-columns: 1fr; gap: .65rem; width: 100%; margin-top: 1rem; }
 .lee_lee_diabetes_pre_meal_timer_success_actions .lee_lee_diabetes_button { width: 100%; min-height: 2.9rem; }
@@ -227,7 +255,7 @@
 .lee_lee_diabetes_pre_meal_timer_conflict_actions { display: grid; gap: .65rem; margin-top: 1.25rem; }
 .lee_lee_diabetes_pre_meal_timer_stop_actions { display: grid; gap: .65rem; margin-top: 1.25rem; }
 .lee_lee_diabetes_pre_meal_timer_stop_actions .lee_lee_diabetes_button { width: 100%; }
-.lee_lee_diabetes_button--danger { border-color: rgb(239 68 68 / 45%); color: #fca5a5; }
+.lee_lee_diabetes_button--danger { border-color: color-mix(in srgb, var(--lee-lee-danger) 45%, transparent); color: var(--lee-lee-danger-text); }
 .lee_lee_diabetes_button--text { border: 0; background: transparent; color: var(--lee-lee-muted); }
 @container llt (max-width: 23rem) {
   .lee_lee_diabetes_pre_meal_timer_actions { display: grid; grid-template-columns: 1fr; }
@@ -295,8 +323,8 @@
 
 .lee_lee_diabetes_nav_button.is-active {
   border-color: var(--lee-lee-border-strong);
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 16%);
-  color: var(--lee-lee-soft);
+  background: rgb(var(--lee-lee-accent-rgb) / 16%);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_card:focus-visible,
@@ -309,8 +337,9 @@
 .lee_lee_diabetes_select:focus-visible,
 .lee_lee_diabetes_select[data-context-pending],
 .lee_lee_diabetes_history_date:focus-visible {
-  outline: 2px solid var(--lee-lee-soft);
+  outline: 2px solid var(--lee-lee-border-strong);
   outline-offset: 3px;
+  box-shadow: var(--lee-lee-focus);
 }
 
 .lee_lee_diabetes_card_title,
@@ -327,7 +356,7 @@
 }
 
 .lee_lee_diabetes_card.is-complete .lee_lee_diabetes_card_status {
-  color: var(--lee-lee-blue);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_card_values {
@@ -345,14 +374,14 @@
   border: 1px solid var(--lee-lee-border);
   border-radius: 999px;
   background: rgb(0 0 0 / 20%);
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.82rem;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .lee_lee_diabetes_card_icon {
-  color: var(--lee-lee-accent);
+  color: var(--lee-lee-green);
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -396,7 +425,7 @@
 
 .lee_lee_diabetes_event_option::after {
   content: '›';
-  color: var(--lee-lee-accent);
+  color: var(--lee-lee-green);
   font-size: 1.35rem;
 }
 
@@ -407,7 +436,7 @@
 
 .lee_lee_diabetes_section_title {
   margin: 1.3rem 0 0.7rem;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 1rem;
 }
 
@@ -440,7 +469,7 @@
 }
 
 .lee_lee_diabetes_timeline_time {
-  color: var(--lee-lee-blue);
+  color: var(--lee-lee-muted);
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -469,7 +498,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -478,7 +507,7 @@
 }
 
 .lee_lee_diabetes_timeline_edit--danger {
-  color: #fca5a5;
+  color: var(--lee-lee-danger-text);
 }
 
 .lee_lee_diabetes_timeline_edit--muted {
@@ -486,7 +515,7 @@
 }
 
 .lee_lee_diabetes_timeline_edit--primary {
-  color: var(--app-accent);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_back_link {
@@ -516,7 +545,7 @@
 
 .lee_lee_diabetes_timeline_edit--danger:hover,
 .lee_lee_diabetes_timeline_edit--danger:focus-visible {
-  color: #fecaca;
+  color: var(--lee-lee-danger-text);
 }
 
 .lee_lee_diabetes_filters {
@@ -535,7 +564,7 @@
 
 .lee_lee_diabetes_filter_summary {
   margin: 0;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -552,7 +581,7 @@
   min-height: 24px;
   margin-left: 0.35rem;
   border-radius: 999px;
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 24%);
+  background: rgb(var(--lee-lee-accent-rgb) / 24%);
   color: var(--lee-lee-text);
 }
 
@@ -576,7 +605,7 @@
   box-sizing: border-box;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 18px 18px 0 0;
-  background: #1C1C1E;
+  background: var(--lee-lee-panel);
   box-shadow: 0 -18px 50px rgb(0 0 0 / 44%);
   transform: translateX(-50%);
   overflow-y: auto;
@@ -650,11 +679,11 @@
 
 .lee_lee_diabetes_conflict_grid div.is-different {
   border-color: var(--lee-lee-border-strong);
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 10%);
+  background: rgb(var(--lee-lee-accent-rgb) / 10%);
 }
 
 .lee_lee_diabetes_conflict_grid dt {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 600;
 }
 
@@ -739,7 +768,7 @@
 
 .lee_lee_diabetes_chart figcaption {
   margin-bottom: 0.65rem;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 600;
 }
 
@@ -772,7 +801,7 @@
 }
 
 .lee_lee_diabetes_chart_unit {
-  fill: var(--lee-lee-soft);
+  fill: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_chart_axis {
@@ -814,7 +843,7 @@
 }
 
 .lee_lee_diabetes_chart_target {
-  fill: rgb(var(--app-accent-rgb, 255 159 10) / 12%);
+  fill: rgb(var(--lee-lee-accent-rgb) / 12%);
 }
 
 .lee_lee_diabetes_chart_tooltip {
@@ -826,7 +855,7 @@
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 8px;
-  background: #1C1C1E;
+  background: var(--lee-lee-panel);
   box-shadow: 0 12px 28px rgb(0 0 0 / 30%);
   color: var(--lee-lee-muted);
   font-size: 0.74rem;
@@ -905,7 +934,7 @@
 .lee_lee_diabetes_field {
   display: grid;
   gap: var(--llt-field-label-gap);
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: var(--llt-field-label-size);
   font-weight: var(--llt-field-label-weight);
 }
@@ -968,7 +997,7 @@
 .lee_lee_diabetes_save_status--failed,
 .lee_lee_diabetes_save_status--unavailable,
 .lee_lee_diabetes_save_status--conflict {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 500;
 }
 
@@ -976,13 +1005,13 @@
 .lee_lee_diabetes_save_status--signed-out,
 .lee_lee_diabetes_save_status--waiting,
 .lee_lee_diabetes_save_status--offline {
-  color: #fbbf24;
+  color: var(--lee-lee-warning-text);
   font-weight: 500;
 }
 
 .lee_lee_diabetes_save_status--syncing,
 .lee_lee_diabetes_save_status--synced {
-  color: var(--lee-lee-accent);
+  color: var(--lee-lee-green);
   font-weight: 500;
 }
 
@@ -994,7 +1023,7 @@
   margin-left: 0.45rem;
   border: 0;
   background: transparent;
-  color: var(--lee-lee-accent);
+  color: var(--lee-lee-green);
   font: inherit;
   font-weight: 600;
   text-decoration: underline;
@@ -1007,7 +1036,7 @@
   padding: 0.85rem;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 8px;
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 10%);
+  background: rgb(var(--lee-lee-accent-rgb) / 10%);
 }
 
 .lee_lee_diabetes_dose_card p {
@@ -1022,16 +1051,16 @@
 }
 
 .lee_lee_diabetes_dose_card--verification-warning {
-  border-color: rgb(251 191 36 / 58%);
-  background: rgb(251 191 36 / 12%);
+  border-color: color-mix(in srgb, var(--lee-lee-warning) 58%, transparent);
+  background: color-mix(in srgb, var(--lee-lee-warning) 12%, transparent);
 }
 
 .lee_lee_diabetes_dose_card--verification-warning .lee_lee_diabetes_dose_label {
-  color: #fbbf24;
+  color: var(--lee-lee-warning-text);
 }
 
 .lee_lee_diabetes_dose_label {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.82rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1057,10 +1086,10 @@
 .lee_lee_diabetes_dose_breakdown--adjustment {
   margin-top: 0.4rem;
   padding: 0.42rem 0.6rem;
-  border-left: 3px solid #63c879;
+  border-left: 3px solid var(--lee-lee-green);
   border-radius: 4px;
-  background: rgb(99 200 121 / 14%);
-  color: #8be39b;
+  background: color-mix(in srgb, var(--lee-lee-green) 14%, transparent);
+  color: var(--lee-lee-green);
   font-weight: 650;
 }
 
@@ -1071,10 +1100,10 @@
 .lee_lee_diabetes_dose_warning {
   margin: 0;
   padding: 0.65rem 0.75rem;
-  border: 1px solid rgb(255 202 87 / 52%);
+  border: 1px solid color-mix(in srgb, var(--lee-lee-warning) 52%, transparent);
   border-radius: 8px;
-  background: rgb(255 202 87 / 12%);
-  color: #ffe08a;
+  background: color-mix(in srgb, var(--lee-lee-warning) 12%, transparent);
+  color: var(--lee-lee-warning-text);
   font-weight: 600;
 }
 
@@ -1161,7 +1190,7 @@
   box-sizing: border-box;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 18px;
-  background: #1C1C1E;
+  background: var(--lee-lee-panel);
   color: var(--lee-lee-text);
   box-shadow: 0 24px 70px rgb(0 0 0 / 44%);
   overflow: hidden;
@@ -1381,7 +1410,7 @@
 .lee_lee_diabetes_meal_builder_add_food:focus-visible,
 .lee_lee_diabetes_meal_builder .lee_lee_diabetes_input:focus,
 .lee_lee_diabetes_meal_builder .lee_lee_diabetes_input:focus-visible {
-  border-color: var(--lee-lee-soft);
+  border-color: var(--lee-lee-green);
   outline: 0;
   box-shadow: inset 0 0 0 1px var(--lee-lee-soft);
 }
@@ -1435,11 +1464,11 @@
 
 .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus,
 .lee_lee_diabetes_food_editor_dialog .lee_lee_diabetes_input:focus-visible {
-  border-color: var(--lee-lee-soft);
+  border-color: var(--lee-lee-green);
   outline: 0;
   box-shadow:
     inset 0 0 0 1px var(--lee-lee-soft),
-    0 0 0 3px rgb(var(--app-accent-rgb, 255 159 10) / 22%);
+    0 0 0 3px rgb(var(--lee-lee-accent-rgb) / 22%);
 }
 
 .lee_lee_diabetes_carb_search {
@@ -1605,7 +1634,7 @@
 }
 
 .lee_lee_diabetes_carb_pick_state {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 1.15rem;
   font-weight: 600;
   line-height: 1;
@@ -1648,7 +1677,7 @@
 }
 
 .lee_lee_diabetes_food_item .lee_lee_diabetes_food_note {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.76rem;
 }
 
@@ -1874,7 +1903,7 @@
   margin-top: 0.05rem;
   padding: 0.5rem 0 0.25rem;
   border-top: 1px solid var(--lee-lee-border);
-  background: #1C1C1E;
+  background: var(--lee-lee-panel);
 }
 
 .lee_lee_diabetes_carb_calculator--item-editor > .lee_lee_diabetes_carb_item_editor_actions {
@@ -1943,10 +1972,8 @@
 
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus,
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus-visible {
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 14%);
-  outline: 2px solid rgb(var(--app-accent-rgb, 255 159 10) / 28%);
-  outline-offset: 1px;
-  box-shadow: none;
+  background: rgb(var(--lee-lee-accent-rgb) / 14%);
+  box-shadow: var(--lee-lee-focus);
 }
 
 .lee_lee_diabetes_carb_calc_unit_input {
@@ -2013,7 +2040,7 @@
 }
 
 .lee_lee_diabetes_icon_button--danger {
-  color: #fca5a5;
+  color: var(--lee-lee-danger-text);
 }
 
 .lee_lee_diabetes_carb_calc_sum {
@@ -2109,7 +2136,7 @@
     bottom: 0;
     margin-top: auto;
     padding-top: 0.3rem;
-    background: #1C1C1E;
+    background: var(--lee-lee-panel);
   }
 
   .lee_lee_diabetes_meal_builder_component {
@@ -2199,7 +2226,7 @@
   align-items: center;
   justify-content: space-between;
   min-height: 2rem;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 700;
   cursor: pointer;
   list-style: none;
@@ -2304,7 +2331,7 @@
 }
 
 .lee_lee_diabetes_field_label {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: var(--llt-field-label-size);
   font-weight: var(--llt-field-label-weight);
 }
@@ -2341,7 +2368,7 @@
 
 .lee_lee_diabetes_ranges legend {
   margin-bottom: 0.65rem;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.92rem;
   font-weight: 600;
 }
@@ -2393,8 +2420,8 @@
   padding: 0.75rem;
   border: 1px solid var(--lee-lee-border-strong);
   border-radius: 8px;
-  background: rgb(var(--app-accent-rgb, 255 159 10) / 10%);
-  color: var(--lee-lee-soft);
+  background: rgb(var(--lee-lee-accent-rgb) / 10%);
+  color: var(--lee-lee-green);
   font-weight: 600;
 }
 
@@ -2446,7 +2473,7 @@
 
 .lee_lee_diabetes_plan_verification_header h3 {
   margin: 0;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-size: 0.82rem;
   letter-spacing: 0.04em;
 }
@@ -2457,12 +2484,12 @@
 }
 
 .lee_lee_diabetes_plan_verification_status--verified {
-  color: var(--lee-lee-accent);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_plan_verification_status--mismatch,
 .lee_lee_diabetes_plan_verification_status--not_verified {
-  color: #fbbf24;
+  color: var(--lee-lee-warning-text);
 }
 
 .lee_lee_diabetes_plan_verification_compare {
@@ -2506,7 +2533,7 @@
 }
 
 .lee_lee_diabetes_plan_verification_difference {
-  color: #fbbf24;
+  color: var(--lee-lee-warning-text);
   font-style: normal;
   font-weight: 700;
   white-space: nowrap;
@@ -2515,8 +2542,8 @@
 .lee_lee_diabetes_plan_verification_row.is-mismatch {
   padding-inline: 0.45rem;
   border-radius: 6px;
-  background: rgb(255 191 36 / 12%);
-  outline: 1px solid rgb(255 191 36 / 32%);
+  background: color-mix(in srgb, var(--lee-lee-warning) 12%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--lee-lee-warning) 32%, transparent);
 }
 
 .lee_lee_diabetes_details {
@@ -2526,7 +2553,7 @@
 
 .lee_lee_diabetes_details summary {
   min-height: 44px;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2548,7 +2575,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(135deg, var(--app-accent, #FF9F0A), var(--app-accent-deep, #343436));
+  background: linear-gradient(135deg, var(--lee-lee-accent), var(--lee-lee-accent-deep));
   transition: width 180ms ease;
 }
 
@@ -2571,7 +2598,7 @@
   justify-content: space-between;
   gap: 1rem;
   min-height: 52px;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
   font-weight: 500;
 }
 
@@ -2664,13 +2691,13 @@
 }
 
 .lee_lee_diabetes_button--primary {
-  background: linear-gradient(135deg, var(--app-accent, #FF9F0A), var(--app-accent-deep, #343436));
-  border-color: rgb(var(--app-accent-rgb, 255 159 10) / 62%);
+  background: linear-gradient(135deg, var(--lee-lee-accent), var(--lee-lee-accent-deep));
+  border-color: rgb(var(--lee-lee-accent-rgb) / 62%);
 }
 
 .lee_lee_diabetes_button--ghost {
   background: transparent;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_button--danger {
@@ -2682,18 +2709,6 @@
 .lee_lee_diabetes_report_preview {
   padding: 1rem;
   overflow-x: auto;
-}
-
-:root[data-theme="light"] .lee_lee_diabetes_shell {
-  --lee-lee-bg: #F5F5F7;
-  --lee-lee-panel: rgb(255 255 255 / 92%);
-  --lee-lee-panel-strong: rgb(250 250 252 / 98%);
-  --lee-lee-border: rgb(60 60 67 / 16%);
-  --lee-lee-border-strong: rgb(var(--app-accent-rgb, 138 75 0) / 40%);
-  --lee-lee-text: #1C1C1E;
-  --lee-lee-muted: #636366;
-  --lee-lee-soft: var(--app-accent-soft, #8A4B00);
-  --lee-lee-green: #13794a;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card,
@@ -2752,25 +2767,23 @@
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_warning {
   border-color: rgb(178 116 0 / 32%);
-  background: rgb(255 202 87 / 24%);
-  color: #6d4a00;
+  background: color-mix(in srgb, var(--lee-lee-warning) 24%, transparent);
+  color: var(--lee-lee-warning-text);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_card--verification-warning {
   border-color: rgb(154 103 0 / 52%);
-  background: rgb(255 191 36 / 18%);
+  background: color-mix(in srgb, var(--lee-lee-warning) 18%, transparent);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_card--verification-warning .lee_lee_diabetes_dose_label,
 :root[data-theme="light"] .lee_lee_diabetes_plan_verification_difference {
-  color: #8a5a00;
+  color: var(--lee-lee-warning-text);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_dose_adjustment_note,
 :root[data-theme="light"] .lee_lee_diabetes_dose_breakdown--adjustment {
-  border-left-color: #2f8f4e;
-  background: rgb(47 143 78 / 16%);
-  color: #236b37;
+  background: color-mix(in srgb, var(--lee-lee-green) 10%, transparent);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card_title,
@@ -2785,7 +2798,6 @@
   color: var(--lee-lee-text);
 }
 
-:root[data-theme="light"] .lee_lee_diabetes_card_status,
 :root[data-theme="light"] .lee_lee_diabetes_timeline_values,
 :root[data-theme="light"] .lee_lee_diabetes_timeline_notes,
 :root[data-theme="light"] .lee_lee_diabetes_record_details,
@@ -2826,12 +2838,12 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:hover {
-  background: rgb(138 75 0 / 7%);
+  background: rgb(var(--lee-lee-accent-rgb) / 7%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus,
 :root[data-theme="light"] .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus-visible {
-  background: rgb(138 75 0 / 12%);
+  background: rgb(var(--lee-lee-accent-rgb) / 12%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input {
@@ -2857,20 +2869,14 @@
 :root[data-theme="light"] .lee_lee_diabetes_nav_button.is-active,
 :root[data-theme="light"] .lee_lee_diabetes_dose_card,
 :root[data-theme="light"] .lee_lee_diabetes_banner {
-  background: rgb(var(--app-accent-rgb, 138 75 0) / 10%);
+  background: rgb(var(--lee-lee-accent-rgb) / 10%);
   border-color: var(--lee-lee-border-strong);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button {
-  background: rgb(var(--app-accent-rgb, 138 75 0) / 10%);
+  background: rgb(var(--lee-lee-accent-rgb) / 10%);
   border-color: var(--lee-lee-border-strong);
-  color: var(--lee-lee-soft);
-}
-
-:root[data-theme="light"] .lee_lee_diabetes_shell {
-  --lee-lee-panel: #FFFFFF;
-  --lee-lee-panel-strong: #F2F2F4;
-  --lee-lee-border: rgb(60 60 67 / 18%);
+  color: var(--lee-lee-green);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_card,
@@ -2881,7 +2887,7 @@
 :root[data-theme="light"] .lee_lee_diabetes_sheet {
   background: var(--lee-lee-panel);
   border-color: var(--lee-lee-border);
-  box-shadow: 0 16px 42px rgb(138 75 0 / 10%);
+  box-shadow: 0 16px 42px rgb(var(--lee-lee-accent-rgb) / 10%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_nav_button,
@@ -2912,15 +2918,15 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button--primary {
-  background: linear-gradient(135deg, var(--app-accent, #FF9F0A), #343436);
-  border-color: rgb(var(--app-accent-rgb, 138 75 0) / 62%);
+  background: linear-gradient(135deg, var(--lee-lee-accent), #343436);
+  border-color: rgb(var(--lee-lee-accent-rgb) / 62%);
   color: #ffffff;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button--ghost,
 :root[data-theme="light"] .lee_lee_diabetes_timeline_edit {
   background: transparent;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_timeline_edit--muted {
@@ -2928,12 +2934,12 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_timeline_edit--primary {
-  color: var(--app-accent);
+  color: var(--lee-lee-green);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_button--danger,
 :root[data-theme="light"] .lee_lee_diabetes_timeline_edit--danger {
-  color: #b4232b;
+  color: var(--lee-lee-danger-text);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_progress {
@@ -2949,7 +2955,7 @@
 }
 
 .lee_lee_diabetes_report_header {
-  border-bottom: 2px solid #FF9F0A;
+  border-bottom: 2px solid var(--lee-lee-accent);
   padding-bottom: 0.75rem;
   margin-bottom: 1rem;
 }
@@ -3105,11 +3111,11 @@
 }
 
 .lee_lee_diabetes_bottom_nav_button:hover .lee_lee_diabetes_bottom_nav_icon {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_bottom_nav_button.is-active .lee_lee_diabetes_bottom_nav_icon {
-  color: var(--app-accent);
+  color: var(--lee-lee-green);
 }
 
 .lee_lee_diabetes_bottom_nav_icon {
@@ -3134,7 +3140,7 @@
   border-radius: 50%;
   background: var(--lee-lee-accent);
   color: #ffffff;
-  box-shadow: 0 5px 18px rgb(var(--app-accent-rgb, 255 159 10) / 34%);
+  box-shadow: 0 5px 18px rgb(var(--lee-lee-accent-rgb) / 34%);
 }
 
 .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon {
@@ -3143,9 +3149,9 @@
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav {
-  background: rgb(245 245 247 / 96%);
+  background: color-mix(in srgb, var(--lee-lee-bg) 96%, transparent);
   border-color: var(--lee-lee-border);
-  box-shadow: 0 -10px 30px rgb(138 75 0 / 12%);
+  box-shadow: 0 -10px 30px rgb(var(--lee-lee-accent-rgb) / 12%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button {
@@ -3224,7 +3230,7 @@
     border-radius: 50%;
     background: var(--lee-lee-accent);
     color: #ffffff;
-    box-shadow: 0 5px 18px rgb(var(--app-accent-rgb, 255 159 10) / 34%);
+    box-shadow: 0 5px 18px rgb(var(--lee-lee-accent-rgb) / 34%);
   }
 
   .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon {
@@ -3233,9 +3239,9 @@
   }
 
   :root[data-theme="light"] .lee_lee_diabetes_bottom_nav {
-    background: rgb(245 245 247 / 96%);
+    background: color-mix(in srgb, var(--lee-lee-bg) 96%, transparent);
     border-color: var(--lee-lee-border);
-    box-shadow: 0 -10px 30px rgb(138 75 0 / 12%);
+    box-shadow: 0 -10px 30px rgb(var(--lee-lee-accent-rgb) / 12%);
   }
 
   :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button {
@@ -3387,7 +3393,7 @@
 .llt_sensor_facts dd { margin: 0 0 .5rem; }
 .llt_sensor_history { border-top: 1px solid #48484A; padding: .75rem 0; }
 .llt_sensor_history p { margin: .4rem 0; }
-.llt_sensor_dialog [role="alert"] { color: #f2a6a6; }
+.llt_sensor_dialog [role="alert"] { color: var(--lee-lee-danger-text); }
 
 /* This body-mounted dialog is outside .app_theme's native date/time reset.
    iOS native appearance overrides border-box sizing when padding is present. */
@@ -3440,7 +3446,7 @@
 /* Keep the center primary action's foreground above ordinary light nav colors. */
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button--primary,
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button--primary .lee_lee_diabetes_bottom_nav_icon {
-  color: var(--app-accent-contrast, #ffffff);
+  color: #161A1D;
 }
 
 /* Entry Notes mixes prose and numbers; the bundled data font has a distinctive zero. */
@@ -3670,7 +3676,7 @@
 .lee_lee_diabetes_carb_shortcuts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .lee_lee_diabetes_carb_shortcuts[hidden] { display: none; }
 .lee_lee_diabetes_carb_shortcuts button { min-block-size: 44px; padding-inline: 0.75rem; border-radius: 9px; }
-.lee_lee_diabetes_carb_shortcuts [aria-pressed="true"] { background: var(--lee-lee-panel-strong); color: var(--lee-lee-soft); }
+.lee_lee_diabetes_carb_shortcuts [aria-pressed="true"] { background: var(--lee-lee-panel-strong); color: var(--lee-lee-green); }
 .lee_lee_diabetes_carb_result_type { color: var(--lee-lee-muted); font-size: 0.75rem; letter-spacing: 0.02em; }
 /* Restore the production six-column table, including inline actions. */
 @container llt (max-width: 520px) {
@@ -3770,18 +3776,18 @@ dialog.lee_lee_diabetes_carb_calc_layer {
 dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 
 .lee_lee_diabetes_select[aria-invalid="true"] {
-  border-color: #fca5a5;
-  outline: 2px solid #fca5a5;
+  border-color: var(--lee-lee-danger-text);
+  outline: 2px solid var(--lee-lee-danger-text);
   outline-offset: 2px;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_select[aria-invalid="true"] {
-  border-color: #dc2626;
-  outline-color: #dc2626;
+  border-color: var(--lee-lee-danger);
+  outline-color: var(--lee-lee-danger);
 }
 
 .lee_lee_diabetes_context_pending .lee_lee_diabetes_select:not([aria-invalid="true"]) {
-  border-color: var(--lee-lee-accent);
+  border-color: var(--lee-lee-green);
 }
 
 /* Let the blank native Context prompt wrap without duplicating its instruction. */
@@ -3831,11 +3837,11 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   pointer-events: none;
 }
 .lee_lee_diabetes_bottom_nav {
-  --footer-surface: #1C1C1E;
-  --footer-border: #34373c;
-  --footer-inactive: #A1A1A6;
-  --footer-active: #FF9F0A;
-  --footer-selected: #343436;
+  --footer-surface: var(--lee-lee-panel);
+  --footer-border: var(--lee-lee-border);
+  --footer-inactive: var(--lee-lee-muted);
+  --footer-active: var(--lee-lee-green);
+  --footer-selected: var(--lee-lee-panel-strong);
   position: static;
   transform: none;
   width: 100%;
@@ -3860,7 +3866,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   top: 0;
   bottom: calc(-12px - env(safe-area-inset-bottom));
   width: calc(100% + 32px);
-  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 90%) 100%);
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--lee-lee-bg) 90%, transparent) 100%);
   pointer-events: none;
 }
 .lee_lee_diabetes_bottom_nav_button {
@@ -3879,15 +3885,15 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 }
 .lee_lee_diabetes_bottom_nav_button.is-active { background: var(--footer-selected); color: var(--footer-active); }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav {
-  --footer-surface: #fff;
-  --footer-border: #D1D1D6;
-  --footer-inactive: #636366;
-  --footer-active: #8A4B00;
-  --footer-selected: #e5e7eb;
+  --footer-surface: var(--lee-lee-panel);
+  --footer-border: var(--lee-lee-border);
+  --footer-inactive: var(--lee-lee-muted);
+  --footer-active: var(--lee-lee-green);
+  --footer-selected: var(--lee-lee-panel-strong);
   background: var(--footer-surface);
   box-shadow: 0 8px 28px #00000030;
 }
-:root[data-theme="light"] .lee_lee_diabetes_nav_shell::before { background: linear-gradient(to bottom, transparent, rgb(245 245 247 / 85%) 100%); }
+:root[data-theme="light"] .lee_lee_diabetes_nav_shell::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--lee-lee-bg) 85%, transparent) 100%); }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button { color: var(--footer-inactive); }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button.is-active { background: var(--footer-selected); color: var(--footer-active); }
 .lee_lee_diabetes_bottom_nav .lee_lee_diabetes_bottom_nav_icon { width: 24px; height: 24px; color: inherit; }
@@ -3926,16 +3932,15 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 }
 
 /* Stage 2 identity and library discovery; all clinical status colors stay above. */
-#lee-lees-tracker-view { background: #000000; }
-:root[data-theme="light"] #lee-lees-tracker-view { background: #F5F5F7; }
+#lee-lees-tracker-view { background: var(--lee-lee-bg); }
 .lee_lee_diabetes_button--primary,
 :root[data-theme="light"] .lee_lee_diabetes_button--primary,
-.lee_lee_diabetes_floating_log { background: #FF9F0A; color: #000; }
+.lee_lee_diabetes_floating_log { background: var(--lee-lee-accent); color: #000; }
 .lee_lee_diabetes_library_search { margin: 1rem 0; }
 .lee_lee_diabetes_library_search input { min-height: 52px; border-radius: 18px; }
 .lee_lee_diabetes_library_filters { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1.25rem .75rem; }
 .lee_lee_diabetes_library_filters .lee_lee_diabetes_button { min-height: 44px; padding: .65rem 1rem; }
-.lee_lee_diabetes_library_filters [aria-pressed="true"] { background: var(--lee-lee-panel-strong); color: var(--lee-lee-soft); border-color: var(--lee-lee-soft); }
+.lee_lee_diabetes_library_filters [aria-pressed="true"] { background: var(--lee-lee-panel-strong); color: var(--lee-lee-green); border-color: var(--lee-lee-green); }
 .lee_lee_diabetes_library_section { margin-block: 1.5rem; }
 .lee_lee_diabetes_library_section h2 { margin-bottom: .85rem; }
 .lee_lee_diabetes_food_item--library { background: var(--lee-lee-panel); border-radius: 20px; }
@@ -3945,14 +3950,14 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 .lee_lee_diabetes_carb_pick_state { display: grid; place-items: center; flex-shrink: 0; min-width: 44px; min-height: 44px; border-radius: 50%; background: var(--lee-lee-accent); color: #000; font-size: 1.5rem; }
 .lee_lee_diabetes_carb_result_type { color: var(--lee-lee-muted); letter-spacing: .08em; font-size: .68rem; }
 .lee_lee_diabetes_carb_calc_sum { padding: 1.25rem; border-radius: 20px; background: var(--lee-lee-panel); border: 1px solid var(--lee-lee-border); }
-.lee_lee_diabetes_carb_calc_sum strong { color: var(--lee-lee-soft); font-size: 2rem; }
+.lee_lee_diabetes_carb_calc_sum strong { color: var(--lee-lee-green); font-size: 2rem; }
 .lee_lee_diabetes_carb_calc_actions .lee_lee_diabetes_icon_button { min-width: 44px; min-height: 44px; }
 .lee_lee_diabetes_carb_calc_row { padding-block: .8rem; }
 .lee_lee_diabetes_carb_calc_item_name { font-weight: 600; }
 .lee_lee_diabetes_food_library_actions { flex-wrap: wrap; }
-/* Neutral typography keeps orange focused on actions and selection. */
+/* Neutral typography keeps the accent focused on actions and selection. */
 #lee-lees-tracker-view .digit_clock_title { color: #FFFFFF; }
-#lee-lees-tracker-view #lee_lee_settings_toggle { color: var(--app-accent-soft); background: #1C1C1E; border-color: #343436; }
+#lee-lees-tracker-view #lee_lee_settings_toggle { color: var(--lee-lee-green); background: var(--lee-lee-panel); border-color: #343436; }
 .lee_lee_diabetes_shell :is(.lee_lee_diabetes_section_title, .lee_lee_diabetes_field) { color: var(--lee-lee-text); }
 .lee_lee_diabetes_library_filters .lee_lee_diabetes_button[aria-pressed="false"] { border-color: var(--lee-lee-border); color: var(--lee-lee-muted); }
 :root[data-theme="light"] #lee-lees-tracker-view .digit_clock_title { color: #1C1C1E; }
@@ -3988,15 +3993,15 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 #lee-lees-tracker-view select,
 .llt_sensor_dialog select { color-scheme: dark; }
 #lee-lees-tracker-view :is(option, optgroup),
-.llt_sensor_dialog :is(option, optgroup) { background-color: #1C1C1E; color: #FFFFFF; }
+.llt_sensor_dialog :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
 #lee-lees-tracker-view option:disabled,
-.llt_sensor_dialog option:disabled { color: #A1A1A6; }
+.llt_sensor_dialog option:disabled { color: var(--lee-lee-muted); }
 :root[data-theme="light"] #lee-lees-tracker-view select,
 :root[data-theme="light"] .llt_sensor_dialog select { color-scheme: light; }
 :root[data-theme="light"] #lee-lees-tracker-view :is(option, optgroup),
-:root[data-theme="light"] .llt_sensor_dialog :is(option, optgroup) { background-color: #FFFFFF; color: #1C1C1E; }
+:root[data-theme="light"] .llt_sensor_dialog :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
 :root[data-theme="light"] #lee-lees-tracker-view option:disabled,
-:root[data-theme="light"] .llt_sensor_dialog option:disabled { color: #636366; }
+:root[data-theme="light"] .llt_sensor_dialog option:disabled { color: var(--lee-lee-muted); }
 
 /* Physical-iPhone acceptance corrections: keep actions inside the visible sheet. */
 .lee_lee_diabetes_history_sheet_frame {
@@ -4045,7 +4050,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
    Small checkboxes reserve outside space instead, keeping their checkmark clear. */
 #lee-lees-tracker-view :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
 .llt_sensor_dialog :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
-#lee-lees-tracker-view select[data-context-pending] { outline: 2px solid var(--lee-lee-soft, var(--app-accent-soft)); outline-offset: -3px; }
+#lee-lees-tracker-view select[data-context-pending] { outline: 2px solid var(--lee-lee-soft, var(--lee-lee-green)); outline-offset: -3px; }
 #lee-lees-tracker-view input[type="checkbox"] { margin: 5px; }
 #lee-lees-tracker-view input[type="checkbox"]:focus-visible { outline-offset: 2px; }
 [data-history-filter-draft] { padding: 5px; }
@@ -4094,7 +4099,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   border-color: var(--lee-lee-border);
 }
 .lee_lee_diabetes_dose_card:not(.lee_lee_diabetes_dose_card--notice) .lee_lee_diabetes_dose_label {
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
 }
 .lee_lee_diabetes_carb_quantity_controls {
   grid-column: 1 / -1;
@@ -4110,7 +4115,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   min-height: 44px;
   border: 1px solid var(--lee-lee-border);
   border-radius: 999px;
-  color: var(--lee-lee-soft);
+  color: var(--lee-lee-green);
 }
 .lee_lee_diabetes_carb_quantity_controls button:disabled { opacity: .4; }
 

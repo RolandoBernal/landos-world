@@ -1576,7 +1576,7 @@ test('suggested dose presentation makes included temporary adjustment explicit',
   assert.match(trackerSource, /Temp adjustment: Not applied — no carbs entered/);
   assert.match(trackerSource, /temporaryEatingAdjustmentApplied === true/);
   assert.match(trackerSource, /lee_lee_diabetes_dose_breakdown--adjustment/);
-  assert.match(cssSource, /\.lee_lee_diabetes_dose_adjustment_note[\s\S]*background: rgb\(99 200 121/);
+  assert.match(cssSource, /\.lee_lee_diabetes_dose_adjustment_note[\s\S]*background: color-mix\(in srgb, var\(--lee-lee-green\) 14%/);
   assert.match(cssSource, /\.lee_lee_diabetes_dose_breakdown--adjustment[\s\S]*border-left/);
 });
 
@@ -1730,7 +1730,7 @@ test('carb calculator compact rows keep narrow item controls and icon actions', 
   assert.match(cssSource, /\.lee_lee_diabetes_icon_button svg \{[\s\S]*stroke: currentColor/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.75ch[\s\S]*border: 0[\s\S]*border-bottom: 0[\s\S]*background: transparent/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_cell--qty \.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*width: 2\.5ch[\s\S]*max-width: 2\.5ch/);
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--app-accent-rgb, 255 159 10\) \/ 14%\)[\s\S]*outline: 2px solid/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus,[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input:focus-visible \{[\s\S]*background: rgb\(var\(--lee-lee-accent-rgb\) \/ 14%\);[^}]*box-shadow: var\(--lee-lee-focus\)/);
   assert.doesNotMatch(cssSource, /decrement-carb-row|increment-carb-row|lee_lee_diabetes_quantity_control/);
 });
 
@@ -3025,7 +3025,7 @@ test('entry card footer actions stay compact and preserve delete confirmation', 
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_footer[\s\S]*justify-content: space-between/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_actions[\s\S]*inline-flex[\s\S]*flex-wrap: wrap/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit[\s\S]*min-height: 36px/);
-  assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger[\s\S]*#fca5a5/);
+  assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit--danger \{[^}]*color: var\(--lee-lee-danger-text\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_timeline_edit:focus-visible/);
   assert.match(trackerSource, /if \(action === 'delete-record'\)[\s\S]*deleteRecord\(target\.dataset\.id, target\.dataset\.returnTo\)/);
   assert.match(trackerSource, /function deleteRecord\(recordId, returnTo\)[\s\S]*renderDeleteConfirmation\(record, returnTo\)/);
