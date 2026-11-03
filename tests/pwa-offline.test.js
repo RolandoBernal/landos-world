@@ -335,7 +335,7 @@ test('offline, install, update, and settings UI hooks are present and accessible
   assert.match(pwaManager, /navigator\.storage\.estimate/);
   assert.match(digitalClockCss, /\.pwa_network_status/);
   assert.match(digitalClockCss, /\.ecosystem_nav/);
-  assert.match(digitalClockCss, /\.is-ecosystem-scrolled \.ecosystem_nav/);
+  assert.doesNotMatch(digitalClockCss, /\.is-ecosystem-scrolled \.ecosystem_nav/);
   assert.match(digitalClockCss, /\.lando_settings_link/);
   assert.match(digitalClockCss, /\.lando_settings_shell/);
   assert.match(digitalClockCss, /\.pwa_offline_panel/);
