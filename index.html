@@ -1143,10 +1143,6 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       return pendingEcosystemScrollReset && (route === 'home' || LANDO_ACTIVE_ROUTES.has(route));
     }
 
-    function updateEcosystemNavState() {
-      document.body.classList.toggle('is-ecosystem-scrolled', window.scrollY > 2 || window.scrollX > 0);
-    }
-
     function updateEcosystemAppState(route) {
       const isChildApp = LANDO_ACTIVE_ROUTES.has(route) && route !== 'settings';
       document.body.classList.toggle('is-child-app-active', isChildApp);
@@ -1174,10 +1170,8 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         resetEcosystemScrollPosition(activeView);
         window.requestAnimationFrame?.(() => {
           resetEcosystemScrollPosition(activeView);
-          updateEcosystemNavState();
         });
       }
-      updateEcosystemNavState();
       pendingEcosystemScrollReset = false;
     }
 
@@ -1203,7 +1197,6 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         navigateToRoute(normalizeRouteFromHash() === 'settings' ? 'home' : 'settings');
       });
       window.addEventListener('hashchange', handleRouteChange);
-      window.addEventListener('scroll', updateEcosystemNavState, { passive: true });
       window.LandosWorld = {
         setActiveView,
         navigateHome: (options) => navigateToRoute('home', options),
