@@ -1590,21 +1590,20 @@ test('temporary adjustment settings reuse contained numeric controls and respons
   assert.match(cssSource, /\.lee_lee_diabetes_temporary_adjustment_checkline[\s\S]*justify-content: flex-start/);
 });
 
-test('LLT typography uses bundled DM Sans without affecting sibling apps', () => {
-  assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'DM Sans'[\s\S]*font-weight: 400 700[\s\S]*url\('\.\.\/fonts\/dm-sans-latin\.woff2'\)/);
-  assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/dm-sans-latin-ext\.woff2'\)/);
-  assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Roboto Mono'[\s\S]*url\('\.\.\/fonts\/roboto-mono-regular\.ttf'\)/);
-  assert.match(cssSource, /--llt-ui-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif/);
+test('LLT typography uses bundled Montserrat without affecting sibling apps', () => {
+  assert.match(cssSource, /@font-face \{[\s\S]*font-family: 'Montserrat'[\s\S]*font-weight: 100 900[\s\S]*url\('\.\.\/fonts\/montserrat-latin\.woff2'\)/);
+  assert.match(cssSource, /@font-face \{[\s\S]*url\('\.\.\/fonts\/montserrat-latin-ext\.woff2'\)/);
+  assert.match(cssSource, /--llt-ui-font: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell \{[\s\S]*font-family: var\(--llt-ui-font\)[\s\S]*font-weight: 400/);
-  assert.match(cssSource, /--llt-numeric-font: "Roboto Mono", "SFMono-Regular", "Menlo", "Consolas", monospace/);
+  assert.match(cssSource, /--llt-numeric-font: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace/);
   assert.match(cssSource, /\.lee_lee_diabetes_numeric,[\s\S]*\.lee_lee_diabetes_shell input\[type="date"\],[\s\S]*\.lee_lee_diabetes_shell input\[type="time"\],[\s\S]*\.lee_lee_diabetes_shell input\[inputmode="decimal"\],[\s\S]*\.lee_lee_diabetes_carb_calc_input\.lee_lee_diabetes_input \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_chart_tick,[\s\S]*\.lee_lee_diabetes_chart_unit \{[\s\S]*font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_timeline_values,\n.lee_lee_diabetes_timeline_notes'), /font-family: var\(--llt-numeric-font\)/);
   assert.doesNotMatch(getCssRuleBody('.lee_lee_diabetes_dose_breakdown'), /font-family: var\(--llt-numeric-font\)/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input,[\s\S]*\.lee_lee_diabetes_shell textarea \{[\s\S]*font-family: inherit/);
   assert.match(cssSource, /\.lee_lee_diabetes_shell input::placeholder,[\s\S]*\.lee_lee_diabetes_shell textarea::placeholder \{[\s\S]*font-family: inherit/);
-  assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'DM Sans'/);
-  assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'DM Sans'/);
+  assert.doesNotMatch(cssSource, /body \{[\s\S]{0,180}font-family: 'Montserrat'/);
+  assert.doesNotMatch(cssSource, /html \{[\s\S]{0,180}font-family: 'Montserrat'/);
 });
 
 test('LLT report and conflict data preserve numeric typography in generated cells', () => {
