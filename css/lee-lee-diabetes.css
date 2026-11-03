@@ -4134,3 +4134,43 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 .lee_lee_diabetes_carb_calc_row > .lee_lee_diabetes_carb_quantity_controls { grid-area: 2 / 1; }
 
 .lee_lee_diabetes_insulin_given { color: var(--lee-lee-text); font-weight: 400; }
+
+dialog.lee_lee_diabetes_carb_meal_dialog {
+  box-sizing: border-box;
+  width: min(24rem, calc(100% - 2rem));
+  height: fit-content;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  overflow: auto;
+  background: var(--lee-lee-panel);
+  color: var(--lee-lee-text);
+}
+
+.lee_lee_diabetes_carb_meal_dialog .lee_lee_diabetes_input,
+.lee_lee_diabetes_carb_meal_dialog .lee_lee_diabetes_actions > .lee_lee_diabetes_button {
+  min-width: 0;
+  min-height: 44px;
+  padding-block: 0.5rem;
+}
+
+.lee_lee_diabetes_carb_meal_dialog .lee_lee_diabetes_actions > .lee_lee_diabetes_button {
+  padding-inline: 0.5rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.lee_lee_diabetes_carb_meal_dialog > .lee_lee_diabetes_help {
+  padding: 0;
+}
+
+.lee_lee_diabetes_carb_meal_dialog > .lee_lee_diabetes_actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+dialog.lee_lee_diabetes_carb_meal_dialog::backdrop {
+  background: #000a;
+}
