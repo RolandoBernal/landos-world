@@ -6052,6 +6052,28 @@
     selection.innerHTML = renderCarbCalculatorSelection(getCarbCalculatorRowsFromState(), currentEditor.calculatorSession?.context === 'standalone');
   }
 
+  // Quantity taps must retain the live row and focused button. Rebuilding the
+  // editor (or selection) removes iOS scroll/focus anchors during the tap.
+  function refreshCarbCalculatorQuantity(form, rowId) {
+    const rows = getCarbCalculatorRowsFromState();
+    const item = rows.find(row => row.id === rowId);
+    const row = form.querySelector(`[data-carb-calculator-row]${getCarbRowSelector(rowId)}`);
+    if (!item || !row) return;
+    row.querySelector('.lee_lee_diabetes_carb_calc_qty').textContent = item.qty;
+    row.querySelector('[aria-label="Quantity"]').textContent = item.qty;
+    row.querySelector('.lee_lee_diabetes_carb_calc_row_total').innerHTML = renderCarbGrams(formatCarbAmount(calculateCarbCalculatorRowTotal(item)));
+    row.querySelector('[data-action="decrease-carb-calculator-quantity"]').disabled = Number(item.qty) <= 1;
+    row.querySelector('[data-action="increase-carb-calculator-quantity"]').disabled = Number(item.qty) >= CARB_CALCULATOR_MAX_QTY;
+    const total = formatCarbAmount(calculateCarbCalculatorMealTotal(rows));
+    form.querySelector('[data-carb-calculator-total]').innerHTML = renderCarbGrams(total);
+    const useButton = form.querySelector('[data-action="use-carb-calculator-total"]');
+    if (useButton) {
+      useButton.textContent = `Use ${total} g`;
+      useButton.setAttribute('aria-label', `Use ${total} grams`);
+      useButton.disabled = !hasValidCarbCalculatorTotal(rows);
+    }
+  }
+
   function renderCarbCalculatorLibrary(activePicker, search, rows = []) {
     const query = String(search || '');
     return `<div class="lee_lee_diabetes_carb_library">
@@ -10787,7 +10809,7 @@
         currentEditor.carbCalculatorRows = getCarbCalculatorRowsFromState().map(row => row.id === target.dataset.carbRowId
           ? { ...row, qty: String(normalizeCarbCalculatorQuantity(Math.max(1, Number(row.qty) + (action === 'increase-carb-calculator-quantity' ? 1 : -1)))) }
           : row);
-        renderCarbCalculatorMainFromForm(form, { focus: `[data-action="${action}"]${getCarbRowSelector(target.dataset.carbRowId)}` });
+        refreshCarbCalculatorQuantity(form, target.dataset.carbRowId);
         return;
       }
       if (action === 'remove-carb-calculator-row') {

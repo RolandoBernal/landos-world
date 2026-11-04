@@ -91,3 +91,40 @@ for (const theme of ['dark', 'light']) {
     await page.screenshot({ path: testInfo.outputPath('dose.png'), fullPage: true });
   });
 }
+
+for (const entry of [false, true]) {
+test(`${entry ? 'entry' : 'standalone'} repeated serving increments preserve live controls, scroll and keyboard focus`, async ({ page }, testInfo) => {
+  await open(page);
+  if (entry) {
+    await page.getByRole('button', { name: 'Log Entry', exact: true }).click();
+    await page.locator('[name="type"]').selectOption('Snacks');
+    await page.locator('[name="notes"]').fill('Synthetic draft');
+    await page.locator('[data-action="open-carb-calculator"]').click();
+  } else await scratch(page);
+  for (let index = 1; index <= 10; index += 1) {
+    await manual(page, '10', `Test item ${index}`);
+  }
+
+  const plus = page.getByRole('button', { name: 'Increase quantity for Test item 10', exact: true });
+  const row = page.locator('[data-carb-calculator-row]').last();
+  await plus.evaluate(button => button.scrollIntoView({ block: 'center' }));
+  await plus.evaluate(button => { window.quantityTapButton = button; window.quantityTapForm = button.closest('form'); });
+  const scrollY = await page.evaluate(() => window.scrollY);
+  expect(scrollY).toBeGreaterThan(0);
+
+  for (const quantity of [2, 3, 4]) {
+    if (testInfo.project.use.hasTouch) await plus.tap();
+    else await plus.click();
+    await expect(row.getByLabel('Quantity', { exact: true })).toHaveText(String(quantity));
+    await expect(page.locator('[data-carb-calculator-total]')).toHaveText(`${90 + quantity * 10} g`);
+    expect(await plus.evaluate(button => button === window.quantityTapButton && button.closest('form') === window.quantityTapForm)).toBe(true);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
+  }
+
+  await plus.focus();
+  await plus.press('Enter');
+  await expect(plus).toBeFocused();
+  await expect(row.getByLabel('Quantity', { exact: true })).toHaveText('5');
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
+});
+}
