@@ -20,6 +20,8 @@ export const PAGES_RUNTIME_FILES = [
   'icon-192.png',
   'icon-512.png',
   'css/app-themes.css',
+  'css/status-scrim.css',
+  'js/status-scrim.js',
   'css/daily-chief-briefing.css',
   'css/digital-clock.css',
   'css/lee-lee-diabetes.css',

@@ -1,0 +1,72 @@
+/* Shared standalone chrome; app adapters only supply palette and header clearance. */
+:root[data-status-app] {
+  --status-inset: env(safe-area-inset-top, 0px);
+  --status-surface: var(--color-bg);
+  --landos-page-top-space: calc(1rem + var(--status-inset));
+}
+:root[data-status-app="sprints"],
+:root[data-status-app="checklist"] { --status-surface: #050507; }
+:root[data-theme="light"][data-status-app="sprints"],
+:root[data-theme="light"][data-status-app="checklist"] { --status-surface: var(--color-bg); }
+:root[data-status-app="imt"] { --status-surface: #0D1311; }
+:root[data-theme="light"][data-status-app="imt"] { --status-surface: #EDEFEA; }
+:root[data-status-app="llt"] { --status-surface: #F4F3EA; }
+:root[data-status-app="llt"][data-theme="dark"] { --status-surface: #171923; }
+:root[data-status-app="lwvd"] { --status-surface: var(--app-surface); }
+:root[data-status-app] body::after {
+  content: ""; position: fixed; inset: 0 0 auto; height: var(--status-inset);
+  /* Opaque fallback; soften the edge below its safe inset. */
+  box-sizing: content-box; padding-bottom: 12px;
+  background: linear-gradient(to bottom, var(--status-surface) 0,
+    var(--status-surface) var(--status-inset), transparent 100%);
+  z-index: 2147483647; pointer-events: none;
+}
+/* Conservative frosted treatment; the opaque gradient above is the fallback. */
+@supports (background: color-mix(in srgb, black 95%, transparent)) and ((backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))) {
+  :root[data-status-app] body::after {
+    --status-glass: color-mix(in srgb, var(--status-surface) 95%, transparent);
+    /* A single continuous ramp: 95% top, 65% midpoint, 35% bottom. */
+    background: linear-gradient(to bottom,
+      var(--status-glass) 0,
+      color-mix(in srgb, var(--status-surface) 35%, transparent) var(--status-inset),
+      transparent 100%);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    /* Keep blur steady in the status area, then soften the existing 12px edge. */
+    -webkit-mask-image: linear-gradient(to bottom, black 0,
+      black var(--status-inset), transparent 100%);
+    mask-image: linear-gradient(to bottom, black 0,
+      black var(--status-inset), transparent 100%);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-status-app] body::after {
+    background: linear-gradient(to bottom, var(--status-surface) 0,
+      var(--status-surface) var(--status-inset), transparent 100%);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+:root[data-status-app] .ecosystem_nav {
+  padding-top: var(--status-inset);
+}
+:root[data-status-app="llt"] .lee_lee_diabetes_carb_calc_visual_viewport {
+  padding-top: calc(12px + var(--status-inset));
+}
+:root[data-status-app="lwvd"] .shell { padding-top: calc(26px + var(--status-inset)); }
+:root[data-status-app="lwvd"] .shell > header { top: calc(22px + var(--status-inset)); }
+
+/* These two views do not use the shared digit_clock_app outer padding. */
+:root[data-status-app="sprints"] #sprints-view,
+:root[data-status-app="checklist"] #road-bike-checklist-view {
+  padding-top: var(--landos-page-top-space);
+}
+/* iMT owns a compact shell and a back link without a negative top margin. */
+:root[data-status-app="imt"] #maintenance-total-view {
+  padding-top: calc(12px + var(--status-inset));
+}
+:root[data-status-app="imt"] #maintenance-total-view > .ecosystem_nav {
+  padding-top: 0;
+}
