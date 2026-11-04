@@ -4,9 +4,15 @@
 .setting-row{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:12px;box-shadow:0 2px 8px #42308d08}.setting-row>div:last-child{flex:1;min-width:0}.setting-row label{display:block;margin-bottom:2px}.setting-row input,.setting-row select{border:0;box-shadow:none;background:transparent;padding:5px 0;min-height:44px;border-radius:4px;font-size:.9rem}.settings-panel .hint{margin:7px 0 14px}.setting-row .setting-icon{width:44px;height:44px}
 
 /* Direct ecosystem navigation uses the same arrow-and-label pattern as sibling apps. */
-.ecosystem_nav_back{display:inline-flex;align-items:center;gap:7px;min-height:44px;color:#5820c8;text-decoration:none;font-size:.78rem;font-weight:500;margin:-10px 0 5px}
-.ecosystem_nav_back>span:first-child{font-size:1.3rem}
-body[data-screen=home] #settings{margin-top:38px}
+.ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
+.ecosystem_nav_back>span:first-child{font-size:1rem;line-height:1}
+.home-back,.app-heading .brand{display:none}
+body[data-screen=home] header{position:static;margin-bottom:15px}
+body[data-screen=home] .home-back{display:inline-flex}
+body[data-screen=home] .app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+body[data-screen=home] .app-heading .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-size:1.2rem;font-weight:700;min-width:0}
+.app-heading .brand img{width:36px;height:36px;flex-shrink:0}
+body[data-screen=home] .greeting{padding-right:0}
 
 /* The shared theme manager owns resolution, storage and color-scheme. */
 :root[data-theme=dark]{color:#eee8ff;background:#151020}
