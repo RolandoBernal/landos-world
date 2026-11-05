@@ -21,6 +21,11 @@
     var(--status-surface) var(--status-inset), transparent 100%);
   z-index: 2147483647; pointer-events: none;
 }
+/* LLT's keyboard can pan the visible viewport away from layout viewport zero.
+   Move only the existing status cover; document layout and scrolling stay native. */
+:root[data-status-app="llt"] body::after {
+  top: var(--status-viewport-top, 0px);
+}
 /* Conservative frosted treatment; the opaque gradient above is the fallback. */
 @supports (background: color-mix(in srgb, black 95%, transparent)) and ((backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))) {
   :root[data-status-app] body::after {

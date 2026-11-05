@@ -4,16 +4,17 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const source = await readFile(new URL('../js/status-scrim.js', import.meta.url), 'utf8');
-function setup({ installed = true, media = false, pathname = '/', hash = '#/' } = {}) {
-  const root = { dataset: {} };
+function setup({ installed = true, media = false, pathname = '/', hash = '#/', viewport = null } = {}) {
+  const properties = new Map();
+  const root = { dataset: {}, style: { setProperty: (key, value) => properties.set(key, value), removeProperty: key => properties.delete(key) } };
   const events = {};
   const display = { matches: media, addEventListener: (name, fn) => { events[name] = fn; } };
   const location = { pathname, hash };
   vm.runInNewContext(source, {
-    document: { documentElement: root }, navigator: { standalone: installed }, location,
+    visualViewport: viewport, document: { documentElement: root }, navigator: { standalone: installed }, location,
     matchMedia: () => display, addEventListener: (name, fn) => { events[name] = fn; },
   });
-  return { root, events, display, location };
+  return { root, events, display, location, properties };
 }
 
 test('installed ecosystem routes receive presentation adapters without changing location', () => {
@@ -47,4 +48,22 @@ test('LWVD standalone entry and pageshow use the approved adapter', () => {
   delete state.root.dataset.statusApp;
   state.events.pageshow();
   assert.equal(state.root.dataset.statusApp, 'lwvd');
+});
+
+
+test('LLT status cover follows keyboard viewport panning and clears on exit', () => {
+  const listeners = {};
+  const viewport = { offsetTop: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
+  const state = setup({ hash: '#/lee-lees-tracker', viewport });
+  for (const offset of [90, 150, 35, 0]) {
+    viewport.offsetTop = offset;
+    listeners.resize(); listeners.scroll();
+    assert.equal(state.properties.get('--status-viewport-top'), `${offset}px`);
+  }
+  viewport.offsetTop = 120;
+  state.location.hash = '#/weather'; state.events.hashchange();
+  listeners.scroll();
+  assert.equal(state.properties.has('--status-viewport-top'), false);
+  state.location.hash = '#/lee-lees-tracker'; state.events.hashchange();
+  assert.equal(state.properties.get('--status-viewport-top'), '120px');
 });

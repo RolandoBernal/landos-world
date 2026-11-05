@@ -1305,6 +1305,9 @@
   }
 
   function renderCarbCalculatorPageTop(entry = false) {
+    if (currentEditor?.carbCalculatorItemEditorMode === 'add') {
+      return renderTrackerTop({ active: 'open-standalone-carb-calculator', kicker: '', title: 'Add Manual Amount', supportingText: '' });
+    }
     return renderTrackerTop({
       active: 'open-standalone-carb-calculator', kicker: '', title: 'Carb Calculator',
       supportingText: 'Calculate carbs without logging an entry.',
@@ -5980,15 +5983,16 @@
     const activePicker = currentEditor?.carbCalculatorPicker || '';
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
-    const usesVisualViewportPanel = Boolean(itemEditorMode);
+    const manualAdd = itemEditorMode === 'add';
+    const usesVisualViewportPanel = Boolean(itemEditorMode) && !manualAdd;
     const activeTitle = itemEditorMode ? (itemEditorMode === 'edit' ? (currentEditor.carbCalculatorItemDraft?.sourceType === 'meal' ? 'Edit Meal Amount' : currentEditor.carbCalculatorItemDraft?.sourceType === 'food' ? 'Edit Food Item' : 'Edit Manual Amount') : 'Add Manual Amount') : 'Carb Calculator';
     return `
       <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>
         ${usesVisualViewportPanel ? '<div class="lee_lee_diabetes_carb_calc_visual_viewport" data-modal-visual-viewport>' : ''}
-        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared lee_lee_diabetes_carb_calculator--embedded${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${!itemEditorMode ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
+        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared lee_lee_diabetes_carb_calculator--embedded${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${!itemEditorMode || manualAdd ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
           ${itemEditorMode ? `<div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
               <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>
-              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>
+              ${manualAdd ? '' : `<h2 class="lee_lee_diabetes_section_title" id="lee-lee-carb-calculator-title">${escapeHtml(activeTitle)}</h2>`}
           </div>` : ''}
           <div class="lee_lee_diabetes_carb_calculator_body${itemEditorMode ? ' lee_lee_diabetes_carb_item_editor_body' : ''}" data-carb-calculator-body${itemEditorMode ? ' data-carb-item-editor-body' : ''}>
             ${itemEditorMode ? renderCarbCalculatorItemEditor(itemEditorMode) : `
@@ -8973,7 +8977,7 @@
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="copy-pending-settings-metadata">Copy Pending Settings Metadata</button>
           <span role="status" aria-live="polite" data-pending-settings-copy-status></span>
         </div>
-        <div class="lee_lee_diabetes_diagnostic_actions">
+        <div class="lee_lee_diabetes_diagnostic_actions lee_lee_diabetes_diagnostic_actions--recovery">
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="recover-pending-settings">Recover Missing-Audit Settings</button>
           <p class="lee_lee_diabetes_help">Keeps a private backup on this device. Proceeds only when pending settings match the current server version and values.</p>
           <span role="status" aria-live="polite" data-settings-recovery-status></span>
