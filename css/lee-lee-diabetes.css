@@ -4166,3 +4166,41 @@ dialog.lee_lee_diabetes_carb_meal_dialog {
 dialog.lee_lee_diabetes_carb_meal_dialog::backdrop {
   background: #000a;
 }
+
+/* Settings actions fill their own container, including diagnostic action rows. */
+[data-plan-editor] button:not(.lee_lee_diabetes_settings_shortcut):not(.lee_lee_diabetes_bottom_nav_button):not(.lee_lee_diabetes_floating_log) {
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: none;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding: .75rem 1rem;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+[data-plan-editor] :is(.lee_lee_diabetes_diagnostic_actions, .lee_lee_diabetes_actions, .lee_lee_diabetes_plan_verification_header) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+}
+
+.lee_lee_diabetes_diagnostic_actions--recovery {
+  display: grid;
+  justify-content: stretch;
+  gap: 0.65rem;
+}
+.lee_lee_diabetes_diagnostic_actions--recovery > button {
+  justify-self: start;
+  inline-size: 100%;
+  max-inline-size: none;
+  min-inline-size: 0;
+  white-space: normal;
+}
+.lee_lee_diabetes_diagnostic_actions--recovery > .lee_lee_diabetes_help {
+  margin: 0;
+}

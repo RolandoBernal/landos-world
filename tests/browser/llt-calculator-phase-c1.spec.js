@@ -161,6 +161,72 @@ for (const context of ['standalone', 'entry']) {
     await expect(favorites).toHaveAttribute('aria-expanded','false');
   });
 
+  test(`${context}: existing status cover follows keyboard open, field switches and close`, async ({ page }) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
+    await seed(page); await enter(page, context);
+    const calc = root(page).locator('[data-carb-calculator]');
+    await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.setProperty('--status-inset', '47px');
+      }, theme);
+      const background = await page.evaluate(() => getComputedStyle(document.body, '::after').backgroundImage);
+      for (const [field, top, height] of [['carbItemCarbs', 80, 360], ['carbItemQty', 140, 360], ['carbItemLabel', 35, 360], ['carbItemLabel', 0, 844]]) {
+        await calc.locator(`[name="${field}"]`).focus();
+        await page.evaluate(({ top, height }) => {
+          const viewport = window.visualViewport;
+          Object.defineProperty(viewport, 'offsetTop', { configurable: true, value: top });
+          Object.defineProperty(viewport, 'height', { configurable: true, value: height });
+          viewport.dispatchEvent(new Event('resize'));
+          viewport.dispatchEvent(new Event('scroll'));
+        }, { top, height });
+        await expect.poll(() => page.evaluate(() => getComputedStyle(document.body, '::after').top)).toBe(`${top}px`);
+        const cover = await page.evaluate(() => {
+          const style = getComputedStyle(document.body, '::after');
+          return { height: style.height, position: style.position, background: style.backgroundImage, overflow: getComputedStyle(document.querySelector('[data-carb-item-editor-body]')).overflowY };
+        });
+        expect(cover).toEqual({ height: '47px', position: 'fixed', background, overflow: 'visible' });
+        await expect(calc.locator('[data-modal-scroll-container], [data-modal-visual-viewport]')).toHaveCount(0);
+      }
+    }
+    await calc.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Carb Calculator', exact: true })).toBeVisible();
+  });
+
+  test(`${context}: full-page manual Back, Cancel and Add preserve calculator state`, async ({ page }) => {
+    await seed(page); await enter(page, context);
+    const calc = root(page).locator('[data-carb-calculator]');
+    await manual(page, '10', '2');
+    await calc.locator('[name="carbFoodSearch"]').fill('Office');
+    for (const exit of ['Back to Carb Calculator', 'Cancel']) {
+      await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+      await expect(page.getByRole('heading', { name: 'Add Manual Amount', exact: true })).toBeVisible();
+      await expect(calc.locator('[data-modal-visual-viewport], [data-modal-scroll-container]')).toHaveCount(0);
+      await expect(calc).toHaveCSS('overflow-y', 'visible');
+      await calc.locator('[name="carbItemCarbs"]').fill('99');
+      await mockKeyboard(page, 360, 80);
+      await page.setViewportSize({ width: 390, height: 430 });
+      await calc.locator('[name="carbItemLabel"]').focus();
+      await calc.locator('[name="carbItemLabel"]').scrollIntoViewIfNeeded();
+      await expect(calc.locator('[name="carbItemLabel"]')).toBeInViewport();
+      expect(await calc.locator('[data-carb-item-editor-body]').evaluate(n => ({ overflow: getComputedStyle(n).overflowY, scroll: n.scrollTop }))).toEqual({ overflow: 'visible', scroll: 0 });
+      await mockKeyboard(page, 844);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await calc.getByRole('button', { name: exit, exact: true }).click();
+      await expect(calc.locator('[data-carb-calculator-total]')).toHaveText('20 g');
+      await expect(calc.locator('[name="carbFoodSearch"]')).toHaveValue('Office');
+    }
+    await manual(page, '5', '3');
+    await expect(calc.locator('[data-carb-calculator-total]')).toHaveText('35 g');
+    expect((await stored(page)).records).toHaveLength(0);
+    if (context === 'entry') {
+      await calc.locator('[data-action="use-carb-calculator-total"]').click();
+      await expect(root(page).locator('[name="notes"]')).toHaveValue('Keep entry note');
+      await expect(root(page).locator('[name="type"]')).toHaveValue('Snacks');
+    }
+  });
+
   test(`${context}: shared spacing and container-specific centering survive short and keyboard viewports`, async ({page},info)=>{
     await seed(page); await enter(page,context);
     const calc=root(page).locator('[data-carb-calculator]');
@@ -175,7 +241,7 @@ for (const context of ['standalone', 'entry']) {
       const m=await calc.evaluate(n=>{
         const body=n.querySelector('[data-carb-item-editor-body]');const form=n.querySelector('[data-carb-item-editor]');const header=n.querySelector('.lee_lee_diabetes_carb_calculator_header');const actions=n.querySelector('.lee_lee_diabetes_carb_item_editor_actions');
         const b=body.getBoundingClientRect(),f=form.getBoundingClientRect(),h=header.getBoundingClientRect(),a=actions.getBoundingClientRect();
-        return {bodyTop:b.top,bodyBottom:b.bottom,formTop:f.top,formBottom:f.bottom,headerBottom:h.bottom,headerRight:h.right,titleRight:header.querySelector('h2').getBoundingClientRect().right,actionsTop:a.top,padding:parseFloat(getComputedStyle(body).paddingTop),gap:parseFloat(getComputedStyle(form).gap),center:getComputedStyle(body).alignContent,overflow:document.documentElement.scrollWidth>innerWidth};
+        return {bodyTop:b.top,bodyBottom:b.bottom,formTop:f.top,formBottom:f.bottom,headerBottom:h.bottom,headerRight:h.right,titleRight:document.querySelector('#lee-lee-diabetes-title').getBoundingClientRect().right,actionsTop:a.top,padding:parseFloat(getComputedStyle(body).paddingTop),gap:parseFloat(getComputedStyle(form).gap),center:getComputedStyle(body).alignContent,overflow:document.documentElement.scrollWidth>innerWidth};
       });
       expect(m.padding).toBeCloseTo(m.gap,1); expect(m.padding).toBeGreaterThanOrEqual(12);
       expect(m.formTop-m.headerBottom).toBeGreaterThanOrEqual(m.padding-1);
@@ -192,6 +258,8 @@ for (const context of ['standalone', 'entry']) {
     await page.screenshot({path:info.outputPath('manual-keyboard-sized.png')});
     await page.setViewportSize({width:844,height:320});
     await expect(calc.locator('[data-carb-item-editor-body]')).toHaveCSS('overflow-y','visible');
+    await expect(root(page).locator('dialog[data-carb-calculator-layer]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Add Manual Amount', exact: true })).toBeVisible();
     await qty.fill('0');await expect(calc.getByRole('button',{name:'Add Item',exact:true})).toBeDisabled();
     await qty.fill('2');await calc.getByRole('button',{name:'Add Item',exact:true}).click();
     await expect(calc.locator('[data-carb-calculator-total]')).toHaveText('55.1 g');
