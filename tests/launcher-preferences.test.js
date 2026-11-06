@@ -33,7 +33,7 @@ test('show all shows every app and resets order to the canonical registry order'
 test('normalization removes duplicates/unknown IDs and appends new apps hidden', () => {
   const p = api.normalize(config(['weather', 'weather', 'unknown'], ['unknown', 'weather', 'weather']), [...ids, 'new-app']);
   assert.deepEqual(p.visibleAppIds, ['weather']);
-  assert.deepEqual(p.appOrder, [...ids, 'new-app']);
+  assert.deepEqual(p.appOrder, ['weather', ...ids.filter((id) => id !== 'weather'), 'new-app']);
   assert.deepEqual(api.normalize(p, ids.filter((id) => id !== 'weather')).visibleAppIds, []);
 });
 test('empty is intentional and serialization/persistence deterministic', () => {
@@ -78,12 +78,12 @@ test('mutations read latest external state and protect future schemas', () => {
   assert.equal(f.store.change(() => config([])).status, 'unsupported');
 });
 test('moves are clamped, pure, persistent and visible reorder preserves hidden slots', () => {
-  const p = config(['weather', 'digital-clock']);
+  const p = config(['digital-clock', 'weather']);
   const moved = api.move(p, 'weather', 99, ids);
   assert.equal(moved.appOrder.at(-1), 'weather');
   assert.deepEqual(p.appOrder, ids);
-  const next = api.reorderVisible(p, ['digital-clock', 'weather'], ids);
-  assert.deepEqual(next.appOrder, ['digital-clock', 'weather', ...ids.slice(2)]);
+  const next = api.reorderVisible(p, ['weather', 'digital-clock'], ids);
+  assert.deepEqual(next.appOrder, ['weather', 'digital-clock', ...ids.slice(2)]);
   assert.deepEqual(api.move(p, 'absent', 0, ids), p);
 });
 
@@ -144,5 +144,5 @@ test('LWVD registry addition preserves existing saved choices without writing', 
   assert.deepEqual(loaded.appOrder, [...saved.appOrder, 'violet-dineros']);
   assert.equal(f.raw(), raw);
   assert.deepEqual(f.writes, []);
-  assert.deepEqual(api.recommended(loaded, ids).visibleAppIds, ['digital-clock', 'weather', 'lee-lees-tracker']);
+  assert.deepEqual(api.recommended(loaded, ids).visibleAppIds, ['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
 });
