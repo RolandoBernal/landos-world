@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = 'landos_world_my_apps_v1';
-  const RECOMMENDED_IDS = Object.freeze(['digital-clock', 'weather', 'lee-lees-tracker']);
+  const RECOMMENDED_IDS = Object.freeze(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
   const unique = (values) => [...new Set(values)];
 
   function normalize(value, registryIds) {
@@ -32,9 +32,15 @@
     }
   }
 
+  // Tapping Recommended or Show All resets the app order to the registry
+  // (canonical) order; Recommended then shows only the first five apps.
   function recommended(preferences, ids) {
     const first = RECOMMENDED_IDS.filter((id) => ids.includes(id));
-    return normalize({ visibleAppIds: first, appOrder: [...first, ...preferences.appOrder] }, ids);
+    return normalize({ visibleAppIds: first, appOrder: [...ids] }, ids);
+  }
+
+  function showAll(preferences, ids) {
+    return normalize({ visibleAppIds: [...ids], appOrder: [...ids] }, ids);
   }
 
   function move(preferences, id, position, ids) {
@@ -91,6 +97,6 @@
   }
 
   globalThis.LandosLauncherPreferences = Object.freeze({
-    STORAGE_KEY, RECOMMENDED_IDS, normalize, legacy, decode, recommended, move, reorderVisible, createStore,
+    STORAGE_KEY, RECOMMENDED_IDS, normalize, legacy, decode, recommended, showAll, move, reorderVisible, createStore,
   });
 })();

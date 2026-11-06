@@ -20,10 +20,15 @@ test('missing preserves complete registry order without any write', () => {
   assert.deepEqual(f.store.read(), { status: 'missing', preferences: config() });
   assert.deepEqual(f.writes, []);
 });
-test('recommended exact order, remaining saved order preserved', () => {
+test('recommended shows the first five and resets order to the canonical registry order', () => {
   const p = api.recommended(config(ids, [...ids].reverse()), ids);
-  assert.deepEqual(p.visibleAppIds, ['digital-clock', 'weather', 'lee-lees-tracker']);
-  assert.deepEqual(p.appOrder.slice(3), [...ids].reverse().filter((id) => !api.RECOMMENDED_IDS.includes(id)));
+  assert.deepEqual(p.visibleAppIds, ['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
+  assert.deepEqual(p.appOrder, ids);
+});
+test('show all shows every app and resets order to the canonical registry order', () => {
+  const p = api.showAll(config(['weather'], [...ids].reverse()), ids);
+  assert.deepEqual(p.visibleAppIds, ids);
+  assert.deepEqual(p.appOrder, ids);
 });
 test('normalization removes duplicates/unknown IDs and appends new apps hidden', () => {
   const p = api.normalize(config(['weather', 'weather', 'unknown'], ['unknown', 'weather', 'weather']), [...ids, 'new-app']);

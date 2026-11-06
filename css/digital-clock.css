@@ -1439,7 +1439,8 @@ body.is-child-app-active .pwa_network_status {
 }
 
 /* Launcher preferences share the existing Settings panel and theme tokens. */
-.my_apps_actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.my_apps_actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.65rem; }
+.my_apps_actions > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; white-space: normal; }
 .my_apps_list { display: grid; gap: 0.5rem; padding: 0; margin: 0 -8px; list-style: none; overflow-anchor: none; }
 .my_apps_row { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr) 90px; align-items: center; gap: 0; min-width: 0; }
 .my_apps_identity { display: grid; grid-template-columns: 20px minmax(0, 1fr) 44px; align-items: center; gap: 0; min-width: 0; min-height: 44px; cursor: pointer; }
@@ -1482,8 +1483,6 @@ body.is-child-app-active .pwa_network_status {
 .digit_clock_menu_toggle[aria-expanded="true"] svg > :not(.settings_close_icon) { display: none; }
 .digit_clock_menu_toggle[aria-expanded="true"] svg > .settings_close_icon { display: initial; }
 .digit_clock_menu_toggle[aria-expanded="true"] svg { transform: none !important; animation: none !important; }
-.my_apps_actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
-.my_apps_actions > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; white-space: normal; }
 
 .pwa_toast--update .pwa_update_actions button { min-height: 52px; border-radius: 9999px; }
 .pwa_cache_button { width: 100%; min-height: 52px; border-radius: 9999px; }
