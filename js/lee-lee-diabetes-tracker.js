@@ -6230,7 +6230,7 @@
   function renderCarbCalculatorItemEditor(mode) {
     const draft = normalizeCarbCalculatorRow(currentEditor?.carbCalculatorItemDraft || createBlankCarbCalculatorRow());
     return `
-      <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor>
+      <div class="lee_lee_diabetes_carb_item_editor" data-carb-item-editor data-preserve-document-scroll-on-viewport-pan>
           <label class="lee_lee_diabetes_field">
             ${draft.sourceType === 'meal' ? 'Carbs per saved amount' : 'Carbs per serving'}
             <span class="lee_lee_diabetes_unit_input">

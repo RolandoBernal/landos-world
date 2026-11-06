@@ -161,7 +161,7 @@ for (const context of ['standalone', 'entry']) {
     await expect(favorites).toHaveAttribute('aria-expanded','false');
   });
 
-  test(`${context}: existing status cover follows keyboard open, field switches and close`, async ({ page }) => {
+  test(`${context}: solid status cover stays fixed through keyboard open, field switches and close`, async ({ page }) => {
     await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
     await seed(page); await enter(page, context);
     const calc = root(page).locator('[data-carb-calculator]');
@@ -171,7 +171,6 @@ for (const context of ['standalone', 'entry']) {
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.setProperty('--status-inset', '47px');
       }, theme);
-      const background = await page.evaluate(() => getComputedStyle(document.body, '::after').backgroundImage);
       for (const [field, top, height] of [['carbItemCarbs', 80, 360], ['carbItemQty', 140, 360], ['carbItemLabel', 35, 360], ['carbItemLabel', 0, 844]]) {
         await calc.locator(`[name="${field}"]`).focus();
         await page.evaluate(({ top, height }) => {
@@ -181,17 +180,52 @@ for (const context of ['standalone', 'entry']) {
           viewport.dispatchEvent(new Event('resize'));
           viewport.dispatchEvent(new Event('scroll'));
         }, { top, height });
-        await expect.poll(() => page.evaluate(() => getComputedStyle(document.body, '::after').top)).toBe(`${top}px`);
+        await expect.poll(() => page.evaluate(() => getComputedStyle(document.body, '::after').top)).toBe('0px');
         const cover = await page.evaluate(() => {
           const style = getComputedStyle(document.body, '::after');
-          return { height: style.height, position: style.position, background: style.backgroundImage, overflow: getComputedStyle(document.querySelector('[data-carb-item-editor-body]')).overflowY };
+          return { height: style.height, position: style.position, background: style.backgroundImage, color: style.backgroundColor, pointer: style.pointerEvents, blur: style.backdropFilter || style.webkitBackdropFilter, padding: style.paddingBottom, overflow: getComputedStyle(document.querySelector('[data-carb-item-editor-body]')).overflowY };
         });
-        expect(cover).toEqual({ height: '47px', position: 'fixed', background, overflow: 'visible' });
+        expect(cover).toMatchObject({ height: '47px', position: 'fixed', background: 'none', pointer: 'none', blur: 'none', padding: '0px', overflow: 'visible' });
+        expect(cover.color).toBe(theme === 'light' ? 'rgb(244, 243, 234)' : 'rgb(23, 25, 35)');
         await expect(calc.locator('[data-modal-scroll-container], [data-modal-visual-viewport]')).toHaveCount(0);
       }
     }
     await calc.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Carb Calculator', exact: true })).toBeVisible();
+  });
+
+  test(`${context}: manual amount preserves focused document scrolling like New Entry`, async ({ page }) => {
+    await seed(page); await enter(page, context);
+    const calc = root(page).locator('[data-carb-calculator]');
+    await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await expect(calc.locator('[data-carb-item-editor]')).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => window.LandosTheme.setPreference(theme), theme);
+      await page.setViewportSize({ width: 390, height: 430 });
+      for (const name of ['carbItemCarbs', 'carbItemQty', 'carbItemLabel']) {
+        await calc.locator(`[name="${name}"]`).focus();
+        await page.waitForTimeout(50);
+        const result = await page.evaluate(() => {
+          const input = document.activeElement;
+          const panel = input.closest('[data-carb-item-editor]');
+          panel.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 140 }));
+          window.scrollTo(0, document.documentElement.scrollHeight);
+          const before = window.scrollY;
+          visualViewport.dispatchEvent(new Event('scroll'));
+          visualViewport.dispatchEvent(new Event('resize'));
+          return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve({ before, after: window.scrollY, focused: input === document.activeElement }))));
+        });
+        expect(result.after).toBe(result.before);
+        expect(result.focused).toBe(true);
+      }
+      await page.evaluate(() => document.activeElement.blur());
+      await page.setViewportSize({ width: 390, height: 844 });
+    }
+    await calc.locator('[name="carbItemCarbs"]').fill('12');
+    await calc.locator('[name="carbItemQty"]').fill('2');
+    await calc.getByRole('button', { name: 'Add Item', exact: true }).click();
+    await expect(calc.locator('[data-carb-calculator-total]')).toHaveText('24 g');
+    expect((await stored(page)).records).toHaveLength(0);
   });
 
   test(`${context}: full-page manual Back, Cancel and Add preserve calculator state`, async ({ page }) => {
