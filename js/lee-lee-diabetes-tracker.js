@@ -4551,7 +4551,7 @@
   }
 
   function renderTrackerNav(active) {
-    if (currentEditor?.carbCalculatorOpen) return '';
+    if (active === 'settings' || currentEditor?.carbCalculatorOpen) return '';
     const showLogAction = active !== 'settings' && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     return `
@@ -7683,8 +7683,8 @@
     root.querySelector('[data-low-dialog] button')?.focus();
   }
 
-  function lowButton(action, label, id = '') {
-    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="${action}" data-id="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
+  function lowButton(action, label, id = '', variant = 'ghost') {
+    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--${variant}" data-action="${action}" data-id="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
   }
 
   function saveLowGlucoseEditor(form) {
@@ -7817,7 +7817,7 @@
     }
     showLowGlucoseDialog(completed ? 'Recheck Glucose' : 'Low Glucose Recheck',
       completed ? 'The 15-minute reminder has finished. Record the actual glucose observation when available.' : 'Optional reminder. Background alarms are not guaranteed; completion appears when you return.',
-      (completed ? lowButton('low-timer-recheck', 'Record Recheck', timer.episodeId) : '') + lowButton('low-done', completed ? 'Later' : 'Back') + (!completed ? lowButton('low-stop-timer', 'Stop Timer', timer.episodeId) : ''), { mode: 'low-timer', timer });
+      (completed ? lowButton('low-timer-recheck', 'Record Recheck', timer.episodeId) : '') + lowButton('low-done', completed ? 'Later' : 'Back') + (!completed ? lowButton('low-stop-timer', 'Stop Timer', timer.episodeId, 'danger') : ''), { mode: 'low-timer', timer });
     getRoot()?.querySelector('#low-dialog-message')?.insertAdjacentHTML('beforebegin', `<p class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</p>`);
     window.clearInterval(preMealTimerRefresh);
     if (!completed) preMealTimerRefresh = window.setInterval(() => {

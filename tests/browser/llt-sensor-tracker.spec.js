@@ -578,7 +578,7 @@ test('invalid sensor code cannot reach review or save; no normalization',async({
   await expect(page.locator('.llt_sensor_review')).toContainText('Dexcom G7 · 0000');
 });
 
-test('sensor management uses compact SVG close/refresh and full-width action rows', async ({ page }) => {
+test('sensor management uses SVG close, a full-width Refresh row and full-width action rows', async ({ page }) => {
   await open(page); await start(page);
   const modal = page.locator('.llt_sensor_dialog');
   for (const theme of ['light', 'dark', 'system']) {
@@ -587,7 +587,7 @@ test('sensor management uses compact SVG close/refresh and full-width action row
     await expect(close.locator('svg')).toBeVisible();
     const box = await close.boundingBox(); expect(box.width).toBe(44); expect(box.height).toBe(44);
     const refresh = modal.getByRole('button', { name: 'Refresh', exact: true });
-    expect((await refresh.boundingBox()).width).toBeLessThan(120);
+    expect(await refresh.evaluate(n => { const s = getComputedStyle(n.parentElement); return Math.abs(n.getBoundingClientRect().width - (n.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))); })).toBeLessThan(2);
     await modal.locator('.llt_sensor_manage summary').click();
     for (const name of ['Replace Sensor', 'Edit Start Time', 'Undo Current Sensor', 'View All Sensor History →']) {
       const button = modal.getByRole('button', { name, exact: true });

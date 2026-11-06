@@ -567,6 +567,12 @@ test('Low Glucose modal and Today countdown stay synchronized through close and 
   await page.clock.install();
   await open(page); await newEpisode(page); await save(page);
   await page.locator('[data-action=low-start-timer]').click();
+  const modalActions = page.locator('[data-low-dialog] .lee_lee_diabetes_actions > button');
+  expect(await modalActions.allTextContents()).toEqual(['Back', 'Stop Timer']);
+  const modalBoxes = await modalActions.evaluateAll(nodes => nodes.map(n => { const r = n.getBoundingClientRect(); return { width: r.width, top: r.top, bottom: r.bottom }; }));
+  expect(Math.abs(modalBoxes[1].width - modalBoxes[0].width)).toBeLessThan(1);
+  expect(modalBoxes[1].top).toBeGreaterThan(modalBoxes[0].bottom);
+  await expect(page.locator('[data-low-dialog] [data-action="low-stop-timer"]')).toHaveClass(/lee_lee_diabetes_button--danger/);
   const initial = await page.evaluate(() => window.LeeLeePreMealTimer.getTimer());
   await page.clock.runFor(2100);
   await expect(page.locator('[data-low-dialog] [data-pre-meal-timer-value]')).not.toHaveText('15:00');
