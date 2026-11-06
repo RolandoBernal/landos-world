@@ -51,19 +51,11 @@ test('LWVD standalone entry and pageshow use the approved adapter', () => {
 });
 
 
-test('LLT status cover follows keyboard viewport panning and clears on exit', () => {
-  const listeners = {};
-  const viewport = { offsetTop: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
-  const state = setup({ hash: '#/lee-lees-tracker', viewport });
-  for (const offset of [90, 150, 35, 0]) {
-    viewport.offsetTop = offset;
-    listeners.resize(); listeners.scroll();
-    assert.equal(state.properties.get('--status-viewport-top'), `${offset}px`);
-  }
-  viewport.offsetTop = 120;
-  state.location.hash = '#/weather'; state.events.hashchange();
-  listeners.scroll();
-  assert.equal(state.properties.has('--status-viewport-top'), false);
-  state.location.hash = '#/lee-lees-tracker'; state.events.hashchange();
-  assert.equal(state.properties.get('--status-viewport-top'), '120px');
+test('status cover remains anchored without visual-viewport scroll offsets', async () => {
+  const css = await readFile(new URL('../css/status-scrim.css', import.meta.url), 'utf8');
+  assert.match(css, /position: fixed; inset: 0 0 auto/);
+  assert.doesNotMatch(css + source, /status-viewport-top|offsetTop/);
+  const state = setup({ hash: '#/lee-lees-tracker', viewport: { offsetTop: 120 } });
+  assert.equal(state.root.dataset.statusApp, 'llt');
+  assert.equal(state.properties.size, 0);
 });
