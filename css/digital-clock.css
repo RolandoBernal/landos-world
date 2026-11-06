@@ -1476,3 +1476,16 @@ body.is-child-app-active .pwa_network_status {
   outline: 2px solid var(--color-text-strong); outline-offset: 3px;
 }
 #my-apps-status { margin: 0; color: var(--color-text-muted); line-height: 1.45; }
+
+/* Settings keeps its existing button and state; only the SVG glyph changes. */
+.digit_clock_menu_toggle .settings_close_icon { display: none; }
+.digit_clock_menu_toggle[aria-expanded="true"] svg > :not(.settings_close_icon) { display: none; }
+.digit_clock_menu_toggle[aria-expanded="true"] svg > .settings_close_icon { display: initial; }
+.digit_clock_menu_toggle[aria-expanded="true"] svg { transform: none !important; animation: none !important; }
+.my_apps_actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.my_apps_actions > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; white-space: normal; }
+
+.pwa_toast--update .pwa_update_actions button { min-height: 52px; border-radius: 9999px; }
+.pwa_cache_button { width: 100%; min-height: 52px; border-radius: 9999px; }
+
+.pwa_update_actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

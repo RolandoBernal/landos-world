@@ -4204,3 +4204,36 @@ dialog.lee_lee_diabetes_carb_meal_dialog::backdrop {
 .lee_lee_diabetes_diagnostic_actions--recovery > .lee_lee_diabetes_help {
   margin: 0;
 }
+
+/* Form actions share equal, in-flow pill buttons; row tools stay independent. */
+:is(.lee_lee_diabetes_actions:where(:not([class*="pre_meal_timer_"])):where(:not(.lee_lee_diabetes_pre_meal_timer_modal *)), .lee_lee_diabetes_food_editor_actions, .lee_lee_diabetes_carb_item_editor_actions, .lee_lee_diabetes_backup_actions, .llt_sensor_actions) {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem;
+}
+:is(.lee_lee_diabetes_actions:where(:not([class*="pre_meal_timer_"])):where(:not(.lee_lee_diabetes_pre_meal_timer_modal *)), .lee_lee_diabetes_food_editor_actions, .lee_lee_diabetes_carb_item_editor_actions, .lee_lee_diabetes_backup_actions, .llt_sensor_actions) > :is(button, a) {
+  width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; white-space: normal;
+}
+:is(.lee_lee_diabetes_actions:where(:not([class*="pre_meal_timer_"])):where(:not(.lee_lee_diabetes_pre_meal_timer_modal *)), .lee_lee_diabetes_food_editor_actions, .lee_lee_diabetes_carb_item_editor_actions, .lee_lee_diabetes_backup_actions, .llt_sensor_actions) > :only-child { grid-column: 1 / -1; }
+.lee_lee_diabetes_back_link {
+  display: inline-flex; align-items: center; justify-content: flex-start; gap: .25rem;
+  width: auto; min-width: 44px; min-height: 44px; padding: .35rem .25rem;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; font: inherit; color: var(--lee-lee-green);
+}
+
+.lee_lee_diabetes_food_editor_actions, .lee_lee_diabetes_meal_builder_footer { position: static; }
+
+/* Specific long-label forms stack; timer and inline record controls stay native. */
+:is(.lee_lee_diabetes_actions, .lee_lee_diabetes_food_editor_actions).lee_lee_diabetes_actions--stacked,
+.lee_lee_diabetes_low_episode .lee_lee_diabetes_low_episode_actions,
+.llt_sensor_actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+.llt_sensor_dialog .llt_sensor_close {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px;
+  padding: 9px; color: inherit; border: 1px solid var(--lee-lee-border); border-radius: 6px; background: transparent;
+}
+.llt_sensor_close svg { width: 24px; height: 24px; }
+.llt_sensor_management > button, .llt_sensor_corrections button,
+.llt_sensor_dialog [data-sensor-action="history"] { width: 100%; }
+.llt_sensor_dialog .llt_sensor_sync_row button { flex: 0 0 auto; width: auto; padding: .4rem .65rem; }
+.lee_lee_diabetes_carb_search { position: relative; }
+.lee_lee_diabetes_carb_search > svg { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; pointer-events: none; color: var(--lee-lee-muted); }
+.lee_lee_diabetes_carb_search > input { padding-left: 2.7rem; }
+.lee_lee_diabetes_carb_library_list:empty { display: none; }
