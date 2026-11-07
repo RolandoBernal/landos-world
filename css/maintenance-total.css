@@ -304,13 +304,13 @@
 .maintenance_total_view .imt_status--good,
 .maintenance_total_view .imt_status--done { background: #DDEEE5; color: #1F6B4A; }
 .maintenance_total_view .imt_toast { color: var(--green); }
-.maintenance_total_view .imt_bottom_nav { background: var(--surface); border-color: var(--line); box-shadow: 0 8px 28px rgba(20,33,30,.14); }
+.maintenance_total_view .imt_bottom_nav { background: color-mix(in srgb, var(--surface) 84%, transparent); border-color: var(--line); box-shadow: 0 12px 32px rgba(20,33,30,.22); backdrop-filter: blur(18px) saturate(150%); }
 .maintenance_total_view .imt_nav_button { color: var(--ink3); }
 .maintenance_total_view .imt_nav_button.is-active { background: var(--surface2); color: var(--ink); }
 .maintenance_total_view .imt_nav_button.is-active .imt_nav_icon { color: var(--ink); }
 .maintenance_total_view .imt_nav_button:hover .imt_nav_icon { color: var(--teal); }
-.maintenance_total_view .imt_add_button { background: var(--teal); color: #FFFFFF; border-color: var(--line); box-shadow: 0 6px 20px rgba(20,33,30,.14); }
-.maintenance_total_view .imt_floating_controls::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 90%, transparent) 100%); }
+.maintenance_total_view .imt_add_button { background: var(--teal); color: #FFFFFF; border-color: var(--line); box-shadow: 0 8px 24px rgba(20,33,30,.24); }
+.maintenance_total_view .imt_floating_controls::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 90%, transparent) 100%); backdrop-filter: blur(14px) saturate(140%); -webkit-mask-image: linear-gradient(to bottom, transparent, black 55%); mask-image: linear-gradient(to bottom, transparent, black 55%); }
 .maintenance_total_view .lando_settings_link,
 .maintenance_total_view .digit_clock_menu_toggle { background: var(--surface); color: var(--ink); border-color: var(--line); }
 .maintenance_total_view .digit_clock_menu_toggle[aria-expanded="true"] { background: var(--teal-soft); border-color: var(--teal); color: var(--ink); }
