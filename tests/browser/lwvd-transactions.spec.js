@@ -24,7 +24,7 @@ async function setup(page,theme='light',transactions) {
 }
 const saved=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
 const sheet=page=>page.getByRole('dialog');
-async function openAdd(page,type){await page.getByRole('button',{name:type==='income'?'Add Money':'Add Expense',exact:true}).click();await expect(sheet(page)).toBeVisible();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();}
+async function openAdd(page,type){await page.locator('#quick-actions-toggle').click();await page.getByRole('button',{name:type==='income'?'Add Money':'Add Expense',exact:true}).click();await expect(sheet(page)).toBeVisible();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();}
 async function fillTransaction(page,type,amount,label,description=''){
   await sheet(page).getByLabel('How much?',{exact:true}).fill(amount);
   await sheet(page).getByLabel(type==='income'?'Where did it come from?':'Category',{exact:true}).selectOption(label);
@@ -35,7 +35,7 @@ async function add(page,type,amount,label,description=''){
   await sheet(page).getByRole('button',{name:type==='income'?'Add Money':'Save Expense',exact:true}).click();await expect(sheet(page)).not.toBeVisible();
 }
 async function activity(page){await page.getByRole('button',{name:'Activity',exact:true}).click();}
-async function home(page){await page.getByRole('button',{name:'Home',exact:true}).click();}
+async function home(page){if(await page.locator('#settings').getAttribute('aria-expanded')==='true'){await page.locator('#settings').click();return;}await page.getByRole('button',{name:'Home',exact:true}).click();}
 
 test('legacy data is not rewritten; income/expense, negative balances, guide and reload use cents',async({page})=>{
   const initial=await setup(page);expect(await saved(page)).toEqual(initial);await expect(page.locator('.balance')).toHaveText('$150.00');
@@ -78,11 +78,11 @@ test('edit preserves ID/type/date and deletion still confirms and cancels',async
   await fillTransaction(page,'expense','8.50','Fun','Movie snack');await sheet(page).getByRole('button',{name:'Save Changes',exact:true}).click();
   await expect(page.locator('.activity>h1')).toBeFocused();
   const edited={...original,amountCents:850,label:'Fun',description:'Movie snack'};
-  expect((await saved(page)).transactions).toEqual([edited]);await expect(page.locator('#notice')).toHaveText('Changes saved.');
+  expect((await saved(page)).transactions).toEqual([edited]);await expect(page.locator('#notice > span')).toHaveText('Changes saved.');
   await home(page);await expect(page.locator('.balance')).toHaveText('$141.50');await expect(page.locator('.guide')).toHaveText('$47.17 a day');await activity(page);
   await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(sheet(page)).toContainText('Your balance will be updated');expect((await saved(page)).transactions).toEqual([edited]);
   await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toEqual([edited]);await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();
-  await expect(page.locator('.transaction-row')).toHaveCount(0);await expect(page.locator('#notice')).toHaveText('Transaction deleted.');await home(page);await expect(page.locator('.balance')).toHaveText('$150.00');
+  await expect(page.locator('.transaction-row')).toHaveCount(0);await expect(page.locator('#notice > span')).toHaveText('Transaction deleted.');await home(page);await expect(page.locator('.balance')).toHaveText('$150.00');
   await page.reload();expect((await saved(page)).transactions).toEqual([]);
 });
 

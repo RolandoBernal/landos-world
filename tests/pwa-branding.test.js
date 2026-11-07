@@ -58,13 +58,13 @@ test('GitHub Pages entrypoint is the Lando World app shell', () => {
   assert.doesNotMatch(entryHtml, /index-digital-clock\.html/);
 });
 
-test('landing launcher omits Daily Chief Briefing and starts with Weather', () => {
+test('landing launcher omits Daily Chief Briefing and starts with Digital Clock', () => {
   const appCardsStart = entryHtml.indexOf('const APP_CARDS = [');
   const appCardsEnd = entryHtml.indexOf('const WEATHER_CONFIG = [');
   const appCardsSource = entryHtml.slice(appCardsStart, appCardsEnd);
   assert.doesNotMatch(appCardsSource, /id: 'daily-chief-briefing'/);
   assert.match(appCardsSource, /id: 'weather'/);
-  assert.ok(appCardsSource.indexOf("id: 'weather'") < appCardsSource.indexOf("id: 'digital-clock'"));
+  assert.ok(appCardsSource.indexOf("id: 'digital-clock'") < appCardsSource.indexOf("id: 'weather'"));
 });
 
 test('legacy Digital Clock URL redirects to the root hash router', () => {

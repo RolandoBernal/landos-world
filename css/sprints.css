@@ -1127,3 +1127,9 @@
     gap: .7rem;
   }
 }
+
+.sprints-confirm__actions > .sprints-btn, .sprints-editor > .sprints-btn {
+  width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; white-space: normal;
+}
+.sprints-editor > .sprints-btn--accent { background: var(--sprints-accent); border-color: var(--sprints-accent); color: var(--color-bg); }
+.sprints-confirm__actions > .sprints-btn--accent { background: var(--sprints-accent); border-color: var(--sprints-accent); color: var(--color-bg); }

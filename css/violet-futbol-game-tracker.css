@@ -975,6 +975,20 @@
   gap: 1rem;
 }
 
+/* Form actions stack full-width; live game controls keep the shared row layout. */
+.vfgt_form .vfgt_actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.vfgt_form .vfgt_actions > .vfgt_button {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  border-radius: 9999px;
+}
+
 .vfgt_home_actions {
   display: flex;
   flex-wrap: wrap;
@@ -1128,6 +1142,7 @@
 .vfgt_confirm__actions .vfgt_button {
   min-height: 52px;
   min-width: 0;
+  border-radius: 9999px;
 }
 
 :root[data-theme="light"] .vfgt_confirm .vfgt_button--danger,

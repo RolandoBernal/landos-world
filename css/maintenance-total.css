@@ -437,3 +437,14 @@
 .maintenance_total_view .imt_form :disabled { opacity: .65; }
 
 .maintenance_total_view .imt_history_icon { display: inline-grid; place-items: center; width: 30px; height: 30px; margin: 0 .5rem .4rem 0; border-radius: 10px; background: var(--asset-accent); color: #FFFFFF; font-size: .75rem; font-weight: 700; vertical-align: middle; }
+
+.imt_actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.imt_actions > .imt_button { width: 100%; min-width: 0; min-height: 52px; white-space: normal; }
+.imt_actions > :only-child { grid-column: 1 / -1; }
+
+.maintenance_total_view .imt_form .imt_actions > .imt_button { scroll-margin-block: 80px calc(100px + env(safe-area-inset-bottom)); }
+
+#maintenance-total-root[data-imt-page="more"] .imt_section > .imt_button { display: block; width: 100%; margin-top: .75rem; }
+#imt_settings_toggle { width: 44px; height: 44px; min-width: 44px; padding: 9px; border: 1px solid var(--color-border-strong); border-radius: 6px; }
+
+.imt_actions.imt_actions--stacked { grid-template-columns: minmax(0, 1fr); }

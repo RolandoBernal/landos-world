@@ -1793,7 +1793,7 @@
     return `<button type="button" class="digit_clock_menu_toggle vfgt_icon_button" data-vfgt-action="settings" data-vfgt-settings-toggle aria-expanded="${settingsOpen ? 'true' : 'false'}" aria-label="${settingsOpen ? 'Close VFGT Settings' : 'VFGT Settings'}" title="${settingsOpen ? 'Close Settings' : 'Settings'}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-      </svg>
+      <path class="settings_close_icon" d="M6 6l12 12M18 6 6 18"/></svg>
     </button>`;
   }
 
@@ -1839,7 +1839,7 @@
       renderSettings();
       return;
     }
-    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-duration-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="settings">←</button><div><p class="vfgt_kicker">Game Settings</p><h1 id="vfgt-duration-title">Half Duration</h1></div></header><form class="vfgt_form" data-vfgt-duration-form><p class="vfgt_settings_note">Applies to ${escapeHtml(season.name)}.</p><label>Minutes <input name="halfDurationMinutes" type="number" inputmode="numeric" min="1" step="1" required value="${season.halfDurationMinutes}"></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="settings">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Duration</button></div></form></section>`;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-duration-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="settings">←</button><div><p class="vfgt_kicker">Game Settings</p><h1 id="vfgt-duration-title">Half Duration</h1></div></header><form class="vfgt_form" data-vfgt-duration-form><p class="vfgt_settings_note">Applies to ${escapeHtml(season.name)}.</p><label>Minutes <input name="halfDurationMinutes" type="number" inputmode="numeric" min="1" step="1" required value="${season.halfDurationMinutes}"></label><div class="vfgt_actions"><button type="submit" class="vfgt_button vfgt_button--primary">Save Duration</button><button type="button" class="vfgt_button" data-vfgt-action="settings">Cancel</button></div></form></section>`;
   }
 
   function renderTeams() {
@@ -1859,14 +1859,14 @@
   function renderTeamForm(id = '') {
     const team = teams.find((item) => item.id === id) || { name: '', shortName: '' };
     editingEntityId = id;
-    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-team-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="teams">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-team-form-title">${id ? 'Edit Team' : 'Add Team'}</h1></div></header><form class="vfgt_form" data-vfgt-team-form><label>Team Name <input name="name" required maxlength="80" value="${escapeHtml(team.name)}"></label><label>Short Name / Abbreviation <input name="shortName" maxlength="12" value="${escapeHtml(team.shortName)}"></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="teams">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Team</button></div></form></section>`;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-team-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="teams">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-team-form-title">${id ? 'Edit Team' : 'Add Team'}</h1></div></header><form class="vfgt_form" data-vfgt-team-form><label>Team Name <input name="name" required maxlength="80" value="${escapeHtml(team.name)}"></label><label>Short Name / Abbreviation <input name="shortName" maxlength="12" value="${escapeHtml(team.shortName)}"></label><div class="vfgt_actions"><button type="submit" class="vfgt_button vfgt_button--primary">Save Team</button><button type="button" class="vfgt_button" data-vfgt-action="teams">Cancel</button></div></form></section>`;
   }
 
   function renderSeasonForm(id = '') {
     const season = seasons.find((item) => item.id === id) || { name: '', teamId: currentTeam()?.id || '' };
     editingEntityId = id;
     const options = teams.filter((team) => !team.archived).map((team) => `<option value="${escapeHtml(team.id)}" ${team.id === season.teamId ? 'selected' : ''}>${escapeHtml(team.name)}</option>`).join('');
-    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-season-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="seasons">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-season-form-title">${id ? 'Edit Season' : 'Add Season'}</h1></div></header><form class="vfgt_form" data-vfgt-season-form><label>Season Name <input name="name" required maxlength="80" placeholder="2027 Fall" value="${escapeHtml(season.name)}"></label><label>Team <select name="teamId" required>${options}</select></label><div class="vfgt_actions"><button type="button" class="vfgt_button" data-vfgt-action="seasons">Cancel</button><button type="submit" class="vfgt_button vfgt_button--primary">Save Season</button></div></form></section>`;
+    getRoot().innerHTML = `<section class="vfgt_app" aria-labelledby="vfgt-season-form-title"><header class="vfgt_page_header vfgt_page_header--with-back"><button type="button" class="vfgt_back_button" data-vfgt-action="seasons">←</button><div><p class="vfgt_kicker">Settings</p><h1 id="vfgt-season-form-title">${id ? 'Edit Season' : 'Add Season'}</h1></div></header><form class="vfgt_form" data-vfgt-season-form><label>Season Name <input name="name" required maxlength="80" placeholder="2027 Fall" value="${escapeHtml(season.name)}"></label><label>Team <select name="teamId" required>${options}</select></label><div class="vfgt_actions"><button type="submit" class="vfgt_button vfgt_button--primary">Save Season</button><button type="button" class="vfgt_button" data-vfgt-action="seasons">Cancel</button></div></form></section>`;
   }
 
   function scheduledGameMarkup(game) {
@@ -1931,8 +1931,8 @@
           <label>Game Type ${gameTypeSelectMarkup(defaults.gameType)}</label>
           <label>Notes <textarea name="notes" rows="3" placeholder="Optional">${escapeHtml(defaults.notes)}</textarea></label>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Save Future Game</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
           </div>
         </form>
       </section>`;
@@ -2133,8 +2133,8 @@
             <label>Start time <input name="time" type="time" value="${defaults.time}"></label>
           </div>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Start Game</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
           </div>
         </form>
       </section>`;
@@ -2190,8 +2190,8 @@
           </section>
           <output class="vfgt_manual_total" data-vfgt-manual-final aria-live="polite">Final: 0 - 0</output>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Save Past Game</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="choose-game-type">Back</button>
           </div>
         </form>
       </section>`;
@@ -2408,8 +2408,8 @@
           ${game.overtimePlayed ? `<section class="vfgt_manual_half"><h2>Overtime Goals</h2><div class="vfgt_form_grid">${manualScoreEditor('otGoalsTeam1', 'Team 1 OT goals', game.otGoalsTeam1)}${manualScoreEditor('otGoalsTeam2', 'Team 2 OT goals', game.otGoalsTeam2)}</div></section>` : ''}
           <output class="vfgt_manual_total" data-vfgt-manual-final aria-live="polite">Final: ${score.team1} - ${score.team2}</output>
           <div class="vfgt_actions vfgt_actions--sticky">
-            <button type="button" class="vfgt_button" data-vfgt-action="cancel-edit" data-id="${escapeHtml(id)}">Cancel</button>
             <button type="submit" class="vfgt_button vfgt_button--primary">Save Changes</button>
+            <button type="button" class="vfgt_button" data-vfgt-action="cancel-edit" data-id="${escapeHtml(id)}">Cancel</button>
           </div>
         </form>
       </section>`;
