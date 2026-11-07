@@ -562,3 +562,51 @@ for (const threshold of [80, null, 'not-a-threshold']) test(`saved threshold ${t
   await expect(card.locator('[data-low-details]')).toContainText(threshold === 80 ? 'Episode threshold: 80 mg/dL' : 'Episode threshold unavailable');
   expect((await stored(page))[0].lowGlucoseEpisode.thresholdSnapshot).toEqual(record.lowGlucoseEpisode.thresholdSnapshot);
 });
+
+test('Low Glucose modal and Today countdown stay synchronized through close and reopen', async ({ page }) => {
+  await page.clock.install();
+  await open(page); await newEpisode(page); await save(page);
+  await page.locator('[data-action=low-start-timer]').click();
+  const modalActions = page.locator('[data-low-dialog] .lee_lee_diabetes_actions > button');
+  expect(await modalActions.allTextContents()).toEqual(['Back', 'Stop Timer']);
+  const modalBoxes = await modalActions.evaluateAll(nodes => nodes.map(n => { const r = n.getBoundingClientRect(); return { width: r.width, top: r.top, bottom: r.bottom }; }));
+  expect(Math.abs(modalBoxes[1].width - modalBoxes[0].width)).toBeLessThan(1);
+  expect(modalBoxes[1].top).toBeGreaterThan(modalBoxes[0].bottom);
+  await expect(page.locator('[data-low-dialog] [data-action="low-stop-timer"]')).toHaveClass(/lee_lee_diabetes_button--danger/);
+  const initial = await page.evaluate(() => window.LeeLeePreMealTimer.getTimer());
+  await page.clock.runFor(2100);
+  await expect(page.locator('[data-low-dialog] [data-pre-meal-timer-value]')).not.toHaveText('15:00');
+  await done(page); await page.clock.runFor(2100);
+  for (const theme of ['light', 'dark', 'system']) {
+    await page.evaluate(t => window.LandosTheme.setPreference(t), theme);
+    const actions = page.locator('.lee_lee_diabetes_low_episode_actions');
+    expect(await actions.locator('button').allTextContents()).toEqual(['Record Recheck', 'Recheck Timer', 'End Without Confirmed Recovery']);
+    const boxes = await actions.locator('button').evaluateAll(nodes => nodes.map(n => { const r = n.getBoundingClientRect(); return { width: r.width, top: r.top, bottom: r.bottom }; }));
+    expect(Math.abs(boxes[1].width - boxes[0].width)).toBeLessThan(1); expect(Math.abs(boxes[2].width - boxes[0].width)).toBeLessThan(1);
+    expect(boxes[1].top).toBeGreaterThan(boxes[0].bottom); expect(boxes[2].top).toBeGreaterThan(boxes[1].bottom);
+  }
+  await page.locator('[data-action=open-pre-meal-timer]').click();
+  async function synchronized() {
+    const expected = await page.evaluate(() => {
+      const timer = window.LeeLeePreMealTimer.getTimer();
+      const seconds = Math.ceil(window.LeeLeePreMealTimer.remainingMs(timer) / 1000);
+      return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    });
+    await expect(page.locator('[data-pre-meal-timer-value]')).toHaveCount(2);
+    expect(await page.locator('[data-pre-meal-timer-value]').allTextContents()).toEqual([expected, expected]);
+    return expected;
+  }
+  await synchronized();
+  await page.clock.runFor(3100);
+  expect(await synchronized()).not.toBe('15:00');
+  for (let i = 0; i < 2; i += 1) {
+    await done(page); await page.clock.runFor(2100);
+    await page.locator('[data-action=open-pre-meal-timer]').click();
+    await synchronized(); await page.clock.runFor(2100); await synchronized();
+  }
+  const current = await page.evaluate(() => window.LeeLeePreMealTimer.getTimer());
+  expect(current.endsAt).toBe(initial.endsAt);
+  expect(current.scheduleId).toBe(initial.scheduleId);
+  expect(current.durationMinutes).toBe(15);
+  expect((await stored(page))).toHaveLength(1);
+});

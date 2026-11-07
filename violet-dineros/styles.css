@@ -7,10 +7,10 @@
 .ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
 .ecosystem_nav_back>span:first-child{font-size:1rem;line-height:1}
 .home-back,.app-heading .brand{display:none}
-body[data-screen=home] header{position:static;margin-bottom:15px}
-body[data-screen=home] .home-back{display:inline-flex}
-body[data-screen=home] .app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
-body[data-screen=home] .app-heading .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-size:1.2rem;font-weight:700;min-width:0}
+body:is([data-screen=home],[data-screen=settings]) header{position:static;margin-bottom:15px}
+body:is([data-screen=home],[data-screen=settings]) .home-back{display:inline-flex}
+body:is([data-screen=home],[data-screen=settings]) .app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+body:is([data-screen=home],[data-screen=settings]) .app-heading .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-size:1.2rem;font-weight:700;min-width:0}
 .app-heading .brand img{width:36px;height:36px;flex-shrink:0}
 body[data-screen=home] .greeting{padding-right:0}
 
@@ -271,8 +271,8 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] #small-result.small-result-empty p{color:#c1b2d5}
 
 /* Goals reuse Activity details and transaction forms; confirmations stay compact.
-   Keep the origin shell hidden until the complete Goals interaction closes. */
-body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hidden}
+   The details/forms are pages in the shell now, so a compact confirmation
+   opens over the page instead of hiding the shell. */
 #transaction-sheet[data-presentation=goal][data-view=confirm],
 #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm],
@@ -417,3 +417,41 @@ body.nav-scroll-hidden #notice:not(:empty){bottom:calc(16px + env(safe-area-inse
 #notice[data-kind=success]:not(:empty){display:flex;pointer-events:none;width:auto;max-width:448px}
 dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:auto;padding:8px 12px}
 @media(prefers-reduced-motion:reduce){nav,.floating-actions{transition:none}}
+
+/* Existing form actions remain in flow, with one consistent pair/single layout. */
+:is(.sheet-actions, .settings-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+:is(.sheet-actions, .settings-actions) > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; line-height: 1.3; white-space: normal; }
+:is(.sheet-actions, .settings-actions) > :only-child { grid-column: 1 / -1; }
+.sheet-actions > button:not(.primary) { background: transparent; border: 1px solid currentColor; }
+.sheet-actions > .danger, .goal-actions > #goal-delete { color: #b42348; border-color: currentColor; }
+.sheet-actions > .primary.danger { background: #a21d41; color: #fff; border-color: #a21d41; }
+:root[data-theme=dark] .sheet-actions > .danger, :root[data-theme=dark] .goal-actions > #goal-delete { color: #ff9bb2; }
+:root[data-theme=dark] .sheet-actions > .primary.danger { color: #fff; }
+.sheet-heading button { display: grid; place-items: center; width: 44px; height: 44px; padding: 8px; }
+.settings-title .back-circle, :root[data-theme=dark] .settings-title .back-circle { width: 50px; min-width: 50px; height: 50px; min-height: 50px; border-radius: 0; background: transparent; }
+.settings-title .back-circle svg { width: 24px; height: 24px; }
+.goal-actions > button { width: 100%; min-height: 52px; border-radius: 9999px; }
+
+.form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.form-actions > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; }
+.form-actions > :only-child { grid-column: 1 / -1; }
+.form-actions > .text-button { border: 1px solid currentColor; background: transparent; }
+
+.sheet-actions.sheet-actions--stacked { grid-template-columns: minmax(0, 1fr); }
+#settings { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 1px solid #ded8f1; border-radius: 6px; }
+:root[data-theme=dark] #settings { border-color: #53405f; }
+#settings svg { width: 24px; height: 24px; }
+
+/* Sheet pages: long forms and details render in the tab content as real
+   pages instead of the fixed sheet dialog (small confirmations keep the
+   dialog). The frame/panel become plain document flow. */
+body[data-screen=sheet] .shell{padding-bottom:25px}
+.sheet-page-frame{position:static;width:100%;height:auto;display:block;padding-top:0;overflow:visible}
+.sheet-page-frame .transaction-panel{width:100%;max-height:none;min-height:0;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:4px 0 24px}
+.sheet-page-frame :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+.sheet-page-frame label{font-size:.87rem;font-weight:500}
+.sheet-page-frame .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.sheet-page-frame progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}
+.sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+.sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
+body[data-screen=sheet] #settings{display:none}

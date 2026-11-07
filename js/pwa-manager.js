@@ -219,8 +219,8 @@
           <p class="pwa_update_secondary_message">You’re currently using <span class="pwa_version_token">${escapeHtml(getRunningVersionLabel())}</span>.</p>
           ${updateBlockedReason ? `<p class="pwa_update_blocked" role="status">${escapeHtml(updateBlockedReason)}</p>` : ''}
           <div class="pwa_update_actions">
-            <button type="button" class="pwa_update_primary_action" data-pwa-action="update-now">Update Now</button>
             <button type="button" class="pwa_update_secondary_action" data-pwa-action="later">Later</button>
+            <button type="button" class="pwa_update_primary_action" data-pwa-action="update-now">Update Now</button>
           </div>
         </div>
       `;

@@ -37,9 +37,9 @@ for(const historical of [-1,0,2,25,105]) test(`bounded sensor history with ${his
   if(total) {
     await page.locator('[data-sensor-results] > button').first().click();
     await expect(page.getByRole('heading',{name:'Sensor Details',exact:true})).toBeVisible();
-    await expect(page.locator('.llt_sensor_dialog')).toContainText('Active');
-    await expect(page.locator('.llt_sensor_dialog')).not.toContainText('Actual Replacement');
-    await expect(page.locator('.llt_sensor_dialog')).not.toContainText('Actual Duration');
+    await expect(page.locator('.llt_sensor_page')).toContainText('Active');
+    await expect(page.locator('.llt_sensor_page')).not.toContainText('Actual Replacement');
+    await expect(page.locator('.llt_sensor_page')).not.toContainText('Actual Duration');
     await expect(page.getByRole('button',{name:'Edit Replacement Metadata',exact:true})).toHaveCount(0);
   }
 });
@@ -50,25 +50,25 @@ test('combined search/filter, legacy unknowns, escaped notes, and preserved list
   await search.fill('ADHESIVE'); await expect(page.locator('[data-sensor-results] > button')).toHaveCount(1);
   await filter.selectOption('Completed'); await expect(page.locator('[data-sensor-results] > button')).toHaveCount(0);
   await filter.selectOption('Replaced Early'); await page.locator('[data-sensor-results] > button').click();
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Sensor Fell Off');
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Replacement Requested: No');
+  await expect(page.locator('.llt_sensor_page')).toContainText('Sensor Fell Off');
+  await expect(page.locator('.llt_sensor_page')).toContainText('Replacement Requested: No');
   await expect(page.locator('.llt_sensor_notes')).toHaveText('Synthetic adhesive note <script>bad()</script>');
   await expect(page.locator('.llt_sensor_notes script')).toHaveCount(0);
-  await page.getByRole('button',{name:'← All Sensors',exact:true}).click();
+  await page.locator('[data-sensor-action="history-back"]').click();
   await expect(search).toHaveValue('ADHESIVE'); await expect(filter).toHaveValue('Replaced Early');
   await search.fill(''); await filter.selectOption('All'); await page.getByRole('button',{name:'Load More'}).click();
-  await page.locator('.llt_sensor_dialog').evaluate(d=>d.scrollTop=500);
-  const scroll=await page.locator('.llt_sensor_dialog').evaluate(d=>d.scrollTop);
+  await page.evaluate(()=>window.scrollTo(0,500));
+  const scroll=await page.evaluate(()=>window.scrollY);
   await page.locator('[data-sensor-results] > button').nth(3).click();
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Reason Not Recorded');
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('No Notes Recorded');
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Replacement Requested: Not Recorded');
-  await page.getByRole('button',{name:'← All Sensors',exact:true}).click();
+  await expect(page.locator('.llt_sensor_page')).toContainText('Reason Not Recorded');
+  await expect(page.locator('.llt_sensor_page')).toContainText('No Notes Recorded');
+  await expect(page.locator('.llt_sensor_page')).toContainText('Replacement Requested: Not Recorded');
+  await page.locator('[data-sensor-action="history-back"]').click();
   await expect(page.locator('[data-sensor-results] > button')).toHaveCount(50);
-  expect(await page.locator('.llt_sensor_dialog').evaluate(d=>d.scrollTop)).toBeCloseTo(scroll,0);
+  expect(await page.evaluate(()=>window.scrollY)).toBeCloseTo(scroll,0);
   for(const width of [320,393,768,1280]) {
     await page.setViewportSize({width,height:740});
-    expect(await page.locator('.llt_sensor_dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().width<=innerWidth)).toBe(true);
+    expect(await page.locator('.llt_sensor_page').evaluate(d=>d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().width<=innerWidth)).toBe(true);
   }
   await page.screenshot({path:testInfo.outputPath('all-sensors.png')});
 });
@@ -80,10 +80,10 @@ test('historical metadata edit persists and refetches across tabs, conflicts fai
   await page.getByLabel('Replacement Requested from Dexcom',{exact:true}).selectOption('true');
   await page.getByRole('button',{name:'Save Replacement Metadata'}).click();
   await expect(page.getByRole('heading',{name:'Sensor Details',exact:true})).toBeVisible();
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Signal Loss');
+  await expect(page.locator('.llt_sensor_page')).toContainText('Signal Loss');
   const second=await context.newPage(); await second.goto(url);
   await history(second); await second.locator('[data-sensor-results] > button').nth(1).click();
-  await expect(second.locator('.llt_sensor_dialog')).toContainText('Updated synthetic note');
+  await expect(second.locator('.llt_sensor_page')).toContainText('Updated synthetic note');
   await second.getByRole('button',{name:'Edit Replacement Metadata'}).click();
   await page.getByRole('button',{name:'Edit Replacement Metadata'}).click();
   await page.getByLabel('Replacement Notes',{exact:true}).fill('Newer synthetic note');
@@ -96,7 +96,7 @@ test('historical metadata edit persists and refetches across tabs, conflicts fai
   await page.locator('.llt_sensor_manage summary').click();
   await page.getByRole('button',{name:'Undo Current Sensor',exact:true}).click();
   await page.getByRole('button',{name:'Undo Current Sensor',exact:true}).click();
-  await page.locator('.llt_sensor_dialog [data-sensor-action=history]').click();
+  await page.locator('.llt_sensor_page [data-sensor-action=history]').click();
   await page.locator('[data-sensor-filter]').selectOption('Cancelled');
   await page.locator('[data-sensor-results] > button').click();
   await expect(page.getByRole('button',{name:'Edit Replacement Metadata'})).toHaveCount(0);
@@ -134,6 +134,6 @@ test('metadata notes enforce the 2000-character limit without changing stored da
   await page.getByRole('button',{name:'Save Replacement Metadata'}).click();
   await expect(page.getByRole('heading',{name:'Sensor Details',exact:true})).toBeVisible();
   await expect(page.locator('.llt_sensor_notes')).toHaveText('😀'.repeat(2000));
-  await expect(page.locator('.llt_sensor_dialog')).toContainText('Replacement Requested: Not Recorded');
-  expect(await page.locator('.llt_sensor_dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1)).toBe(true);
+  await expect(page.locator('.llt_sensor_page')).toContainText('Replacement Requested: Not Recorded');
+  expect(await page.locator('.llt_sensor_page').evaluate(d=>d.scrollWidth<=d.clientWidth+1)).toBe(true);
 });

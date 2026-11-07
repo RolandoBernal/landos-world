@@ -140,7 +140,7 @@ for (const context of ['standalone', 'entry']) {
     await list.dispatchEvent('pointerdown',{pointerId:88,clientX:80,clientY:300,pointerType:'touch'});
     await list.dispatchEvent('pointermove',{pointerId:88,clientX:80,clientY:200,pointerType:'touch'});
     await list.dispatchEvent('pointerup',{pointerId:88,clientX:80,clientY:200,pointerType:'touch'});
-    const outside=calc.locator('.lee_lee_diabetes_carb_intro');
+    const outside=root(page).locator('#lee-lee-diabetes-title');
     await outside.evaluate(() => window.scrollBy(0,140));
     await expect(favorites).toHaveAttribute('aria-expanded','true');
     await outside.dispatchEvent('click',{detail:1});
@@ -301,3 +301,22 @@ for (const context of ['standalone', 'entry']) {
     if(context==='entry') {await calc.locator('[data-action="use-carb-calculator-total"]').click();await expect(root(page).locator('[name="notes"]')).toHaveValue('Keep entry note');expect((await stored(page)).records).toHaveLength(0);}
   });
 }
+
+for (const context of ['standalone', 'entry']) test(`${context}: cleaned calculator introduction and accessible search preserve manual navigation`, async ({ page }) => {
+  await seed(page); await enter(page, context);
+  const calc = root(page).locator('[data-carb-calculator]');
+  await expect(root(page).getByText('Find foods or saved meals and calculate their total carbohydrates. Or choose Favorites, Recent, or My Meals.', { exact: true })).toBeVisible();
+  await expect(root(page).getByText('What are you eating?', { exact: true })).toHaveCount(0);
+  await expect(root(page).getByText('Calculate carbs without logging an entry.', { exact: true })).toHaveCount(0);
+  const search = calc.getByRole('searchbox', { name: 'Search foods & meals', exact: true });
+  await expect(search).toHaveAttribute('placeholder', 'Search foods & meals...');
+  await expect(calc.locator('.lee_lee_diabetes_carb_search > svg')).toHaveCSS('pointer-events', 'none');
+  expect(await calc.locator('[data-carb-search-shortcuts]').evaluate(n => n.nextElementSibling.dataset.action)).toBe('open-carb-calculator-item-editor');
+  await search.fill('Office'); await expect(calc.locator('[data-carb-library-list]')).toContainText('Office snack');
+  await search.fill(''); await calc.getByRole('button', { name: 'Favorites', exact: true }).click();
+  await expect(calc.locator('[data-carb-library-list]')).toContainText('Office snack');
+  await calc.getByRole('button', { name: '+ Add Manual Amount...', exact: true }).click();
+  await expect(calc.locator('[data-carb-item-editor]')).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
+  await calc.getByRole('button', { name: 'Back to Carb Calculator', exact: true }).click();
+  await expect(search).toBeVisible();
+});

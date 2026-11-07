@@ -191,7 +191,7 @@ test('desktop keeps the centered LWVD-sized mobile canvas on every LLT destinati
 test('all native LLT dropdowns have readable opaque options in Dark and Light', async ({ page }) => {
   await open(page);
   async function check(theme) {
-    const dropdowns = page.locator('#lee-lees-tracker-view select:visible, .llt_sensor_dialog select:visible');
+    const dropdowns = page.locator('#lee-lees-tracker-view select:visible, .llt_sensor_page select:visible');
     expect(await dropdowns.count()).toBeGreaterThan(0);
     for (const select of await dropdowns.all()) {
       expect(await select.evaluate(node => getComputedStyle(node).colorScheme)).toBe(theme);
@@ -224,7 +224,7 @@ test('all native LLT dropdowns have readable opaque options in Dark and Light', 
     await nav(page).getByRole('button', { name: 'Today', exact: true }).click();
     await page.locator('[data-sensor-action="history"]').click();
     await check(theme);
-    await page.locator('.llt_sensor_dialog [data-sensor-action="close"]').click();
+    await page.locator('.llt_sensor_page [data-sensor-action="close"]').click();
   }
 });
 
@@ -354,7 +354,7 @@ test('floating pill and plus hide down, restore up, ignore jitter and respect re
   await expect(shell).toHaveCSS('transition-duration', '0s');
 });
 
-test('Food and Meal panels have inset rounded edges, one Cancel and keyboard-safe actions', async ({ page }, testInfo) => {
+test('Food and Meal editors are full pages with one Cancel and no horizontal overflow', async ({ page }, testInfo) => {
   await open(page); await foods(page);
   for (const theme of ['dark', 'light']) {
     await page.evaluate(theme => window.LandosTheme.setPreference(theme), theme);
@@ -369,27 +369,17 @@ test('Food and Meal panels have inset rounded edges, one Cancel and keyboard-saf
         const panel = root(page).locator(kind === 'Food' ? '[data-food-library-editor-dialog]' : '[data-meal-builder]');
         await expect(panel.getByRole('heading', { name: `Add New ${kind}`, exact: true })).toBeVisible();
         await expect(panel.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(1);
+        // Phase 2: the editors are pages in the document flow, not inset
+        // overlay panels — they may be taller than the viewport and scroll
+        // with the page, but they must never overflow horizontally and
+        // their actions stay reachable at the end of the form.
         const box = await panel.boundingBox();
-        expect(box.x).toBeGreaterThanOrEqual(12);
-        expect(box.x+box.width).toBeLessThanOrEqual(width-12);
-        expect(box.y).toBeGreaterThanOrEqual(12);
-        expect(box.y+box.height).toBeLessThanOrEqual(832);
-        await expect(panel).toHaveCSS('border-top-left-radius', '18px');
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x+box.width).toBeLessThanOrEqual(width);
         expect(await panel.evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
-        await page.evaluate(() => {
-          Object.defineProperty(window.visualViewport,'height',{configurable:true,get:()=>330});
-          Object.defineProperty(window.visualViewport,'offsetTop',{configurable:true,get:()=>40});
-          window.visualViewport.dispatchEvent(new Event('resize'));
-        });
-        await page.waitForTimeout(50);
-        const reduced = await panel.boundingBox();
-        expect(reduced.y).toBeGreaterThanOrEqual(52);
-        expect(reduced.y+reduced.height).toBeLessThanOrEqual(358);
         const cancel = panel.getByRole('button', {name:'Cancel',exact:true});
-        const cancelBox = await cancel.boundingBox();
-        expect(cancelBox.y+cancelBox.height).toBeLessThanOrEqual(reduced.y+reduced.height);
-        await page.evaluate(() => { delete window.visualViewport.height;delete window.visualViewport.offsetTop;window.visualViewport.dispatchEvent(new Event('resize')); });
-        await page.waitForTimeout(50);
+        await cancel.scrollIntoViewIfNeeded();
+        await expect(cancel).toBeVisible();
         if(width===390) await page.screenshot({path:testInfo.outputPath(`add-new-${kind.toLowerCase()}-${theme}.png`)});
         await cancel.click();
       }
