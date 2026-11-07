@@ -382,7 +382,7 @@ nav button[aria-current] { background: var(--footer-selected); color: var(--foot
 :root:not([data-theme="dark"]) nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
 nav button svg { width: 24px; height: 24px; }
 .shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
-#notice:not(:empty) { bottom: calc(90px + env(safe-area-inset-bottom)); }
+
 /* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */
 nav::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--footer-surface); pointer-events: none; }
 :root[data-theme=dark] nav { background: var(--footer-surface); border-color: var(--footer-border); }
@@ -410,9 +410,9 @@ body[data-screen]:has(.floating-actions:not([hidden])) .shell{padding-bottom:cal
 /* Keep the existing pill and quick action moving together, using LLT's threshold. */
 nav,.floating-actions{transition:transform 220ms ease,opacity 220ms ease,visibility 220ms}
 body.nav-scroll-hidden nav,body.nav-scroll-hidden .floating-actions{transform:translateY(220px);opacity:0;visibility:hidden;pointer-events:none}
-#notice:not(:empty){bottom:calc(90px + env(safe-area-inset-bottom));z-index:5;pointer-events:none}
-body:not(.nav-scroll-hidden):has(.floating-actions:not([hidden])) #notice:not(:empty){bottom:calc(172px + env(safe-area-inset-bottom))}
-body.nav-scroll-hidden #notice:not(:empty){bottom:calc(16px + env(safe-area-inset-bottom))}
+#notice:not(:empty){z-index:5;pointer-events:none}
+
+
 #notice button{pointer-events:auto;flex-shrink:0;min-width:44px;min-height:44px;padding:0;font-size:1.5rem;background:transparent;color:inherit;border:0}
 #notice[data-kind=success]:not(:empty){display:flex;pointer-events:none;width:auto;max-width:448px}
 dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:auto;padding:8px 12px}
