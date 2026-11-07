@@ -173,7 +173,7 @@
   }
   function allSensors(reset = false) {
     if (reset) historyState = { search: "", filter: "All", limit: 25, scroll: 0, focusId: null };
-    open(`<p class="llt_sensor_sync" role="status">${escape(syncNote(client.get()))}</p><label for="llt-history-search">Search Sensors</label><input id="llt-history-search" type="search" data-sensor-search value="${escape(historyState.search)}" placeholder="Dates, reasons or notes"><label for="llt-history-filter">Filter Sensors</label><select id="llt-history-filter" data-sensor-filter>${["All", "Active", "Completed", "Replaced Early", "Sensor Issues", "Cancelled"].map(f => `<option${f === historyState.filter ? " selected" : ""}>${f}</option>`).join("")}</select><p data-sensor-count role="status"></p><div data-sensor-results></div>${button("history-more", "Load More")}<p class="llt_sensor_help">Sensor Issues includes recorded issue reasons. Other is excluded because free-text notes are not classified.</p>`, "All Sensors");
+    open(`${button("list-back", "← Sensor Details")}<p class="llt_sensor_sync" role="status">${escape(syncNote(client.get()))}</p><label for="llt-history-search">Search Sensors</label><input id="llt-history-search" type="search" data-sensor-search value="${escape(historyState.search)}" placeholder="Dates, reasons or notes"><label for="llt-history-filter">Filter Sensors</label><select id="llt-history-filter" data-sensor-filter>${["All", "Active", "Completed", "Replaced Early", "Sensor Issues", "Cancelled"].map(f => `<option${f === historyState.filter ? " selected" : ""}>${f}</option>`).join("")}</select><p data-sensor-count role="status"></p><div data-sensor-results></div>${button("history-more", "Load More")}<p class="llt_sensor_help">Sensor Issues includes recorded issue reasons. Other is excluded because free-text notes are not classified.</p>`, "All Sensors");
     renderHistoryResults();
     page.querySelector("[data-sensor-search]").addEventListener("input", e => { historyState.search = e.target.value; historyState.limit = 25; historyState.scroll = 0; renderHistoryResults(); });
     page.querySelector("[data-sensor-filter]").addEventListener("change", e => { historyState.filter = e.target.value; historyState.limit = 25; historyState.scroll = 0; renderHistoryResults(); });
@@ -351,6 +351,7 @@
         sensorDetails(target.dataset.sensorId);
       }
       else if (action === "sensor-back") sensorDetails(selectedSensorId);
+      else if (action === "list-back") details();
       else if (action === "metadata-edit") editMetadata();
       else if (action === "metadata-save") await saveMetadata();
       else if (action === "details") details();

@@ -1333,7 +1333,7 @@
         </form>
       </section>`);
     if (currentEditor.carbCalculatorMealEditorOpen) {
-      focusSavedMealNameField(root);
+      applySavedMealPanelFocus(root);
       return;
     }
     if (options.focusAction === 'open-carb-meal-editor') {
@@ -4549,7 +4549,7 @@
   }
 
   function renderTrackerNav(active) {
-    if (active === 'settings' || currentEditor?.carbCalculatorOpen) return '';
+    if (active === 'settings' || currentEditor?.carbCalculatorOpen || currentEditor?.foodLibraryEditorOpen || mealBuilderState) return '';
     const showLogAction = active !== 'settings' && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     return `
@@ -5945,8 +5945,8 @@
           </div>
           ${itemEditorMode ? `
             <div class="lee_lee_diabetes_actions lee_lee_diabetes_carb_item_editor_actions lee_lee_diabetes_actions--stacked">
-              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor" ${getCarbItemPreviewTotal(currentEditor.carbCalculatorItemDraft || {}) == null ? 'disabled' : ''}>${itemEditorMode === 'edit' ? 'Save Item' : 'Add Item'}</button>
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor">Cancel</button>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor" ${getCarbItemPreviewTotal(currentEditor.carbCalculatorItemDraft || {}) == null ? 'disabled' : ''}>${itemEditorMode === 'edit' ? 'Save Item' : 'Add Item'}</button>
             </div>
           ` : ''}
         </section>
@@ -6106,6 +6106,19 @@
 
   function focusSavedMealNameField(root) {
     root.querySelector('[name="savedMealName"]')?.focus({ preventScroll: true });
+  }
+
+  function applySavedMealPanelFocus(root) {
+    const panel = root.querySelector('.lee_lee_diabetes_carb_meal_panel');
+    if (!panel) { focusSavedMealNameField(root); return; }
+    const calculator = panel.closest('[data-carb-calculator]');
+    calculator?.classList.add('lee_lee_diabetes_carb_calculator--meal-editor-open');
+    let region = panel;
+    while (region && region !== calculator) {
+      [...region.parentElement.children].forEach(element => { if (element !== region) element.inert = true; });
+      region = region.parentElement;
+    }
+    focusSavedMealNameField(root);
   }
 
   function renderSavedMealEditorPanel(rows = []) {
@@ -6492,7 +6505,7 @@
       window.setTimeout(applyFocus, 0);
     };
     if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorMealEditorOpen) {
-      focusSavedMealNameField(root);
+      applySavedMealPanelFocus(root);
     } else if (options.focusAction) {
       focusTarget(`[data-action="${options.focusAction}"]`);
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
@@ -7616,7 +7629,7 @@
     root.querySelector('.lee_lee_diabetes_pre_meal_timer_modal')?.remove();
     currentEditor = { ...(currentEditor || {}), ...state };
     [...root.children].forEach(child => { child.inert = true; });
-    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" data-low-dialog role="dialog" aria-modal="true" aria-labelledby="low-dialog-title" aria-describedby="low-dialog-message"><div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div><section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--low"><h1 id="low-dialog-title">${escapeHtml(title)}</h1><p id="low-dialog-message" role="status">${escapeHtml(message)}</p><div class="lee_lee_diabetes_actions">${buttons}</div></section></div>`);
+    root.insertAdjacentHTML('beforeend', `<div class="lee_lee_diabetes_pre_meal_timer_modal" data-low-dialog role="dialog" aria-modal="true" aria-labelledby="low-dialog-title"${message ? ' aria-describedby="low-dialog-message"' : ''}><div class="lee_lee_diabetes_pre_meal_timer_backdrop"></div><section class="lee_lee_diabetes_pre_meal_timer_panel lee_lee_diabetes_pre_meal_timer_panel--low"><h1 id="low-dialog-title">${escapeHtml(title)}</h1>${message ? `<p id="low-dialog-message" role="status">${escapeHtml(message)}</p>` : ''}<div class="lee_lee_diabetes_actions">${buttons}</div></section></div>`);
     root.querySelector('[data-low-dialog] button')?.focus();
   }
 
@@ -7753,9 +7766,10 @@
       window.LeeLeePreMealTimer?.markCompletionPresented?.();
     }
     showLowGlucoseDialog(completed ? 'Recheck Glucose' : 'Low Glucose Recheck',
-      completed ? 'The 15-minute reminder has finished. Record the actual glucose observation when available.' : 'Optional reminder. Background alarms are not guaranteed; completion appears when you return.',
+      completed ? 'The 15-minute reminder has finished. Record the actual glucose observation when available.' : '',
       (completed ? lowButton('low-timer-recheck', 'Record Recheck', timer.episodeId) : '') + lowButton('low-done', completed ? 'Later' : 'Back') + (!completed ? lowButton('low-stop-timer', 'Stop Timer', timer.episodeId, 'danger') : ''), { mode: 'low-timer', timer });
-    getRoot()?.querySelector('#low-dialog-message')?.insertAdjacentHTML('beforebegin', `<p class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</p>`);
+    const lowDialogRoot = getRoot();
+    (lowDialogRoot?.querySelector('#low-dialog-message') || lowDialogRoot?.querySelector('[data-low-dialog] .lee_lee_diabetes_actions'))?.insertAdjacentHTML('beforebegin', `<p class="lee_lee_diabetes_pre_meal_timer_large" data-pre-meal-timer-value>${formatPreMealRemaining(timer)}</p>`);
     window.clearInterval(preMealTimerRefresh);
     if (!completed) preMealTimerRefresh = window.setInterval(() => {
       const current = getPurposeAwareTimer();
