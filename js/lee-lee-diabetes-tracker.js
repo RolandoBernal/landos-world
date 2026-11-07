@@ -344,8 +344,6 @@
   let foodLibraryMessageTimer = 0;
   let foodLibraryError = '';
   let mealBuilderState = null;
-  let mealBuilderScrollLock = null;
-  let mealBuilderViewportCleanup = null;
   let preMealTimerRefresh = null;
   const carbCalculatorEngine = window.LeeLeeCarbCalculator.createEngine({
     isValidQuantity: isValidCarbCalculatorQuantity,
@@ -1335,7 +1333,7 @@
         </form>
       </section>`);
     if (currentEditor.carbCalculatorMealEditorOpen) {
-      showSavedMealDialog(root);
+      focusSavedMealNameField(root);
       return;
     }
     if (options.focusAction === 'open-carb-meal-editor') {
@@ -4891,29 +4889,20 @@
       ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
       <section id="lee-lee-foods-panel" aria-label="Food and meal library">
-      <label class="lee_lee_diabetes_field lee_lee_diabetes_library_search">Search foods and meals<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" placeholder="Search your entire library" autocomplete="off"></label>
-      <div class="lee_lee_diabetes_food_library_actions">
+      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<label class="lee_lee_diabetes_field lee_lee_diabetes_library_search">Search foods and meals<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" placeholder="Search your entire library" autocomplete="off"></label>`}
+      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div class="lee_lee_diabetes_food_library_actions">
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="open-food-library-editor">+ Add New Food</button>
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-saved-meal-builder">+ Add New Meal</button>
-      </div>
+      </div>`}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
       ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved" data-food-library-feedback role="status" aria-live="polite">${escapeHtml(foodLibraryMessage)}</p>` : ''}
-      <div data-food-library-discovery>${renderFoodLibraryDiscovery()}</div>
+      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div data-food-library-discovery>${renderFoodLibraryDiscovery()}</div>`}
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
       ${mealBuilderState ? renderSavedMealBuilder(mealBuilderState) : ''}
       </section>
     `);
-    if (currentEditor.foodLibraryEditorOpen || mealBuilderState) {
-      attachMealBuilderViewportListeners();
-      updateMealBuilderViewport();
-    } else if (mealBuilderViewportCleanup) {
-      mealBuilderViewportCleanup();
-      mealBuilderViewportCleanup = null;
-    }
     if (currentEditor.foodLibraryEditorOpen) {
       requestAnimationFrame(() => {
-        const dialog = root.querySelector('[data-food-library-fields]');
-        if (dialog) dialog.scrollTop = currentEditor.foodLibraryEditorScrollTop || 0;
         root.querySelector('[data-food-library-editor] [name="foodName"]')?.focus({ preventScroll: true });
       });
     }
@@ -4952,10 +4941,7 @@
 
   function renderFoodLibraryEditor(food = null, title = 'Add New Food') {
     return `
-      <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_food_editor_layer" data-food-library-editor-layer>
-        <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-food-library-editor"></div>
-        <div class="lee_lee_diabetes_meal_builder_viewport" data-food-editor-viewport data-modal-visual-viewport>
-        <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_food_editor_dialog" data-food-library-editor-dialog role="dialog" aria-modal="true" aria-labelledby="lee-lee-food-library-editor-title">
+      <section class="lee_lee_diabetes_food_editor_page" data-food-library-editor-dialog aria-labelledby="lee-lee-food-library-editor-title">
           <div class="lee_lee_diabetes_carb_calculator_header">
             <h2 class="lee_lee_diabetes_section_title" id="lee-lee-food-library-editor-title">${escapeHtml(title)}</h2>
           </div>
@@ -4974,9 +4960,7 @@
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
             </div>
           </div>
-        </section>
-        </div>
-      </div>
+      </section>
     `;
   }
 
@@ -5041,21 +5025,18 @@
     const isPicker = state.view === 'picker';
     const total = getMealBuilderTotal(state);
     return `
-      <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_meal_builder_layer" data-meal-builder-layer>
-        <div class="lee_lee_diabetes_carb_calc_backdrop" data-action="cancel-saved-meal-builder" aria-hidden="true"></div>
-        <div class="lee_lee_diabetes_meal_builder_viewport" data-meal-builder-viewport data-modal-visual-viewport>
-          <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_meal_builder" data-meal-builder role="dialog" aria-modal="true" aria-labelledby="lee-lee-meal-builder-title">
+      <section class="lee_lee_diabetes_meal_builder lee_lee_diabetes_meal_builder_page" data-meal-builder aria-labelledby="lee-lee-meal-builder-title">
             <header class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_meal_builder_header">
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">${isPicker ? 'Add Food Item' : state.mode === 'edit' ? 'Edit Meal' : 'Add New Meal'}</h2>
               ${isPicker ? '<button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="return-to-saved-meal-builder"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>' : ''}
             </header>
             ${isPicker ? `
-              <div class="lee_lee_diabetes_meal_builder_body lee_lee_diabetes_meal_builder_picker_body" data-meal-builder-body data-modal-scroll-container>
+              <div class="lee_lee_diabetes_meal_builder_body lee_lee_diabetes_meal_builder_picker_body" data-meal-builder-body>
                 <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="mealBuilderFoodSearch" type="search" autocomplete="off" value="${escapeHtml(state.foodSearch)}" placeholder="Search foods..."></label>
                 <div class="lee_lee_diabetes_food_list" data-meal-builder-food-results>${renderMealBuilderFoodResults(state.foodSearch)}</div>
               </div>
             ` : `
-              <div class="lee_lee_diabetes_meal_builder_body" data-meal-builder-body data-modal-scroll-container>
+              <div class="lee_lee_diabetes_meal_builder_body" data-meal-builder-body>
                 ${state.error ? `<p class="lee_lee_diabetes_error" data-meal-builder-error role="alert">${escapeHtml(state.error)}</p>` : '<p class="lee_lee_diabetes_error" data-meal-builder-error role="alert" hidden></p>'}
                 <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="mealBuilderName" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(state.name)}" required></label>
                 <label class="lee_lee_diabetes_field">Emoji<input class="lee_lee_diabetes_input" name="mealBuilderEmoji" type="text" maxlength="16" autocomplete="off" value="${escapeHtml(state.emoji)}" placeholder="Optional"></label>
@@ -5084,9 +5065,7 @@
                 </div>
               </footer>
             `}
-          </section>
-        </div>
-      </div>
+      </section>
     `;
   }
 
@@ -5128,31 +5107,6 @@
     `).join('') : '<p class="lee_lee_diabetes_empty">No foods match.</p>';
   }
 
-  function updateMealBuilderViewport() {
-    const frame = document.querySelector('[data-meal-builder-viewport], [data-food-editor-viewport]');
-    if (!frame) return;
-    const viewport = window.visualViewport;
-    frame.style.setProperty('--lee-lee-meal-builder-viewport-top', `${viewport?.offsetTop || 0}px`);
-    frame.style.setProperty('--lee-lee-meal-builder-viewport-left', `${viewport?.offsetLeft || 0}px`);
-    frame.style.setProperty('--lee-lee-meal-builder-viewport-width', `${viewport?.width || window.innerWidth}px`);
-    frame.style.setProperty('--lee-lee-meal-builder-viewport-height', `${viewport?.height || window.innerHeight}px`);
-  }
-
-  function attachMealBuilderViewportListeners() {
-    if (mealBuilderViewportCleanup) return;
-    const viewport = window.visualViewport;
-    const update = () => requestAnimationFrame(updateMealBuilderViewport);
-    viewport?.addEventListener?.('resize', update, { passive: true });
-    viewport?.addEventListener?.('scroll', update, { passive: true });
-    window.addEventListener('resize', update, { passive: true });
-    mealBuilderViewportCleanup = () => {
-      viewport?.removeEventListener?.('resize', update);
-      viewport?.removeEventListener?.('scroll', update);
-      window.removeEventListener('resize', update);
-      mealBuilderViewportCleanup = null;
-    };
-  }
-
   function openSavedMealBuilder(meal = null) {
     const normalizedMeal = meal ? normalizeSavedMeal(meal) : null;
     mealBuilderState = {
@@ -5167,10 +5121,7 @@
       view: 'builder',
       error: '',
     };
-    mealBuilderScrollLock = window.LandosWorldModalUtils?.lockBackgroundScroll?.('llt-meal-builder') || null;
-    attachMealBuilderViewportListeners();
     renderFoodLibrary();
-    updateMealBuilderViewport();
     requestAnimationFrame(() => {
       const input = getRoot()?.querySelector('[data-meal-builder] [name="mealBuilderName"]');
       input?.focus({ preventScroll: true });
@@ -5179,10 +5130,6 @@
   }
 
   function closeSavedMealBuilder() {
-    if (mealBuilderViewportCleanup) mealBuilderViewportCleanup();
-    if (mealBuilderScrollLock) window.LandosWorldModalUtils?.unlockBackgroundScroll?.(mealBuilderScrollLock);
-    mealBuilderViewportCleanup = null;
-    mealBuilderScrollLock = null;
     mealBuilderState = null;
   }
 
@@ -5213,7 +5160,6 @@
     mealBuilderState.error = '';
     mealBuilderState.view = 'builder';
     renderFoodLibrary();
-    updateMealBuilderViewport();
     requestAnimationFrame(() => {
       const addFoodButton = getRoot()?.querySelector('[data-action="open-meal-builder-food-picker"]');
       addFoodButton?.focus({ preventScroll: true });
@@ -5224,7 +5170,6 @@
     if (!mealBuilderState) return;
     mealBuilderState.view = 'picker';
     renderFoodLibrary();
-    updateMealBuilderViewport();
     requestAnimationFrame(() => {
       const search = getRoot()?.querySelector('[data-meal-builder] [name="mealBuilderFoodSearch"]');
       search?.focus({ preventScroll: true });
@@ -5984,11 +5929,9 @@
     const search = currentEditor?.carbCalculatorSearch || '';
     const itemEditorMode = currentEditor?.carbCalculatorItemEditorMode || '';
     const manualAdd = itemEditorMode === 'add';
-    const usesVisualViewportPanel = Boolean(itemEditorMode) && !manualAdd;
     const activeTitle = itemEditorMode ? (itemEditorMode === 'edit' ? (currentEditor.carbCalculatorItemDraft?.sourceType === 'meal' ? 'Edit Meal Amount' : currentEditor.carbCalculatorItemDraft?.sourceType === 'food' ? 'Edit Food Item' : 'Edit Manual Amount') : 'Add Manual Amount') : 'Carb Calculator';
     return `
       <div class="lee_lee_diabetes_carb_calc_layer lee_lee_diabetes_carb_calc_layer--embedded" data-carb-calculator-layer>
-        ${usesVisualViewportPanel ? '<div class="lee_lee_diabetes_carb_calc_visual_viewport" data-modal-visual-viewport>' : ''}
         <section class="lee_lee_diabetes_carb_calculator lee_lee_diabetes_carb_calculator--shared lee_lee_diabetes_carb_calculator--embedded${itemEditorMode ? ' lee_lee_diabetes_carb_calculator--item-editor' : ''}" data-carb-calculator role="region" aria-labelledby="${!itemEditorMode || manualAdd ? 'lee-lee-diabetes-title' : 'lee-lee-carb-calculator-title'}">
           ${itemEditorMode ? `<div class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_carb_item_editor_header">
               <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="cancel-carb-calculator-item-editor" aria-label="Back to Carb Calculator"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>
@@ -6007,7 +5950,6 @@
             </div>
           ` : ''}
         </section>
-        ${usesVisualViewportPanel ? '</div>' : ''}
       </div>
     `;
   }
@@ -6162,19 +6104,14 @@
     `;
   }
 
-  function showSavedMealDialog(root) {
-    const dialog = root.querySelector('.lee_lee_diabetes_carb_meal_dialog');
-    dialog.addEventListener('cancel', (event) => {
-      event.preventDefault();
-      dialog.querySelector('[data-action="cancel-carb-meal-editor"]').click();
-    });
-    dialog.showModal();
+  function focusSavedMealNameField(root) {
+    root.querySelector('[name="savedMealName"]')?.focus({ preventScroll: true });
   }
 
   function renderSavedMealEditorPanel(rows = []) {
     const total = calculateCarbCalculatorMealTotal(rows);
     return `
-      <dialog class="lee_lee_diabetes_carb_editor_panel lee_lee_diabetes_carb_meal_dialog" aria-labelledby="lee-lee-carb-meal-editor-title">
+      <section class="lee_lee_diabetes_carb_editor_panel lee_lee_diabetes_carb_meal_panel" aria-labelledby="lee-lee-carb-meal-editor-title">
         <h3 id="lee-lee-carb-meal-editor-title">Save as My Meal</h3>
         ${foodLibraryError ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(foodLibraryError)}</p>` : ''}
         <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" autofocus maxlength="80" autocomplete="off" value="${escapeHtml(currentEditor?.carbCalculatorMealNameDraft || '')}" required></label>
@@ -6183,7 +6120,7 @@
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save My Meal</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-meal-editor">Cancel</button>
         </div>
-      </dialog>
+      </section>
     `;
   }
 
@@ -6555,7 +6492,7 @@
       window.setTimeout(applyFocus, 0);
     };
     if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorMealEditorOpen) {
-      showSavedMealDialog(root);
+      focusSavedMealNameField(root);
     } else if (options.focusAction) {
       focusTarget(`[data-action="${options.focusAction}"]`);
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
@@ -10708,7 +10645,6 @@
         if (!mealBuilderState) return;
         mealBuilderState.view = 'builder';
         renderFoodLibrary();
-        updateMealBuilderViewport();
         requestAnimationFrame(() => getRoot()?.querySelector('[data-action="open-meal-builder-food-picker"]')?.focus({ preventScroll: true }));
         return;
       }
@@ -10722,7 +10658,6 @@
         if (!mealBuilderState.components.length) mealBuilderState.mealCarbs = '';
         mealBuilderState.error = '';
         renderFoodLibrary();
-        updateMealBuilderViewport();
         return;
       }
       if (action === 'toggle-saved-meal-favorite') {
@@ -11579,7 +11514,6 @@
         if (mealBuilderState.view === 'picker') {
           mealBuilderState.view = 'builder';
           renderFoodLibrary();
-          updateMealBuilderViewport();
           return;
         }
         closeSavedMealBuilder();
