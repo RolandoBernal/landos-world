@@ -1277,7 +1277,7 @@
 .lee_lee_diabetes_meal_builder_footer {
   position: relative;
   z-index: 1;
-  background: var(--lee-lee-meal-builder-surface, #1C1C1E);
+  background: var(--lee-lee-panel);
 }
 
 .lee_lee_diabetes_meal_builder_header {
@@ -1411,11 +1411,6 @@
 
 .lee_lee_diabetes_meal_builder [data-meal-builder-error]:not([hidden]) {
   margin: 0;
-}
-
-:root[data-theme="light"] .lee_lee_diabetes_meal_builder_header,
-:root[data-theme="light"] .lee_lee_diabetes_meal_builder_footer {
-  --lee-lee-meal-builder-surface: #F5F5F7;
 }
 
 .lee_lee_diabetes_food_editor_page .lee_lee_diabetes_input:focus,
@@ -1649,6 +1644,10 @@
   background: rgb(0 0 0 / 16%);
 }
 
+.lee_lee_diabetes_carb_calculator--meal-editor-open [inert] {
+  opacity: .45;
+}
+
 .lee_lee_diabetes_carb_editor_panel h3 {
   margin: 0;
   font-size: 1rem;
@@ -1861,7 +1860,7 @@
   min-height: 0;
   box-sizing: border-box;
   margin-top: 0.05rem;
-  padding: 0.5rem 0 0.25rem;
+  padding: 0.5rem 10px 0.25rem 0;
   border-top: 1px solid var(--lee-lee-border);
   background: var(--lee-lee-panel);
 }
@@ -3329,6 +3328,7 @@
 .llt_sensor_actions button { min-height: 44px; white-space: normal; }
 #lee-lees-tracker-view.llt_sensor_open .digit_clock_header,
 #lee-lees-tracker-view.llt_sensor_open .ecosystem_nav { pointer-events: none; }
+#lee-lee-diabetes-root:has(.lee_lee_diabetes_pre_meal_timer_modal) .lee_lee_diabetes_floating_log { display: none; }
 .llt_sensor_page { box-sizing: border-box; color: var(--lee-lee-text, #FFFFFF); background: var(--lee-lee-bg, #000000); font-family: var(--llt-ui-font); }
 .llt_sensor_page_inner { box-sizing: border-box; padding: 1rem 0 max(1.5rem, env(safe-area-inset-bottom)); }
 .llt_sensor_page_header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -3800,9 +3800,9 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   padding: 6px;
   border: 1px solid var(--footer-border);
   border-radius: 36px;
-  background: var(--footer-surface);
-  box-shadow: 0 8px 28px #00000030;
-  backdrop-filter: none;
+  background: color-mix(in srgb, var(--lee-lee-panel) 84%, transparent);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%);
+  backdrop-filter: blur(18px) saturate(150%);
   isolation: isolate;
 }
 .lee_lee_diabetes_nav_shell::before {
@@ -3814,6 +3814,9 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   bottom: calc(-12px - env(safe-area-inset-bottom));
   width: calc(100% + 32px);
   background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--lee-lee-bg) 90%, transparent) 100%);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 55%);
+  mask-image: linear-gradient(to bottom, transparent, black 55%);
   pointer-events: none;
 }
 .lee_lee_diabetes_bottom_nav_button {
@@ -3837,8 +3840,8 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   --footer-inactive: var(--lee-lee-muted);
   --footer-active: var(--lee-lee-green);
   --footer-selected: var(--lee-lee-panel-strong);
-  background: var(--footer-surface);
-  box-shadow: 0 8px 28px #00000030;
+  background: color-mix(in srgb, var(--lee-lee-panel) 84%, transparent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 16%);
 }
 :root[data-theme="light"] .lee_lee_diabetes_nav_shell::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--lee-lee-bg) 85%, transparent) 100%); }
 :root[data-theme="light"] .lee_lee_diabetes_bottom_nav_button { color: var(--footer-inactive); }
@@ -3862,7 +3865,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   border-radius: 50%;
   background: var(--lee-lee-accent);
   color: #fff;
-  box-shadow: 0 6px 20px #00000030;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 34%);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -4110,8 +4113,8 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 }
 
 
-/* Settings actions fill their own container, including diagnostic action rows. */
-[data-plan-editor] button:not(.lee_lee_diabetes_settings_shortcut):not(.lee_lee_diabetes_bottom_nav_button):not(.lee_lee_diabetes_floating_log) {
+/* Settings actions fill their own container, including diagnostic action rows. Inline stepper controls keep their natural size. */
+[data-plan-editor] button:not(.lee_lee_diabetes_settings_shortcut):not(.lee_lee_diabetes_bottom_nav_button):not(.lee_lee_diabetes_floating_log):not([data-action="adjust-pre-meal-duration"]) {
   box-sizing: border-box;
   inline-size: 100%;
   max-inline-size: none;

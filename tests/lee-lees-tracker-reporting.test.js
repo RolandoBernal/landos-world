@@ -1687,7 +1687,7 @@ test('carb calculator food search refreshes results without replacing the search
 });
 
 test('carb item editor actions reuse LLT buttons and keep the footer compact', () => {
-  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--item-editor > \.lee_lee_diabetes_carb_item_editor_actions \{[\s\S]*min-height: 0[\s\S]*margin-top: 0\.05rem[\s\S]*padding: 0\.5rem 0 0\.25rem/);
+  assert.match(cssSource, /\.lee_lee_diabetes_carb_calculator--item-editor > \.lee_lee_diabetes_carb_item_editor_actions \{[\s\S]*min-height: 0[\s\S]*margin-top: 0\.05rem[\s\S]*padding: 0\.5rem 10px 0\.25rem 0/);
   assert.match(cssSource, /\.lee_lee_diabetes_carb_item_editor_actions \.lee_lee_diabetes_button \{[\s\S]*flex: 1 1 0[\s\S]*min-height: 52px/);
 });
 
