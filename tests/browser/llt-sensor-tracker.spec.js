@@ -34,7 +34,7 @@ async function start(page) {
   await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "Sensor Start",
   );
 }
@@ -58,20 +58,20 @@ test("start, correction, early replacement, undo and retained history survive re
     .click();
   await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "Saving this change will end the current sensor and start the new one.",
   );
   await expect(page.locator(".llt_sensor_review dt")).toHaveText(["New sensor", "New sensor starts:", "Current sensor", "Current sensor started:"]);
   await expect(page.locator(".llt_sensor_review dd")).toHaveCount(4);
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
-  await page.locator('.llt_sensor_dialog [data-sensor-action=history]').click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText("Replaced Early");
+  await page.locator('.llt_sensor_page [data-sensor-action=history]').click();
+  await expect(page.locator(".llt_sensor_page")).toContainText("Replaced Early");
   await page.getByRole('button', {name:'Close',exact:true}).click();
   if (!(await page.locator('.llt_sensor_card').evaluate(c=>c.open))) await page.locator('.llt_sensor_disclosure').click();
   await page.getByRole('button',{name:'Manage Sensor',exact:true}).click();
   await page.locator(".llt_sensor_manage summary").click();
   await page.getByRole("button", { name: "Edit Start Time", exact: true }).click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "also changes the recorded replacement time",
   );
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -79,14 +79,14 @@ test("start, correction, early replacement, undo and retained history survive re
   await page
     .getByRole("button", { name: "Undo Current Sensor", exact: true })
     .click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "restore the previous sensor",
   );
   await page
     .getByRole("button", { name: "Undo Current Sensor", exact: true })
     .click();
   await page.locator('[data-sensor-action="history"]').last().click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "Cancelled",
   );
   await page.getByRole("button", { name: "Close", exact: true }).click();
@@ -95,7 +95,7 @@ test("start, correction, early replacement, undo and retained history survive re
   await page.locator(".llt_sensor_disclosure").click();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   await page.locator('[data-sensor-action="history"]').last().click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText(
+  await expect(page.locator(".llt_sensor_page")).toContainText(
     "Cancelled",
   );
   const persisted = await page.evaluate(() => ({
@@ -166,10 +166,10 @@ for (const [state, hours, copy] of [
       await page
         .getByRole("button", { name: "Manage Sensor" })
         .click();
-      await expect(page.locator(".llt_sensor_dialog")).toBeVisible();
+      await expect(page.locator(".llt_sensor_page")).toBeVisible();
       expect(
         await page
-          .locator(".llt_sensor_dialog")
+          .locator(".llt_sensor_page")
           .evaluate((d) => d.scrollWidth <= d.clientWidth + 1),
       ).toBe(true);
       await page.locator(".llt_sensor_manage summary").click();
@@ -326,7 +326,7 @@ test("tracked sensor disclosure is user controlled, keyboard accessible and resp
   await expect(summary).toHaveAttribute("aria-expanded", "true");
   await expect(card.locator(".llt_sensor_time")).toBeVisible();
   await expect(card.locator(".llt_sensor_sync")).toBeVisible();
-  await expect(page.locator(".llt_sensor_dialog")).toHaveCount(0);
+  await expect(page.locator(".llt_sensor_page")).toHaveCount(0);
   await expect(details).toBeVisible();
   for (const [width, height] of [[320,740],[393,852],[768,1024],[1280,800],[852,393]]) {
     await page.setViewportSize({width,height});
@@ -364,7 +364,7 @@ test("tracked sensor disclosure is user controlled, keyboard accessible and resp
   await page.screenshot({path:"/private/tmp/llt-accordion-collapsed.png"});
   await summary.click();
   await details.click();
-  await expect(page.locator(".llt_sensor_dialog")).toContainText("Sensor Start");
+  await expect(page.locator(".llt_sensor_page")).toContainText("Sensor Start");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await card.getByRole("button", { name: "Replace Sensor", exact: true }).click();
   await expect(page.locator('[data-sensor-form="start"]')).toBeVisible();
@@ -373,91 +373,87 @@ test("tracked sensor disclosure is user controlled, keyboard accessible and resp
   await expect(summary).toHaveAttribute("aria-expanded", "false");
 });
 
-test("sensor management disclosure preserves keyboard containment and refresh flow", async ({ page }) => {
+test("sensor management disclosure preserves keyboard flow and refresh flow", async ({ page }) => {
   await open(page);
   await start(page);
-  const modal = page.locator(".llt_sensor_dialog");
-  const summary = modal.locator(".llt_sensor_manage summary");
-  const edit = modal.locator('[data-sensor-action="edit"]');
-  const undo = modal.locator('[data-sensor-action="undo"]');
-  await expect(modal.getByRole("heading", { name: "Sensor Management", exact: true })).toBeVisible();
-  const replace = modal.getByRole("button", { name: "Replace Sensor", exact: true });
+  const sensorPage = page.locator(".llt_sensor_page");
+  const summary = sensorPage.locator(".llt_sensor_manage summary");
+  const edit = sensorPage.locator('[data-sensor-action="edit"]');
+  const undo = sensorPage.locator('[data-sensor-action="undo"]');
+  await expect(sensorPage.getByRole("heading", { name: "Sensor Management", exact: true })).toBeVisible();
+  const replace = sensorPage.getByRole("button", { name: "Replace Sensor", exact: true });
   await expect(replace).toHaveText("Replace Sensor");
   await expect(replace).toHaveClass(/lee_lee_diabetes_button--primary/);
-  await expect(modal.locator("#llt-sensor-replace-description")).toHaveText("Start tracking a new Dexcom G7.");
+  await expect(sensorPage.locator("#llt-sensor-replace-description")).toHaveText("Start tracking a new Dexcom G7.");
   await expect(replace.locator("#llt-sensor-replace-description")).toHaveCount(0);
-  expect(await modal.locator(".llt_sensor_management").evaluate((s) => getComputedStyle(s).borderTopWidth)).toBe("1px");
-  await expect(modal.locator(".llt_sensor_history")).toHaveCount(0);
-  await expect(modal.getByRole("button", { name: "View All Sensor History →", exact: true })).toBeVisible();
-  await expect(modal.locator(".llt_sensor_sync_row")).toContainText("Last synced");
-  await expect(modal.locator(".llt_sensor_management [data-sensor-action=refresh]")).toHaveCount(0);
+  expect(await sensorPage.locator(".llt_sensor_management").evaluate((s) => getComputedStyle(s).borderTopWidth)).toBe("1px");
+  await expect(sensorPage.locator(".llt_sensor_history")).toHaveCount(0);
+  await expect(sensorPage.getByRole("button", { name: "View All Sensor History →", exact: true })).toBeVisible();
+  await expect(sensorPage.locator(".llt_sensor_sync_row")).toContainText("Last synced");
+  await expect(sensorPage.locator(".llt_sensor_management [data-sensor-action=refresh]")).toHaveCount(0);
   await expect(summary).toHaveAttribute("aria-expanded", "false");
   await expect(edit).toBeHidden();
   await expect(undo).toBeHidden();
   await summary.focus();
   await page.keyboard.press("Tab");
-  await expect(modal.getByRole("button", { name: "View All Sensor History →", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(modal.getByRole("button", { name: "Close", exact: true })).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await page.keyboard.press("Shift+Tab");
-  await expect(summary).toBeFocused();
+  await expect(sensorPage.getByRole("button", { name: "View All Sensor History →", exact: true })).toBeFocused();
+  await summary.focus();
   await page.keyboard.press("Enter");
   await expect(summary).toHaveAttribute("aria-expanded", "true");
   await expect(edit).toHaveText("Edit Start Time");
   await expect(edit).toBeVisible();
   await expect(undo).toBeVisible();
-  await expect(modal.locator(".llt_sensor_corrections")).toContainText("Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.");
-  await expect(modal.locator(".llt_sensor_corrections")).toContainText("Remove a sensor that was added by mistake and restore the previous sensor when possible.");
+  await expect(sensorPage.locator(".llt_sensor_corrections")).toContainText("Change the start date or time if it was entered incorrectly. This will update the sensor’s expiration and grace-period times.");
+  await expect(sensorPage.locator(".llt_sensor_corrections")).toContainText("Remove a sensor that was added by mistake and restore the previous sensor when possible.");
   await page.keyboard.press("Space");
   await expect(summary).toHaveAttribute("aria-expanded", "false");
   await expect(edit).toBeHidden();
-  await modal.locator(".llt_sensor_sync_row").getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(modal.locator(".llt_sensor_manage summary")).toHaveAttribute("aria-expanded", "false");
-  await expect(modal.locator(".llt_sensor_history")).toHaveCount(0);
-  await expect(modal).toContainText("Sensor Start");
-  await modal.getByRole("button", { name: "Replace Sensor", exact: true }).click();
-  await expect(modal.locator('form[data-sensor-form="start"]')).toBeVisible();
-  await modal.getByRole("button", { name: "Cancel", exact: true }).click();
-  await modal.locator(".llt_sensor_manage summary").click();
-  await modal.getByRole("button", { name: "Edit Start Time", exact: true }).click();
+  await sensorPage.locator(".llt_sensor_sync_row").getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(sensorPage.locator(".llt_sensor_manage summary")).toHaveAttribute("aria-expanded", "false");
+  await expect(sensorPage.locator(".llt_sensor_history")).toHaveCount(0);
+  await expect(sensorPage).toContainText("Sensor Start");
+  await sensorPage.getByRole("button", { name: "Replace Sensor", exact: true }).click();
+  await expect(sensorPage.locator('form[data-sensor-form="start"]')).toBeVisible();
+  await sensorPage.getByRole("button", { name: "Cancel", exact: true }).click();
+  await sensorPage.locator(".llt_sensor_manage summary").click();
+  await sensorPage.getByRole("button", { name: "Edit Start Time", exact: true }).click();
   await page.locator('input[name="date"]').fill("2099-01-01");
-  await modal.getByRole("button", { name: "Review Start Correction" }).click();
-  await expect(modal.locator("[data-sensor-error]")).toContainText("not in the future");
-  await page.keyboard.press("Escape");
-  await expect(modal).toHaveCount(0);
+  await sensorPage.getByRole("button", { name: "Review Start Correction" }).click();
+  await expect(sensorPage.locator("[data-sensor-error]")).toContainText("not in the future");
+  await sensorPage.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(sensorPage).toHaveCount(0);
 });
 
-test("modal management fits narrow, wide and landscape viewports; no-sensor start remains available", async ({ page }) => {
+test("sensor management page fits narrow, wide and landscape viewports; no-sensor start remains available", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "Manage Sensor" }).click();
-  const modal = page.locator(".llt_sensor_dialog");
-  await expect(modal.getByRole("button", { name: "Start New Sensor", exact: true })).toBeVisible();
-  await expect(modal.locator(".llt_sensor_management")).toHaveCount(0);
-  await expect(modal.locator('[data-sensor-action="edit"], [data-sensor-action="undo"]')).toHaveCount(0);
-  await modal.getByRole("button", { name: "Start New Sensor", exact: true }).click();
+  const sensorPage = page.locator(".llt_sensor_page");
+  await expect(sensorPage.getByRole("button", { name: "Start New Sensor", exact: true })).toBeVisible();
+  await expect(sensorPage.locator(".llt_sensor_management")).toHaveCount(0);
+  await expect(sensorPage.locator('[data-sensor-action="edit"], [data-sensor-action="undo"]')).toHaveCount(0);
+  await sensorPage.getByRole("button", { name: "Start New Sensor", exact: true }).click();
   await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
-  await modal.getByRole("button", { name: "Close", exact: true }).click();
+  await sensorPage.getByRole("button", { name: "Close", exact: true }).click();
   await page.locator(".llt_sensor_disclosure").click();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   for (const [width, height] of [[320,740],[393,852],[768,1024],[1280,800],[852,393]]) {
     await page.setViewportSize({ width, height });
-    await expect(modal.locator(".llt_sensor_manage summary")).toHaveAttribute("aria-expanded", "false");
-    await modal.locator(".llt_sensor_manage summary").click();
-    await expect(modal.locator('[data-sensor-action="undo"]')).toBeVisible();
-    expect(await modal.evaluate((d) => d.scrollWidth <= d.clientWidth + 1 && d.getBoundingClientRect().width <= innerWidth && d.getBoundingClientRect().height <= innerHeight)).toBe(true);
+    await expect(sensorPage.locator(".llt_sensor_manage summary")).toHaveAttribute("aria-expanded", "false");
+    await sensorPage.locator(".llt_sensor_manage summary").click();
+    await expect(sensorPage.locator('[data-sensor-action="undo"]')).toBeVisible();
+    expect(await sensorPage.evaluate((d) => d.scrollWidth <= d.clientWidth + 1 && d.getBoundingClientRect().width <= innerWidth)).toBe(true);
     for (const action of ["start", "refresh", "edit", "undo"]) {
-      expect(await modal.locator(`[data-sensor-action="${action}"]`).evaluate((b) => b.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      expect(await sensorPage.locator(`[data-sensor-action="${action}"]`).evaluate((b) => b.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
     }
-    await modal.locator('[data-sensor-action="undo"]').scrollIntoViewIfNeeded();
+    await sensorPage.locator('[data-sensor-action="undo"]').scrollIntoViewIfNeeded();
     await page.screenshot({ animations: "disabled", path: `/private/tmp/llt-management-expanded-${width}.png` });
-    await modal.locator(".llt_sensor_manage summary").click();
-    await modal.getByRole("button", { name: "Close", exact: true }).scrollIntoViewIfNeeded();
+    await sensorPage.locator(".llt_sensor_manage summary").click();
+    await sensorPage.getByRole("button", { name: "Close", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ animations: "disabled", path: `/private/tmp/llt-management-collapsed-${width}.png` });
   }
-  await modal.getByRole("button", { name: "Close", exact: true }).click();
+  await sensorPage.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("button", { name: "Manage Sensor" })).toBeFocused();
 });
 
@@ -470,16 +466,16 @@ test("sensor native date/time controls and stacked replacement review fit both t
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       if (!(await page.locator(".llt_sensor_card").evaluate(card => card.open))) await page.locator(".llt_sensor_disclosure").click();
-      await page.getByRole("button", { name: "Replace Sensor", exact: true }).click();
-      const modal = page.locator(".llt_sensor_dialog");
       const titleFits = await page.locator(".llt_sensor_disclosure").first().evaluate(summary => {
         const title=summary.querySelector("strong").getBoundingClientRect();
         const chevron=summary.querySelector(".lee_lee_diabetes_accordion_chevron").getBoundingClientRect();
         return title.right <= chevron.left && title.width > 0;
       });
       expect(titleFits).toBe(true);
+      await page.getByRole("button", { name: "Replace Sensor", exact: true }).click();
+      const sensorPage = page.locator(".llt_sensor_page");
       for (const type of ["date", "time", "text"]) {
-        const input = modal.locator(`input[type=${type}]`);
+        const input = sensorPage.locator(`input[type=${type}]`);
         await expect(input).toBeVisible();
         if (type !== "text") expect(await input.evaluate(input => getComputedStyle(input).appearance)).toBe("none");
         const bounds = await input.evaluate(input => {
@@ -492,18 +488,18 @@ test("sensor native date/time controls and stacked replacement review fit both t
         await input.focus();
         await expect(input).toBeFocused();
       }
-      expect(await modal.evaluate(d => d.scrollWidth <= d.clientWidth + 1)).toBe(true);
+      expect(await sensorPage.evaluate(d => d.scrollWidth <= d.clientWidth + 1)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`sensor-inputs-${width}-${theme}.png`) });
       await page.getByLabel("Sensor Code", { exact: true }).fill("2345");
   await page.getByRole("button", { name: "Review New Sensor" }).click();
-      await expect(modal.locator(".llt_sensor_review dt")).toHaveText(["New sensor", "New sensor starts:", "Current sensor", "Current sensor started:"]);
-      const rows = await modal.locator(".llt_sensor_review dd").evaluateAll(rows => rows.map(row => row.getBoundingClientRect().y));
+      await expect(sensorPage.locator(".llt_sensor_review dt")).toHaveText(["New sensor", "New sensor starts:", "Current sensor", "Current sensor started:"]);
+      const rows = await sensorPage.locator(".llt_sensor_review dd").evaluateAll(rows => rows.map(row => row.getBoundingClientRect().y));
       expect(rows[1]).toBeGreaterThan(rows[0]);
-      await expect(modal.getByText("Saving this change will end the current sensor and start the new one.", { exact: true })).toBeVisible();
-      await expect(modal.getByRole("button", { name: "Save Sensor Change" })).toBeVisible();
-      await expect(modal.getByRole("button", { name: "Cancel" })).toBeVisible();
+      await expect(sensorPage.getByText("Saving this change will end the current sensor and start the new one.", { exact: true })).toBeVisible();
+      await expect(sensorPage.getByRole("button", { name: "Save Sensor Change" })).toBeVisible();
+      await expect(sensorPage.getByRole("button", { name: "Cancel" })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`sensor-review-${width}-${theme}.png`) });
-      await modal.getByRole("button", { name: "Cancel" }).click();
+      await sensorPage.getByRole("button", { name: "Cancel" }).click();
     }
   }
 });
@@ -580,21 +576,21 @@ test('invalid sensor code cannot reach review or save; no normalization',async({
 
 test('sensor management uses SVG close, a full-width Refresh row and full-width action rows', async ({ page }) => {
   await open(page); await start(page);
-  const modal = page.locator('.llt_sensor_dialog');
+  const sensorPage = page.locator('.llt_sensor_page');
   for (const theme of ['light', 'dark', 'system']) {
     await page.evaluate(theme => window.LandosTheme.setPreference(theme), theme);
-    const close = modal.getByRole('button', { name: 'Close', exact: true });
+    const close = sensorPage.getByRole('button', { name: 'Close', exact: true });
     await expect(close.locator('svg')).toBeVisible();
     const box = await close.boundingBox(); expect(box.width).toBe(44); expect(box.height).toBe(44);
-    const refresh = modal.getByRole('button', { name: 'Refresh', exact: true });
+    const refresh = sensorPage.getByRole('button', { name: 'Refresh', exact: true });
     expect(await refresh.evaluate(n => { const s = getComputedStyle(n.parentElement); return Math.abs(n.getBoundingClientRect().width - (n.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))); })).toBeLessThan(2);
-    await modal.locator('.llt_sensor_manage summary').click();
+    await sensorPage.locator('.llt_sensor_manage summary').click();
     for (const name of ['Replace Sensor', 'Edit Start Time', 'Undo Current Sensor', 'View All Sensor History →']) {
-      const button = modal.getByRole('button', { name, exact: true });
+      const button = sensorPage.getByRole('button', { name, exact: true });
       expect(await button.evaluate(n => { const s = getComputedStyle(n.parentElement); return Math.abs(n.getBoundingClientRect().width - (n.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))); })).toBeLessThan(2);
     }
-    await modal.locator('.llt_sensor_manage summary').click();
+    await sensorPage.locator('.llt_sensor_manage summary').click();
   }
-  await modal.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(modal).toHaveCount(0);
+  await sensorPage.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(sensorPage).toHaveCount(0);
 });

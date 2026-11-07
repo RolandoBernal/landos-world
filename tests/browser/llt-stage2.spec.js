@@ -191,7 +191,7 @@ test('desktop keeps the centered LWVD-sized mobile canvas on every LLT destinati
 test('all native LLT dropdowns have readable opaque options in Dark and Light', async ({ page }) => {
   await open(page);
   async function check(theme) {
-    const dropdowns = page.locator('#lee-lees-tracker-view select:visible, .llt_sensor_dialog select:visible');
+    const dropdowns = page.locator('#lee-lees-tracker-view select:visible, .llt_sensor_page select:visible');
     expect(await dropdowns.count()).toBeGreaterThan(0);
     for (const select of await dropdowns.all()) {
       expect(await select.evaluate(node => getComputedStyle(node).colorScheme)).toBe(theme);
@@ -224,7 +224,7 @@ test('all native LLT dropdowns have readable opaque options in Dark and Light', 
     await nav(page).getByRole('button', { name: 'Today', exact: true }).click();
     await page.locator('[data-sensor-action="history"]').click();
     await check(theme);
-    await page.locator('.llt_sensor_dialog [data-sensor-action="close"]').click();
+    await page.locator('.llt_sensor_page [data-sensor-action="close"]').click();
   }
 });
 

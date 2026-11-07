@@ -27,9 +27,8 @@
   object-fit: contain;
 }
 
-/* Sensor dialogs mount under body and share the LLT palette. */
-#lee-lees-tracker-view,
-.llt_sensor_dialog {
+/* Sensor pages render inside the LLT view and share its palette. */
+#lee-lees-tracker-view {
   --lee-lee-bg: #171923;
   --lee-lee-panel: #1A202C;
   --lee-lee-panel-strong: #2D3748;
@@ -60,8 +59,7 @@
   --app-accent-soft: var(--lee-lee-green);
 }
 
-#lee-lees-tracker-view,
-.llt_sensor_dialog {
+#lee-lees-tracker-view {
   --llt-ui-font: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --llt-numeric-font: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
@@ -101,8 +99,7 @@
   font-family: var(--llt-numeric-font);
 }
 
-:root[data-theme="light"] #lee-lees-tracker-view,
-:root[data-theme="light"] .llt_sensor_dialog {
+:root[data-theme="light"] #lee-lees-tracker-view {
   --lee-lee-bg: #F4F3EA;
   --lee-lee-panel: #FFFFFF;
   --lee-lee-panel-strong: #F5F4EA;
@@ -3392,34 +3389,35 @@
 .llt_sensor_card[data-state="expired"] { border-color: #c76b6b; }
 .llt_sensor_actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 .llt_sensor_actions button { min-height: 44px; white-space: normal; }
-.llt_sensor_dialog { box-sizing: border-box; width: min(448px, calc(100vw - 1rem)); max-height: calc(100dvh - 2rem); border: 1px solid #48484A; border-radius: 1rem; padding: 0; color: var(--lee-lee-text, #FFFFFF); background: var(--lee-lee-bg, #000000); font-family: var(--llt-ui-font); overflow: auto; }
-.llt_sensor_dialog::backdrop { background: #000a; }
-.llt_sensor_dialog_inner { padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); }
-.llt_sensor_dialog_header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.llt_sensor_dialog_header h2 { margin: 0; }
-.llt_sensor_dialog .llt_sensor_close {
+#lee-lees-tracker-view.llt_sensor_open .digit_clock_header,
+#lee-lees-tracker-view.llt_sensor_open .ecosystem_nav { pointer-events: none; }
+.llt_sensor_page { box-sizing: border-box; color: var(--lee-lee-text, #FFFFFF); background: var(--lee-lee-bg, #000000); font-family: var(--llt-ui-font); }
+.llt_sensor_page_inner { box-sizing: border-box; padding: 1rem 0 max(1.5rem, env(safe-area-inset-bottom)); }
+.llt_sensor_page_header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.llt_sensor_page_header h2 { margin: 0; }
+.llt_sensor_page .llt_sensor_close {
   display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px;
   padding: 9px; color: inherit; border: 1px solid var(--lee-lee-border); border-radius: 6px; background: transparent;
 }
 .llt_sensor_close svg { width: 24px; height: 24px; }
-.llt_sensor_dialog label { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .4rem; margin: 1rem 0; }
-.llt_sensor_dialog input, .llt_sensor_dialog select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; font: inherit; color: inherit; background: var(--lee-lee-panel, #1C1C1E); border: 1px solid #636366; border-radius: .5rem; padding: .6rem; }
+.llt_sensor_page label { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .4rem; margin: 1rem 0; }
+.llt_sensor_page input, .llt_sensor_page select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; font: inherit; color: inherit; background: var(--lee-lee-panel, #1C1C1E); border: 1px solid #636366; border-radius: .5rem; padding: .6rem; }
 .llt_sensor_facts { display: grid; gap: .4rem; }
 .llt_sensor_facts dd { margin: 0 0 .5rem; }
 .llt_sensor_history { border-top: 1px solid #48484A; padding: .75rem 0; }
 .llt_sensor_history p { margin: .4rem 0; }
-.llt_sensor_dialog [role="alert"] { color: var(--lee-lee-danger-text); }
+.llt_sensor_page [role="alert"] { color: var(--lee-lee-danger-text); }
 
-/* This body-mounted dialog is outside .app_theme's native date/time reset.
+/* The sensor page sits outside .lee_lee_diabetes_shell's native date/time reset.
    iOS native appearance overrides border-box sizing when padding is present. */
-.llt_sensor_dialog input[type="date"], .llt_sensor_dialog input[type="time"] {
+.llt_sensor_page input[type="date"], .llt_sensor_page input[type="time"] {
   -webkit-appearance: none;
   appearance: none;
   font-family: var(--llt-numeric-font);
   color-scheme: inherit;
 }
-.llt_sensor_dialog input[type="date"]::-webkit-date-and-time-value,
-.llt_sensor_dialog input[type="time"]::-webkit-date-and-time-value {
+.llt_sensor_page input[type="date"]::-webkit-date-and-time-value,
+.llt_sensor_page input[type="time"]::-webkit-date-and-time-value {
   min-inline-size: 0;
   max-inline-size: 100%;
   margin: 0;
@@ -3452,7 +3450,7 @@
 .llt_sensor_manage[open] > summary .lee_lee_diabetes_accordion_chevron { transform: rotate(180deg); }
 .llt_sensor_corrections { display: grid; gap: 1rem; padding-top: .75rem; }
 .llt_sensor_corrections button, .llt_sensor_start button { min-height: 44px; white-space: normal; }
-.llt_sensor_management > button, .llt_sensor_corrections button, .llt_sensor_dialog [data-sensor-action="history"] { width: 100%; }
+.llt_sensor_management > button, .llt_sensor_corrections button, .llt_sensor_page [data-sensor-action="history"] { width: 100%; }
 .llt_sensor_corrections p { margin: .35rem 0 0; color: var(--lee-lee-muted); }
 .llt_sensor_start { margin-block: 1rem; }
 @container llt (max-width: 640px) {
@@ -3570,14 +3568,12 @@
 
 /* Sensor history uses the existing dialog theme with a dedicated full-screen view. */
 .llt_sensor_card [data-sensor-action="history"],
-.llt_sensor_dialog [data-sensor-action="history"] { width: 100%; min-height: 44px; margin-top: .65rem; }
-.llt_sensor_dialog--full { width: 100%; height: 100dvh; max-width: none; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
-.llt_sensor_dialog--full .llt_sensor_dialog_inner { box-sizing: border-box; max-width: 480px; margin-inline: auto; padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
-.llt_sensor_dialog textarea { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; font: inherit; color: inherit; background: var(--lee-lee-panel); border: 1px solid var(--lee-lee-border); border-radius: .5rem; padding: .6rem; resize: vertical; }
-.llt_sensor_dialog fieldset { min-width: 0; margin: 1rem 0; padding: .75rem; border: 1px solid var(--lee-lee-border); border-radius: .5rem; }
+.llt_sensor_page [data-sensor-action="history"] { width: 100%; min-height: 44px; margin-top: .65rem; }
+.llt_sensor_page textarea { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; font: inherit; color: inherit; background: var(--lee-lee-panel); border: 1px solid var(--lee-lee-border); border-radius: .5rem; padding: .6rem; resize: vertical; }
+.llt_sensor_page fieldset { min-width: 0; margin: 1rem 0; padding: .75rem; border: 1px solid var(--lee-lee-border); border-radius: .5rem; }
 .llt_sensor_history_link { display: grid; gap: .4rem; width: 100%; min-height: 44px; margin-top: .65rem; padding: 1rem; font: inherit; color: inherit; background: var(--lee-lee-panel); border: 1px solid var(--lee-lee-border); border-radius: .75rem; text-align: left; overflow-wrap: anywhere; }
 .llt_sensor_notes { white-space: pre-wrap; overflow-wrap: anywhere; }
-.llt_sensor_dialog--full [data-sensor-action="history-more"] { margin-top: .65rem; width: 100%; }
+.llt_sensor_page [data-sensor-action="history-more"] { margin-top: .65rem; width: 100%; }
 
 /* Issue #12: one full-screen calculation surface in both invocation contexts. */
 .lee_lee_diabetes_carb_calc_layer:has(.lee_lee_diabetes_carb_calculator--shared),
@@ -4003,17 +3999,17 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 /* Native dropdown menus need an opaque option surface as well as a themed
    closed control. Include sensor dialogs, which are mounted under body. */
 #lee-lees-tracker-view select,
-.llt_sensor_dialog select { color-scheme: dark; }
+.llt_sensor_page select { color-scheme: dark; }
 #lee-lees-tracker-view :is(option, optgroup),
-.llt_sensor_dialog :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
+.llt_sensor_page :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
 #lee-lees-tracker-view option:disabled,
-.llt_sensor_dialog option:disabled { color: var(--lee-lee-muted); }
+.llt_sensor_page option:disabled { color: var(--lee-lee-muted); }
 :root[data-theme="light"] #lee-lees-tracker-view select,
-:root[data-theme="light"] .llt_sensor_dialog select { color-scheme: light; }
+:root[data-theme="light"] .llt_sensor_page select { color-scheme: light; }
 :root[data-theme="light"] #lee-lees-tracker-view :is(option, optgroup),
-:root[data-theme="light"] .llt_sensor_dialog :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
+:root[data-theme="light"] .llt_sensor_page :is(option, optgroup) { background-color: var(--lee-lee-panel); color: var(--lee-lee-text); }
 :root[data-theme="light"] #lee-lees-tracker-view option:disabled,
-:root[data-theme="light"] .llt_sensor_dialog option:disabled { color: var(--lee-lee-muted); }
+:root[data-theme="light"] .llt_sensor_page option:disabled { color: var(--lee-lee-muted); }
 
 /* Physical-iPhone acceptance corrections: keep actions inside the visible sheet. */
 .lee_lee_diabetes_history_sheet_frame {
@@ -4061,7 +4057,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
 /* Keep the focus ring inside the control's own bounds at scrollport edges.
    Small checkboxes reserve outside space instead, keeping their checkmark clear. */
 #lee-lees-tracker-view :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
-.llt_sensor_dialog :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
+.llt_sensor_page :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
 #lee-lees-tracker-view select[data-context-pending] { outline: 2px solid var(--lee-lee-soft, var(--lee-lee-green)); outline-offset: -3px; }
 
 #lee-lees-tracker-view .ecosystem_nav_back:focus-visible {
