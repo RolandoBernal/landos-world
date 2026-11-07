@@ -271,8 +271,8 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] #small-result.small-result-empty p{color:#c1b2d5}
 
 /* Goals reuse Activity details and transaction forms; confirmations stay compact.
-   Keep the origin shell hidden until the complete Goals interaction closes. */
-body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hidden}
+   The details/forms are pages in the shell now, so a compact confirmation
+   opens over the page instead of hiding the shell. */
 #transaction-sheet[data-presentation=goal][data-view=confirm],
 #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm],
@@ -441,3 +441,17 @@ dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:au
 #settings { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 1px solid #ded8f1; border-radius: 6px; }
 :root[data-theme=dark] #settings { border-color: #53405f; }
 #settings svg { width: 24px; height: 24px; }
+
+/* Sheet pages: long forms and details render in the tab content as real
+   pages instead of the fixed sheet dialog (small confirmations keep the
+   dialog). The frame/panel become plain document flow. */
+body[data-screen=sheet] .shell{padding-bottom:25px}
+.sheet-page-frame{position:static;width:100%;height:auto;display:block;padding-top:0;overflow:visible}
+.sheet-page-frame .transaction-panel{width:100%;max-height:none;min-height:0;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:4px 0 24px}
+.sheet-page-frame :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+.sheet-page-frame label{font-size:.87rem;font-weight:500}
+.sheet-page-frame .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.sheet-page-frame progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}
+.sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+.sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
+body[data-screen=sheet] #settings{display:none}
