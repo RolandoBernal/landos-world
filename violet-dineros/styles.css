@@ -99,7 +99,7 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 .sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sheet-heading h2{font-size:1.3rem;margin:0}.sheet-heading h2:focus{outline:none}.sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
 :is(#transaction-sheet,#affordability-sheet) label{font-size:.87rem;font-weight:500}.sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.transaction-details dt{color:#675b80}.transaction-details dd{margin:0;overflow-wrap:anywhere}
-#notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;top:calc(10px + env(safe-area-inset-top));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
 :root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:#493061;color:#eee3ff;border-color:#a783ce}
 :root[data-theme=dark] .activity-group>h2{color:#bfb0d5}
 :root[data-theme=dark] .transaction-row{background:#292135;color:#eee8ff}
@@ -455,3 +455,25 @@ body[data-screen=sheet] .shell{padding-bottom:25px}
 .sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
 .sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
 body[data-screen=sheet] #settings{display:none}
+
+/* Details page: give the facts a card with room to breathe instead of bare rows at the top. */
+.sheet-page-frame:has(.details-body) .transaction-panel{display:flex;flex-direction:column;min-height:calc(100dvh - 132px)}
+.details-centered{background:#fff;border:1px solid #e5dff4;border-radius:18px;padding:22px 20px;box-shadow:0 2px 8px #42308d08}
+:root[data-theme=dark] .details-centered{background:#292135;border-color:#53405f;box-shadow:none}
+.details-centered .detail-amount{margin-bottom:16px}
+.details-centered .transaction-details{gap:0 12px}
+.details-centered .transaction-details dt,.details-centered .transaction-details dd{padding:11px 0;border-top:1px solid #eee7f8}
+.details-centered .transaction-details dt:first-of-type,.details-centered .transaction-details dd:first-of-type{border-top:0;padding-top:0}
+.details-centered .transaction-details dt:last-of-type,.details-centered .transaction-details dd:last-of-type{padding-bottom:0}
+:root[data-theme=dark] .details-centered .transaction-details dt,:root[data-theme=dark] .details-centered .transaction-details dd{border-top-color:#453257}
+.details-centered .sheet-actions{margin-top:20px}
+
+/* Settings fields must read as editable: visible box, not bare text in the row. */
+.settings-panel .setting-row input,.settings-panel .setting-row select{border:1px solid #d6d0ea;background:#ffffffb8;border-radius:10px;padding:5px 10px}
+:root[data-theme=dark] .settings-panel .setting-row input,:root[data-theme=dark] .settings-panel .setting-row select{border-color:#53405f;background:#1d1626;color:#eee8ff}
+
+/* Floating chrome: frosted surfaces with a soft lift shadow. */
+nav{backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -6px 20px #35205212}
+:root[data-theme=dark] nav{background:#17131ff2;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -8px 24px #00000059}
+#quick-actions-toggle{box-shadow:0 8px 24px #3520524d}
+:root[data-theme=dark] #quick-actions-toggle{box-shadow:0 8px 24px #00000073}
