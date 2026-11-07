@@ -57,7 +57,8 @@
   function button(action, label, disabled = false) {
     const back = label.startsWith("←");
     const primary = ["save", "confirm", "metadata-save"].includes(action);
-    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--${primary ? "primary" : "ghost"}${back ? " lee_lee_diabetes_back_link" : ""}" data-sensor-action="${action}" ${back ? `aria-label="${escape(label.slice(2))}"` : ""} ${disabled ? "disabled" : ""}>${back ? '<span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span>' : label}</button>`;
+    const textLink = action === "list-back" ? " lee_lee_diabetes_back_link--text" : "";
+    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--${primary ? "primary" : "ghost"}${back ? " lee_lee_diabetes_back_link" : ""}${textLink}" data-sensor-action="${action}" ${back ? `aria-label="${escape(label.slice(2))}"` : ""} ${disabled ? "disabled" : ""}>${back ? '<span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span>' : label}</button>`;
   }
   function syncNote(state) {
     return state.pending

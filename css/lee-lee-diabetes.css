@@ -2126,6 +2126,19 @@
   flex-shrink: 0;
 }
 
+/* Pre-Meal duration stepper matches the Carb Calculator quantity steppers:
+   fully round 44px icon buttons with a clearly sized glyph. */
+.lee_lee_diabetes_settings_section [data-action="adjust-pre-meal-duration"] {
+  inline-size: 44px;
+  block-size: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--lee-lee-border);
+  border-radius: 999px;
+  color: var(--lee-lee-green);
+  font-size: 1.2rem;
+}
+
 .lee_lee_diabetes_settings_accordion > summary,
 .lee_lee_diabetes_settings_accordion_body {
   width: 100%;
@@ -2568,6 +2581,17 @@
   display: inline-flex; align-items: center; justify-content: flex-start; gap: .25rem;
   width: auto; min-width: 44px; min-height: 44px; padding: .35rem .25rem;
   border: 0; border-radius: 0; background: transparent; box-shadow: none; font: inherit; color: var(--lee-lee-green);
+}
+
+/* Text-link variant (All Sensors → Sensor Details): no button chrome at all. */
+.lee_lee_diabetes_button.lee_lee_diabetes_back_link--text {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--lee-lee-green);
+  padding: .35rem .25rem;
+  justify-content: flex-start;
 }
 
 .lee_lee_diabetes_button {

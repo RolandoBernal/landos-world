@@ -4956,8 +4956,8 @@
             <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food?.favorite ? 'checked' : ''}><span>Favorite</span></label>
             </div>
             <div class="lee_lee_diabetes_food_editor_actions lee_lee_diabetes_actions--stacked">
-              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
             </div>
           </div>
       </section>
@@ -5060,8 +5060,8 @@
               <footer class="lee_lee_diabetes_meal_builder_footer">
                 <div class="lee_lee_diabetes_meal_builder_total"><span>Total Carbs</span><strong data-meal-builder-total>${renderCarbs(total)}</strong></div>
                 <div class="lee_lee_diabetes_food_editor_actions lee_lee_diabetes_actions--stacked">
-                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-saved-meal-builder">Save Meal</button>
                   <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-saved-meal-builder">Cancel</button>
+                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-saved-meal-builder">Save Meal</button>
                 </div>
               </footer>
             `}
@@ -6130,8 +6130,8 @@
         <label class="lee_lee_diabetes_field">Meal Name<input class="lee_lee_diabetes_input" name="savedMealName" type="text" autofocus maxlength="80" autocomplete="off" value="${escapeHtml(currentEditor?.carbCalculatorMealNameDraft || '')}" required></label>
         <p class="lee_lee_diabetes_help">${renderCarbs(total)}</p>
         <div class="lee_lee_diabetes_actions lee_lee_diabetes_actions--stacked">
-          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save My Meal</button>
           <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-meal-editor">Cancel</button>
+          <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-meal-editor">Save My Meal</button>
         </div>
       </section>
     `;
@@ -9182,7 +9182,7 @@
           const timerSettings = window.LeeLeePreMealTimer?.getSettings() || { enabled: true, durationMinutes: 15 };
           return `<p class="lee_lee_diabetes_help">A device-local convenience timer starts after a new entry with more than 0 g of carbs is saved. It does not change insulin calculations or sync between devices.</p>
             <label class="lee_lee_diabetes_checkline"><span>Enable Pre-Meal Timer</span><input type="checkbox" name="preMealTimerEnabled" ${timerSettings.enabled ? 'checked' : ''}></label>
-            <label class="lee_lee_diabetes_field">Timer Duration<span class="lee_lee_diabetes_inline_control"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-duration" data-delta="-1" aria-label="Decrease timer duration">−</button><input class="lee_lee_diabetes_input" name="preMealTimerDuration" type="number" min="1" max="60" step="1" value="${escapeHtml(timerSettings.durationMinutes)}" aria-describedby="pre-meal-timer-range"><button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="adjust-pre-meal-duration" data-delta="1" aria-label="Increase timer duration">+</button><span>minutes</span></span></label>
+            <label class="lee_lee_diabetes_field">Timer Duration<span class="lee_lee_diabetes_inline_control"><button type="button" class="lee_lee_diabetes_icon_button" data-action="adjust-pre-meal-duration" data-delta="-1" aria-label="Decrease timer duration">−</button><input class="lee_lee_diabetes_input" name="preMealTimerDuration" type="number" min="1" max="60" step="1" value="${escapeHtml(timerSettings.durationMinutes)}" aria-describedby="pre-meal-timer-range"><button type="button" class="lee_lee_diabetes_icon_button" data-action="adjust-pre-meal-duration" data-delta="1" aria-label="Increase timer duration">+</button><span>minutes</span></span></label>
             <p class="lee_lee_diabetes_help" id="pre-meal-timer-range">Choose 1–60 minutes. This is a user preference, not medical guidance.</p>
             <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="save-pre-meal-settings">Save Pre-Meal Timer Settings</button>`;
         })(), false)}
