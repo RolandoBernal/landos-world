@@ -19,3 +19,15 @@ for (const [index, source] of inlineScripts.entries()) {
     assert.doesNotThrow(() => new vm.Script(source));
   });
 }
+
+// Every settings toggle in index.html draws the same gear icon. One copy
+// once shipped with three corrupted path tokens (a flipped arc sweep flag
+// and two flipped signs), which carved a visible notch into the LLT cog.
+// Keep every copy token-identical so a transcription slip fails here.
+test('every gear icon path in index.html is token-identical', () => {
+  const paths = [...html.matchAll(/M12\.22 2h-\.44[^"]+/g)].map((match) => match[0]);
+  assert.ok(paths.length > 1);
+  const tokenize = (d) => d.match(/[A-Za-z]|-?\d*\.?\d+/g);
+  const canonical = tokenize(paths[0]);
+  for (const d of paths) assert.deepEqual(tokenize(d), canonical);
+});
