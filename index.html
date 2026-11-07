@@ -910,7 +910,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       document.querySelectorAll('[data-my-apps-action]').forEach((button) => {
         button.addEventListener('click', () => applyLauncherChange((preferences) => button.dataset.myAppsAction === 'recommended'
           ? launcherPreferences.recommended(preferences, launcherIds)
-          : launcherPreferences.showAll(preferences, launcherIds));
+          : launcherPreferences.showAll(preferences, launcherIds)));
       });
       window.addEventListener('storage', (event) => {
         if (event.key !== null && event.key !== launcherPreferences.STORAGE_KEY) return;
