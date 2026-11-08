@@ -93,10 +93,6 @@ test("start, correction, early replacement, undo and retained history survive re
   await page.reload();
   await expect(page.locator(".llt_sensor_card")).toContainText("remaining");
   await page.locator(".llt_sensor_disclosure").click();
-  // Focus the opener first: desktop engines focus a button on click, but
-  // mobile Safari does not focus it on tap, and the module's return-focus
-  // path starts from the focused element (the keyboard scenario).
-  await page.getByRole("button", { name: "Manage Sensor" }).focus();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   await page.locator('[data-sensor-action="history"]').last().click();
   await expect(page.locator(".llt_sensor_page")).toContainText(
@@ -441,7 +437,11 @@ test("sensor management page fits narrow, wide and landscape viewports; no-senso
   await page.getByRole("button", { name: "Save Sensor Change" }).click();
   await sensorPage.getByRole("button", { name: "Close", exact: true }).click();
   await page.locator(".llt_sensor_disclosure").click();
-  await page.getByRole("button", { name: "Manage Sensor" }).click();
+  // Focus the opener and activate it from the keyboard: mobile WebKit
+  // loses the focused opener on the following click, and the module's
+  // return-focus path starts from the focused element.
+  await page.getByRole("button", { name: "Manage Sensor" }).focus();
+  await page.keyboard.press("Enter");
   for (const [width, height] of [[320,740],[393,852],[768,1024],[1280,800],[852,393]]) {
     await page.setViewportSize({ width, height });
     await expect(sensorPage.locator(".llt_sensor_manage summary")).toHaveAttribute("aria-expanded", "false");
@@ -602,7 +602,7 @@ test('sensor management uses SVG close, a full-width Refresh row and full-width 
 test("sensor pages make the app chrome inert to the keyboard until close", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "Manage Sensor" }).focus();
-  await page.getByRole("button", { name: "Manage Sensor" }).click();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".llt_sensor_page")).toBeVisible();
   // Both the header (Settings gear) and every pill navigation element are
   // inert while a sensor page is open — not just pointer-blocked.
