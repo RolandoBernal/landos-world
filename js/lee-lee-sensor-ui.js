@@ -103,6 +103,31 @@
         slot.querySelector(`[data-sensor-action="${action}"]`)?.focus();
     }
   }
+  let successTimer = 0;
+  function dismissSuccess() {
+    window.clearTimeout(successTimer);
+    successTimer = 0;
+    document.querySelector("[data-success-confirmation]")?.remove();
+  }
+  // The LLT success confirmation card (see lee-lee-diabetes-tracker.js):
+  // same classes and behavior — check badge, message, no buttons, 2.5s.
+  function showSuccess(message) {
+    dismissSuccess();
+    const host = document.getElementById("lee-lees-tracker-view") || document.body;
+    const card = document.createElement("div");
+    card.className = "lee_lee_diabetes_success_card";
+    card.dataset.successConfirmation = "";
+    card.setAttribute("role", "status");
+    const badge = document.createElement("span");
+    badge.className = "lee_lee_diabetes_success_badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+    const text = document.createElement("span");
+    text.textContent = message;
+    card.append(badge, text);
+    host.append(card);
+    successTimer = window.setTimeout(dismissSuccess, 2500);
+  }
   function dismiss() {
     page?.remove();
     page = null;
@@ -213,7 +238,7 @@
       actor: repository?.getDeviceIdentity() || "Unknown", metadata: metadata() });
     f.querySelector('[data-sensor-action="metadata-save"]').disabled = true;
     const result = await client.submit(request);
-    if (result.status === "accepted") sensorDetails(selectedSensorId);
+    if (result.status === "accepted") { sensorDetails(selectedSensorId); showSuccess("Replacement details saved."); }
     else { f.querySelector("[data-sensor-error]").textContent = client.get().error || "Not saved — review the sensor state.";
       f.querySelector('[data-sensor-action="metadata-save"]').disabled = !!client.get().pending; }
   }
@@ -377,10 +402,21 @@
         details();
       } else if (action === "confirm") {
         target.disabled = true;
-        const r = await client.submit(page._request);
+        const request = page._request || {};
+        const replacing = request.p_action === "start" && !!D.current(client.get().snapshot);
+        const r = await client.submit(request);
         if (r.status === "accepted") {
           draft = null;
           details();
+          showSuccess(
+            request.p_action === "start"
+              ? replacing ? "New sensor started." : "Sensor started."
+              : request.p_action === "edit_start"
+                ? "Sensor start updated."
+                : request.p_action === "undo_current"
+                  ? "Sensor change undone."
+                  : "Sensor saved.",
+          );
         } else if (page) {
           page.querySelector("[data-sensor-error]").textContent =
             client.get().error ||
