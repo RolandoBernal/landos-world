@@ -1187,7 +1187,7 @@
                 </li>`).join('') : '<li class="sprints-empty">No steps yet. Add one below.</li>'}
             </ul>
             <button type="button" class="sprints-btn sprints-btn--primary sprints-btn--block" data-action="add-step">+ Add Step</button>
-            <button type="button" class="sprints-btn sprints-btn--block" data-action="save">Save Workout</button>
+            <button type="button" class="sprints-btn sprints-btn--accent sprints-btn--block" data-action="save">Save Workout</button>
           </div>
         </div>`;
     }

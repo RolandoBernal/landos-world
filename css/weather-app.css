@@ -730,3 +730,5 @@
 .weather_current_temp .lww_temperature_pair--long {
   font-size: min(1em, 23cqi);
 }
+
+.weather_settings_location_row > .weather_settings_button { width: 100%; min-height: 52px; border-radius: 9999px; }

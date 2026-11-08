@@ -55,7 +55,9 @@
     };
   }
   function button(action, label, disabled = false) {
-    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-sensor-action="${action}" ${disabled ? "disabled" : ""}>${label}</button>`;
+    const back = label.startsWith("←");
+    const primary = ["save", "confirm", "metadata-save"].includes(action);
+    return `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--${primary ? "primary" : "ghost"}${back ? " lee_lee_diabetes_back_link" : ""}" data-sensor-action="${action}" ${back ? `aria-label="${escape(label.slice(2))}"` : ""} ${disabled ? "disabled" : ""}>${back ? '<span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span>' : label}</button>`;
   }
   function syncNote(state) {
     return state.pending
@@ -116,7 +118,7 @@
     returnFocus = opener;
     dialog = document.createElement("dialog");
     dialog.className = "llt_sensor_dialog" + (fullScreen ? " llt_sensor_dialog--full" : "");
-    dialog.innerHTML = `<div class="llt_sensor_dialog_inner"><div class="llt_sensor_dialog_header"><h2 id="llt-sensor-title">${escape(title)}</h2>${button("close", "Close")}</div>${html}</div>`;
+    dialog.innerHTML = `<div class="llt_sensor_dialog_inner"><div class="llt_sensor_dialog_header"><h2 id="llt-sensor-title">${escape(title)}</h2><button type="button" class="llt_sensor_close" data-sensor-action="close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>${html}</div>`;
     dialog.setAttribute("aria-labelledby", "llt-sensor-title");
     const styles = getComputedStyle(
       document.getElementById("lee-lee-diabetes-root"),

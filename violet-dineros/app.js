@@ -8,6 +8,7 @@ let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
+ close: '<path d="M6 6l12 12M18 6 6 18"/>',
  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
  home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
  activity: '<rect x="5" y="3" width="15" height="19" rx="2"/><path d="M10 8h6M10 13h6M10 18h6M8 8h.01M8 13h.01M8 18h.01"/>',
@@ -16,7 +17,7 @@ const icons = {
  search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
  insights: '<path d="M3 21V13h4v8M10 21V8h4v13M17 21V3h4v18"/>',
  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2"/>',
- settings: '<path d="m9 3 1-2h4l1 2 3 2 2 0 2 4-2 2v3l2 2-2 4-3-1-2 2h-5l-1-2-3-1-2 0-2-4 2-2V9L2 7l2-4 3 1Z"/><circle cx="12" cy="11" r="3"/>',
+ settings: '<circle cx="12" cy="12" r="3"></circle> <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"> </path>',
  plus: '<path d="M12 5v14M5 12h14"/>',
  expense: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6m-6 4h6m-6 4h2m2 0h2m-6 4h2m2 0h2"/>',
  afford: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h2m4 0h2M8 15h2m4 0h2M8 18h2m4 0h2"/>',
@@ -104,17 +105,16 @@ function onboarding() {
   focusPageStart();
 }
 function settings() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="settings-back" class="back-circle" aria-label="Back to Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
+  content.innerHTML = `<section class="settings-panel"><div class="settings-title"><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
     if (save({ ...state, firstName, payday: anchor, frequency })) { tab = 'Home'; render(); announce('Settings saved.'); focusPageStart(); }
   };
   content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusPageStart(); };
-  content.querySelector('#settings-back').onclick = () => { tab = 'Home'; render(); focusPageStart(); };
 }
 function editStartingBalance() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" class="back-circle" aria-label="Back to Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><button class="primary">Save</button><button type="button" id="balance-cancel">Cancel</button></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" class="back-circle" aria-label="Back to Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><div class="sheet-actions"><button type="button" id="balance-cancel">Cancel</button><button class="primary">Save</button></div></form></section>`;
   const back = () => { tab = 'Settings'; render(); focusPageStart(); };
   content.querySelector('#balance-back').onclick = back;
   content.querySelector('#balance-cancel').onclick = back;
@@ -188,8 +188,10 @@ function render() {
   if (!state) { onboarding(); return; }
   if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
   document.body.dataset.screen = tab.toLowerCase();
-  gear.hidden = tab !== 'Home'; nav.hidden = ['Afford', 'Settings'].includes(tab);
-  gear.innerHTML = icon('settings');
+  gear.hidden = !['Home', 'Settings'].includes(tab); nav.hidden = ['Afford', 'Settings'].includes(tab);
+  gear.innerHTML = icon(tab === 'Settings' ? 'close' : 'settings');
+  gear.setAttribute('aria-label', tab === 'Settings' ? 'Close Settings' : 'Settings');
+  gear.setAttribute('aria-expanded', String(tab === 'Settings'));
   nav.innerHTML = ['Home', 'Activity', 'Goals', 'Insights'].map((label, i) => `<button ${tab === label ? 'aria-current="page"' : ''} data-tab="${label}"><span aria-hidden="true">${icon(['home', 'activity', 'goals', 'insights'][i])}</span>${label}</button>`).join('');
   nav.querySelectorAll('button').forEach(button => button.onclick = () => { tab = button.dataset.tab; render(); focusPageStart(); });
   if (tab === 'Afford') { renderAffordability(); return; }
@@ -207,7 +209,7 @@ function render() {
 function renderAffordability() {
   const preview = document.querySelector('#affordability-sheet');
   affordabilityRaw = lastRaw;
-  showDocumentPanel(preview, `<div class="sheet-heading"><h2 id="afford-title" tabindex="-1">Can I Afford This?</h2><button type="button" id="afford-back" aria-label="Back to Home">×</button></div><form id="affordability-form" novalidate><div class="sheet-body sheet-fields"><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" autofocus name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></div></form>`, '#afford-title', 'affordability');
+  showDocumentPanel(preview, `<div class="sheet-heading"><h2 id="afford-title" tabindex="-1">Can I Afford This?</h2><button type="button" id="afford-back" aria-label="Back to Home">${icon('close')}</button></div><form id="affordability-form" novalidate><div class="sheet-body sheet-fields"><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" autofocus name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></div></form>`, '#afford-title', 'affordability');
   const input = preview.querySelector('#afford-price'), result = preview.querySelector('#afford-result'), buy = preview.querySelector('#afford-buy');
   const update = () => {
     affordabilityInput = input.value;
@@ -251,7 +253,7 @@ function commitGoal(next, message) {
   render(); closeSheet(); announce(message); return true;
 }
 function goalForm(title, fields, button, submit) {
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`, '#sheet-title', 'form', 'goal');
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions sheet-actions--stacked"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`, '#sheet-title', 'form', 'goal');
   bindSheetClose(); transactionSheet.querySelector('[data-cancel]').onclick = closeSheet;
   let submitted = false;
   transactionSheet.querySelector('form').onsubmit = event => {
@@ -295,7 +297,7 @@ function showGoal(id) {
     });
   });
   for (const action of ['archive','delete']) transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
-    openSheet(`${sheetHeading(action === 'archive' ? 'Archive Goal?' : 'Delete Goal?')}<div class="sheet-body"><p>${action === 'archive' ? 'Archive' : 'Permanently delete'} ${escape(goal.name)} and release ${money(goal.reservedCents)}? Your total balance and existing expenses stay the same.</p></div><div class="sheet-actions"><button class="primary" id="confirm-goal">${action === 'archive' ? 'Archive' : 'Delete'}</button><button id="cancel-goal">Cancel</button></div>`, '#sheet-title', 'confirm', 'goal');
+    openSheet(`${sheetHeading(action === 'archive' ? 'Archive Goal?' : 'Delete Goal?')}<div class="sheet-body"><p>${action === 'archive' ? 'Archive' : 'Permanently delete'} ${escape(goal.name)} and release ${money(goal.reservedCents)}? Your total balance and existing expenses stay the same.</p></div><div class="sheet-actions"><button id="cancel-goal">Cancel</button><button class="primary danger" id="confirm-goal">${action === 'archive' ? 'Archive' : 'Delete'}</button></div>`, '#sheet-title', 'confirm', 'goal');
     bindSheetClose(); transactionSheet.querySelector('#cancel-goal').onclick = () => showGoal(id);
     let submitted = false;
     transactionSheet.querySelector('#confirm-goal').onclick = () => {
@@ -363,7 +365,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   fitSheetViewport();
   if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
 }
-const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">×</button></div>`;
+const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">${icon('close')}</button></div>`;
 function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
 function closeSheet() { dismissNotice(); document.querySelector('#transaction-sheet').close(); restoreSheet(); }
 function moneyProgressSection() {
@@ -381,7 +383,7 @@ function openTransactionForm(type, id = null, affordabilityPrice = null) {
   if (original) type = original.type;
   const previewRaw = lastRaw;
   const isIncome = type === 'income', title = original ? `Edit ${isIncome ? 'Money In' : 'Expense'}` : isIncome ? 'Add Money' : 'Add Expense';
-  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields"><label for="transaction-amount">How much?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="transaction-amount" autofocus name="amount" inputmode="decimal" autocomplete="off" required value="${original ? (original.amountCents / 100).toFixed(2) : affordabilityPrice !== null ? String(Math.floor(affordabilityPrice / 100)) + '.' + String(affordabilityPrice % 100).padStart(2, '0') : ''}" placeholder="0.00" aria-describedby="transaction-error"></div><label for="transaction-label">${isIncome ? 'Where did it come from?' : 'Category'}</label><select id="transaction-label" name="label" required><option value="">Choose ${isIncome ? 'a source' : 'a category'}</option>${TRANSACTION_LABELS[type].map(label => `<option ${original?.label === label ? 'selected' : ''}>${label}</option>`).join('')}</select><label for="transaction-description">${isIncome ? 'Description' : 'What was it?'} (optional)</label><input id="transaction-description" name="description" maxlength="120" value="${escape(original?.description || '')}"><p class="error" id="transaction-error" role="alert"></p></div><div class="sheet-actions"><button class="primary" type="submit">${original ? 'Save Changes' : isIncome ? 'Add Money' : 'Save Expense'}</button><button type="button" id="transaction-cancel">Cancel</button></div></form>`, '#transaction-amount');
+  openSheet(`${sheetHeading(title)}<form id="transaction-form" novalidate><div class="sheet-body sheet-fields"><label for="transaction-amount">How much?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="transaction-amount" autofocus name="amount" inputmode="decimal" autocomplete="off" required value="${original ? (original.amountCents / 100).toFixed(2) : affordabilityPrice !== null ? String(Math.floor(affordabilityPrice / 100)) + '.' + String(affordabilityPrice % 100).padStart(2, '0') : ''}" placeholder="0.00" aria-describedby="transaction-error"></div><label for="transaction-label">${isIncome ? 'Where did it come from?' : 'Category'}</label><select id="transaction-label" name="label" required><option value="">Choose ${isIncome ? 'a source' : 'a category'}</option>${TRANSACTION_LABELS[type].map(label => `<option ${original?.label === label ? 'selected' : ''}>${label}</option>`).join('')}</select><label for="transaction-description">${isIncome ? 'Description' : 'What was it?'} (optional)</label><input id="transaction-description" name="description" maxlength="120" value="${escape(original?.description || '')}"><p class="error" id="transaction-error" role="alert"></p></div><div class="sheet-actions sheet-actions--stacked"><button class="primary" type="submit">${original ? 'Save Changes' : isIncome ? 'Add Money' : 'Save Expense'}</button><button type="button" id="transaction-cancel">Cancel</button></div></form>`, '#transaction-amount');
   bindSheetClose(); document.querySelector('#transaction-cancel').onclick = closeSheet;
   let submitted = false;
   document.querySelector('#transaction-form').onsubmit = event => {
@@ -412,10 +414,10 @@ function openTransactionForm(type, id = null, affordabilityPrice = null) {
 function showTransaction(id) {
   const transaction = (state.transactions || []).find(t => t.id === id); if (!transaction) return;
   const isIncome = transaction.type === 'income';
-  openSheet(`${sheetHeading(isIncome ? 'Money In' : 'Expense')}<div class="sheet-body details-body"><div class="details-centered"><p class="detail-amount ${transaction.type}">${isIncome ? '+' : '−'}${money(transaction.amountCents)}</p><dl class="transaction-details"><dt>Type</dt><dd>${isIncome ? 'Money In' : 'Expense'}</dd><dt>${isIncome ? 'Source' : 'Category'}</dt><dd>${escape(transaction.label)}</dd>${transaction.description ? `<dt>Description</dt><dd>${escape(transaction.description)}</dd>` : ''}<dt>Date</dt><dd class="numeric">${escape(new Intl.DateTimeFormat('en-US', {dateStyle:'medium', timeStyle:'short'}).format(new Date(transaction.createdAt)))}</dd></dl><div class="sheet-actions"><button type="button" class="primary" id="transaction-edit">Edit</button><button type="button" id="transaction-delete">Delete</button></div></div></div>`, '#sheet-title', 'details');
+  openSheet(`${sheetHeading(isIncome ? 'Money In' : 'Expense')}<div class="sheet-body details-body"><div class="details-centered"><p class="detail-amount ${transaction.type}">${isIncome ? '+' : '−'}${money(transaction.amountCents)}</p><dl class="transaction-details"><dt>Type</dt><dd>${isIncome ? 'Money In' : 'Expense'}</dd><dt>${isIncome ? 'Source' : 'Category'}</dt><dd>${escape(transaction.label)}</dd>${transaction.description ? `<dt>Description</dt><dd>${escape(transaction.description)}</dd>` : ''}<dt>Date</dt><dd class="numeric">${escape(new Intl.DateTimeFormat('en-US', {dateStyle:'medium', timeStyle:'short'}).format(new Date(transaction.createdAt)))}</dd></dl><div class="sheet-actions"><button type="button" class="danger" id="transaction-delete">Delete</button><button type="button" class="primary" id="transaction-edit">Edit</button></div></div></div>`, '#sheet-title', 'details');
   bindSheetClose(); document.querySelector('#transaction-edit').onclick = () => openTransactionForm(transaction.type, id);
   document.querySelector('#transaction-delete').onclick = () => {
-    openSheet(`${sheetHeading('Delete activity?')}<div class="sheet-body"><p>Delete this ${isIncome ? 'money entry' : 'expense'}? Your balance will be updated.</p></div><div class="sheet-actions"><button class="primary" type="button" id="confirm-delete">Delete</button><button type="button" id="cancel-delete">Cancel</button></div>`, '#sheet-title', 'confirm', 'goal');
+    openSheet(`${sheetHeading('Delete activity?')}<div class="sheet-body"><p>Delete this ${isIncome ? 'money entry' : 'expense'}? Your balance will be updated.</p></div><div class="sheet-actions"><button type="button" id="cancel-delete">Cancel</button><button class="primary danger" type="button" id="confirm-delete">Delete</button></div>`, '#sheet-title', 'confirm', 'goal');
     bindSheetClose(); document.querySelector('#cancel-delete').onclick = () => showTransaction(id);
     let deleted = false;
     document.querySelector('#confirm-delete').onclick = () => {
@@ -488,7 +490,7 @@ window.addEventListener('storage', event => {
   } catch { showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
 });
 function openSettings() { tab = 'Settings'; render(); focusPageStart(); }
-gear.onclick = openSettings;
+gear.onclick = () => { if (tab === 'Settings') { tab = 'Home'; render(); focusPageStart(); } else openSettings(); };
 window.addEventListener('pageshow', event => {
   if (event.persisted) window.LandosTheme?.init();
   render();

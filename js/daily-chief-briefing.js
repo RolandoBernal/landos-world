@@ -661,7 +661,7 @@
           ${store.preferences.showDemoEntry ? '<button type="button" class="daily_briefing_button daily_briefing_button--quiet" data-briefing-action="view-demo">View Demo</button>' : ''}
           <button type="button" class="daily_briefing_icon_button" data-briefing-action="open-history" aria-label="Briefing history">⌚</button>
           <button type="button" class="digit_clock_menu_toggle daily_briefing_icon_button" data-briefing-action="open-settings" aria-label="${activeDialogName === 'settings' ? 'Close Daily Chief Briefing settings' : 'Daily Chief Briefing settings'}" title="${activeDialogName === 'settings' ? 'Close Settings' : 'Settings'}" aria-expanded="${activeDialogName === 'settings' ? 'true' : 'false'}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 1 2.73 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 1 2.73 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><path class="settings_close_icon" d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         </div>
         <div class="daily_briefing_generation_note">${escapeHtml(generationError || status.message)}</div>
@@ -946,7 +946,7 @@
           </label>
           <div class="daily_briefing_dialog_actions">
             <button type="submit" class="daily_briefing_button">Preview Import</button>
-            <button type="button" class="daily_briefing_button" data-briefing-action="confirm-import" ${pendingImportDocument ? '' : 'disabled'}>Save Imported Briefing</button>
+            <button type="button" class="daily_briefing_button daily_briefing_button--primary" data-briefing-action="confirm-import" ${pendingImportDocument ? '' : 'disabled'}>Save Imported Briefing</button>
           </div>
           <div class="daily_briefing_validation" data-import-validation></div>
           ${preview}
@@ -1046,9 +1046,9 @@
             <label class="daily_briefing_checkline"><input type="checkbox" name="defaultSourcesExpanded" ${prefs.defaultSourcesExpanded ? 'checked' : ''}> Expand sources by default</label>
           </section>
           <div class="daily_briefing_dialog_actions">
-            <button type="submit" class="daily_briefing_button">Save Settings</button>
             <button type="button" class="daily_briefing_button daily_briefing_button--quiet" data-briefing-action="export-documents">Export Documents</button>
             <button type="button" class="daily_briefing_button daily_briefing_button--danger" data-briefing-action="reset-documents">Reset Briefing Documents</button>
+            <button type="submit" class="daily_briefing_button daily_briefing_button--primary">Save Settings</button>
           </div>
         </form>
       </dialog>
