@@ -1,13 +1,14 @@
 import {test,expect} from '@playwright/test';
 async function quickAction(page,name){await page.locator('#quick-actions-toggle').click();await page.getByRole('button',{name,exact:true}).click();}
 
+// PR #232 turned the goal sheets into pages: helpers target the page
+// frame (.sheet-page-frame); Archive/Delete confirmations stay dialogs.
 async function continuous(page) {
- const dialog=page.getByRole('dialog');
- for(const inner of await dialog.locator('.transaction-frame,.transaction-panel,#transaction-form,.sheet-body').all()) await expect(inner).toHaveCSS('overflow-y','visible');
- await expect(dialog).toHaveCSS('position','relative');
- await expect(page.locator('.transaction-panel')).toHaveCSS('border-radius','24px');
- await expect(page.locator('.transaction-panel')).toHaveCSS('border-bottom-width','1px');
- const controls=await dialog.locator('input,select,button').all();
+ const frame=page.locator('.sheet-page-frame');
+ for(const inner of await frame.locator('.transaction-panel,#transaction-form,.sheet-body').all()) await expect(inner).toHaveCSS('overflow-y','visible');
+ await expect(frame).toHaveCSS('position','static');
+ await expect(page.locator('.sheet-page-frame .transaction-panel')).toHaveCSS('border-radius','0px');
+ const controls=await frame.locator('input,select,button').all();
  for(const control of controls){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
  await controls[0].scrollIntoViewIfNeeded();await expect(controls[0]).toBeInViewport();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -16,6 +17,8 @@ const key='lando-world:lwvd:v1';
 const payday=new Date();payday.setDate(payday.getDate()+4);
 const seed={firstName:'Violet',balanceCents:10000,payday:`${payday.getFullYear()}-${String(payday.getMonth()+1).padStart(2,'0')}-${String(payday.getDate()).padStart(2,'0')}`,frequency:'',onboarded:true};
 const saved=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
+const frame=page=>page.locator('.sheet-page-frame');
+const formError=page=>page.locator('.sheet-page-frame .error');
 async function start(page){await page.setViewportSize({width:390,height:844});await page.goto('/violet-dineros/index.html');await page.evaluate(({key,seed})=>{localStorage.setItem(key,JSON.stringify(seed));localStorage.setItem('other-app','keep');},{key,seed});await page.reload();}
 async function goals(page){await page.getByRole('button',{name:'Goals',exact:true}).click();}
 async function create(page,name='Bike',target='80'){await page.getByRole('button',{name:'Create Goal',exact:true}).click();await page.getByLabel('Goal name',{exact:true}).fill(name);await page.getByLabel('Emoji (optional)').fill('🚲');await page.getByLabel('Target amount ($)',{exact:true}).fill(target);await page.getByRole('button',{name:'Save Goal',exact:true}).click();}
@@ -30,24 +33,24 @@ test('goals lifecycle, accounting, featured selection and one purchase survive r
  await goals(page);await page.getByRole('button',{name:'Manage Archived Goal: Bike'}).click();await page.getByRole('button',{name:'Delete Goal',exact:true}).click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();await page.getByRole('button',{name:'Delete Goal',exact:true}).click();await page.getByRole('button',{name:'Delete',exact:true}).click();expect((await saved(page)).goals).toEqual([]);expect((await saved(page)).transactions).toHaveLength(1);expect(await page.evaluate(()=>localStorage.getItem('other-app'))).toBe('keep');
 });
 test('limits, edit, release, archive and protected spending',async({page})=>{
- await start(page);await goals(page);await create(page);await reserve(page,'81');await expect(page.getByRole('dialog').locator('.error')).toContainText('within');await page.getByRole('button',{name:'Cancel',exact:true}).click();await reserve(page,'60');
- await manage(page);await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await page.getByLabel('Target amount ($)').fill('50');await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('Release');await page.getByLabel('Target amount ($)').fill('90');await page.getByRole('button',{name:'Save Goal',exact:true}).click();
- await page.getByRole('button',{name:'Home',exact:true}).click();await quickAction(page,'Add Expense');await page.getByLabel('How much?',{exact:true}).fill('41');await page.getByLabel('Category',{exact:true}).selectOption('Food');await page.getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('release $1.00');await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await start(page);await goals(page);await create(page);await reserve(page,'81');await expect(formError(page)).toContainText('within');await page.getByRole('button',{name:'Cancel',exact:true}).click();await reserve(page,'60');
+ await manage(page);await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await page.getByLabel('Target amount ($)').fill('50');await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(formError(page)).toContainText('Release');await page.getByLabel('Target amount ($)').fill('90');await page.getByRole('button',{name:'Save Goal',exact:true}).click();
+ await page.getByRole('button',{name:'Home',exact:true}).click();await quickAction(page,'Add Expense');await page.getByLabel('How much?',{exact:true}).fill('41');await page.getByLabel('Category',{exact:true}).selectOption('Food');await page.getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.locator('#notice')).toContainText('release $1.00');await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await goals(page);await manage(page);await page.getByRole('button',{name:'Release Funds',exact:true}).click();await page.getByLabel('Amount ($)',{exact:true}).fill('10');await page.getByRole('button',{name:'Release',exact:true}).click();expect((await saved(page)).goals[0].reservedCents).toBe(5000);
  await manage(page);await page.getByRole('button',{name:'Archive Goal',exact:true}).click();await page.getByRole('button',{name:'Archive',exact:true}).click();expect((await saved(page)).goals[0]).toMatchObject({archived:true,reservedCents:0});expect((await saved(page)).transactions).toBeUndefined();
 });
 test('storage failure retains form and legacy data; circular back controls preserve navigation',async({page})=>{
- await start(page);await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await page.getByLabel('Goal name',{exact:true}).fill('Bike');await page.getByLabel('Target amount ($)').fill('80');await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('quota');};});await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('could not be saved');expect(await saved(page)).toEqual(seed);await page.reload();
- await page.locator('#settings').click();const back=page.locator('#settings-back');await expect(back).toHaveAccessibleName('Back to Home');const box=await back.boundingBox();expect(box.width).toBe(50);expect(box.height).toBe(50);await page.getByRole('button',{name:/Starting Balance/}).click();await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await back.click();await expect(page.getByRole('heading',{name:'Hey, Violet!'})).toBeVisible();
+ await start(page);await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await page.getByLabel('Goal name',{exact:true}).fill('Bike');await page.getByLabel('Target amount ($)').fill('80');await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('quota');};});await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(page.locator('#notice')).toContainText('could not be saved');expect(await saved(page)).toEqual(seed);await page.reload();
+ await page.locator('#settings').click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await page.getByRole('button',{name:/Starting Balance/}).click();await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await page.getByRole('button',{name:'Close Settings',exact:true}).click();await expect(page.getByRole('heading',{name:'Hey, Violet!'})).toBeVisible();
 });
 test('goal content fits narrow screens and dark mode with scrollable form actions',async({page})=>{
  await start(page);await page.evaluate(()=>localStorage.setItem('landos_world_appearance_preference_v1','dark'));await page.reload();await page.setViewportSize({width:320,height:568});await goals(page);await create(page,'A very long goal name for a special birthday shopping trip','100');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.locator('[data-goal]').click();await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await expect(page.getByRole('button',{name:'Save Goal',exact:true})).toBeInViewport();expect(await page.getByRole('dialog').evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('[data-goal]').click();await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await expect(page.getByRole('button',{name:'Save Goal',exact:true})).toBeInViewport();expect(await frame(page).evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
 });
 test('failed and stale purchases leave goals and transactions intact',async({page})=>{
  await start(page);await goals(page);await create(page);await reserve(page,'60');await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();
- const before=await saved(page);await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('quota');};});await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
- await page.reload();await goals(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();await page.evaluate(key=>{const next=JSON.parse(localStorage.getItem(key));next.firstName='New name';localStorage.setItem(key,JSON.stringify(next));},key);await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.getByRole('dialog').locator('.error')).toContainText('another tab');expect((await saved(page)).transactions).toBeUndefined();expect((await saved(page)).goals[0].reservedCents).toBe(6000);
+ const before=await saved(page);await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('quota');};});await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.locator('#notice')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
+ await page.reload();await goals(page);await manage(page);await page.getByRole('button',{name:'Record Goal Purchase',exact:true}).click();await page.evaluate(key=>{const next=JSON.parse(localStorage.getItem(key));next.firstName='New name';localStorage.setItem(key,JSON.stringify(next));},key);await page.getByRole('button',{name:'Save Purchase',exact:true}).click();await expect(page.locator('#notice')).toContainText('another tab');expect((await saved(page)).transactions).toBeUndefined();expect((await saved(page)).goals[0].reservedCents).toBe(6000);
 });
 
 test('goal target explains its format, focuses invalid input and saves exact cents after correction',async({page})=>{
@@ -55,7 +58,7 @@ test('goal target explains its format, focuses invalid input and saves exact cen
  await page.getByLabel('Goal name',{exact:true}).fill('New iPhone');const target=page.getByLabel('Target amount ($)',{exact:true});
  await expect(target).toHaveAttribute('aria-describedby','goal-target-hint');await expect(page.locator('#goal-target-hint')).toContainText('1500 or 1500.50, without commas or a $ sign');
  for(const amount of ['1,500','$1500','0','1500.001']){
-  await target.fill(amount);await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(target).toBeFocused();await expect(target).toHaveAttribute('aria-invalid','true');await expect(page.getByRole('dialog').locator('.error')).toContainText('Do not include commas or a $ sign');expect((await saved(page)).goals).toBeUndefined();
+  await target.fill(amount);await page.getByRole('button',{name:'Save Goal',exact:true}).click();await expect(target).toBeFocused();await expect(target).toHaveAttribute('aria-invalid','true');await expect(formError(page)).toContainText('Do not include commas or a $ sign');expect((await saved(page)).goals).toBeUndefined();
  }
  await target.fill('1500.50');await page.getByRole('button',{name:'Save Goal',exact:true}).click();expect((await saved(page)).goals[0].targetCents).toBe(150050);
  await page.locator('[data-goal]').click();await page.getByRole('button',{name:'Edit Goal',exact:true}).click();await expect(target).toHaveValue('1500.50');await expect(page.getByRole('button',{name:'Close',exact:true})).toBeInViewport();await expect(page.locator('#goal-target-hint')).toBeVisible();
@@ -70,20 +73,20 @@ for(const theme of ['light','dark'])test(`${theme} goal progress has a purple em
   }
   await page.screenshot({path:testInfo.outputPath(`progress-${amount}.png`)});
  }
- await expect(page.locator('.goal-card')).toContainText('Fully Funded');await manage(page);await expect(page.getByRole('dialog').getByRole('progressbar')).toHaveAttribute('value','8000');
+ await expect(page.locator('.goal-card')).toContainText('Fully Funded');await manage(page);await expect(frame(page).getByRole('progressbar')).toHaveAttribute('value','8000');
 });
 
 for(const theme of ['light','dark'])test(`${theme} Goal Details scrolls the whole screen and every action remains reachable at large text`,async({page},testInfo)=>{
  await start(page);await page.evaluate(theme=>localStorage.setItem('landos_world_appearance_preference_v1',theme),theme);await page.reload();await goals(page);await create(page);
  await page.setViewportSize({width:320,height:568});await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await manage(page);
- const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
+ const details=frame(page);await expect(details.locator('#sheet-title')).toHaveText('Goal Details');await expect(page.locator('nav')).toBeHidden();
  for(const height of [568,400]){
   await page.setViewportSize({width:320,height});await continuous(page);
-  await dialog.getByRole('button',{name:'Close',exact:true}).scrollIntoViewIfNeeded();await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
-  for(const name of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){const button=dialog.getByRole('button',{name,exact:true});await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();}
-  expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
+  await details.getByRole('button',{name:'Close',exact:true}).scrollIntoViewIfNeeded();await expect(details.getByRole('button',{name:'Close',exact:true})).toBeInViewport();
+  for(const name of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){const button=details.getByRole('button',{name,exact:true});await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();}
+  expect(await details.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
  }
- await page.screenshot({path:testInfo.outputPath('goal-details-large-text.png')});await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.shell')).toHaveCSS('visibility','visible');expect((await saved(page)).transactions).toBeUndefined();
+ await page.screenshot({path:testInfo.outputPath('goal-details-large-text.png')});await details.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('nav')).toBeVisible();expect((await saved(page)).transactions).toBeUndefined();
 });
 
 test('goal purchase category uses the inset LLT chevron and remains a working native select',async({page},testInfo)=>{
@@ -102,7 +105,7 @@ test('every goal form opens on its first input and Details keeps heading focus',
 
 test('onboarding, Settings and Starting Balance focus the first input on entry and return',async({page})=>{
  await page.goto('/violet-dineros/index.html');await expect(page.getByLabel('What’s your first name?')).toBeFocused();await page.getByLabel('What’s your first name?').fill('Violet');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByLabel('Your money ($)').fill('100');await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Next payday (optional)')).toBeFocused();await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByLabel('Your money ($)')).toBeFocused();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Skip for now',exact:true}).click();await page.getByRole('button',{name:'Go to My Dashboard',exact:true}).click();
- await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#edit-starting-balance').click();await expect(page.getByLabel('Starting Balance ($)',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#settings-back').click();
+ await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.locator('#edit-starting-balance').click();await expect(page.getByLabel('Starting Balance ($)',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Close Settings',exact:true}).click();
  for(const action of ['Add Money','Add Expense']){await quickAction(page,action);await expect(page.getByLabel('How much?',{exact:true})).toBeFocused();await page.getByRole('button',{name:'Cancel',exact:true}).click();}
  expect((await saved(page)).transactions).toBeUndefined();
 });
@@ -115,7 +118,7 @@ test('Home shows spendable money and compact featured card opens its specific go
  const cue=await card.locator('.navigation-chevron').boundingBox();expect(cue.width).toBe(38);expect(cue.height).toBe(38);
  await expect(card.locator('svg')).toHaveCSS('width','24px');await expect(card.locator('svg')).toHaveCSS('stroke-width','2.25px');
  const bounds=await card.boundingBox();const parent=await page.locator('.featured').boundingBox();expect(bounds.width).toBeCloseTo(parent.width);expect(bounds.height).toBeCloseTo(parent.height);
- await card.focus();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();await expect(page.getByRole('dialog')).toContainText('Bike');await page.getByRole('button',{name:'Close',exact:true}).click();await expect(card).toBeFocused();
+ await card.focus();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();await expect(frame(page)).toContainText('Bike');await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByRole('heading',{name:'Hey, Violet!'})).toBeFocused();
  await card.click();await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();expect(await saved(page)).toEqual(before);
 });
 
@@ -124,8 +127,8 @@ test('LWVD editable controls retain focus, readable sizes and narrow viewport co
  await page.setViewportSize({width:390,height:844});await page.goto('/violet-dineros/index.html');await controls();await start(page);
  await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByLabel('First name',{exact:true})).toBeFocused();
  for(const height of [844,400]){await page.setViewportSize({width:320,height});await controls();}
- await expect(page.locator('#edit-starting-balance .navigation-chevron svg')).toHaveCSS('width','24px');await expect(page.locator('#settings-back')).toHaveCSS('width','50px');
- await page.locator('#edit-starting-balance').click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('#settings-back').click();
+ await expect(page.locator('#edit-starting-balance .navigation-chevron svg')).toHaveCSS('width','24px');
+ await page.locator('#edit-starting-balance').click();await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Close Settings',exact:true}).click();
  await quickAction(page,'Add Expense');await controls();await page.getByRole('button',{name:'Cancel',exact:true}).click();await goals(page);await page.getByRole('button',{name:'Create Goal',exact:true}).click();await controls();
  await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content','width=device-width, initial-scale=1, viewport-fit=cover');expect(await saved(page)).toEqual(seed);
 });
@@ -137,31 +140,36 @@ for(const theme of ['light','dark'])test(`${theme} all Goals views reuse existin
  await page.evaluate(()=>{const rules=[...document.styleSheets].flatMap(s=>[...s.cssRules]);const standalone=rules.find(r=>r.conditionText==='(display-mode: standalone)');if(!standalone)throw Error('Missing standalone rule');standalone.conditionText='all';});
  const dialog=page.getByRole('dialog');
  async function check(label){
-  await expect(dialog).toHaveAttribute('data-presentation','goal');await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');await expect(dialog).toHaveCSS('background-color',theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');
-  const backdrop=await dialog.evaluate(e=>getComputedStyle(e,'::backdrop').backgroundColor);expect(backdrop).toBe(theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');
-  await expect(page.locator('.transaction-panel')).toHaveCSS('padding-bottom','58px');if(await dialog.getAttribute('data-view')!=='confirm')await continuous(page);
-  await dialog.getByRole('button',{name:'Close',exact:true}).scrollIntoViewIfNeeded();await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();expect(await dialog.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
-  for(const button of await dialog.locator('.sheet-actions button').all()){await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);}
+  if(await dialog.isVisible().catch(()=>false)){
+   // Archive/Delete confirmations remain compact dialogs.
+   await expect(dialog.locator('.transaction-panel')).toHaveCSS('background-color',theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');
+   for(const button of await dialog.locator('.sheet-actions button').all()){await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);}
+  } else {
+   const view=frame(page);await expect(view).toBeVisible();await expect(page.locator('nav')).toBeHidden();
+   await expect(view.locator('.transaction-panel')).toHaveCSS('background-color',theme==='dark'?'rgb(33, 25, 44)':'rgb(252, 250, 255)');await expect(view.locator('.transaction-panel')).toHaveCSS('padding-bottom','24px');
+   if((await view.locator('#sheet-title').textContent())!=='Goal Details')await continuous(page);
+   await view.getByRole('button',{name:'Close',exact:true}).scrollIntoViewIfNeeded();await expect(view.getByRole('button',{name:'Close',exact:true})).toBeInViewport();expect(await view.evaluate(e=>e.scrollWidth<=innerWidth)).toBe(true);
+   for(const button of await view.locator('.sheet-actions button').all()){await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);}
+  }
   await page.screenshot({path:testInfo.outputPath(`${label}.png`)});
  }
  for(const [width,height] of [[390,844],[320,568],[320,400]]){
-  await page.setViewportSize({width,height});await page.getByRole('button',{name:'Create Goal',exact:true}).click();await check(`create-${width}-${height}`);await page.keyboard.press('Escape');
+  await page.setViewportSize({width,height});await page.getByRole('button',{name:'Create Goal',exact:true}).click();await check(`create-${width}-${height}`);await frame(page).getByRole('button',{name:'Close',exact:true}).click();
   for(const action of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){
-   await manage(page);await check(`details-${width}-${height}`);await dialog.getByRole('button',{name:action,exact:true}).click();await check(`${action}-${width}-${height}`);
-   if(action==='Delete Goal'||action==='Archive Goal'){await expect(page.locator('#sheet-title')).toBeFocused();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveAttribute('data-view','details');}
-   await dialog.getByRole('button',{name:'Close',exact:true}).click();
+   await manage(page);await check(`details-${width}-${height}`);await frame(page).getByRole('button',{name:action,exact:true}).click();await check(`${action}-${width}-${height}`);
+   if(action==='Delete Goal'||action==='Archive Goal'){await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:'Goal Details'})).toBeVisible();}
+   await frame(page).getByRole('button',{name:'Close',exact:true}).click();
   }
  }
- expect(await saved(page)).toEqual(before);await expect(page.locator('.shell')).toHaveCSS('visibility','visible');
+ expect(await saved(page)).toEqual(before);await expect(page.locator('nav')).toBeVisible();
 });
 
 for(const action of ['Create Goal','Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase'])test(`${action} scrolls the document in a keyboard-sized viewport and restores page focus`,async({page})=>{
  await start(page);await goals(page);await create(page);const before=await saved(page);const scroll=await page.evaluate(()=>scrollY);
  const opener=page.locator(action==='Create Goal'?'#create-goal':'[data-goal]');await opener.focus();
  await opener.press('Enter');if(action!=='Create Goal')await page.getByRole('button',{name:action,exact:true}).click();
- const dialog=page.getByRole('dialog');
  await page.setViewportSize({width:390,height:340});await continuous(page);
- await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(opener).toBeFocused();expect(await page.evaluate(()=>scrollY)).toBe(scroll);expect(await saved(page)).toEqual(before);
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(frame(page)).toHaveCount(0);await expect(page.getByRole('heading',{name:'Goals',exact:true})).toBeFocused();expect(await page.evaluate(()=>scrollY)).toBe(scroll);expect(await saved(page)).toEqual(before);
 });
 
 for(const origin of ['Home','Goals'])test(`${origin} goal chains preserve origin through cancel, save and confirmations`,async({page},testInfo)=>{
@@ -170,7 +178,7 @@ for(const origin of ['Home','Goals'])test(`${origin} goal chains preserve origin
  const originHeading=()=>page.getByRole('heading',{name:origin==='Home'?'Hey, Violet!':'Goals',exact:true});
  for(const action of ['Edit Goal','Reserve Funds','Release Funds','Record Goal Purchase','Archive Goal','Delete Goal']){
   await open();await page.getByRole('button',{name:action,exact:true}).click();
-  await expect(page.locator('.shell')).toHaveCSS('visibility','hidden');
+  await expect(page.locator('nav')).toBeHidden();
   if(action==='Edit Goal'){
    await page.setViewportSize({width:390,height:340});await continuous(page);await page.setViewportSize({width:390,height:844});
   }
@@ -191,11 +199,11 @@ for(const theme of ['light','dark'])test(`${theme} compact Goals confirmations c
   for(const [width,height,offset] of [[390,844,0],[320,400,0],[390,340,45]]){
    await page.setViewportSize({width,height:844});
    await page.evaluate(({height,offset})=>{Object.defineProperties(visualViewport,{height:{configurable:true,get:()=>height},offsetTop:{configurable:true,get:()=>offset}});visualViewport.dispatchEvent(new Event('resize'));},{height,offset});
-   const panel=page.locator('.transaction-panel');await expect.poll(()=>page.locator('.transaction-frame').evaluate(e=>Math.round(e.getBoundingClientRect().height))).toBe(height);
+   const panel=page.getByRole('dialog').locator('.transaction-panel');await expect.poll(()=>page.getByRole('dialog').locator('.transaction-frame').evaluate(e=>Math.round(e.getBoundingClientRect().height))).toBe(height);
    const box=await panel.boundingBox();expect(Math.abs(box.y+box.height/2-(offset+44+(height-44-34)/2))).toBeLessThanOrEqual(1);expect(box.y).toBeGreaterThanOrEqual(offset+44);expect(box.y+box.height).toBeLessThanOrEqual(offset+height-34);
    await expect(panel).toHaveCSS('border-bottom-width','1px');await expect(panel).toHaveCSS('border-bottom-style','solid');await expect(panel).toHaveCSS('border-bottom-color',theme==='dark'?'rgb(83, 64, 95)':'rgb(221, 210, 238)');await expect(panel).toHaveCSS('border-bottom-left-radius','24px');await expect(panel).toHaveCSS('border-bottom-right-radius','24px');
    for(const button of await page.getByRole('dialog').getByRole('button').all()){const b=await button.boundingBox();expect(b.y).toBeGreaterThanOrEqual(box.y);expect(b.y+b.height).toBeLessThanOrEqual(box.y+box.height);}
-   const body=page.locator('.sheet-body');
+   const body=page.getByRole('dialog').locator('.sheet-body');
    if(await body.evaluate(e=>e.scrollHeight>e.clientHeight)){await expect(body).toHaveCSS('overflow-y','auto');await body.evaluate(e=>{e.scrollTop=e.scrollHeight;});expect(await body.evaluate(e=>e.firstElementChild.getBoundingClientRect().bottom<=e.getBoundingClientRect().bottom+1)).toBe(true);await body.evaluate(e=>{e.scrollTop=0;});}
    else expect(await body.evaluate(e=>e.firstElementChild.getBoundingClientRect().bottom<=e.getBoundingClientRect().bottom+1)).toBe(true);
    await page.screenshot({path:testInfo.outputPath(`${theme}-${action}-${width}-${height}.png`)});
