@@ -10,7 +10,8 @@
     draft = null,
     historyState = { search: "", filter: "All", limit: 25, scroll: 0, focusId: null },
     selectedSensorId = null,
-    renderedUid = null;
+    renderedUid = null,
+    sensorChromeInert = [];
   const escape = (s) =>
     String(s ?? "").replace(
       /[&<>"']/g,
@@ -131,6 +132,11 @@
   function dismiss() {
     page?.remove();
     page = null;
+    // Restore the app chrome to the exact interactive state it had
+    // before the sensor page opened (see open()).
+    for (const { el, was } of sensorChromeInert)
+      if (el.isConnected) el.inert = was;
+    sensorChromeInert = [];
     const root = document.getElementById("lee-lee-diabetes-root");
     if (root) root.hidden = false;
     document
@@ -157,9 +163,22 @@
     const root = document.getElementById("lee-lee-diabetes-root");
     root.after(page);
     root.hidden = true;
-    document
-      .getElementById("lee-lees-tracker-view")
-      ?.classList.add("llt_sensor_open");
+    const view = document.getElementById("lee-lees-tracker-view");
+    view?.classList.add("llt_sensor_open");
+    // The sensor page covers the app, but the header (Settings gear) and
+    // the pill navigation stay visible. pointer-events:none (the old CSS
+    // rule) blocked only the mouse — keyboard focus could still reach and
+    // activate the gear behind the page. inert removes the chrome from
+    // sequential focus navigation, blocks activation, and hides it from
+    // assistive tech; each element's previous state is recorded so
+    // dismiss() restores exactly what was there. Internal page-to-page
+    // transitions re-run open(), which re-applies it synchronously.
+    sensorChromeInert = view
+      ? [...view.querySelectorAll(".digit_clock_header, .ecosystem_nav")].map(
+          (el) => ({ el, was: el.inert }),
+        )
+      : [];
+    for (const { el } of sensorChromeInert) el.inert = true;
     const management = page.querySelector(".llt_sensor_manage");
     management?.addEventListener("toggle", () => {
       management.querySelector("summary").setAttribute("aria-expanded", String(management.open));

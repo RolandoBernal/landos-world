@@ -594,3 +594,40 @@ test('sensor management uses SVG close, a full-width Refresh row and full-width 
   await sensorPage.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sensorPage).toHaveCount(0);
 });
+
+test("sensor pages make the app chrome inert to the keyboard until close", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Manage Sensor" }).click();
+  await expect(page.locator(".llt_sensor_page")).toBeVisible();
+  // Both the header (Settings gear) and every pill navigation element are
+  // inert while a sensor page is open — not just pointer-blocked.
+  const inertState = () => page.evaluate(() => ({
+    header: document.querySelector("#lee-lees-tracker-view .digit_clock_header")?.inert,
+    navs: [...document.querySelectorAll("#lee-lees-tracker-view .ecosystem_nav")].map((nav) => nav.inert),
+  }));
+  const whileOpen = await inertState();
+  expect(whileOpen.header).toBe(true);
+  expect(whileOpen.navs.length).toBeGreaterThan(0);
+  expect(whileOpen.navs.every(Boolean)).toBe(true);
+  // Tabbing from the page heading never lands on the Settings gear.
+  await page.locator("#llt-sensor-title").focus();
+  for (let i = 0; i < 16; i += 1) {
+    await page.keyboard.press("Tab");
+    const focusedId = await page.evaluate(() => document.activeElement?.id || "");
+    expect(focusedId).not.toBe("lee_lee_settings_toggle");
+  }
+  // Programmatic focus inside an inert subtree is refused too.
+  await page.evaluate(() => document.getElementById("lee_lee_settings_toggle")?.focus());
+  expect(await page.evaluate(() => document.activeElement?.id || "")).not.toBe("lee_lee_settings_toggle");
+  // Close restores the chrome and leaves focus on a valid element: the
+  // card control that opened the page (the existing return-focus path).
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".llt_sensor_page")).toHaveCount(0);
+  const afterClose = await inertState();
+  expect(afterClose.header).toBe(false);
+  expect(afterClose.navs.every((inert) => inert === false)).toBe(true);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.dataset?.sensorAction || "")).toBe("details");
+  // And the gear activates again.
+  await page.locator("#lee_lee_settings_toggle").click();
+  await expect(page.locator("#lee_lee_settings_toggle")).toHaveAttribute("aria-expanded", "true");
+});

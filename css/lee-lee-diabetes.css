@@ -3350,8 +3350,6 @@
 .llt_sensor_card[data-state="expired"] { border-color: #c76b6b; }
 .llt_sensor_actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 .llt_sensor_actions button { min-height: 44px; white-space: normal; }
-#lee-lees-tracker-view.llt_sensor_open .digit_clock_header,
-#lee-lees-tracker-view.llt_sensor_open .ecosystem_nav { pointer-events: none; }
 #lee-lee-diabetes-root:has(.lee_lee_diabetes_pre_meal_timer_modal) .lee_lee_diabetes_floating_log { display: none; }
 .llt_sensor_page { box-sizing: border-box; color: var(--lee-lee-text, #FFFFFF); background: var(--lee-lee-bg, #000000); font-family: var(--llt-ui-font); }
 .llt_sensor_page_inner { box-sizing: border-box; padding: 1rem 0 max(1.5rem, env(safe-area-inset-bottom)); }
