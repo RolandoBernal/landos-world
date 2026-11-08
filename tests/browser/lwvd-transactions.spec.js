@@ -1,12 +1,14 @@
 import {test,expect} from '@playwright/test';
 
+// PR #232 turned the transaction sheets into pages: the helpers below
+// target the page frame (.sheet-page-frame) instead of a dialog, and the
+// small Archive/Delete confirmations remain real dialogs (confirmDialog).
 async function continuous(page) {
- const dialog=page.getByRole('dialog');
- for(const inner of await dialog.locator('.transaction-frame,.transaction-panel,#transaction-form,.sheet-body').all()) await expect(inner).toHaveCSS('overflow-y','visible');
- await expect(dialog).toHaveCSS('position','relative');
- await expect(page.locator('.transaction-panel')).toHaveCSS('border-radius','24px');
- await expect(page.locator('.transaction-panel')).toHaveCSS('border-bottom-width','1px');
- const controls=await dialog.locator('input,select,button').all();
+ const frame=page.locator('.sheet-page-frame');
+ for(const inner of await frame.locator('.transaction-panel,#transaction-form,.sheet-body').all()) await expect(inner).toHaveCSS('overflow-y','visible');
+ await expect(frame).toHaveCSS('position','static');
+ await expect(page.locator('.sheet-page-frame .transaction-panel')).toHaveCSS('border-radius','0px');
+ const controls=await frame.locator('input,select,button').all();
  for(const control of controls){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
  await controls[0].scrollIntoViewIfNeeded();await expect(controls[0]).toBeInViewport();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -23,7 +25,8 @@ async function setup(page,theme='light',transactions) {
   await page.goto('/violet-dineros/index.html');await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();return initial;
 }
 const saved=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
-const sheet=page=>page.getByRole('dialog');
+const sheet=page=>page.locator('.sheet-page-frame');
+const confirmDialog=page=>page.getByRole('dialog');
 async function openAdd(page,type){await page.locator('#quick-actions-toggle').click();await page.getByRole('button',{name:type==='income'?'Add Money':'Add Expense',exact:true}).click();await expect(sheet(page)).toBeVisible();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();}
 async function fillTransaction(page,type,amount,label,description=''){
   await sheet(page).getByLabel('How much?',{exact:true}).fill(amount);
@@ -39,7 +42,7 @@ async function home(page){if(await page.locator('#settings').getAttribute('aria-
 
 test('legacy data is not rewritten; income/expense, negative balances, guide and reload use cents',async({page})=>{
   const initial=await setup(page);expect(await saved(page)).toEqual(initial);await expect(page.locator('.balance')).toHaveText('$150.00');
-  await expect(page.getByRole('button',{name:'Can I Afford This?',exact:true})).toBeEnabled();
+  await page.locator('#quick-actions-toggle').click();await expect(page.getByRole('button',{name:'Can I Afford This?',exact:true})).toBeEnabled();await page.locator('#quick-actions-toggle').click();
   await add(page,'income','30','Allowance');await expect(page.locator('.balance')).toHaveText('$180.00');await expect(page.locator('.guide')).toHaveText('$60.00 a day');
   await add(page,'expense','6','Food','Coffee');await expect(page.locator('.balance')).toHaveText('$174.00');await expect(page.locator('.guide')).toHaveText('$58.00 a day');
   await add(page,'expense','200','Shopping','New shirt');await expect(page.locator('.balance')).toHaveText('-$26.00');await expect(page.locator('.guide')).toHaveText('$0.00 a day');
@@ -80,8 +83,8 @@ test('edit preserves ID/type/date and deletion still confirms and cancels',async
   const edited={...original,amountCents:850,label:'Fun',description:'Movie snack'};
   expect((await saved(page)).transactions).toEqual([edited]);await expect(page.locator('#notice > span')).toHaveText('Changes saved.');
   await home(page);await expect(page.locator('.balance')).toHaveText('$141.50');await expect(page.locator('.guide')).toHaveText('$47.17 a day');await activity(page);
-  await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(sheet(page)).toContainText('Your balance will be updated');expect((await saved(page)).transactions).toEqual([edited]);
-  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toEqual([edited]);await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();
+  await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(confirmDialog(page)).toContainText('Your balance will be updated');expect((await saved(page)).transactions).toEqual([edited]);
+  await confirmDialog(page).getByRole('button',{name:'Cancel',exact:true}).click();expect((await saved(page)).transactions).toEqual([edited]);await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await confirmDialog(page).getByRole('button',{name:'Delete',exact:true}).click();
   await expect(page.locator('.transaction-row')).toHaveCount(0);await expect(page.locator('#notice > span')).toHaveText('Transaction deleted.');await home(page);await expect(page.locator('.balance')).toHaveText('$150.00');
   await page.reload();expect((await saved(page)).transactions).toEqual([]);
 });
@@ -96,7 +99,7 @@ test('Starting Balance changes preserve transactions and recalculate Current Bal
 test('stale saves cannot overwrite newer raw financial data',async({page})=>{
   await setup(page);await openAdd(page,'income');await fillTransaction(page,'income','30','Gift');
   const newer=await page.evaluate(key=>{const data=JSON.parse(localStorage.getItem(key));data.balanceCents=20000;localStorage.setItem(key,JSON.stringify(data));return data;},key);
-  await sheet(page).getByRole('button',{name:'Add Money',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('changed in another tab');expect(await saved(page)).toEqual(newer);
+  await sheet(page).getByRole('button',{name:'Add Money',exact:true}).click();await expect(page.locator('#notice')).toContainText('changed in another tab');expect(await saved(page)).toEqual(newer);
 });
 
 test('another tab updates the balance without losing transactions',async({page,context})=>{
@@ -105,11 +108,11 @@ test('another tab updates the balance without losing transactions',async({page,c
 
 test('storage failures preserve saved data, keep the sheet open and show no success or Undo',async({page})=>{
   const initial=await setup(page);await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
-  await openAdd(page,'expense');await fillTransaction(page,'expense','20','Food');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');await expect(sheet(page)).toBeVisible();expect(await saved(page)).toEqual(initial);await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
+  await openAdd(page,'expense');await fillTransaction(page,'expense','20','Food');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.locator('#notice')).toContainText('could not be saved');await expect(sheet(page)).toBeVisible();expect(await saved(page)).toEqual(initial);await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);
 });
 
 for(const theme of ['light','dark','system']){
-  test(`bottom sheet and Activity work in ${theme} with mobile keyboard-size viewports`,async({page})=>{
+  test(`transaction page and Activity work in ${theme} with mobile keyboard-size viewports`,async({page})=>{
     await page.emulateMedia({colorScheme:'dark'});await setup(page,theme);await openAdd(page,'expense');
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme==='light'?'light':'dark');
     for(const [width,height] of [[320,568],[390,400],[430,844]]){
@@ -134,32 +137,34 @@ test('success messages are noninteractive and expire at 2.5 seconds; errors rema
   await page.clock.fastForward(2499);await expect(page.locator('#notice')).toHaveText('Money added.');await page.clock.fastForward(1);await expect(page.locator('#notice')).toBeEmpty();
   await add(page,'expense','2','Food');await expect(page.locator('#notice')).toHaveText('Expense saved.');await page.clock.fastForward(2500);await expect(page.locator('#notice')).toBeEmpty();
   const before=await saved(page);await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
-  await openAdd(page,'expense');await fillTransaction(page,'expense','1','Other');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await page.clock.fastForward(3000);await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
+  await openAdd(page,'expense');await fillTransaction(page,'expense','1','Other');await sheet(page).getByRole('button',{name:'Save Expense',exact:true}).click();await page.clock.fastForward(3000);await expect(page.locator('#notice')).toContainText('could not be saved');expect(await saved(page)).toEqual(before);
 });
 
 test('failed edit and deletion keep the saved transaction unchanged',async({page})=>{
   await setup(page);await add(page,'expense','6','Food','Coffee');const original=await saved(page);await activity(page);await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();
   await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===key)throw Error('quota');return original.call(this,name,value);};},key);
-  await fillTransaction(page,'expense','9','Fun','Snack');await sheet(page).getByRole('button',{name:'Save Changes',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
-  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(sheet(page).getByRole('alert')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
+  await fillTransaction(page,'expense','9','Fun','Snack');await sheet(page).getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.locator('#notice')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
+  await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Delete',exact:true}).click();await confirmDialog(page).getByRole('button',{name:'Delete',exact:true}).click();await expect(page.locator('#notice')).toContainText('could not be saved');expect(await saved(page)).toEqual(original);
 });
 
 
 
 
-test('repeated sheets restore focus and page position through top, middle and bottom scroll',async({page})=>{
-  await setup(page);await page.setViewportSize({width:320,height:568});
+test('repeated pages restore focus and page position through top, middle and bottom scroll',async({page})=>{
+  const createdAt=new Date().toISOString();
+  await setup(page,'light',Array.from({length:12},(_,i)=>({id:`t${i}`,type:'expense',amountCents:100+i,label:'Food',description:`Item ${i}`,createdAt})));
+  await page.setViewportSize({width:320,height:568});await activity(page);
   for(const fraction of [0,0.5,1]){
     await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);
-    const opener=page.getByRole('button',{name:'Add Expense',exact:true});await opener.scrollIntoViewIfNeeded();
+    const row=page.locator('.transaction-row').nth(5);await row.scrollIntoViewIfNeeded();
     const before=await page.evaluate(()=>window.scrollY);
     for(let cycle=0;cycle<2;cycle++){
-      await opener.click();await expect(sheet(page)).toBeVisible();
-      const bounds=await page.locator('.transaction-panel').boundingBox();expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y+bounds.height).toBeLessThanOrEqual(569);
-      await page.keyboard.press('Escape');await expect(sheet(page)).not.toBeVisible();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');await expect(opener).toBeFocused();await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(before);
+      await row.click();await expect(sheet(page)).toBeVisible();
+      await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(sheet(page)).toHaveCount(0);
+      await expect(page.locator('.activity>h1')).toBeFocused();await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(before);
     }
   }
-  expect((await saved(page)).transactions).toBeUndefined();
+  expect((await saved(page)).transactions).toHaveLength(12);
 });
 
 test('Home has no disclaimer and compact Activity rows communicate interactive details',async({page})=>{
@@ -182,12 +187,13 @@ for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Det
       await activity(page);await page.locator(`[data-transaction-id="${mode==='Edit Money In'?'income':'expense'}"]`).click();
       if(mode.startsWith('Edit'))await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();
     }
-    await expect(page.locator('dialog[open]')).toHaveCount(1);
+    await expect(page.locator('.sheet-page-frame')).toHaveCount(1);await expect(page.locator('#transaction-sheet[open]')).toHaveCount(0);
     if(mode!=='Details')await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
     await page.setViewportSize({width:390,height:320});await continuous(page);
-    await page.locator('nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement))).toBe(true);
-    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect.poll(()=>page.evaluate(()=>document.body.style.overflow)).toBe('');
-    expect(await page.locator('#transaction-sheet').evaluate(el=>el.style.getPropertyValue('--sheet-height'))).toBe('');
+    // Pages do not trap focus; the app chrome is hidden instead, so focus
+    // cannot leave the page for the navigation behind it.
+    await expect(page.locator('nav')).toBeHidden();await page.locator('nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('.sheet-page-frame').contains(document.activeElement))).toBe(true);
+    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.sheet-page-frame')).toHaveCount(0);await expect(page.locator('nav')).toBeVisible();
     expect((await saved(page)).transactions).toHaveLength(2);
   });
 }
@@ -197,16 +203,16 @@ for(const type of ['income','expense']){
     const createdAt=new Date().toISOString(),label=type==='income'?'Gift':'Food';
     await setup(page,'dark',[{id:'detail',type,amountCents:600,label,description:'Coffee',createdAt}]);await activity(page);
     await page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true}).click();await page.getByLabel('Search activity').fill('Coffee');await page.locator('.transaction-row').click();
-    await expect(sheet(page)).toHaveAttribute('data-view','details');await expect(page.locator('.shell')).not.toBeVisible();
+    await expect(sheet(page).locator('#sheet-title')).toHaveText(type==='income'?'Money In':'Expense');await expect(page.locator('nav')).toBeHidden();
     await continuous(page);
-    expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(33, 25, 44)');
+    expect(await page.locator('.sheet-page-frame .transaction-panel').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(33, 25, 44)');
     await expect(sheet(page)).toContainText(type==='income'?'Money In':'Expense');await expect(sheet(page)).toContainText(label);await expect(sheet(page)).toContainText('Coffee');
     await page.setViewportSize({width:320,height:360});await page.evaluate(()=>document.documentElement.style.fontSize='32px');await continuous(page);
     expect(await page.evaluate(()=>document.scrollingElement.scrollHeight>innerHeight)).toBe(true);
     const edit=sheet(page).getByRole('button',{name:'Edit',exact:true});await edit.scrollIntoViewIfNeeded();const box=await edit.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(360);
     await page.evaluate(()=>document.documentElement.style.fontSize='');await page.setViewportSize({width:390,height:844});
     await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByLabel('Search activity')).toHaveValue('Coffee');await expect(page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.locator('.transaction-row')).toHaveCount(1);
-    await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();await expect(sheet(page)).toHaveAttribute('data-view','form');await expect(page.locator('dialog[open]')).toHaveCount(1);await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
+    await page.locator('.transaction-row').click();await sheet(page).getByRole('button',{name:'Edit',exact:true}).click();await expect(page.locator('.sheet-page-frame')).toHaveCount(1);await expect(page.locator('#transaction-sheet[open]')).toHaveCount(0);await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();
   });
 }
 
@@ -222,17 +228,17 @@ test('touch outlines clear app-wide, while keyboard focus remains visible',async
   const context=await browser.newContext({baseURL,viewport:{width:390,height:844},hasTouch:true,isMobile:true});
   const page=await context.newPage();await setup(page);
   for(const name of ['Add Money','Add Expense']){
-    const action=page.getByRole('button',{name,exact:true});await action.tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();await sheet(page).getByRole('button',{name:'Cancel',exact:true}).tap();
-    await expect(sheet(page)).not.toBeVisible();await expect(action).toHaveCSS('outline-style','none');await expect(action).toHaveCSS('box-shadow','none');await page.getByRole('heading',{name:'Hey, Max!'}).tap();await expect(action).toHaveCSS('box-shadow','none');
+    const action=page.getByRole('button',{name,exact:true});await page.locator('#quick-actions-toggle').tap();await action.tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toBeFocused();await sheet(page).getByRole('button',{name:'Cancel',exact:true}).tap();
+    await expect(sheet(page)).toHaveCount(0);const item=page.locator('#quick-actions-menu button').filter({hasText:name});await expect(item).toHaveCSS('outline-style','none');await expect(item).toHaveCSS('box-shadow','none');await page.getByRole('heading',{name:'Hey, Max!'}).tap();await expect(item).toHaveCSS('box-shadow','none');
   }
   await add(page,'expense','6','Food','Coffee');
   const activityButton=page.getByRole('button',{name:'Activity',exact:true});await activityButton.tap();await expect(activityButton).toHaveCSS('outline-style','none');
   const row=page.locator('.transaction-row');await row.tap();await sheet(page).getByRole('button',{name:'Close',exact:true}).tap();await expect(row).toHaveCSS('outline-style','none');
   await page.getByRole('button',{name:'Expenses',exact:true}).tap();await expect(page.getByRole('button',{name:'Expenses',exact:true})).toHaveCSS('outline-style','none');
-  await page.getByRole('button',{name:'Home',exact:true}).tap();await page.getByRole('button',{name:'Settings',exact:true}).tap();await page.locator('#edit-starting-balance').tap();await page.getByRole('button',{name:'Cancel',exact:true}).tap();await expect(page.locator('#edit-starting-balance')).toHaveCSS('outline-style','none');await page.getByRole('button',{name:'Home',exact:true}).tap();
-  await page.getByRole('button',{name:'Add Money',exact:true}).tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toHaveCSS('outline-style','none');
+  await page.getByRole('button',{name:'Home',exact:true}).tap();await page.getByRole('button',{name:'Settings',exact:true}).tap();await page.locator('#edit-starting-balance').tap();await page.getByRole('button',{name:'Cancel',exact:true}).tap();await expect(page.locator('#edit-starting-balance')).toHaveCSS('outline-style','none');await page.locator('#settings').tap();
+  await page.locator('#quick-actions-toggle').tap();await page.getByRole('button',{name:'Add Money',exact:true}).tap();await expect(sheet(page).getByLabel('How much?',{exact:true})).toHaveCSS('outline-style','none');
   const source=sheet(page).getByLabel('Where did it come from?',{exact:true});await source.focus();await expect(source).toHaveCSS('outline-style','none');await page.keyboard.press('Tab');await source.focus();await expect(source).toHaveCSS('outline-style','solid');await sheet(page).getByRole('button',{name:'Cancel',exact:true}).tap();
-  const action=page.getByRole('button',{name:'Add Money',exact:true});await page.keyboard.press('Tab');await action.focus();await expect(action).toHaveCSS('outline-style','solid');await page.keyboard.press('Enter');await page.keyboard.press('Escape');await expect(action).toBeFocused();await expect(action).toHaveCSS('outline-style','solid');
+  const toggle=page.locator('#quick-actions-toggle');await page.keyboard.press('Tab');await toggle.focus();await expect(toggle).toHaveCSS('outline-style','solid');await page.keyboard.press('Enter');const action=page.getByRole('button',{name:'Add Money',exact:true});await action.click();await expect(sheet(page)).toBeVisible();await sheet(page).getByRole('button',{name:'Cancel',exact:true}).click();await expect(sheet(page)).toHaveCount(0);
   await context.close();
 });
 
@@ -251,10 +257,10 @@ for(const theme of ['light','dark']){
       for(const value of ['', '10', '10.25']){await amount.fill(value);await expect(prefix).toBeVisible();await expect(amount).toHaveValue(value);}
       await expect(amount).toHaveAttribute('inputmode','decimal');await expect(amount).toHaveCSS('font-variant-numeric','tabular-nums');
       expect(await amount.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('Geist Mono');
-      expect(await sheet(page).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
+      expect(await page.locator('.sheet-page-frame .transaction-panel').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
       for(const height of [320,844]){
         await page.setViewportSize({width:390,height});
-        await continuous(page);await expect(page.locator('.shell')).toBeHidden();
+        await continuous(page);await expect(page.locator('nav')).toBeHidden();
         const select=sheet(page).getByLabel(income?'Where did it come from?':'Category',{exact:true});await select.selectOption(income?'Paycheck':'Shopping');
         const metrics=await select.evaluate(el=>{const style=getComputedStyle(el);return {height:el.getBoundingClientRect().height,paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,lineHeight:style.lineHeight,value:el.value};});
         expect(metrics.height).toBe(52);expect(metrics.paddingTop).toBe('0px');expect(metrics.paddingBottom).toBe('0px');expect(metrics.lineHeight).toBe('normal');expect(metrics.value).toBe(income?'Paycheck':'Shopping');
@@ -300,9 +306,9 @@ for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport,
   await home(page);await page.getByRole('button',{name:'Settings',exact:true}).click();
   const rows=await page.locator('.settings-panel .setting-row').evaluateAll(rows=>rows.map(row=>({height:row.getBoundingClientRect().height,padding:getComputedStyle(row).padding,icon:row.querySelector('.setting-icon').getBoundingClientRect().width})));
   expect(rows).toHaveLength(4);expect(new Set(rows.map(r=>r.padding)).size).toBe(1);expect(new Set(rows.map(r=>r.icon)).size).toBe(1);expect(Math.max(...rows.map(r=>r.height))-Math.min(...rows.map(r=>r.height))).toBeLessThan(2);
-  const actions=await page.locator('.settings-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {top:r.top,width:r.width,height:r.height,bottom:r.bottom};}));expect(actions[0].top).toBe(actions[1].top);expect(Math.abs(actions[0].width-actions[1].width)).toBeLessThan(1);expect(actions[0].height).toBe(actions[1].height);expect(actions[0].height).toBeGreaterThanOrEqual(44);
-  await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));const actionBottom=(await page.locator('.settings-actions').boundingBox()).y+(await page.locator('.settings-actions').boundingBox()).height;expect(actionBottom).toBeLessThanOrEqual((await page.locator('nav').boundingBox()).y-8);
-  await page.getByLabel('First name',{exact:true}).fill('Unsaved');await page.locator('#cancel').click();await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();expect(await saved(page)).toEqual(before);
+  const actions=await page.locator('.settings-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {top:r.top,width:r.width,height:r.height,bottom:r.bottom};}));expect(actions).toHaveLength(1);expect(actions[0].height).toBeGreaterThanOrEqual(44);
+  await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));const actionBox=await page.locator('.settings-actions').boundingBox();expect(actionBox.y+actionBox.height).toBeLessThanOrEqual((await page.evaluate(()=>innerHeight))+1);
+  await page.getByLabel('First name',{exact:true}).fill('Unsaved');await page.locator('#settings').click();await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();expect(await saved(page)).toEqual(before);
   await activity(page);await expect(page.locator('.activity-search svg')).toBeVisible();
   for(const name of ['All','Money In','Expenses']){const filter=page.getByRole('button',{name,exact:true});await filter.click();await expect(filter).toHaveAttribute('aria-pressed','true');await expect(filter).toHaveCSS('background-color','rgba(0, 0, 0, 0)');expect((await filter.boundingBox()).height).toBeGreaterThanOrEqual(44);}
   await page.keyboard.press('Tab');await page.getByRole('button',{name:'All',exact:true}).focus();await expect(page.getByRole('button',{name:'All',exact:true})).toHaveCSS('outline-style','solid');

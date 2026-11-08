@@ -99,7 +99,7 @@ body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transacti
 .sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sheet-heading h2{font-size:1.3rem;margin:0}.sheet-heading h2:focus{outline:none}.sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
 :is(#transaction-sheet,#affordability-sheet) label{font-size:.87rem;font-weight:500}.sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.transaction-details dt{color:#675b80}.transaction-details dd{margin:0;overflow-wrap:anywhere}
-#notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;top:calc(10px + env(safe-area-inset-top));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
 :root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:#493061;color:#eee3ff;border-color:#a783ce}
 :root[data-theme=dark] .activity-group>h2{color:#bfb0d5}
 :root[data-theme=dark] .transaction-row{background:#292135;color:#eee8ff}
@@ -271,8 +271,8 @@ h1,h2,strong,b{font-weight:500}
 :root[data-theme=dark] #small-result.small-result-empty p{color:#c1b2d5}
 
 /* Goals reuse Activity details and transaction forms; confirmations stay compact.
-   Keep the origin shell hidden until the complete Goals interaction closes. */
-body:has(#transaction-sheet[data-presentation=goal][open])>.shell{visibility:hidden}
+   The details/forms are pages in the shell now, so a compact confirmation
+   opens over the page instead of hiding the shell. */
 #transaction-sheet[data-presentation=goal][data-view=confirm],
 #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
 :root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm],
@@ -382,7 +382,7 @@ nav button[aria-current] { background: var(--footer-selected); color: var(--foot
 :root:not([data-theme="dark"]) nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
 nav button svg { width: 24px; height: 24px; }
 .shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
-#notice:not(:empty) { bottom: calc(90px + env(safe-area-inset-bottom)); }
+
 /* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */
 nav::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--footer-surface); pointer-events: none; }
 :root[data-theme=dark] nav { background: var(--footer-surface); border-color: var(--footer-border); }
@@ -410,9 +410,9 @@ body[data-screen]:has(.floating-actions:not([hidden])) .shell{padding-bottom:cal
 /* Keep the existing pill and quick action moving together, using LLT's threshold. */
 nav,.floating-actions{transition:transform 220ms ease,opacity 220ms ease,visibility 220ms}
 body.nav-scroll-hidden nav,body.nav-scroll-hidden .floating-actions{transform:translateY(220px);opacity:0;visibility:hidden;pointer-events:none}
-#notice:not(:empty){bottom:calc(90px + env(safe-area-inset-bottom));z-index:5;pointer-events:none}
-body:not(.nav-scroll-hidden):has(.floating-actions:not([hidden])) #notice:not(:empty){bottom:calc(172px + env(safe-area-inset-bottom))}
-body.nav-scroll-hidden #notice:not(:empty){bottom:calc(16px + env(safe-area-inset-bottom))}
+#notice:not(:empty){z-index:5;pointer-events:none}
+
+
 #notice button{pointer-events:auto;flex-shrink:0;min-width:44px;min-height:44px;padding:0;font-size:1.5rem;background:transparent;color:inherit;border:0}
 #notice[data-kind=success]:not(:empty){display:flex;pointer-events:none;width:auto;max-width:448px}
 dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:auto;padding:8px 12px}
@@ -441,3 +441,51 @@ dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:au
 #settings { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 1px solid #ded8f1; border-radius: 6px; }
 :root[data-theme=dark] #settings { border-color: #53405f; }
 #settings svg { width: 24px; height: 24px; }
+
+/* Sheet pages: long forms and details render in the tab content as real
+   pages instead of the fixed sheet dialog (small confirmations keep the
+   dialog). The frame/panel become plain document flow. */
+body[data-screen=sheet] .shell{padding-bottom:25px}
+.sheet-page-frame{position:static;width:100%;height:auto;display:block;padding-top:0;overflow:visible}
+.sheet-page-frame .transaction-panel{width:100%;max-height:none;min-height:0;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:4px 0 24px}
+.sheet-page-frame :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+.sheet-page-frame label{font-size:.87rem;font-weight:500}
+.sheet-page-frame .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.sheet-page-frame progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}
+.sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+.sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
+body[data-screen=sheet] #settings{display:none}
+
+/* Details page: give the facts a card with room to breathe instead of bare rows at the top. */
+.sheet-page-frame:has(.details-body) .transaction-panel{display:flex;flex-direction:column;min-height:calc(100dvh - 132px)}
+.details-centered{background:#fff;border:1px solid #e5dff4;border-radius:18px;padding:22px 20px;box-shadow:0 2px 8px #42308d08}
+:root[data-theme=dark] .details-centered{background:#292135;border-color:#53405f;box-shadow:none}
+.details-centered .detail-amount{margin-bottom:16px}
+.details-centered .transaction-details{gap:0 12px}
+.details-centered .transaction-details dt,.details-centered .transaction-details dd{padding:11px 0;border-top:1px solid #eee7f8}
+.details-centered .transaction-details dt:first-of-type,.details-centered .transaction-details dd:first-of-type{border-top:0;padding-top:0}
+.details-centered .transaction-details dt:last-of-type,.details-centered .transaction-details dd:last-of-type{padding-bottom:0}
+:root[data-theme=dark] .details-centered .transaction-details dt,:root[data-theme=dark] .details-centered .transaction-details dd{border-top-color:#453257}
+.details-centered .sheet-actions{margin-top:20px}
+
+/* Settings fields must read as editable: visible box, not bare text in the row. */
+.settings-panel .setting-row input,.settings-panel .setting-row select{border:1px solid #d6d0ea;background:#ffffffb8;border-radius:10px;padding:5px 10px}
+:root[data-theme=dark] .settings-panel .setting-row input,:root[data-theme=dark] .settings-panel .setting-row select{border-color:#53405f;background:#1d1626;color:#eee8ff}
+
+/* Floating chrome: frosted surfaces with a soft lift shadow. */
+nav{backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -6px 20px #35205212}
+:root[data-theme=dark] nav{background:#17131ff2;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -8px 24px #00000059}
+#quick-actions-toggle{box-shadow:0 8px 24px #3520524d}
+:root[data-theme=dark] #quick-actions-toggle{box-shadow:0 8px 24px #00000073}
+/* Success confirmations read as a brief modal, modeled on the sheet dialogs:
+   a centered card over a soft scrim. No decision is required and nothing is
+   interactive (the notice stays pointer-events:none) — it dismisses itself
+   on the existing timer. In-dialog notices keep the static inline variant,
+   and error notices keep the top banner with their dismiss button. */
+.shell>#notice[data-kind=success]:not(:empty){top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 48px));max-width:none;padding:24px 22px;border-radius:20px;background:#fcfaff;border:1px solid #ddd2ee;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #28133b38;flex-direction:column;align-items:center;gap:12px;text-align:center;font-size:1rem;font-weight:500;color:#30234b;animation:lwvd-notice-in .18s ease-out}
+#notice .notice-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#d8f5e9;color:#216f59;font-style:normal;flex-shrink:0}
+#notice .notice-icon svg{width:28px;height:28px;stroke-width:2.4}
+:root[data-theme=dark] .shell>#notice[data-kind=success]:not(:empty){background:#342443;border-color:#84629e;color:#f0e7fa;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #00000066}
+:root[data-theme=dark] #notice .notice-icon{background:#1e3d33;color:#7fe3bb}
+@keyframes lwvd-notice-in{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@media (prefers-reduced-motion:reduce){.shell>#notice[data-kind=success]:not(:empty){animation:none}}

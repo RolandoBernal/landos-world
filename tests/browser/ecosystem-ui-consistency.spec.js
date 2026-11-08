@@ -93,22 +93,26 @@ for (const theme of ['light', 'dark', 'system']) {
         goals: [{ id: 'bike', name: 'Bike', emoji: '🚲', targetCents: 10000, reservedCents: 1000, archived: false }] }));
     }, theme);
     await page.reload();
-    const sheet = page.locator('#transaction-sheet');
+    // Phase 2: LWVD long forms and details render as pages in the tab
+    // content; only the small confirmations still use the sheet dialog.
+    // The presenting surface is the last visible transaction panel (an open
+    // confirmation dialog sits after the page in the DOM).
+    const surface = () => page.locator('.transaction-panel:visible').last();
     async function check(expectedFirst = 'Cancel') {
-      await pair(sheet.locator('.sheet-actions'));
-      if ((await sheet.locator('.sheet-actions').getAttribute('class')).includes('sheet-actions--stacked')) {
-        await expect(sheet.locator('.sheet-actions > button').first()).toHaveClass(/primary/);
-        await expect(sheet.locator('.sheet-actions > button').last()).toHaveText('Cancel');
-      } else await expect(sheet.locator('.sheet-actions > button').first()).toHaveText(expectedFirst);
-      await expect(sheet.locator('[data-sheet-close] svg')).toBeVisible();
+      await pair(surface().locator('.sheet-actions'));
+      if ((await surface().locator('.sheet-actions').getAttribute('class')).includes('sheet-actions--stacked')) {
+        await expect(surface().locator('.sheet-actions > button').first()).toHaveClass(/primary/);
+        await expect(surface().locator('.sheet-actions > button').last()).toHaveText('Cancel');
+      } else await expect(surface().locator('.sheet-actions > button').first()).toHaveText(expectedFirst);
+      await expect(surface().locator('[data-sheet-close] svg')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     }
     async function quick(name) { await page.evaluate(() => { scrollTo(0, 1); scrollTo(0, 0); }); await page.locator('#quick-actions-toggle').click(); await page.getByRole('button', { name, exact: true }).click(); }
     for (const name of ['Add Money', 'Add Expense']) {
       await quick(name); await check();
-      await sheet.locator('button[type="submit"]').click();
-      await expect(sheet.locator('.error')).not.toBeEmpty();
-      await sheet.locator('#transaction-cancel').click();
+      await surface().locator('button[type="submit"]').click();
+      await expect(surface().locator('.error')).not.toBeEmpty();
+      await surface().locator('#transaction-cancel').click();
     }
     await quick('Can I Afford This?');
     await expect(page.locator('#afford-back svg')).toBeVisible();
@@ -116,17 +120,18 @@ for (const theme of ['light', 'dark', 'system']) {
     await page.locator('#afford-back').click();
     await page.getByRole('button', { name: 'Goals', exact: true }).click();
     await page.getByRole('button', { name: 'Create Goal', exact: true }).click(); await check();
-    await sheet.locator('[data-cancel]').click();
+    await surface().locator('[data-cancel]').click();
     for (const id of ['goal-edit', 'goal-reserve', 'goal-release', 'goal-buy', 'goal-archive', 'goal-delete']) {
       await page.getByRole('button', { name: 'Manage Goal: Bike', exact: true }).click();
-      await sheet.locator('#' + id).click(); await check();
-      await sheet.locator('[data-sheet-close]').click();
+      await surface().locator('#' + id).click(); await check();
+      // The close control abandons the whole flow (page or page + confirm).
+      await surface().locator('[data-sheet-close]').click();
     }
     await page.getByRole('button', { name: 'Activity', exact: true }).click();
     await page.locator('[data-transaction-id="income"]').click(); await check('Delete');
-    await sheet.locator('#transaction-edit').click(); await check(); await sheet.locator('#transaction-cancel').click();
-    await page.locator('[data-transaction-id="income"]').click(); await sheet.locator('#transaction-delete').click(); await check();
-    await sheet.locator('[data-sheet-close]').click();
+    await surface().locator('#transaction-edit').click(); await check(); await surface().locator('#transaction-cancel').click();
+    await page.locator('[data-transaction-id="income"]').click(); await surface().locator('#transaction-delete').click(); await check();
+    await surface().locator('[data-sheet-close]').click();
     await page.getByRole('button', { name: 'Home', exact: true }).click();
     await page.locator('#settings').click();
     await expect(page.locator('#settings[aria-expanded="true"] svg')).toBeVisible();

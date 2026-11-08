@@ -2,12 +2,14 @@ import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effec
 const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
+let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
 let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
+ check: '<path d="M5 13l4 4L19 7"/>',
  close: '<path d="M6 6l12 12M18 6 6 18"/>',
  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
  home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
@@ -36,10 +38,20 @@ function showNotice(message, kind, duration) {
   const notice = document.querySelector('#notice');
   notice.dataset.kind = kind;
   const text = document.createElement('span'); text.textContent = message;
-  const close = document.createElement('button');
-  close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification'); close.textContent = '×';
-  close.onclick = dismissNotice;
-  notice.append(text, close);
+  if (kind === 'success') {
+    // Success confirmations are a brief modal-style card (see styles.css):
+    // a check badge, no decision and no dismiss control — the timer below
+    // clears it. Errors keep the dismiss button.
+    const badge = document.createElement('i');
+    badge.className = 'notice-icon'; badge.setAttribute('aria-hidden', 'true');
+    badge.innerHTML = icon('check');
+    notice.append(badge, text);
+  } else {
+    const close = document.createElement('button');
+    close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification'); close.textContent = '×';
+    close.onclick = dismissNotice;
+    notice.append(text, close);
+  }
   const dialog = document.querySelector('#transaction-sheet[open],#affordability-sheet[open]');
   if (dialog) {
     const error = dialog.querySelector('.error');
@@ -187,6 +199,7 @@ function render() {
   quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
   if (!state) { onboarding(); return; }
   if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
+  if (sheetPage) { renderSheetPage(); return; }
   document.body.dataset.screen = tab.toLowerCase();
   gear.hidden = !['Home', 'Settings'].includes(tab); nav.hidden = ['Afford', 'Settings'].includes(tab);
   gear.innerHTML = icon(tab === 'Settings' ? 'close' : 'settings');
@@ -254,12 +267,12 @@ function commitGoal(next, message) {
 }
 function goalForm(title, fields, button, submit) {
   openSheet(`${sheetHeading(title)}<form id="transaction-form" class="goal-form" novalidate><div class="sheet-body sheet-fields">${fields}<p class="error" role="alert"></p></div><div class="sheet-actions sheet-actions--stacked"><button class="primary">${button}</button><button type="button" data-cancel>Cancel</button></div></form>`, '#sheet-title', 'form', 'goal');
-  bindSheetClose(); transactionSheet.querySelector('[data-cancel]').onclick = closeSheet;
+  bindSheetClose(); sheetRoot().querySelector('[data-cancel]').onclick = closeSheet;
   let submitted = false;
-  transactionSheet.querySelector('form').onsubmit = event => {
+  sheetRoot().querySelector('form').onsubmit = event => {
     event.preventDefault(); if (submitted) return;
     try { submitted = true; if (!submit(new FormData(event.target))) submitted = false; }
-    catch (error) { submitted = false; transactionSheet.querySelector('.error').textContent = error.message; }
+    catch (error) { submitted = false; sheetRoot().querySelector('.error').textContent = error.message; }
   };
 }
 function openGoalForm(goal = null) {
@@ -267,7 +280,7 @@ function openGoalForm(goal = null) {
     const name = data.get('name').trim(), emoji = data.get('emoji').trim(), targetCents = parseMoney(data.get('target'));
     if (!name || name.length > 80) throw Error('Enter a goal name of 80 characters or fewer.');
     if ([...emoji].length > 16) throw Error('Use a short emoji, up to 16 characters.');
-    const target = transactionSheet.querySelector('#goal-target');
+    const target = sheetRoot().querySelector('#goal-target');
     target.removeAttribute('aria-invalid');
     if (!targetCents) {
       target.setAttribute('aria-invalid', 'true'); target.focus();
@@ -279,9 +292,9 @@ function openGoalForm(goal = null) {
 function showGoal(id) {
   const goal = (state.goals || []).find(g => g.id === id); if (!goal) return;
   openSheet(`${sheetHeading('Goal Details')}<div class="sheet-body goal-details-body"><h3>${escape(goal.emoji)} ${escape(goal.name)}</h3>${goalProgress(goal)}${goal.archived ? '<p>Archived. No funds are reserved.</p>' : '<p>Reservations are not expenses. Complete a purchase to record one expense and archive this goal, releasing any unused funds.</p>'}<div class="goal-actions"><button id="goal-edit">Edit Goal</button>${goal.archived ? '' : '<button id="goal-reserve">Reserve Funds</button><button id="goal-release">Release Funds</button><button id="goal-buy">Record Goal Purchase</button><button id="goal-archive">Archive Goal</button>'}<button id="goal-delete">Delete Goal</button></div></div>`, '#sheet-title', 'details', 'goal');
-  bindSheetClose(); transactionSheet.querySelector('#goal-edit').onclick = () => openGoalForm(goal);
+  bindSheetClose(); sheetRoot().querySelector('#goal-edit').onclick = () => openGoalForm(goal);
   for (const action of ['reserve','release']) {
-    transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
+    sheetRoot().querySelector(`#goal-${action}`)?.addEventListener('click', () => {
       goalForm(action === 'reserve' ? 'Reserve Funds' : 'Release Funds', `<p>${action === 'reserve' ? `${money(availableBalance(state))} available; ${money(goal.targetCents - goal.reservedCents)} left to fund.` : `${money(goal.reservedCents)} reserved.`}</p><label for="goal-amount">Amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-amount" name="amount" inputmode="decimal"></div>`, action === 'reserve' ? 'Reserve' : 'Release', data => {
         const amount = parseMoney(data.get('amount'));
         if (!amount) throw Error('Enter an amount greater than zero with up to two decimal places.');
@@ -289,18 +302,18 @@ function showGoal(id) {
       });
     });
   }
-  transactionSheet.querySelector('#goal-buy')?.addEventListener('click', () => {
+  sheetRoot().querySelector('#goal-buy')?.addEventListener('click', () => {
     goalForm('Record Goal Purchase', `<p>Record one expense, archive this goal, and release any unused reservation. You can use up to ${money(availableBalance(state) + goal.reservedCents)} without using other goals’ funds.</p><label for="goal-amount">Purchase amount ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="goal-amount" name="amount" inputmode="decimal" value="${(goal.targetCents / 100).toFixed(2)}"></div><label for="goal-category">Category</label><select id="goal-category" name="label">${TRANSACTION_LABELS.expense.map(label => `<option ${label === 'Shopping' ? 'selected' : ''}>${label}</option>`).join('')}</select>`, 'Save Purchase', data => {
       const amountCents = parseMoney(data.get('amount'));
       if (!amountCents) throw Error('Enter a purchase amount greater than zero with up to two decimal places.');
       return commitGoal(purchaseGoal(state, id, {id: newId(), type:'expense', amountCents, label:data.get('label'), description:goal.name, createdAt:new Date().toISOString()}), 'Purchase saved. Goal archived and unused funds released.');
     });
   });
-  for (const action of ['archive','delete']) transactionSheet.querySelector(`#goal-${action}`)?.addEventListener('click', () => {
+  for (const action of ['archive','delete']) sheetRoot().querySelector(`#goal-${action}`)?.addEventListener('click', () => {
     openSheet(`${sheetHeading(action === 'archive' ? 'Archive Goal?' : 'Delete Goal?')}<div class="sheet-body"><p>${action === 'archive' ? 'Archive' : 'Permanently delete'} ${escape(goal.name)} and release ${money(goal.reservedCents)}? Your total balance and existing expenses stay the same.</p></div><div class="sheet-actions"><button id="cancel-goal">Cancel</button><button class="primary danger" id="confirm-goal">${action === 'archive' ? 'Archive' : 'Delete'}</button></div>`, '#sheet-title', 'confirm', 'goal');
-    bindSheetClose(); transactionSheet.querySelector('#cancel-goal').onclick = () => showGoal(id);
+    bindSheetClose(); sheetRoot().querySelector('#cancel-goal').onclick = () => showGoal(id);
     let submitted = false;
-    transactionSheet.querySelector('#confirm-goal').onclick = () => {
+    sheetRoot().querySelector('#confirm-goal').onclick = () => {
       if (submitted) return; submitted = true;
       const next = action === 'delete' ? {...state, goals:state.goals.filter(g => g.id !== id)} : updateGoal(state, {...goal, archived:true, reservedCents:0});
       if (!commitGoal(next, action === 'delete' ? 'Goal deleted. Funds released.' : 'Goal archived. Funds released.')) submitted = false;
@@ -342,8 +355,39 @@ function closeAffordability() {
   window.scrollTo({left:0, top:0, behavior:'instant'});
   quickToggle.focus({preventScroll:true});
 }
+function renderSheetPage() {
+  document.body.dataset.screen = 'sheet';
+  gear.hidden = true; nav.hidden = true; quickActions.hidden = true;
+  // A mounted page whose stamp matches the active sheet is already the
+  // live page: re-rendering would replace its DOM with the pristine
+  // sheetPage.html, erasing typed draft values and the form handlers
+  // wired against the live nodes. That is exactly what a back/forward
+  // cache restore must survive — the browser restores the DOM intact,
+  // and this render (via pageshow) used to destroy it. A missing or
+  // mismatched stamp means the page genuinely needs reconstruction.
+  const mounted = content.querySelector('.sheet-page-frame');
+  if (mounted && mounted.dataset.sheetMount === String(sheetPage.mountId)) return;
+  content.innerHTML = `<div class="transaction-frame sheet-page-frame" data-sheet-mount="${sheetPage.mountId}"><section class="transaction-panel">${sheetPage.html}</section></div>`;
+  window.scrollTo({left:0, top:0, behavior:'instant'});
+  if (!focusFirstField(content)) content.querySelector(sheetPage.focusSelector)?.focus({preventScroll:true});
+}
 function openSheet(html, focusSelector = '#sheet-title', view = 'form', presentation = 'screen') {
   dismissNotice();
+  if (view !== 'confirm') {
+    // Long forms and details are pages: they replace the tab content
+    // instead of opening the sheet dialog. Only the small confirmations
+    // below still use the dialog.
+    const preview = document.querySelector('#affordability-sheet');
+    if (preview.open) { preview.close(); preview.replaceChildren(); }
+    if (transactionSheet.open) transactionSheet.close();
+    if (!sheetPage) {
+      pageOpener = document.activeElement;
+      pageScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
+    }
+    sheetPage = { html, focusSelector, view, mountId: ++sheetMountId };
+    render();
+    return;
+  }
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
     sheetOpener = document.activeElement;
@@ -366,8 +410,29 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
 }
 const sheetHeading = title => `<div class="sheet-heading"><h2 id="sheet-title" tabindex="-1">${title}</h2><button type="button" data-sheet-close aria-label="Close">${icon('close')}</button></div>`;
-function bindSheetClose() { document.querySelector('#transaction-sheet [data-sheet-close]').onclick = closeSheet; }
-function closeSheet() { dismissNotice(); document.querySelector('#transaction-sheet').close(); restoreSheet(); }
+const sheetRoot = () => transactionSheet.open ? transactionSheet : (sheetPage ? content : transactionSheet);
+function bindSheetClose() { sheetRoot().querySelector('[data-sheet-close]').onclick = closeSheet; }
+function closeSheet() {
+  dismissNotice();
+  if (sheetPage) {
+    sheetPage = null;
+    if (transactionSheet.open) { sheetScroll = null; sheetOpener = null; transactionSheet.close(); }
+    document.querySelector('.shell').inert = false;
+    document.querySelector('#affordability-sheet').inert = false;
+    render();
+    if (pageScroll) {
+      document.body.style.overflow = pageScroll.overflow;
+      window.scrollTo({left: pageScroll.x, top: pageScroll.y, behavior:'instant'});
+      pageScroll = null;
+    }
+    const target = pageOpener?.isConnected ? pageOpener : content.querySelector('h1');
+    if (target?.matches('h1')) target.tabIndex = -1;
+    target?.focus({preventScroll:true});
+    pageOpener = null;
+    return;
+  }
+  document.querySelector('#transaction-sheet').close(); restoreSheet();
+}
 function moneyProgressSection() {
   const p = moneyProgress(state), level = progressLevel(p.xp);
   return `<section class="money-progress card" aria-label="Money Progress"><h2>Money Progress</h2><p><strong>Level ${level.level} · ${level.title}</strong></p><p>${p.xp} XP total · ${level.next - p.xp} XP to Level ${level.level + 1}</p><progress max="100" value="${level.earned}" aria-label="Progress toward next level"></progress><h3>This week’s challenge</h3><p>Record 3 expenses this week <strong>+25 XP</strong></p><p>${p.count} of 3 completed${p.rewarded ? ' · Complete! Reward earned.' : ''}</p><progress max="3" value="${p.count}" aria-label="Weekly expense challenge"></progress><p class="progress-help">Earn XP for tracking expenses and saving toward your goals. Small steps add up! ✨</p></section>`;
@@ -463,6 +528,9 @@ transactionSheet.addEventListener('keydown', handleEntryKeys);
 document.querySelector('#affordability-sheet').addEventListener('keydown', handleEntryKeys);
 document.querySelector('#affordability-sheet').addEventListener('cancel', event => {event.preventDefault();closeAffordability();});
 transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && sheetPage && !transactionSheet.open) { event.preventDefault(); closeSheet(); }
+});
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
   // A queued close event can arrive after a rapid reopen or a second close.
@@ -485,7 +553,7 @@ window.addEventListener('storage', event => {
     const raw = localStorage.getItem(STORAGE_KEY), next = JSON.parse(raw);
     if (!validState(next)) throw Error();
     state = next; lastRaw = raw;
-    if (transactionSheet.open) closeSheet();
+    if (transactionSheet.open || sheetPage) closeSheet();
     render(); announce('Your money information was updated in another tab.');
   } catch { showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
 });
@@ -495,9 +563,9 @@ window.addEventListener('pageshow', event => {
   if (event.persisted) window.LandosTheme?.init();
   render();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open) render(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open && !sheetPage) render(); });
 // Refresh calendar-day guidance while Home remains open across midnight.
-setInterval(() => { if (state && ['Home', 'Insights'].includes(tab) && !document.hidden && !document.querySelector('#transaction-sheet')?.open && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
+setInterval(() => { if (state && ['Home', 'Insights'].includes(tab) && !document.hidden && !document.querySelector('#transaction-sheet')?.open && !sheetPage && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
 let renderedDay = localToday();
 render();
 
