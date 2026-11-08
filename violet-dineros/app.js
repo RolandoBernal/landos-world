@@ -2,7 +2,7 @@ import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effec
 const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
-let sheetPage = null, pageOpener = null, pageScroll = null;
+let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
 let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
@@ -358,7 +358,16 @@ function closeAffordability() {
 function renderSheetPage() {
   document.body.dataset.screen = 'sheet';
   gear.hidden = true; nav.hidden = true; quickActions.hidden = true;
-  content.innerHTML = `<div class="transaction-frame sheet-page-frame"><section class="transaction-panel">${sheetPage.html}</section></div>`;
+  // A mounted page whose stamp matches the active sheet is already the
+  // live page: re-rendering would replace its DOM with the pristine
+  // sheetPage.html, erasing typed draft values and the form handlers
+  // wired against the live nodes. That is exactly what a back/forward
+  // cache restore must survive — the browser restores the DOM intact,
+  // and this render (via pageshow) used to destroy it. A missing or
+  // mismatched stamp means the page genuinely needs reconstruction.
+  const mounted = content.querySelector('.sheet-page-frame');
+  if (mounted && mounted.dataset.sheetMount === String(sheetPage.mountId)) return;
+  content.innerHTML = `<div class="transaction-frame sheet-page-frame" data-sheet-mount="${sheetPage.mountId}"><section class="transaction-panel">${sheetPage.html}</section></div>`;
   window.scrollTo({left:0, top:0, behavior:'instant'});
   if (!focusFirstField(content)) content.querySelector(sheetPage.focusSelector)?.focus({preventScroll:true});
 }
@@ -375,7 +384,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
       pageOpener = document.activeElement;
       pageScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
     }
-    sheetPage = { html, focusSelector, view };
+    sheetPage = { html, focusSelector, view, mountId: ++sheetMountId };
     render();
     return;
   }
