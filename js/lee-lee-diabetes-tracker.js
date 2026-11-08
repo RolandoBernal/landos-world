@@ -4956,8 +4956,8 @@
             <label class="lee_lee_diabetes_checkline"><input type="checkbox" name="foodFavorite" ${food?.favorite ? 'checked' : ''}><span>Favorite</span></label>
             </div>
             <div class="lee_lee_diabetes_food_editor_actions lee_lee_diabetes_actions--stacked">
-              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
               <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-food-library-item">Save Food</button>
+              <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-food-library-editor">Cancel</button>
             </div>
           </div>
       </section>
@@ -5060,8 +5060,8 @@
               <footer class="lee_lee_diabetes_meal_builder_footer">
                 <div class="lee_lee_diabetes_meal_builder_total"><span>Total Carbs</span><strong data-meal-builder-total>${renderCarbs(total)}</strong></div>
                 <div class="lee_lee_diabetes_food_editor_actions lee_lee_diabetes_actions--stacked">
-                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-saved-meal-builder">Cancel</button>
                   <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-saved-meal-builder">Save Meal</button>
+                  <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-saved-meal-builder">Cancel</button>
                 </div>
               </footer>
             `}
