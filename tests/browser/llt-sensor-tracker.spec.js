@@ -93,6 +93,10 @@ test("start, correction, early replacement, undo and retained history survive re
   await page.reload();
   await expect(page.locator(".llt_sensor_card")).toContainText("remaining");
   await page.locator(".llt_sensor_disclosure").click();
+  // Focus the opener first: desktop engines focus a button on click, but
+  // mobile Safari does not focus it on tap, and the module's return-focus
+  // path starts from the focused element (the keyboard scenario).
+  await page.getByRole("button", { name: "Manage Sensor" }).focus();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   await page.locator('[data-sensor-action="history"]').last().click();
   await expect(page.locator(".llt_sensor_page")).toContainText(
@@ -426,10 +430,6 @@ test("sensor management disclosure preserves keyboard flow and refresh flow", as
 
 test("sensor management page fits narrow, wide and landscape viewports; no-sensor start remains available", async ({ page }) => {
   await open(page);
-  // Focus the opener first: desktop engines focus a button on click, but
-  // mobile Safari does not focus it on tap, and the module's return-focus
-  // path starts from the focused element (the keyboard scenario).
-  await page.getByRole("button", { name: "Manage Sensor" }).focus();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   const sensorPage = page.locator(".llt_sensor_page");
   await expect(sensorPage.getByRole("button", { name: "Start New Sensor", exact: true })).toBeVisible();
@@ -601,6 +601,7 @@ test('sensor management uses SVG close, a full-width Refresh row and full-width 
 
 test("sensor pages make the app chrome inert to the keyboard until close", async ({ page }) => {
   await open(page);
+  await page.getByRole("button", { name: "Manage Sensor" }).focus();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   await expect(page.locator(".llt_sensor_page")).toBeVisible();
   // Both the header (Settings gear) and every pill navigation element are
