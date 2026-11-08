@@ -5026,7 +5026,7 @@
     const isPicker = state.view === 'picker';
     const total = getMealBuilderTotal(state);
     return `
-      <section class="lee_lee_diabetes_meal_builder lee_lee_diabetes_meal_builder_page" data-meal-builder aria-labelledby="lee-lee-meal-builder-title">
+      <section class="lee_lee_diabetes_meal_builder lee_lee_diabetes_meal_builder_page" data-meal-builder data-preserve-document-scroll-on-viewport-pan aria-labelledby="lee-lee-meal-builder-title">
             <header class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_meal_builder_header">
               <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">${isPicker ? 'Add Food Item' : state.mode === 'edit' ? 'Edit Meal' : 'Add New Meal'}</h2>
               ${isPicker ? '<button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="return-to-saved-meal-builder"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>' : ''}
