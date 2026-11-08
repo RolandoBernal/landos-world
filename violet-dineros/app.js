@@ -9,6 +9,7 @@ let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
 try { const stored = localStorage.getItem(STORAGE_KEY); lastRaw = stored; if (stored) { const parsed = JSON.parse(stored); if (!validState(parsed)) throw Error(); state = parsed; } } catch { storageBlocked = true; }
 const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icons = {
+ check: '<path d="M5 13l4 4L19 7"/>',
  close: '<path d="M6 6l12 12M18 6 6 18"/>',
  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
  home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
@@ -37,10 +38,20 @@ function showNotice(message, kind, duration) {
   const notice = document.querySelector('#notice');
   notice.dataset.kind = kind;
   const text = document.createElement('span'); text.textContent = message;
-  const close = document.createElement('button');
-  close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification'); close.textContent = '×';
-  close.onclick = dismissNotice;
-  notice.append(text, close);
+  if (kind === 'success') {
+    // Success confirmations are a brief modal-style card (see styles.css):
+    // a check badge, no decision and no dismiss control — the timer below
+    // clears it. Errors keep the dismiss button.
+    const badge = document.createElement('i');
+    badge.className = 'notice-icon'; badge.setAttribute('aria-hidden', 'true');
+    badge.innerHTML = icon('check');
+    notice.append(badge, text);
+  } else {
+    const close = document.createElement('button');
+    close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification'); close.textContent = '×';
+    close.onclick = dismissNotice;
+    notice.append(text, close);
+  }
   const dialog = document.querySelector('#transaction-sheet[open],#affordability-sheet[open]');
   if (dialog) {
     const error = dialog.querySelector('.error');

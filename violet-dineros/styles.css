@@ -477,3 +477,15 @@ nav{backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -6px 20px #35205212}
 :root[data-theme=dark] nav{background:#17131ff2;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -8px 24px #00000059}
 #quick-actions-toggle{box-shadow:0 8px 24px #3520524d}
 :root[data-theme=dark] #quick-actions-toggle{box-shadow:0 8px 24px #00000073}
+/* Success confirmations read as a brief modal, modeled on the sheet dialogs:
+   a centered card over a soft scrim. No decision is required and nothing is
+   interactive (the notice stays pointer-events:none) — it dismisses itself
+   on the existing timer. In-dialog notices keep the static inline variant,
+   and error notices keep the top banner with their dismiss button. */
+.shell>#notice[data-kind=success]:not(:empty){top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 48px));max-width:none;padding:24px 22px;border-radius:20px;background:#fcfaff;border:1px solid #ddd2ee;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #28133b38;flex-direction:column;align-items:center;gap:12px;text-align:center;font-size:1rem;font-weight:500;color:#30234b;animation:lwvd-notice-in .18s ease-out}
+#notice .notice-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#d8f5e9;color:#216f59;font-style:normal;flex-shrink:0}
+#notice .notice-icon svg{width:28px;height:28px;stroke-width:2.4}
+:root[data-theme=dark] .shell>#notice[data-kind=success]:not(:empty){background:#342443;border-color:#84629e;color:#f0e7fa;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #00000066}
+:root[data-theme=dark] #notice .notice-icon{background:#1e3d33;color:#7fe3bb}
+@keyframes lwvd-notice-in{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@media (prefers-reduced-motion:reduce){.shell>#notice[data-kind=success]:not(:empty){animation:none}}
