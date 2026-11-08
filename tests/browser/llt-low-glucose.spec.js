@@ -587,14 +587,31 @@ test('Low Glucose modal and Today countdown stay synchronized through close and 
   }
   await page.locator('[data-action=open-pre-meal-timer]').click();
   async function synchronized() {
-    const expected = await page.evaluate(() => {
+    // Sample the timer state and both displays in a single page turn.
+    // Two 1s intervals drive the displays — one rewrites every countdown
+    // element, the other rewrites the Today card — and they are not
+    // phase-locked, so at any instant the displays may legitimately
+    // straddle a tick and differ by one second. Synchronization means
+    // they never differ by more than that one tick and each stays within
+    // one tick of the computed remaining time. The original version
+    // sampled the expectation and the displays in separate calls and
+    // demanded exact equality, which raced the intervals and failed
+    // intermittently by one second.
+    const sample = await page.evaluate(() => {
       const timer = window.LeeLeePreMealTimer.getTimer();
-      const seconds = Math.ceil(window.LeeLeePreMealTimer.remainingMs(timer) / 1000);
-      return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      const expectedSeconds = Math.ceil(window.LeeLeePreMealTimer.remainingMs(timer) / 1000);
+      const displays = [...document.querySelectorAll('[data-pre-meal-timer-value]')].map((element) => {
+        const [minutes, seconds] = element.textContent.split(':').map(Number);
+        return minutes * 60 + seconds;
+      });
+      return { expectedSeconds, displays };
     });
     await expect(page.locator('[data-pre-meal-timer-value]')).toHaveCount(2);
-    expect(await page.locator('[data-pre-meal-timer-value]').allTextContents()).toEqual([expected, expected]);
-    return expected;
+    expect(sample.displays).toHaveLength(2);
+    expect(Math.abs(sample.displays[1] - sample.displays[0])).toBeLessThanOrEqual(1);
+    for (const shown of sample.displays) expect(Math.abs(shown - sample.expectedSeconds)).toBeLessThanOrEqual(1);
+    const shown = sample.displays[0];
+    return `${String(Math.floor(shown / 60)).padStart(2, '0')}:${String(shown % 60).padStart(2, '0')}`;
   }
   await synchronized();
   await page.clock.runFor(3100);
