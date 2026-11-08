@@ -37,6 +37,24 @@ async function openBuilder(page) {
   await expect(page.locator('[data-meal-builder]')).toBeVisible();
 }
 
+// Mobile WebKit has no mouse.wheel. A real touch scroll also matters to
+// the watcher: the touchmove marks the user's scroll intent, which is
+// what lets the resize path leave a preserved surface alone as well.
+async function touchScroll(page, deltaY) {
+  await page.evaluate((dy) => {
+    const surface = document.querySelector('[data-meal-builder]');
+    const fire = (type, y) => {
+      const event = new Event(type, { bubbles: true, composed: true });
+      Object.defineProperty(event, 'touches', { value: [{ clientX: 195, clientY: y }] });
+      surface.dispatchEvent(event);
+    };
+    fire('touchstart', 420);
+    fire('touchmove', 420 - Math.sign(dy) * 60);
+    window.scrollBy(0, dy);
+    fire('touchend', 420);
+  }, deltaY);
+}
+
 async function fireViewportPan(page) {
   await page.evaluate(() => {
     window.visualViewport?.dispatchEvent(new Event('scroll'));
@@ -52,8 +70,7 @@ test('scrolling in the Meal Builder is not undone by viewport-pan corrections', 
   const name = page.locator('[data-meal-builder] [name="mealBuilderName"]');
   await name.click();
   const scrollY = () => page.evaluate(() => window.scrollY);
-  await page.mouse.move(195, 400);
-  await page.mouse.wheel(0, 600);
+  await touchScroll(page, 600);
   await page.waitForTimeout(150);
   const userPosition = await scrollY();
   expect(userPosition).toBeGreaterThan(400);
@@ -63,7 +80,7 @@ test('scrolling in the Meal Builder is not undone by viewport-pan corrections', 
   const componentCarbs = page.locator('[data-meal-builder-component-carbs]').nth(4);
   await componentCarbs.scrollIntoViewIfNeeded();
   await componentCarbs.click();
-  await page.mouse.wheel(0, -350);
+  await touchScroll(page, -350);
   await page.waitForTimeout(150);
   const componentPosition = await scrollY();
   await fireViewportPan(page);

@@ -426,6 +426,10 @@ test("sensor management disclosure preserves keyboard flow and refresh flow", as
 
 test("sensor management page fits narrow, wide and landscape viewports; no-sensor start remains available", async ({ page }) => {
   await open(page);
+  // Focus the opener first: desktop engines focus a button on click, but
+  // mobile Safari does not focus it on tap, and the module's return-focus
+  // path starts from the focused element (the keyboard scenario).
+  await page.getByRole("button", { name: "Manage Sensor" }).focus();
   await page.getByRole("button", { name: "Manage Sensor" }).click();
   const sensorPage = page.locator(".llt_sensor_page");
   await expect(sensorPage.getByRole("button", { name: "Start New Sensor", exact: true })).toBeVisible();
