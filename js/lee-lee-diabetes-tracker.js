@@ -342,6 +342,7 @@
   let foodLibraryVisibleCount = 20;
   let foodLibraryMessage = '';
   let foodLibraryMessageTimer = 0;
+  let successConfirmationTimer = 0;
   let foodLibraryError = '';
   let mealBuilderState = null;
   let preMealTimerRefresh = null;
@@ -522,6 +523,7 @@
     window.clearInterval(preMealTimerRefresh);
     window.clearTimeout(migrationRetryTimer);
     window.clearTimeout(foodLibraryMessageTimer);
+    dismissSuccessConfirmation();
     disableCarbCalculatorModalViewport();
     closeSavedMealBuilder();
     historyFilterSheetOpen = false;
@@ -4895,7 +4897,6 @@
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-saved-meal-builder">+ Add New Meal</button>
       </div>`}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
-      ${foodLibraryMessage ? `<p class="lee_lee_diabetes_save_status lee_lee_diabetes_save_status--saved" data-food-library-feedback role="status" aria-live="polite">${escapeHtml(foodLibraryMessage)}</p>` : ''}
       ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div data-food-library-discovery>${renderFoodLibraryDiscovery()}</div>`}
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
       ${mealBuilderState ? renderSavedMealBuilder(mealBuilderState) : ''}
@@ -5220,19 +5221,43 @@
   }
 
   function showFoodLibraryMessage(message) {
-    window.clearTimeout(foodLibraryMessageTimer);
-    foodLibraryMessage = message;
-    foodLibraryMessageTimer = window.setTimeout(() => {
-      foodLibraryMessageTimer = 0;
-      foodLibraryMessage = '';
-      getRoot()?.querySelector('[data-food-library-feedback]')?.remove();
-    }, 4000);
+    showSuccessConfirmation(message);
+  }
+
+  function dismissSuccessConfirmation() {
+    window.clearTimeout(successConfirmationTimer);
+    successConfirmationTimer = 0;
+    document.querySelector('[data-success-confirmation]')?.remove();
+  }
+
+  // Success confirmations are a brief centered card over a dimmed screen —
+  // the same pattern as Violet Dineros: a check badge, the message, no
+  // buttons, and it dismisses itself. The card is appended to the tracker
+  // view (outside the re-rendered root, so renders cannot wipe it, and
+  // inside the view so the theme tokens resolve).
+  function showSuccessConfirmation(message) {
+    dismissSuccessConfirmation();
+    const host = document.getElementById('lee-lees-tracker-view') || document.body;
+    const card = document.createElement('div');
+    card.className = 'lee_lee_diabetes_success_card';
+    card.dataset.successConfirmation = '';
+    card.setAttribute('role', 'status');
+    const badge = document.createElement('span');
+    badge.className = 'lee_lee_diabetes_success_badge';
+    badge.setAttribute('aria-hidden', 'true');
+    badge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+    const text = document.createElement('span');
+    text.textContent = message;
+    card.append(badge, text);
+    host.append(card);
+    successConfirmationTimer = window.setTimeout(dismissSuccessConfirmation, 2500);
   }
 
   function clearFoodLibraryMessage() {
     window.clearTimeout(foodLibraryMessageTimer);
     foodLibraryMessageTimer = 0;
     foodLibraryMessage = '';
+    dismissSuccessConfirmation();
   }
 
   function renderDeleteConfirmation(record, returnTo = 'history-day') {
@@ -7111,6 +7136,7 @@
     currentEditor.carbCalculatorItemEditId = '';
     currentEditor.carbCalculatorItemDraft = null;
     renderCarbCalculatorMainFromForm(form, { focus: `[data-action="edit-carb-calculator-row"]${getCarbRowSelector(nextRow.id)}` });
+    showSuccessConfirmation(existing ? 'Item saved.' : 'Item added.');
   }
 
   function getScrollSnapshot() {
@@ -7350,6 +7376,7 @@
       foodLibraryError = '';
       currentEditor.carbCalculatorFoodEditorOpen = false;
       currentEditor.carbCalculatorFoodDraft = null;
+      showSuccessConfirmation('Food saved.');
     }
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
@@ -7387,6 +7414,7 @@
       if (currentEditor.calculatorSession?.context === 'standalone') currentEditor.carbCalculatorMealNameDraft = '';
       currentEditor.carbCalculatorTab = 'meals';
       currentEditor.carbCalculatorSearch = result.meal.name;
+      showSuccessConfirmation('Meal saved.');
     }
     renderEditor({
       mode: currentEditor?.mode || 'log-entry',
@@ -10995,6 +11023,7 @@
         }
         const saved = upsertRecord(pendingRecord);
         renderAfterRecordChange(pendingRecord);
+        showSuccessConfirmation('Record saved.');
         maybeOfferPreMealTimer(pendingRecord, saved.existingRecord, saved);
       }
       if (action === 'confirm-plan') {
