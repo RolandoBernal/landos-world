@@ -862,7 +862,7 @@
 .lee_lee_diabetes_chart_table th,
 .lee_lee_diabetes_chart_table td {
   padding: 0.35rem;
-  border-top: 1px solid #48484A;
+  border-top: 1px solid var(--lee-lee-border);
   text-align: left;
 }
 
@@ -1406,7 +1406,7 @@
 
 .lee_lee_diabetes_meal_builder_footer {
   display: grid;
-  gap: var(--llt-field-support-gap);
+  gap: 1rem;
 }
 
 .lee_lee_diabetes_meal_builder [data-meal-builder-error]:not([hidden]) {
@@ -1665,7 +1665,7 @@
 
 .lee_lee_diabetes_food_item_footer {
   padding-top: 0.55rem;
-  border-top: 1px solid #48484A;
+  border-top: 1px solid var(--lee-lee-border);
 }
 
 .lee_lee_diabetes_food_item_actions {
@@ -1861,7 +1861,7 @@
   box-sizing: border-box;
   margin-top: 0.05rem;
   padding: 0.5rem 10px 0.25rem 0;
-  border-top: 1px solid #48484A;
+  border-top: 1px solid var(--lee-lee-border);
   background: var(--lee-lee-panel);
 }
 
@@ -2446,7 +2446,7 @@
   grid-template-columns: minmax(7rem, 0.7fr) minmax(0, 1.3fr);
   gap: 0.65rem;
   padding: 0.55rem 0;
-  border-top: 1px solid #48484A;
+  border-top: 1px solid var(--lee-lee-border);
 }
 
 .lee_lee_diabetes_plan_verification_row dt {
@@ -2830,6 +2830,17 @@
 :root[data-theme="light"] .lee_lee_diabetes_event_option,
 :root[data-theme="light"] .lee_lee_diabetes_pill,
 :root[data-theme="light"] .lee_lee_diabetes_conflict_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_summary_grid div,
+:root[data-theme="light"] .lee_lee_diabetes_chart,
+:root[data-theme="light"] .lee_lee_diabetes_typical_day article,
+:root[data-theme="light"] .lee_lee_diabetes_carb_entry,
+:root[data-theme="light"] .lee_lee_diabetes_confirm_list div,
+:root[data-theme="light"] .lee_lee_diabetes_range_row,
+:root[data-theme="light"] .lee_lee_diabetes_status_grid div {
+  background: rgb(250 250 252 / 88%);
+  border-color: var(--lee-lee-border);
+}
+
 :root[data-theme="light"] .lee_lee_diabetes_nav_button.is-active,
 :root[data-theme="light"] .lee_lee_diabetes_dose_card,
 :root[data-theme="light"] .lee_lee_diabetes_banner {
@@ -3051,7 +3062,7 @@
   box-sizing: border-box;
   padding: 0.45rem 0.5rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  border-top: 1px solid #48484A;
+  border-top: 1px solid var(--lee-lee-border);
   background: rgb(28 28 30 / 94%);
   box-shadow: 0 -10px 30px rgb(0 0 0 / 18%);
   backdrop-filter: blur(16px);
@@ -3148,7 +3159,7 @@
     width: 100%;
     box-sizing: border-box;
     padding: 0.45rem 0.5rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid #48484A;
+    border-top: 1px solid var(--lee-lee-border);
     background: rgb(28 28 30 / 94%);
     box-shadow: 0 -10px 30px rgb(0 0 0 / 18%);
     backdrop-filter: blur(16px);
