@@ -1,8 +1,10 @@
 /* Shared standalone chrome; app adapters only supply palette and header clearance. */
 :root[data-status-app] {
   --status-inset: env(safe-area-inset-top, 0px);
+  /* Leave room below the native status-area edge without enlarging the cover. */
+  --status-content-inset: calc(var(--status-inset) + 8px);
   --status-surface: var(--color-bg);
-  --landos-page-top-space: calc(1rem + var(--status-inset));
+  --landos-page-top-space: calc(1rem + var(--status-content-inset));
 }
 :root[data-status-app="sprints"],
 :root[data-status-app="checklist"] { --status-surface: #050507; }
@@ -19,13 +21,13 @@
   z-index: 2147483647; pointer-events: none;
 }
 :root[data-status-app] .ecosystem_nav {
-  padding-top: var(--status-inset);
+  padding-top: var(--status-content-inset);
 }
 :root[data-status-app="llt"] .lee_lee_diabetes_carb_calc_visual_viewport {
   padding-top: calc(12px + var(--status-inset));
 }
-:root[data-status-app="lwvd"] .shell { padding-top: calc(26px + var(--status-inset)); }
-:root[data-status-app="lwvd"] .shell > header { top: calc(22px + var(--status-inset)); }
+:root[data-status-app="lwvd"] .shell { padding-top: calc(26px + var(--status-content-inset)); }
+:root[data-status-app="lwvd"] .shell > header { top: calc(22px + var(--status-content-inset)); }
 
 /* These two views do not use the shared digit_clock_app outer padding. */
 :root[data-status-app="sprints"] #sprints-view,
@@ -34,7 +36,7 @@
 }
 /* iMT owns a compact shell and a back link without a negative top margin. */
 :root[data-status-app="imt"] #maintenance-total-view {
-  padding-top: calc(12px + var(--status-inset));
+  padding-top: calc(12px + var(--status-content-inset));
 }
 :root[data-status-app="imt"] #maintenance-total-view > .ecosystem_nav {
   padding-top: 0;
