@@ -72,3 +72,74 @@ test('starring a meal deep in the Foods list keeps the scroll position', async (
   const stored = await page.evaluate(k => JSON.parse(localStorage.getItem(k)), key);
   expect(stored.savedMeals.find(m => m.id === 'meal-3').favorite).toBe(true);
 });
+
+// Exercise the actual tracker callbacks used by production sync, without
+// connecting a test browser to a user's Supabase account.
+async function exposeSyncCallbacks(page) {
+  await page.addInitScript(() => {
+    let api;
+    Object.defineProperty(window, 'LeeLeeTrackerSync', {
+      configurable: true,
+      get: () => api,
+      set(value) {
+        api = { ...value, createRepository(options) {
+          const repository = value.createRepository(options);
+          window.testRemoteLibrary = (patch = {}) => {
+            const data = options.getDocument();
+            const next = { ...data, ...patch };
+            options.saveDocument(next, { keepStatus: true });
+            options.onRemoteChange(next);
+          };
+          return { ...repository, subscribe(listener) {
+            window.testSyncStatus = (status = {}) => listener({ ...repository.getSyncStatus(), ...status });
+            return repository.subscribe(listener);
+          } };
+        } };
+      },
+    });
+  });
+}
+
+for (const [action, id] of [['toggle-food-favorite', 'food-25'], ['toggle-saved-meal-favorite', 'meal-3']]) {
+  test(`favorite survives delayed sync acknowledgement: ${action}`, async ({ page }) => {
+    await exposeSyncCallbacks(page);
+    await open(page);
+    const star = page.locator(`[data-action="${action}"][data-id="${id}"]`);
+    await star.scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => scrollY);
+    await star.tap();
+    // Let the local toggle settle before delivering the separate network
+    // acknowledgement. The original tests only covered the local save.
+    await page.waitForTimeout(200);
+    const search = await page.locator('[name="foodLibrarySearch"]').elementHandle();
+    await page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:v1'));
+      window.testRemoteLibrary({ foodLibrary: data.foodLibrary.map(food => ({ ...food, version: (food.version || 0) + 1 })) });
+      // Force layout between remote acknowledgement and status notification,
+      // as occurs when those arrive in different browser tasks.
+      void document.documentElement.offsetHeight;
+    });
+    const afterRemote = await page.evaluate(() => scrollY);
+    expect(Math.abs(afterRemote - before)).toBeLessThanOrEqual(150);
+    expect(await search.evaluate(element => element.isConnected)).toBe(true);
+    await page.evaluate(() => window.testSyncStatus({ configured: true, signedIn: true, state: 'syncing', message: 'Syncing...' }));
+    await expect(page.locator('.lee_lee_diabetes_top .lee_lee_diabetes_save_status')).toContainText('Syncing...');
+    await page.evaluate(() => window.testSyncStatus({ configured: true, signedIn: true, state: 'idle', pendingCount: 0, realtimeStatus: 'connected', lastSuccessfulSyncAt: new Date().toISOString() }));
+    expect(await search.evaluate(element => element.isConnected)).toBe(true);
+    await expect(page.locator('.lee_lee_diabetes_top .lee_lee_diabetes_save_status')).toContainText('Synced');
+  });
+}
+
+test('remote library edits still reach Foods after the document has been saved', async ({ page }) => {
+  await exposeSyncCallbacks(page);
+  await open(page);
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:v1'));
+    window.testRemoteLibrary({
+      foodLibrary: data.foodLibrary.map(food => food.id === 'food-25' ? { ...food, name: 'Updated remote food' } : food),
+      savedMeals: data.savedMeals.map(meal => meal.id === 'meal-3' ? { ...meal, name: 'Updated remote meal' } : meal),
+    });
+  });
+  await expect(page.locator('[data-food-library-discovery]')).toContainText('Updated remote food');
+  await expect(page.locator('[data-food-library-discovery]')).toContainText('Updated remote meal');
+});
