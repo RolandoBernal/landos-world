@@ -270,7 +270,6 @@
   border: 1px solid var(--lee-lee-border);
   border-radius: 8px;
   background: var(--lee-lee-panel);
-  box-shadow: 0 14px 40px rgb(0 0 0 / 24%);
 }
 
 .lee_lee_diabetes_card {
@@ -1284,6 +1283,15 @@
   padding-block-end: var(--llt-field-support-gap);
 }
 
+/* Picker header: the Back link takes its own left-aligned row under the
+   page title, above the section title — no band background. */
+.lee_lee_diabetes_meal_builder_header--picker {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  background: transparent;
+}
+
 .lee_lee_diabetes_meal_builder_body {
   display: grid;
   align-content: start;
@@ -1937,6 +1945,13 @@
 
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus,
 .lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input:focus-visible {
+  background: rgb(var(--lee-lee-accent-rgb) / 14%);
+  box-shadow: var(--lee-lee-focus);
+}
+
+/* Pre-highlighted first field: the editor opens with the full page visible
+   (no keyboard), wearing the usual focus ring until the user engages. */
+.lee_lee_diabetes_carb_calc_input.lee_lee_diabetes_input--primed {
   background: rgb(var(--lee-lee-accent-rgb) / 14%);
   box-shadow: var(--lee-lee-focus);
 }
@@ -2699,7 +2714,6 @@
   background: var(--lee-lee-panel);
   border-color: var(--lee-lee-border);
   color: var(--lee-lee-text);
-  box-shadow: 0 16px 42px rgb(22 26 29 / 12%);
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_calculator--item-editor > .lee_lee_diabetes_carb_item_editor_actions {
@@ -2875,9 +2889,6 @@
 
 :root[data-theme="light"] .lee_lee_diabetes_card,
 :root[data-theme="light"] .lee_lee_diabetes_timeline_item,
-:root[data-theme="light"] .lee_lee_diabetes_editor,
-:root[data-theme="light"] .lee_lee_diabetes_history_date,
-:root[data-theme="light"] .lee_lee_diabetes_report_preview,
 :root[data-theme="light"] .lee_lee_diabetes_sheet {
   background: var(--lee-lee-panel);
   border-color: var(--lee-lee-border);
