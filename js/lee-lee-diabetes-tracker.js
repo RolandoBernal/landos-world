@@ -6072,7 +6072,7 @@
       <div class="lee_lee_diabetes_carb_shortcuts" data-carb-search-shortcuts${query.trim() ? ' hidden' : ''}>
         ${[['favorites', 'Favorites'], ['recent', 'Recent'], ['meals', 'My Meals']].map(([key, label]) => `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="carb-search-shortcut" data-picker="${key}" aria-pressed="${activePicker === key}" aria-expanded="${activePicker === key}" aria-controls="lee-lee-carb-results">${label}</button>`).join('')}
       </div>
-      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount...</button>
+      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount</button>
       <div class="lee_lee_diabetes_carb_library_list" id="lee-lee-carb-results" data-carb-library-list data-results-bounded="${!query.trim() && ['favorites', 'recent', 'meals'].includes(activePicker)}" tabindex="0" role="region" aria-label="Food and meal results">
         ${currentEditor?.carbCalculatorFoodEditorOpen ? `${foodLibraryError ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(foodLibraryError)}</p>` : ''}${renderFoodEditorPanel()}` : renderCarbCalculatorLibraryList(activePicker, query, rows)}
       </div>

@@ -45,7 +45,7 @@ test('five destinations, center calculator, floating entry and scratch preservat
   await expect(nav(page)).toHaveCount(0);
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);
   await expect(root(page).locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
-  await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
   await root(page).locator('[name="carbItemCarbs"]').fill('12.5');
   await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();
   await root(page).getByRole('button', { name: 'Done', exact: true }).click();
@@ -235,7 +235,7 @@ test('standalone Done restores each launching destination and retains scratch st
     await nav(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
     await expect(root(page).locator('.lee_lee_diabetes_nav_shell, .lee_lee_diabetes_floating_log')).toHaveCount(0);
     if (destination === 'Today') {
-      await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+      await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
       await root(page).locator('[name="carbItemCarbs"]').fill('17.5');
       await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();
     }

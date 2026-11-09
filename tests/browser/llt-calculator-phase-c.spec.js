@@ -52,7 +52,7 @@ async function enter(page, context) {
 }
 async function stored(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)), key); }
 async function manual(page, carbs, qty = '1') {
-  await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
   await root(page).locator('[name="carbItemCarbs"]').fill(carbs);
   await root(page).locator('[name="carbItemQty"]').fill(qty);
   await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();
@@ -79,7 +79,7 @@ for (const context of ['standalone', 'entry']) {
     await retry.evaluate(n => { n.dataset.id = 'missing-food'; });
     await retry.click();
     await expect(query).toHaveValue('Office');
-    await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
     await root(page).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(query).toHaveValue('Office');
     await expect(root(page).locator('[data-carb-calculator-row]')).toHaveCount(3);
@@ -119,7 +119,7 @@ for (const context of ['standalone', 'entry']) {
     await seed(page); await enter(page, context);
     await root(page).locator('[name="carbFoodSearch"]').fill('Office');
     await root(page).getByRole('button', { name: /^Add Office snack / }).click();
-    await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
     const carbs = root(page).locator('[name="carbItemCarbs"]');
     const qty = root(page).locator('[name="carbItemQty"]');
     const preview = root(page).locator('[data-carb-item-preview]');

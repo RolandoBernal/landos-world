@@ -53,7 +53,7 @@ async function enter(page, context) {
 }
 async function stored(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)), key); }
 async function manual(page, carbs, qty = '1') {
-  await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
   await root(page).locator('[name="carbItemCarbs"]').fill(carbs);
   await root(page).locator('[name="carbItemQty"]').fill(qty);
   await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();
@@ -94,7 +94,7 @@ for (const context of ['standalone', 'entry']) {
     await page.screenshot({ path: info.outputPath('recent-dismissed.png') });
     await favorites.click(); await calc.locator('.lee_lee_diabetes_carb_intro h3').click();
     await expect(favorites).toHaveAttribute('aria-expanded','false');
-    await recent.click(); await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await recent.click(); await calc.getByRole('button', { name: '+ Add Manual Amount' }).click();
     await expect(calc.locator('[data-carb-item-editor]')).toBeVisible();
     await calc.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(recent).toHaveAttribute('aria-expanded','false');
@@ -165,7 +165,7 @@ for (const context of ['standalone', 'entry']) {
     await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
     await seed(page); await enter(page, context);
     const calc = root(page).locator('[data-carb-calculator]');
-    await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await calc.getByRole('button', { name: '+ Add Manual Amount' }).click();
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => {
         document.documentElement.dataset.theme = theme;
@@ -197,7 +197,7 @@ for (const context of ['standalone', 'entry']) {
   test(`${context}: manual amount preserves focused document scrolling like New Entry`, async ({ page }) => {
     await seed(page); await enter(page, context);
     const calc = root(page).locator('[data-carb-calculator]');
-    await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+    await calc.getByRole('button', { name: '+ Add Manual Amount' }).click();
     await expect(calc.locator('[data-carb-item-editor]')).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => window.LandosTheme.setPreference(theme), theme);
@@ -234,7 +234,7 @@ for (const context of ['standalone', 'entry']) {
     await manual(page, '10', '2');
     await calc.locator('[name="carbFoodSearch"]').fill('Office');
     for (const exit of ['Back to Carb Calculator', 'Cancel']) {
-      await calc.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+      await calc.getByRole('button', { name: '+ Add Manual Amount' }).click();
       await expect(page.getByRole('heading', { name: 'Add Manual Amount', exact: true })).toBeVisible();
       await expect(calc.locator('[data-modal-visual-viewport], [data-modal-scroll-container]')).toHaveCount(0);
       await expect(calc).toHaveCSS('overflow-y', 'visible');
@@ -264,7 +264,7 @@ for (const context of ['standalone', 'entry']) {
   test(`${context}: shared spacing and container-specific centering survive short and keyboard viewports`, async ({page},info)=>{
     await seed(page); await enter(page,context);
     const calc=root(page).locator('[data-carb-calculator]');
-    await calc.getByRole('button',{name:'+ Add Manual Amount...'}).click();
+    await calc.getByRole('button',{name:'+ Add Manual Amount'}).click();
     const carbs=calc.locator('[name="carbItemCarbs"]'); const qty=calc.locator('[name="carbItemQty"]');
     await expect(qty).toHaveValue('1'); await carbs.fill('27.55'); await qty.fill('2');
     await expect(calc.locator('[data-carb-item-preview]')).toHaveText('55.1 g');
@@ -315,7 +315,7 @@ for (const context of ['standalone', 'entry']) test(`${context}: cleaned calcula
   await search.fill('Office'); await expect(calc.locator('[data-carb-library-list]')).toContainText('Office snack');
   await search.fill(''); await calc.getByRole('button', { name: 'Favorites', exact: true }).click();
   await expect(calc.locator('[data-carb-library-list]')).toContainText('Office snack');
-  await calc.getByRole('button', { name: '+ Add Manual Amount...', exact: true }).click();
+  await calc.getByRole('button', { name: '+ Add Manual Amount', exact: true }).click();
   await expect(calc.locator('[data-carb-item-editor]')).toHaveAttribute('data-preserve-document-scroll-on-viewport-pan', '');
   await calc.getByRole('button', { name: 'Back to Carb Calculator', exact: true }).click();
   await expect(search).toBeVisible();

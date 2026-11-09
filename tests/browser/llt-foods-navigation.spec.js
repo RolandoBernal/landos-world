@@ -29,7 +29,7 @@ const calcTab = page => nav(page).getByRole('button', { name: 'Carb Calc', exact
 const nav = page => root(page).getByRole('navigation', { name: 'Lee-Lee’s Tracker mobile navigation' });
 async function foods(page) { await nav(page).getByRole('button', { name: 'Foods', exact: true }).click(); }
 async function addManual(page, amount) {
-  await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
   await root(page).locator('[name="carbItemCarbs"]').fill(amount);
   await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();
 }
