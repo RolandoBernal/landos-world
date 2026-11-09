@@ -52,7 +52,7 @@ async function enter(page, context) {
 }
 async function stored(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)), key); }
 async function manual(page, carbs, qty = '1') {
-  await root(page).getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
   await root(page).locator('[name="carbItemCarbs"]').fill(carbs);
   await root(page).locator('[name="carbItemQty"]').fill(qty);
   await root(page).getByRole('button', { name: 'Add Item', exact: true }).click();

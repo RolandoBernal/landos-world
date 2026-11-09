@@ -1616,7 +1616,7 @@ test('LLT report and conflict data preserve numeric typography in generated cell
 
 test('carb calculator uses display rows with a focused item editor', () => {
   assert.match(trackerSource, /data-action="open-carb-calculator-item-editor"/);
-  assert.match(trackerSource, /\+ Add Manual Amount\.\.\./);
+  assert.match(trackerSource, /\+ Add Manual Amount</);
   assert.match(calculatorMarkup('entry', { carbCalculatorItemEditorMode: 'edit' }), />Edit Manual Amount<\/h2>/);
   assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="cancel-carb-calculator-item-editor"/);
   assert.match(trackerSource, /class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="save-carb-calculator-item-editor"/);

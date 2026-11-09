@@ -37,7 +37,7 @@ test('manual actions blend into page and Total Carbs border is inset in both cal
         await root(page).locator('[name="type"]').selectOption('Snacks');
         await root(page).locator('[data-action="open-carb-calculator"]').click();
       }
-      await root(page).getByRole('button', {name:'+ Add Manual Amount...'}).click();
+      await root(page).getByRole('button', {name:'+ Add Manual Amount'}).click();
       const actions=root(page).locator('.lee_lee_diabetes_carb_item_editor_actions');
       await expect(actions).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
       await expect(actions.getByRole('button')).toHaveText(['Cancel','Add Item']);

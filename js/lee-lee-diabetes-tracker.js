@@ -1344,8 +1344,8 @@
       return;
     }
     const focus = options.focusFoodsView ? '#lee-lee-diabetes-title' : options.carbCalculatorPickerFocus || (currentEditor.carbCalculatorItemEditorMode
-      ? '[name="carbItemCarbs"]' : '[name="carbFoodSearch"]');
-    const target = root.querySelector(focus);
+      ? (options.carbCalculatorItemEditorMode ? '' : '[name="carbItemCarbs"]') : '[name="carbFoodSearch"]');
+    const target = focus ? root.querySelector(focus) : null;
     target?.focus({ preventScroll: true });
     if (!options.focusFoodsView && target) window.LandosWorldModalUtils?.ensureFocusedElementVisible?.(target, 112);
   }
@@ -5053,10 +5053,14 @@
     const total = getMealBuilderTotal(state);
     return `
       <section class="lee_lee_diabetes_meal_builder lee_lee_diabetes_meal_builder_page" data-meal-builder data-preserve-document-scroll-on-viewport-pan aria-labelledby="lee-lee-meal-builder-title">
+            ${isPicker ? `
+            <header class="lee_lee_diabetes_meal_builder_header lee_lee_diabetes_meal_builder_header--picker">
+              <button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="return-to-saved-meal-builder"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>
+              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">Add Food Item</h2>
+            </header>` : `
             <header class="lee_lee_diabetes_carb_calculator_header lee_lee_diabetes_meal_builder_header">
-              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">${isPicker ? 'Add Food Item' : state.mode === 'edit' ? 'Edit Meal' : 'Add New Meal'}</h2>
-              ${isPicker ? '<button type="button" class="lee_lee_diabetes_timeline_edit lee_lee_diabetes_back_link" data-action="return-to-saved-meal-builder"><span class="lee_lee_diabetes_back_icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span><span>Back</span></button>' : ''}
-            </header>
+              <h2 class="lee_lee_diabetes_section_title" id="lee-lee-meal-builder-title">${state.mode === 'edit' ? 'Edit Meal' : 'Add New Meal'}</h2>
+            </header>`}
             ${isPicker ? `
               <div class="lee_lee_diabetes_meal_builder_body lee_lee_diabetes_meal_builder_picker_body" data-meal-builder-body>
                 <label class="lee_lee_diabetes_field">Search Foods<input class="lee_lee_diabetes_input" name="mealBuilderFoodSearch" type="search" autocomplete="off" value="${escapeHtml(state.foodSearch)}" placeholder="Search foods..."></label>
@@ -6077,7 +6081,7 @@
       <div class="lee_lee_diabetes_carb_shortcuts" data-carb-search-shortcuts${query.trim() ? ' hidden' : ''}>
         ${[['favorites', 'Favorites'], ['recent', 'Recent'], ['meals', 'My Meals']].map(([key, label]) => `<button type="button" class="lee_lee_diabetes_timeline_edit" data-action="carb-search-shortcut" data-picker="${key}" aria-pressed="${activePicker === key}" aria-expanded="${activePicker === key}" aria-controls="lee-lee-carb-results">${label}</button>`).join('')}
       </div>
-      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount...</button>
+      <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_carb_add_item_button" data-action="open-carb-calculator-item-editor">+ Add Manual Amount</button>
       <div class="lee_lee_diabetes_carb_library_list" id="lee-lee-carb-results" data-carb-library-list data-results-bounded="${!query.trim() && ['favorites', 'recent', 'meals'].includes(activePicker)}" tabindex="0" role="region" aria-label="Food and meal results">
         ${currentEditor?.carbCalculatorFoodEditorOpen ? `${foodLibraryError ? `<p class="lee_lee_diabetes_error" role="alert">${escapeHtml(foodLibraryError)}</p>` : ''}${renderFoodEditorPanel()}` : renderCarbCalculatorLibraryList(activePicker, query, rows)}
       </div>
@@ -6232,7 +6236,7 @@
           <label class="lee_lee_diabetes_field">
             ${draft.sourceType === 'meal' ? 'Carbs per saved amount' : 'Carbs per serving'}
             <span class="lee_lee_diabetes_unit_input">
-              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input" name="carbItemCarbs" ${draft.sourceType === 'meal' ? 'readonly' : ''} type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" autofocus value="${escapeHtml(draft.carbs)}">
+              <input class="lee_lee_diabetes_input lee_lee_diabetes_carb_calc_input lee_lee_diabetes_input--primed" name="carbItemCarbs" ${draft.sourceType === 'meal' ? 'readonly' : ''} type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" value="${escapeHtml(draft.carbs)}">
               <span>g</span>
             </span>
           </label>
@@ -6562,7 +6566,9 @@
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorPickerFocus) {
       focusTarget(currentEditor.carbCalculatorPickerFocus);
       currentEditor.carbCalculatorPickerFocus = '';
-    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode) {
+    } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorItemEditorMode && previousEditor?.carbCalculatorItemEditorMode) {
+      // Not on the opening render: the item editor opens with the full page
+      // visible (no keyboard) and its first field pre-highlighted instead.
       focusTarget('[name="carbItemCarbs"]');
     } else if (currentEditor.carbCalculatorOpen && currentEditor.carbCalculatorFoodEditorOpen) {
       focusTarget('[name="foodName"]');
@@ -10597,6 +10603,7 @@
     }, true);
     root.addEventListener('pointermove', trackCarbDiscoveryMovement, { passive: true });
     root.addEventListener('focusin', (event) => {
+      if (event.target.closest?.('[data-carb-item-editor]')) event.target.closest('[data-carb-item-editor]').querySelector('.lee_lee_diabetes_input--primed')?.classList.remove('lee_lee_diabetes_input--primed');
       if (event.target.closest?.('.lee_lee_diabetes_nav_shell')) getRoot()?.querySelector('.lee_lee_diabetes_nav_shell')?.classList.remove('is-scroll-hidden');
       if (event.target.closest?.('[data-carb-calculator]')) applyCarbCalculatorViewportFrame();
       if (event.target.matches?.('[name="carbFoodSearch"]')) dismissCarbDiscoveryOutside(event.target);

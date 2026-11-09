@@ -110,7 +110,7 @@ test('Neighboring food cards, Favorites, Recent, Search and calculator retain th
   await expect(calc.getByLabel('Meal Total')).toHaveText('12.5 g');
   await expect(calc.getByRole('button', { name: 'Edit Neighbor Food', exact: true })).toBeVisible();
   await expect(calc.getByRole('button', { name: 'Remove Neighbor Food', exact: true })).toBeVisible();
-  await calc.getByRole('button', { name: '+ Add Manual Amount...', exact: true }).click();
+  await calc.getByRole('button', { name: '+ Add Manual Amount', exact: true }).click();
   await calc.getByLabel('Label (optional)', { exact: true }).fill('Manual neighbor');
   await calc.getByLabel('Carbs per serving').fill('5');
   await calc.getByRole('button', { name: 'Add Item', exact: true }).click();

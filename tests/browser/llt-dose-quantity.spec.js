@@ -25,7 +25,7 @@ async function open(page, seed = []) {
 async function stored(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)).records, key); }
 async function manual(page, carbs, label = 'Test item') {
   const calculator = page.locator('[data-carb-calculator]');
-  await calculator.getByRole('button', { name: '+ Add Manual Amount...' }).click();
+  await calculator.getByRole('button', { name: '+ Add Manual Amount' }).click();
   await calculator.getByLabel('Label (optional)', { exact: true }).fill(label);
   await calculator.getByLabel('Carbs per serving').fill(carbs);
   await calculator.getByRole('button', { name: 'Add Item' }).click();
