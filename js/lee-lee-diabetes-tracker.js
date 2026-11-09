@@ -4934,6 +4934,27 @@
     if (discovery) discovery.innerHTML = renderFoodLibraryDiscovery();
   }
 
+  // Favorite toggles refresh only the discovery list and keep the reader
+  // where they are in it: a full render rebuilds the whole screen, and
+  // WebKit drops the scroll position back to the top of the list.
+  function refreshFoodLibraryDiscoveryKeepingPlace(action, id, scrollY) {
+    const root = getRoot();
+    if (!root?.querySelector('[data-food-library-discovery]')) {
+      renderFoodLibrary();
+      return;
+    }
+    refreshFoodLibraryDiscovery();
+    // Restore after the refreshed list has laid out, the same pattern
+    // Settings uses: a scrollTo in the same task as the innerHTML swap
+    // does not survive WebKit's layout pass.
+    const restore = () => {
+      window.scrollTo(0, scrollY);
+      getRoot()?.querySelector(`[data-action="${action}"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
+    else window.setTimeout(restore, 0);
+  }
+
   function searchSavedMealItems(meals = [], query = '') {
     return activeSavedMeals(meals)
       .filter((meal) => searchTextMatches(meal.name, query))
@@ -10448,7 +10469,18 @@
         patientStatus.textContent = sharedSettingsStatus.message;
       }
     }
-    if (currentEditor.mode === 'foods') renderFoodLibrary();
+    if (currentEditor.mode === 'foods') {
+      // Queueing a library save emits a sync status that lands here in the
+      // middle of the save; without this, the re-render throws the reader
+      // back to the top of the list they were browsing.
+      const scrollY = window.scrollY;
+      renderFoodLibrary();
+      if (scrollY > 0) {
+        const restore = () => window.scrollTo(0, scrollY);
+        if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
+        else window.setTimeout(restore, 0);
+      }
+    }
     if (currentEditor.mode === 'history') renderHistory();
     if (currentEditor.mode === 'reports') renderReports();
     if (currentEditor.mode === 'export') renderReports();
@@ -10705,11 +10737,13 @@
       if (action === 'toggle-saved-meal-favorite') {
         const meal = savedMeals.find((item) => item.id === target.dataset.id && !isLibraryItemDeleted(item));
         if (meal) {
+          const scrollY = window.scrollY;
           const result = saveSavedMeal({ ...meal, favorite: !meal.favorite });
           foodLibraryError = result.error || '';
           if (result.meal) showFoodLibraryMessage(result.meal.favorite ? 'Meal favorited.' : 'Meal removed from favorites.');
           else clearFoodLibraryMessage();
-          renderFoodLibrary();
+          if (result.error) renderFoodLibrary();
+          else refreshFoodLibraryDiscoveryKeepingPlace('toggle-saved-meal-favorite', meal.id, scrollY);
         }
         return;
       }
@@ -11116,7 +11150,8 @@
       }
       if (action === 'toggle-food-favorite') {
         const food = foodLibrary.find((item) => item.id === target.dataset.id);
-        if (food) saveFoodLibraryItem({ ...food, favorite: !food.favorite });
+        const scrollY = window.scrollY;
+        const result = food ? saveFoodLibraryItem({ ...food, favorite: !food.favorite }) : null;
         if (currentEditor?.carbCalculatorOpen) {
           const form = target.closest('[data-lee-lee-editor]') || root.querySelector('[data-lee-lee-editor]');
           const results = form.querySelector('[data-carb-library-list]');
@@ -11127,8 +11162,10 @@
             const star = [...results.querySelectorAll('[data-action="toggle-food-favorite"]')].find(button => button.dataset.id === target.dataset.id);
             (star || results).focus({ preventScroll: true });
           }
-        } else {
+        } else if (result?.error) {
           renderFoodLibrary();
+        } else if (food) {
+          refreshFoodLibraryDiscoveryKeepingPlace('toggle-food-favorite', food.id, scrollY);
         }
       }
       if (action === 'delete-food-library-item') {
