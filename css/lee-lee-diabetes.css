@@ -1844,7 +1844,13 @@
 }
 
 .lee_lee_diabetes_carb_item_editor .lee_lee_diabetes_unit_input span {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   font-weight: 400;
+  /* Optical: the unit glyph's ink sits low in its em box (descender letter),
+     so nudge it up to sit on the input's visual center. */
+  transform: translateY(-0.12em);
 }
 
 .lee_lee_diabetes_carb_item_editor_secondary_fields > .lee_lee_diabetes_field:last-child .lee_lee_diabetes_input {
@@ -2729,6 +2735,19 @@
   :root[data-theme="light"] .lee_lee_diabetes_food_editor_actions {
     background: var(--lee-lee-panel-strong);
   }
+}
+
+/* The editor page and the meal builder design their header/footer bands and
+   action rows to sit directly on the page; the narrow-container tint above
+   must not paint a slab behind them in the light theme. */
+:root[data-theme="light"] .lee_lee_diabetes_food_editor_page .lee_lee_diabetes_food_editor_actions,
+:root[data-theme="light"] .lee_lee_diabetes_meal_builder_footer .lee_lee_diabetes_food_editor_actions {
+  background: transparent;
+}
+
+:root[data-theme="light"] .lee_lee_diabetes_meal_builder_header,
+:root[data-theme="light"] .lee_lee_diabetes_meal_builder_footer {
+  background: transparent;
 }
 
 :root[data-theme="light"] .lee_lee_diabetes_carb_search_button {
