@@ -344,6 +344,7 @@
   let foodLibraryMessageTimer = 0;
   let successConfirmationTimer = 0;
   let foodLibraryError = '';
+  let renderedFoodLibraryDiscovery = '';
   let mealBuilderState = null;
   let preMealTimerRefresh = null;
   const carbCalculatorEngine = window.LeeLeeCarbCalculator.createEngine({
@@ -4887,6 +4888,7 @@
       ? foodLibrary.find((food) => food.id === currentEditor.foodLibraryEditorId && !isLibraryItemDeleted(food))
       : null);
     const editorTitle = editorFood?.id ? 'Edit Food' : 'Add New Food';
+    renderedFoodLibraryDiscovery = renderFoodLibraryDiscovery();
     renderTrackerScreen(root, `
       ${renderTrackerTop({ active: 'foods', kicker: 'Food Library', title: 'Foods' })}
       ${renderTrackerNav('foods')}
@@ -4897,7 +4899,7 @@
         <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-saved-meal-builder">+ Add New Meal</button>
       </div>`}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
-      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div data-food-library-discovery>${renderFoodLibraryDiscovery()}</div>`}
+      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div data-food-library-discovery>${renderedFoodLibraryDiscovery}</div>`}
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
       ${mealBuilderState ? renderSavedMealBuilder(mealBuilderState) : ''}
       </section>
@@ -4931,7 +4933,10 @@
 
   function refreshFoodLibraryDiscovery() {
     const discovery = getRoot()?.querySelector('[data-food-library-discovery]');
-    if (discovery) discovery.innerHTML = renderFoodLibraryDiscovery();
+    if (discovery) {
+      renderedFoodLibraryDiscovery = renderFoodLibraryDiscovery();
+      discovery.innerHTML = renderedFoodLibraryDiscovery;
+    }
   }
 
   // Favorite toggles refresh only the discovery list and keep the reader
@@ -10357,6 +10362,9 @@
       legacyRecordKeys: LEGACY_RECORD_STORAGE_KEYS,
       getLocalSharedSettings,
       onRemoteChange: (nextData) => {
+        // Sync acknowledgements also enter here. Only changed library
+        // presentation needs a Foods render; replacing identical DOM loses
+        // Safari's scroll/focus anchor after a favorite has already saved.
         trackerData = nextData;
         records = trackerData.records;
         insulinPlans = trackerData.insulinPlans;
@@ -10370,7 +10378,9 @@
           else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
           else if (currentEditor?.mode === 'reports') renderReports();
           else if (currentEditor?.mode === 'export') renderReports();
-          else if (currentEditor?.mode === 'foods') renderFoodLibrary();
+          else if (currentEditor?.mode === 'foods') {
+            if (renderedFoodLibraryDiscovery !== renderFoodLibraryDiscovery()) renderFoodLibrary();
+          }
           else if (currentEditor?.mode === 'settings') refreshCurrentViewForSync();
           else renderHome();
         }
@@ -10470,21 +10480,13 @@
       }
     }
     if (currentEditor.mode === 'foods') {
-      // Queueing a library save emits a sync status that lands here in the
-      // middle of the save; without this, the re-render throws the reader
-      // back to the top of the list they were browsing.
-      const scrollY = window.scrollY;
-      renderFoodLibrary();
-      if (scrollY > 0) {
-        const restore = () => window.scrollTo(0, scrollY);
-        if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
-        else window.setTimeout(restore, 0);
-      }
+      // Status notifications change the status line, not the library data.
+      const status = getRoot()?.querySelector('.lee_lee_diabetes_top .lee_lee_diabetes_save_status');
+      if (status) status.outerHTML = renderPersistenceStatus({ surface: 'foods' });
     }
     if (currentEditor.mode === 'history') renderHistory();
     if (currentEditor.mode === 'reports') renderReports();
     if (currentEditor.mode === 'export') renderReports();
-    if (currentEditor.mode === 'foods') renderFoodLibrary();
   }
 
   function logSyncDiagnosticSnapshot(label, status = syncStatus) {
