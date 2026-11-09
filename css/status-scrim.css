@@ -10,7 +10,7 @@
 :root[data-theme="light"][data-status-app="checklist"] { --status-surface: var(--color-bg); }
 :root[data-status-app="imt"] { --status-surface: #0D1311; }
 :root[data-theme="light"][data-status-app="imt"] { --status-surface: #EDEFEA; }
-:root[data-status-app="llt"] { --status-surface: #F4F3EA; }
+:root[data-status-app="llt"] { --status-surface: #EDEEF1; }
 :root[data-status-app="llt"][data-theme="dark"] { --status-surface: #171923; }
 :root[data-status-app="lwvd"] { --status-surface: var(--app-surface); }
 :root[data-status-app] body::after {

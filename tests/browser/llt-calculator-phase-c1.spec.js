@@ -186,7 +186,7 @@ for (const context of ['standalone', 'entry']) {
           return { height: style.height, position: style.position, background: style.backgroundImage, color: style.backgroundColor, pointer: style.pointerEvents, blur: style.backdropFilter || style.webkitBackdropFilter, padding: style.paddingBottom, overflow: getComputedStyle(document.querySelector('[data-carb-item-editor-body]')).overflowY };
         });
         expect(cover).toMatchObject({ height: '47px', position: 'fixed', background: 'none', pointer: 'none', blur: 'none', padding: '0px', overflow: 'visible' });
-        expect(cover.color).toBe(theme === 'light' ? 'rgb(244, 243, 234)' : 'rgb(23, 25, 35)');
+        expect(cover.color).toBe(theme === 'light' ? 'rgb(237, 238, 241)' : 'rgb(23, 25, 35)');
         await expect(calc.locator('[data-modal-scroll-container], [data-modal-visual-viewport]')).toHaveCount(0);
       }
     }
