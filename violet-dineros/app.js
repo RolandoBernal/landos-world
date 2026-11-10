@@ -1,5 +1,7 @@
 import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effectivePayday, validState, TRANSACTION_LABELS, currentBalance, dailyGuide, activityGroups, availableBalance, reservedBalance, fundedReservations, updateGoal, purchaseGoal, affordability, spendingSummary, smallPurchaseCost, moneyProgress, awardMoneyProgress, progressLevel } from './model.js';
-const content = document.querySelector('main'), nav = document.querySelector('nav'), gear = document.querySelector('#settings');
+const root = document.querySelector('.shell.lwvd-scope');
+const content = root.querySelector('main'), nav = root.querySelector('nav'), gear = root.querySelector('#settings');
+let appActive = true;
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
 let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
@@ -31,7 +33,7 @@ function dismissNotice() {
   clearTimeout(noticeTimer);
   const notice = document.querySelector('#notice');
   notice.replaceChildren();
-  document.querySelector('.shell').append(notice);
+  root.append(notice);
 }
 function showNotice(message, kind, duration) {
   dismissNotice();
@@ -59,7 +61,7 @@ function showNotice(message, kind, duration) {
   }
   noticeTimer = setTimeout(dismissNotice, duration);
 }
-document.addEventListener('submit', dismissNotice, true);
+document.addEventListener('submit', () => { if (appActive) dismissNotice(); }, true);
 function announce(message) { showNotice(message, 'success', 2500); }
 function showSaveError(message) { showNotice(message, 'error', 6000); }
 // The existing reservation guard supplies the proposed state, including edits/deletions.
@@ -97,7 +99,7 @@ function focusPageStart() {
 function onboarding() {
   gear.hidden = nav.hidden = true;
   if (storageBlocked) { content.innerHTML = '<section class="card"><h1>Your saved information needs attention</h1><p>We couldn’t read your local data. Please check browser storage and reload. Your saved information has not been replaced.</p></section>'; return; }
-  document.body.dataset.screen = 'onboarding';
+  root.dataset.screen = 'onboarding';
   const fields = step === 1 ? `<div class="welcome-brand">${plant}<h2>Violet Dineros</h2><p>Your money. Your goals.</p></div><h1>Hey!</h1><p class="onboarding-question">Let’s make money<br>a little easier. 💜</p><label for="name">What’s your first name?</label><input id="name" name="firstName" autocomplete="given-name" maxlength="40" required value="${escape(draft.firstName)}">` : step === 2 ? `<h1>Your Money</h1><p class="onboarding-question">How much money<br>do you have right now?</p><p>This will be your starting balance.<br>It isn’t recorded as income.</p><label for="balance">Your money ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="balance" name="balance" inputmode="decimal" required placeholder="0.00" value="${escape(draft.balanceInput || '')}"></div>` : `<h1>Next Payday</h1><p class="onboarding-question">When do you get<br>paid again?</p><p>This step is optional.<br>You can set or change it later<br>in Settings.</p><label for="payday">Next payday (optional)</label><input id="payday" name="payday" type="date" value="${draft.payday}">`;
   content.innerHTML = `<section class="welcome">${step > 1 ? `<div class="steps" aria-label="Step ${step} of 3">${[1, 2, 3].map(n => `<span class="${n === step ? 'active' : ''}">${n}</span>`).join('<i></i>')}</div>` : ''}<form>${fields}<p class="error" role="alert"></p>${step === 3 ? '<button class="text-button" type="button" id="skip">Skip for now</button>' : ''}<div class="form-actions">${step > 1 ? '<button class="text-button" type="button" id="back">Back</button>' : ''}<button class="primary">Continue</button></div></form></section>`;
   const finish = () => {
@@ -150,7 +152,7 @@ const quickActions = document.createElement('div');
 quickActions.className = 'floating-actions';
 quickActions.hidden = true;
 quickActions.innerHTML = `<div id="quick-actions-menu" class="floating-actions-menu" inert aria-label="Quick actions"><button type="button" data-transaction-type="income">Add Money</button><button type="button" data-transaction-type="expense">Add Expense</button><button type="button" id="check-affordability">Can I Afford This?</button></div><button type="button" id="quick-actions-toggle" aria-label="Quick actions" aria-expanded="false" aria-controls="quick-actions-menu"><span aria-hidden="true"><svg viewBox="0 0 32 32" width="32" height="32" focusable="false"><path d="M16 6v20M6 16h20"/></svg></span></button>`;
-document.querySelector('.shell').append(quickActions);
+root.append(quickActions);
 const quickToggle = quickActions.querySelector('#quick-actions-toggle');
 function closeQuickActions() {
   quickToggle.setAttribute('aria-expanded', 'false');
@@ -168,29 +170,38 @@ quickActions.querySelectorAll('[data-transaction-type]').forEach(button => butto
 quickActions.querySelector('#check-affordability').onclick = () => {
   closeQuickActions(); quickToggle.focus({preventScroll:true}); affordabilityInput = ''; tab = 'Afford'; render();
 };
-document.addEventListener('pointerdown', event => { if (!quickActions.contains(event.target)) closeQuickActions(); });
-document.addEventListener('focusin', event => { if (!quickActions.contains(event.target)) closeQuickActions(); });
+document.addEventListener('pointerdown', event => { if (!appActive) return; if (!quickActions.contains(event.target)) closeQuickActions(); });
+document.addEventListener('focusin', event => { if (!appActive) return; if (!quickActions.contains(event.target)) closeQuickActions(); });
 quickActions.addEventListener('keydown', event => {
   if (event.key === 'Escape') { closeQuickActions(); quickToggle.focus({preventScroll:true}); }
 });
-window.addEventListener('hashchange', closeQuickActions);
-window.addEventListener('popstate', closeQuickActions);
+window.addEventListener('hashchange', () => { if (appActive) closeQuickActions(); });
+window.addEventListener('popstate', () => { if (appActive) closeQuickActions(); });
+// In the standalone document LWVD is always active. PR 2's shell router
+// will flip this switch when another app is showing; the document/window
+// handlers in this module check it first, so an inactive LWVD stays inert.
+window.LandoLWVD = {
+  setActive(value) { appActive = Boolean(value); if (!appActive) closeQuickActions(); },
+  isActive: () => appActive,
+};
 let scrollAnchor = 0;
 function showFloatingNav() {
-  document.body.classList.remove('nav-scroll-hidden');
+  root.classList.remove('nav-scroll-hidden');
   scrollAnchor = Math.max(0, window.scrollY);
 }
 window.addEventListener('scroll', () => {
-  if (nav.hidden || document.querySelector('dialog[open]')) return;
+  if (!appActive) return;
+  if (nav.hidden || document.querySelector('#transaction-sheet[open],#affordability-sheet[open]')) return;
   const y = Math.max(0, Math.min(window.scrollY, document.documentElement.scrollHeight - innerHeight));
   if (y <= 12) showFloatingNav();
   else if (Math.abs(y - scrollAnchor) >= 12) {
-    document.body.classList.toggle('nav-scroll-hidden', y > scrollAnchor);
+    root.classList.toggle('nav-scroll-hidden', y > scrollAnchor);
     scrollAnchor = y;
     closeQuickActions();
   }
 }, {passive:true});
 document.addEventListener('focusin', event => {
+  if (!appActive) return;
   if (event.target.closest('nav,.floating-actions')) showFloatingNav();
 });
 function render() {
@@ -200,7 +211,7 @@ function render() {
   if (!state) { onboarding(); return; }
   if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
   if (sheetPage) { renderSheetPage(); return; }
-  document.body.dataset.screen = tab.toLowerCase();
+  root.dataset.screen = tab.toLowerCase();
   gear.hidden = !['Home', 'Settings'].includes(tab); nav.hidden = ['Afford', 'Settings'].includes(tab);
   gear.innerHTML = icon(tab === 'Settings' ? 'close' : 'settings');
   gear.setAttribute('aria-label', tab === 'Settings' ? 'Close Settings' : 'Settings');
@@ -356,7 +367,7 @@ function closeAffordability() {
   quickToggle.focus({preventScroll:true});
 }
 function renderSheetPage() {
-  document.body.dataset.screen = 'sheet';
+  root.dataset.screen = 'sheet';
   gear.hidden = true; nav.hidden = true; quickActions.hidden = true;
   // A mounted page whose stamp matches the active sheet is already the
   // live page: re-rendering would replace its DOM with the pristine
@@ -398,7 +409,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   const compact = view === 'confirm';
   if (dialog.open && (dialog.dataset.view === 'confirm') !== compact) dialog.close();
   document.body.style.overflow = compact ? 'hidden' : sheetScroll.overflow;
-  document.querySelector('.shell').inert = true;
+  root.inert = true;
   document.querySelector('#affordability-sheet').inert = true;
   dialog.setAttribute('aria-modal', 'true');
   dialog.dataset.view = view;
@@ -417,7 +428,7 @@ function closeSheet() {
   if (sheetPage) {
     sheetPage = null;
     if (transactionSheet.open) { sheetScroll = null; sheetOpener = null; transactionSheet.close(); }
-    document.querySelector('.shell').inert = false;
+    root.inert = false;
     document.querySelector('#affordability-sheet').inert = false;
     render();
     if (pageScroll) {
@@ -493,6 +504,7 @@ function showTransaction(id) {
 }
 // Preserve the accepted short confirmation viewport treatment only.
 function fitSheetViewport() {
+  if (!appActive) return;
   const dialog = document.querySelector('#transaction-sheet'); if (!dialog.open) return;
   if (dialog.dataset.view !== 'confirm') return;
   const viewport = window.visualViewport;
@@ -507,9 +519,10 @@ window.visualViewport?.addEventListener('scroll', fitSheetViewport);
 window.addEventListener('resize', fitSheetViewport);
 document.documentElement.dataset.focusMode = 'pointer';
 document.addEventListener('keydown', event => {
+  if (!appActive) return;
   if (event.key === 'Tab' || event.key === 'Escape' || (['Enter', ' '].includes(event.key) && event.target.matches('button, a'))) document.documentElement.dataset.focusMode = 'keyboard';
 }, true);
-document.addEventListener('pointerdown', () => { document.documentElement.dataset.focusMode = 'pointer'; }, true);
+document.addEventListener('pointerdown', () => { if (!appActive) return; document.documentElement.dataset.focusMode = 'pointer'; }, true);
 const transactionSheet = document.querySelector('#transaction-sheet');
 transactionSheet.addEventListener('focusin', event => {
   if (transactionSheet.dataset.view === 'confirm' && event.target.matches('input')) event.target.scrollIntoView({block:'nearest', inline:'nearest', behavior:'instant'});
@@ -529,13 +542,14 @@ document.querySelector('#affordability-sheet').addEventListener('keydown', handl
 document.querySelector('#affordability-sheet').addEventListener('cancel', event => {event.preventDefault();closeAffordability();});
 transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
 document.addEventListener('keydown', event => {
+  if (!appActive) return;
   if (event.key === 'Escape' && sheetPage && !transactionSheet.open) { event.preventDefault(); closeSheet(); }
 });
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
-  document.querySelector('.shell').inert = false;
+  root.inert = false;
   document.querySelector('#affordability-sheet').inert = false;
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
@@ -552,20 +566,24 @@ window.addEventListener('storage', event => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY), next = JSON.parse(raw);
     if (!validState(next)) throw Error();
+    // Data sync is not a UI effect: keep the in-memory state current even
+    // while inactive, but touch nothing visible until LWVD is active again.
     state = next; lastRaw = raw;
+    if (!appActive) return;
     if (transactionSheet.open || sheetPage) closeSheet();
     render(); announce('Your money information was updated in another tab.');
-  } catch { showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
+  } catch { if (appActive) showSaveError('Your saved information changed in another tab. Reload before making changes.'); }
 });
 function openSettings() { tab = 'Settings'; render(); focusPageStart(); }
 gear.onclick = () => { if (tab === 'Settings') { tab = 'Home'; render(); focusPageStart(); } else openSettings(); };
 window.addEventListener('pageshow', event => {
+  if (!appActive) return;
   if (event.persisted) window.LandosTheme?.init();
   render();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open && !sheetPage) render(); });
+document.addEventListener('visibilitychange', () => { if (!appActive) return; if (!document.hidden && state && !['Settings', 'Balance'].includes(tab) && !document.querySelector('#transaction-sheet')?.open && !sheetPage) render(); });
 // Refresh calendar-day guidance while Home remains open across midnight.
-setInterval(() => { if (state && ['Home', 'Insights'].includes(tab) && !document.hidden && !document.querySelector('#transaction-sheet')?.open && !sheetPage && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
+setInterval(() => { if (appActive && state && ['Home', 'Insights'].includes(tab) && !document.hidden && !document.querySelector('#transaction-sheet')?.open && !sheetPage && localToday() !== renderedDay) { renderedDay = localToday(); render(); } }, 30000);
 let renderedDay = localToday();
 render();
 
