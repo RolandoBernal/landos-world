@@ -2,6 +2,7 @@ import { STORAGE_KEY, money, parseMoney, dateParts, localToday, daysUntil, effec
 const root = document.querySelector('.shell.lwvd-scope');
 const content = root.querySelector('main'), nav = root.querySelector('nav'), gear = root.querySelector('#settings');
 let appActive = true;
+let pendingRaw = null;
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null;
 let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
@@ -181,7 +182,14 @@ window.addEventListener('popstate', () => { if (appActive) closeQuickActions(); 
 // will flip this switch when another app is showing; the document/window
 // handlers in this module check it first, so an inactive LWVD stays inert.
 window.LandoLWVD = {
-  setActive(value) { appActive = Boolean(value); if (!appActive) closeQuickActions(); },
+  setActive(value) {
+    appActive = Boolean(value);
+    if (!appActive) { closeQuickActions(); return; }
+    // Pick up any cross-tab change deferred while inactive. If a draft
+    // is open this is a no-op: the draft keeps its base revision (see
+    // applyPendingSync), so its save still conflict-checks correctly.
+    if (applyPendingSync()) render();
+  },
   isActive: () => appActive,
 };
 let scrollAnchor = 0;
@@ -427,6 +435,7 @@ function closeSheet() {
   dismissNotice();
   if (sheetPage) {
     sheetPage = null;
+    applyPendingSync();
     if (transactionSheet.open) { sheetScroll = null; sheetOpener = null; transactionSheet.close(); }
     root.inert = false;
     document.querySelector('#affordability-sheet').inert = false;
@@ -549,6 +558,7 @@ transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
+  applyPendingSync();
   root.inert = false;
   document.querySelector('#affordability-sheet').inert = false;
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
@@ -561,15 +571,31 @@ function restoreSheet() {
   target?.focus({preventScroll:true});
   sheetOpener = null;
 }
+// A cross-tab change that arrives while LWVD is inactive is deferred,
+// not applied: advancing state/lastRaw would silently re-base any open
+// draft, and its next save would pass the conflict guard in save() while
+// overwriting the newer data with the draft's stale fields. Instead the
+// validated raw value waits here; applyPendingSync applies it when LWVD
+// is reactivated or when the open draft closes — never while a draft
+// (sheet page or dialog) is open, so the draft's save keeps comparing
+// storage against the revision the draft was opened from.
+function applyPendingSync() {
+  if (pendingRaw === null || sheetPage || transactionSheet.open) return false;
+  try {
+    const next = JSON.parse(pendingRaw);
+    if (!validState(next)) throw Error();
+    state = next; lastRaw = pendingRaw;
+  } catch { /* Keep the current state; the next save's guard surfaces it. */ }
+  pendingRaw = null;
+  return true;
+}
 window.addEventListener('storage', event => {
   if (event.key !== STORAGE_KEY && event.key !== null) return;
   try {
     const raw = localStorage.getItem(STORAGE_KEY), next = JSON.parse(raw);
     if (!validState(next)) throw Error();
-    // Data sync is not a UI effect: keep the in-memory state current even
-    // while inactive, but touch nothing visible until LWVD is active again.
-    state = next; lastRaw = raw;
-    if (!appActive) return;
+    if (!appActive) { pendingRaw = raw; return; }
+    state = next; lastRaw = raw; pendingRaw = null;
     if (transactionSheet.open || sheetPage) closeSheet();
     render(); announce('Your money information was updated in another tab.');
   } catch { if (appActive) showSaveError('Your saved information changed in another tab. Reload before making changes.'); }

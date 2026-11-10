@@ -69,6 +69,48 @@ test('a submit anywhere dismisses the notice only while LWVD is active',async({p
  await expect(page.locator('#notice')).toBeEmpty();
 });
 
+test('a draft opened before deactivation conflict-checks against its own base revision',async({page})=>{
+ await start(page);
+ // Open Edit Goal for the seeded goal ($60 of $100 reserved).
+ await page.locator('nav [data-tab=Goals]').click();
+ await page.getByRole('button',{name:'Manage Goal: Bike'}).click();
+ await page.getByRole('button',{name:'Edit Goal'}).click();
+ await expect(page.getByLabel('Goal name')).toHaveValue('Bike');
+ await setActive(page,false);
+ // A second tab in the same context raises the reservation to $70.
+ const tab2=await page.context().newPage();
+ await tab2.goto('/violet-dineros/index.html');
+ await tab2.evaluate(k=>{
+  const data=JSON.parse(localStorage.getItem(k));
+  data.goals[0].reservedCents=7000;
+  localStorage.setItem(k,JSON.stringify(data));
+ },key);
+ await page.waitForTimeout(300);
+ await tab2.close();
+ await setActive(page,true);
+ // Saving a name change from the stale draft must hit the conflict
+ // guard, preserve the draft, and leave the newer $70 untouched.
+ await page.getByLabel('Goal name').fill('Bike (renamed)');
+ await page.getByRole('button',{name:'Save Goal'}).click();
+ await expect(page.locator('#notice')).toContainText('Your information changed in another tab. Reload before saving so those changes stay safe.');
+ await expect(page.getByLabel('Goal name')).toHaveValue('Bike (renamed)');
+ const stored=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+ expect(stored.goals[0].reservedCents).toBe(7000);
+ expect(stored.goals[0].name).toBe('Bike');
+ // Cancelling the draft applies the deferred sync: the Goals list now
+ // shows $70, and a fresh edit saves cleanly against the new revision.
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await expect(page.locator('.goal-card')).toContainText('$70.00 of $100.00');
+ await page.getByRole('button',{name:'Manage Goal: Bike'}).click();
+ await page.getByRole('button',{name:'Edit Goal'}).click();
+ await page.getByLabel('Goal name').fill('Bike (renamed)');
+ await page.getByRole('button',{name:'Save Goal'}).click();
+ await expect(page.locator('#notice')).toContainText('Goal saved.');
+ const saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+ expect(saved.goals[0].reservedCents).toBe(7000);
+ expect(saved.goals[0].name).toBe('Bike (renamed)');
+});
+
 test('focus-mode tracking and quick-action closers run only while LWVD is active',async({page})=>{
  await start(page);
  const focusMode=()=>page.evaluate(()=>document.documentElement.dataset.focusMode);
