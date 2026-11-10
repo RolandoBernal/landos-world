@@ -30,15 +30,15 @@ test('LLT scroll threshold hides and reveals both controls; notices clear on ano
  await start(page);await expense(page,'40');await expect(page.locator('#notice')).toContainText('Expense saved');
  // Give Home enough scroll range without changing its actual controls.
  await page.locator('main').evaluate(e=>e.style.minHeight='2200px');
- await page.evaluate(()=>scrollTo(0,200));await expect(page.locator('body')).toHaveClass(/nav-scroll-hidden/);
+ await page.evaluate(()=>scrollTo(0,200));await expect(page.locator('.shell')).toHaveClass(/nav-scroll-hidden/);
  await expect(page.locator('nav')).toHaveCSS('visibility','hidden');await expect(page.locator('.floating-actions')).toHaveCSS('visibility','hidden');
  const hiddenBottom=await page.locator('#notice').evaluate(e=>parseFloat(getComputedStyle(e).bottom));expect(hiddenBottom).toBe(16);
- await page.evaluate(()=>scrollTo(0,195));await expect(page.locator('body')).toHaveClass(/nav-scroll-hidden/);
- await page.evaluate(()=>scrollTo(0,175));await expect(page.locator('body')).not.toHaveClass(/nav-scroll-hidden/);
+ await page.evaluate(()=>scrollTo(0,195));await expect(page.locator('.shell')).toHaveClass(/nav-scroll-hidden/);
+ await page.evaluate(()=>scrollTo(0,175));await expect(page.locator('.shell')).not.toHaveClass(/nav-scroll-hidden/);
  await expect(page.locator('nav')).toHaveCSS('visibility','visible');
  const n=await page.locator('#notice').boundingBox(),q=await page.locator('.floating-actions').boundingBox();expect(n.y+n.height).toBeLessThanOrEqual(q.y);
  await page.locator('#quick-actions-toggle').click();await expect(page.locator('#notice')).toBeEmpty();
- await page.locator('nav [data-tab=Activity]').click();await expect(page.locator('body')).not.toHaveClass(/nav-scroll-hidden/);
+ await page.locator('nav [data-tab=Activity]').click();await expect(page.locator('.shell')).not.toHaveClass(/nav-scroll-hidden/);
 });
 
 test('expense just below available balance saves with no warning and keeps reservations',async({page})=>{

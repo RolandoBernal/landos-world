@@ -1,325 +1,350 @@
 @font-face{font-family:"Geist Mono";src:url("../fonts/geist-mono-variable.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:'DM Sans';src:url('../fonts/dm-sans-latin.woff2') format('woff2');font-weight:100 1000;font-display:swap}
-:root{font-family:'DM Sans',sans-serif;color:#170765;background:#f9f7ff;font-synthesis:none;line-height:1.45}*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button,a,input,select{-webkit-tap-highlight-color:transparent}button{cursor:pointer;min-height:44px;border:1px solid #ded8f1;background:#fff;border-radius:9999px;padding:10px 18px;color:#4c20d4;font-weight:500}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #197c70;outline-offset:3px}button:disabled{cursor:default;opacity:1}h1,h2,p{margin:0 0 10px}h1{font-size:1.45rem;line-height:1.25;letter-spacing:-.035em}h2{font-size:1rem;line-height:1.35}p{color:#48428a}svg{width:24px;height:24px;display:block;flex-shrink:0}.shell{position:relative;max-width:480px;min-height:100dvh;margin:auto;background:linear-gradient(130deg,#fff,#fbfaff);padding:max(26px,env(safe-area-inset-top)) 22px calc(94px + env(safe-area-inset-bottom))}header{position:absolute;right:18px;top:max(22px,env(safe-area-inset-top));z-index:1}.brand{display:none}#settings{border:0;background:transparent;padding:10px;color:#5420e8}main{display:grid;gap:15px}.greeting{padding-right:46px}.greeting h1{font-size:1.4rem;margin-bottom:1px}.greeting p{font-size:.8rem;margin:0}.money-story{display:grid;gap:8px}.story{background:#e3f9fc;border-radius:17px;padding:17px 19px}.story h2{font-size:.9rem;color:#4b0dce;margin-bottom:2px}.story p{font-size:.8rem;margin:0}.story .balance{font-size:2.65rem;line-height:1.18;font-weight:500;letter-spacing:-.05em;color:#4906b5;overflow-wrap:anywhere}.payday-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.payday-card,.daily-card{border-radius:16px;padding:14px 12px;min-width:0}.payday-card{display:flex;gap:9px;align-items:center;background:#fff;box-shadow:0 2px 7px #44339912;border:1px solid #f0eaff}.payday-card p,.daily-card p{font-size:.72rem;margin:0}.payday-card strong{display:block;font-size:1rem;line-height:1.45}.calendar-icon{display:grid;place-items:center;border-radius:50%;width:39px;height:39px;background:#f1eaff;color:#7832f5;flex-shrink:0}.daily-card{background:#d9faf3;display:flex;flex-direction:column;justify-content:center}.daily-card .guide{font-weight:500;color:#201078;font-size:1.13rem;line-height:1.3;letter-spacing:-.035em;margin:2px 0;overflow-wrap:anywhere}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.section-title h2{margin:0;font-size:.95rem}.section-title>span{font-size:.68rem;color:#675c8c}.quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.quick button{display:flex;align-items:center;flex-direction:column;justify-content:center;gap:7px;padding:14px 7px 11px;border:0;border-radius:16px;color:#210780;background:#e1faf5;font-size:.77rem;line-height:1.2}.quick button:nth-child(2){background:#ffedf7}.quick button:nth-child(3){background:#f0eaff}.quick button>span{background:#26c9b2;color:#fff;width:30px;height:30px;padding:5px;border-radius:50%}.quick svg{width:20px;height:20px}.quick button:nth-child(2)>span{background:#ef4ba8}.quick button:nth-child(3)>span{background:#8550ef}.quick small{font-size:.6rem;font-weight:400;color:#625783}.goal{display:flex;align-items:center;gap:14px;border-radius:17px;background:#f1edff;padding:16px}.goal-star{color:#8249f4}.goal-star svg{width:43px;height:43px;stroke-width:2}.goal h2{font-size:.83rem;margin:0}.goal h2 span{font-weight:400}.goal p{font-size:.77rem;margin:2px 0 0}.motivation{display:flex;gap:10px;padding:0 6px}.motivation>span{font-size:1.65rem;color:#9a6ae7}.motivation h2{font-size:.8rem;margin:0 0 3px}.motivation p{font-size:.72rem;margin:0}.primary{min-height:54px;background:linear-gradient(120deg,#8055f5,#6945e8);border:0;border-radius:9999px;color:#fff;box-shadow:0 3px 8px #7047dc16}.payday-prompt{background:#f3efff;padding:17px;border-radius:16px}.payday-prompt>div{display:flex;gap:14px;align-items:center;justify-content:center;margin-bottom:12px}.payday-prompt p{font-size:.83rem;margin:0}.payday-prompt button{width:100%;min-height:54px;border-radius:9999px}.payday-prompt.expired{background:#fff5df}.expired .calendar-icon{background:#ffe8b1;color:#c25111}nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:auto;background:#fffffff5;border-top:1px solid #ebe6f5;display:grid;grid-template-columns:repeat(4,1fr);padding:5px 12px max(7px,env(safe-area-inset-bottom));backdrop-filter:blur(12px);z-index:2}nav[hidden]{display:none}nav button{border:0;background:transparent;border-radius:8px;font-size:.68rem;padding:6px 2px;color:#6660a4;display:grid;justify-items:center;gap:3px}nav button svg{width:22px;height:22px}nav button[aria-current]{color:#6b1dff}nav button[aria-current] svg{stroke-width:2.5}.empty{min-height:calc(100dvh - 145px)}.empty h1{font-size:1.4rem;margin:7px 0}.empty-body{text-align:center;padding:65px 12px 20px;max-width:350px;margin:auto}.empty-icon{display:grid;place-items:center;width:112px;height:112px;background:#f0eaff;border-radius:50%;color:#8750f5;margin:0 auto 28px}.empty-icon svg{width:62px;height:62px;stroke-width:1.7}.empty h2{font-size:1.2rem;letter-spacing:-.03em;margin-bottom:18px}.empty p{font-size:.88rem;line-height:1.55}.settings-panel{position:relative}.settings-title{display:flex;align-items:center;justify-content:center;height:44px;margin-bottom:24px}.settings-title h1{font-size:1.1rem;margin:0}.settings-title button{position:absolute;left:-10px;top:0;border:0;background:transparent;font-size:2rem;line-height:1;padding:0 12px}.settings-panel form{gap:10px}.settings-panel h2{color:#5919d7;font-size:.87rem;margin:16px 0 3px}.setting-icon{width:39px;height:39px;border-radius:50%;background:#efe8ff;color:#7831ed;display:grid;place-items:center}.settings-panel label{font-size:.82rem}.settings-panel input,.settings-panel select{box-shadow:0 2px 8px #32217306}.hint{font-size:.75rem;line-height:1.55}.welcome{position:relative;text-align:center;min-height:calc(100dvh - 80px);padding:35px 4px 22px;isolation:isolate}.welcome:before{content:'';position:absolute;inset:65% -22px -30px;z-index:-1;background:linear-gradient(#f2edff,#fdfcff);clip-path:polygon(0 8%,15% 5%,35% 13%,50% 17%,70% 12%,100% 8%,100% 100%,0 100%);border-radius:20% 30% 0 0}.welcome-brand{margin:0 0 34px}.plant{width:95px;height:105px;margin:0 auto 10px}.welcome-brand h2{font-size:1.7rem;letter-spacing:-.04em;color:#3a0bad;margin:0}.welcome-brand p{font-size:.8rem;margin:0}.welcome h1{font-size:1.8rem;margin:15px 0 5px}.welcome p{font-size:.85rem;line-height:1.5}.welcome .onboarding-question{color:#160966;font-size:1.1rem;line-height:1.35;margin:4px 0 16px}.welcome label{text-align:left;font-size:.83rem;margin-top:10px}form{display:grid;gap:10px}input,select{width:100%;min-width:0;min-height:49px;border:1px solid #d6d0ea;border-radius:12px;background:#ffffffb8;color:#19124f;padding:11px 13px;font-size:1rem}input[type=date]{appearance:none;-webkit-appearance:none;min-height:49px;text-align:left}.welcome input[name=balance]{font-size:1.4rem;text-align:center}.form-actions{display:flex;gap:8px;margin-top:26px}.form-actions .primary{flex:1}.text-button{background:transparent;border:0;font-size:.8rem}.steps{display:flex;justify-content:center;align-items:center;gap:8px;margin:4px 0 45px}.steps span{display:grid;place-items:center;width:19px;height:19px;background:#f0eaff;border-radius:50%;font-size:.66rem;color:#7665a8}.steps span.active{background:#6920e7;color:#fff}.steps i{width:35px;height:1px;background:#e8e0f8}.complete{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px}.complete h1{font-size:1.65rem}.complete .plant{width:105px;height:115px;margin:0 auto}.complete p{font-size:1rem;margin-bottom:45px}.complete button{width:100%}body[data-screen=onboarding] .shell{padding-bottom:25px}body[data-screen=settings] .shell{background:linear-gradient(#fbfaff,#f8f5ff)}.error{color:#aa2143;font-size:.8rem;margin:0}.card{padding:24px;border:1px solid #e5dff4;border-radius:18px;background:#fff}#notice:empty{display:none}#notice{font-size:.8rem;margin:15px 0 0;overflow-wrap:anywhere}h1:focus{outline:none}@media(max-width:360px){.shell{padding-left:16px;padding-right:16px}.payday-card,.daily-card{padding:12px 9px}.payday-card{gap:6px}.payday-card .calendar-icon{width:29px;height:29px}.calendar-icon svg{width:21px;height:21px}.daily-card .guide{font-size:1rem}.quick{gap:8px}.quick button{font-size:.73rem}.welcome{padding-top:17px}.welcome-brand{margin-bottom:20px}}
-.setting-row{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:12px;box-shadow:0 2px 8px #42308d08}.setting-row>div:last-child{flex:1;min-width:0}.setting-row label{display:block;margin-bottom:2px}.setting-row input,.setting-row select{border:0;box-shadow:none;background:transparent;padding:5px 0;min-height:44px;border-radius:4px;font-size:.9rem}.settings-panel .hint{margin:7px 0 14px}.setting-row .setting-icon{width:44px;height:44px}
+.lwvd-scope{font-family:'DM Sans',sans-serif;color:#170765;font-synthesis:none;line-height:1.45}.lwvd-scope,.lwvd-scope *{box-sizing:border-box}body.lwvd-document{margin:0}.lwvd-scope button,.lwvd-scope input,.lwvd-scope select{font:inherit}.lwvd-scope button,.lwvd-scope a,.lwvd-scope input,.lwvd-scope select{-webkit-tap-highlight-color:transparent}.lwvd-scope button{cursor:pointer;min-height:44px;border:1px solid #ded8f1;background:#fff;border-radius:9999px;padding:10px 18px;color:#4c20d4;font-weight:500}.lwvd-scope button:focus-visible,.lwvd-scope a:focus-visible,.lwvd-scope input:focus-visible,.lwvd-scope select:focus-visible{outline:3px solid #197c70;outline-offset:3px}.lwvd-scope button:disabled{cursor:default;opacity:1}.lwvd-scope h1,.lwvd-scope h2,.lwvd-scope p{margin:0 0 10px}.lwvd-scope h1{font-size:1.45rem;line-height:1.25;letter-spacing:-.035em}.lwvd-scope h2{font-size:1rem;line-height:1.35}.lwvd-scope p{color:#48428a}.lwvd-scope svg{width:24px;height:24px;display:block;flex-shrink:0}.shell.lwvd-scope{position:relative;max-width:480px;min-height:100dvh;margin:auto;background:linear-gradient(130deg,#fff,#fbfaff);padding:max(26px,env(safe-area-inset-top)) 22px calc(94px + env(safe-area-inset-bottom))}.lwvd-scope header{position:absolute;right:18px;top:max(22px,env(safe-area-inset-top));z-index:1}.lwvd-scope .brand{display:none}.lwvd-scope #settings{border:0;background:transparent;padding:10px;color:#5420e8}.lwvd-scope main{display:grid;gap:15px}.lwvd-scope .greeting{padding-right:46px}.lwvd-scope .greeting h1{font-size:1.4rem;margin-bottom:1px}.lwvd-scope .greeting p{font-size:.8rem;margin:0}.lwvd-scope .money-story{display:grid;gap:8px}.lwvd-scope .story{background:#e3f9fc;border-radius:17px;padding:17px 19px}.lwvd-scope .story h2{font-size:.9rem;color:#4b0dce;margin-bottom:2px}.lwvd-scope .story p{font-size:.8rem;margin:0}.lwvd-scope .story .balance{font-size:2.65rem;line-height:1.18;font-weight:500;letter-spacing:-.05em;color:#4906b5;overflow-wrap:anywhere}.lwvd-scope .payday-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.lwvd-scope .payday-card,.lwvd-scope .daily-card{border-radius:16px;padding:14px 12px;min-width:0}.lwvd-scope .payday-card{display:flex;gap:9px;align-items:center;background:#fff;box-shadow:0 2px 7px #44339912;border:1px solid #f0eaff}.lwvd-scope .payday-card p,.lwvd-scope .daily-card p{font-size:.72rem;margin:0}.lwvd-scope .payday-card strong{display:block;font-size:1rem;line-height:1.45}.lwvd-scope .calendar-icon{display:grid;place-items:center;border-radius:50%;width:39px;height:39px;background:#f1eaff;color:#7832f5;flex-shrink:0}.lwvd-scope .daily-card{background:#d9faf3;display:flex;flex-direction:column;justify-content:center}.lwvd-scope .daily-card .guide{font-weight:500;color:#201078;font-size:1.13rem;line-height:1.3;letter-spacing:-.035em;margin:2px 0;overflow-wrap:anywhere}.lwvd-scope .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.lwvd-scope .section-title h2{margin:0;font-size:.95rem}.lwvd-scope .section-title>span{font-size:.68rem;color:#675c8c}.lwvd-scope .quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.lwvd-scope .quick button{display:flex;align-items:center;flex-direction:column;justify-content:center;gap:7px;padding:14px 7px 11px;border:0;border-radius:16px;color:#210780;background:#e1faf5;font-size:.77rem;line-height:1.2}.lwvd-scope .quick button:nth-child(2){background:#ffedf7}.lwvd-scope .quick button:nth-child(3){background:#f0eaff}.lwvd-scope .quick button>span{background:#26c9b2;color:#fff;width:30px;height:30px;padding:5px;border-radius:50%}.lwvd-scope .quick svg{width:20px;height:20px}.lwvd-scope .quick button:nth-child(2)>span{background:#ef4ba8}.lwvd-scope .quick button:nth-child(3)>span{background:#8550ef}.lwvd-scope .quick small{font-size:.6rem;font-weight:400;color:#625783}.lwvd-scope .goal{display:flex;align-items:center;gap:14px;border-radius:17px;background:#f1edff;padding:16px}.lwvd-scope .goal-star{color:#8249f4}.lwvd-scope .goal-star svg{width:43px;height:43px;stroke-width:2}.lwvd-scope .goal h2{font-size:.83rem;margin:0}.lwvd-scope .goal h2 span{font-weight:400}.lwvd-scope .goal p{font-size:.77rem;margin:2px 0 0}.lwvd-scope .motivation{display:flex;gap:10px;padding:0 6px}.lwvd-scope .motivation>span{font-size:1.65rem;color:#9a6ae7}.lwvd-scope .motivation h2{font-size:.8rem;margin:0 0 3px}.lwvd-scope .motivation p{font-size:.72rem;margin:0}.lwvd-scope .primary{min-height:54px;background:linear-gradient(120deg,#8055f5,#6945e8);border:0;border-radius:9999px;color:#fff;box-shadow:0 3px 8px #7047dc16}.lwvd-scope .payday-prompt{background:#f3efff;padding:17px;border-radius:16px}.lwvd-scope .payday-prompt>div{display:flex;gap:14px;align-items:center;justify-content:center;margin-bottom:12px}.lwvd-scope .payday-prompt p{font-size:.83rem;margin:0}.lwvd-scope .payday-prompt button{width:100%;min-height:54px;border-radius:9999px}.lwvd-scope .payday-prompt.expired{background:#fff5df}.lwvd-scope .expired .calendar-icon{background:#ffe8b1;color:#c25111}.lwvd-scope nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:auto;background:#fffffff5;border-top:1px solid #ebe6f5;display:grid;grid-template-columns:repeat(4,1fr);padding:5px 12px max(7px,env(safe-area-inset-bottom));backdrop-filter:blur(12px);z-index:2}.lwvd-scope nav[hidden]{display:none}.lwvd-scope nav button{border:0;background:transparent;border-radius:8px;font-size:.68rem;padding:6px 2px;color:#6660a4;display:grid;justify-items:center;gap:3px}.lwvd-scope nav button svg{width:22px;height:22px}.lwvd-scope nav button[aria-current]{color:#6b1dff}.lwvd-scope nav button[aria-current] svg{stroke-width:2.5}.lwvd-scope .empty{min-height:calc(100dvh - 145px)}.lwvd-scope .empty h1{font-size:1.4rem;margin:7px 0}.lwvd-scope .empty-body{text-align:center;padding:65px 12px 20px;max-width:350px;margin:auto}.lwvd-scope .empty-icon{display:grid;place-items:center;width:112px;height:112px;background:#f0eaff;border-radius:50%;color:#8750f5;margin:0 auto 28px}.lwvd-scope .empty-icon svg{width:62px;height:62px;stroke-width:1.7}.lwvd-scope .empty h2{font-size:1.2rem;letter-spacing:-.03em;margin-bottom:18px}.lwvd-scope .empty p{font-size:.88rem;line-height:1.55}.lwvd-scope .settings-panel{position:relative}.lwvd-scope .settings-title{display:flex;align-items:center;justify-content:center;height:44px;margin-bottom:24px}.lwvd-scope .settings-title h1{font-size:1.1rem;margin:0}.lwvd-scope .settings-title button{position:absolute;left:-10px;top:0;border:0;background:transparent;font-size:2rem;line-height:1;padding:0 12px}.lwvd-scope .settings-panel form{gap:10px}.lwvd-scope .settings-panel h2{color:#5919d7;font-size:.87rem;margin:16px 0 3px}.lwvd-scope .setting-icon{width:39px;height:39px;border-radius:50%;background:#efe8ff;color:#7831ed;display:grid;place-items:center}.lwvd-scope .settings-panel label{font-size:.82rem}.lwvd-scope .settings-panel input,.lwvd-scope .settings-panel select{box-shadow:0 2px 8px #32217306}.lwvd-scope .hint{font-size:.75rem;line-height:1.55}.lwvd-scope .welcome{position:relative;text-align:center;min-height:calc(100dvh - 80px);padding:35px 4px 22px;isolation:isolate}.lwvd-scope .welcome:before{content:'';position:absolute;inset:65% -22px -30px;z-index:-1;background:linear-gradient(#f2edff,#fdfcff);clip-path:polygon(0 8%,15% 5%,35% 13%,50% 17%,70% 12%,100% 8%,100% 100%,0 100%);border-radius:20% 30% 0 0}.lwvd-scope .welcome-brand{margin:0 0 34px}.lwvd-scope .plant{width:95px;height:105px;margin:0 auto 10px}.lwvd-scope .welcome-brand h2{font-size:1.7rem;letter-spacing:-.04em;color:#3a0bad;margin:0}.lwvd-scope .welcome-brand p{font-size:.8rem;margin:0}.lwvd-scope .welcome h1{font-size:1.8rem;margin:15px 0 5px}.lwvd-scope .welcome p{font-size:.85rem;line-height:1.5}.lwvd-scope .welcome .onboarding-question{color:#160966;font-size:1.1rem;line-height:1.35;margin:4px 0 16px}.lwvd-scope .welcome label{text-align:left;font-size:.83rem;margin-top:10px}.lwvd-scope form{display:grid;gap:10px}.lwvd-scope input,.lwvd-scope select{width:100%;min-width:0;min-height:49px;border:1px solid #d6d0ea;border-radius:12px;background:#ffffffb8;color:#19124f;padding:11px 13px;font-size:1rem}.lwvd-scope input[type=date]{appearance:none;-webkit-appearance:none;min-height:49px;text-align:left}.lwvd-scope .welcome input[name=balance]{font-size:1.4rem;text-align:center}.lwvd-scope .form-actions{display:flex;gap:8px;margin-top:26px}.lwvd-scope .form-actions .primary{flex:1}.lwvd-scope .text-button{background:transparent;border:0;font-size:.8rem}.lwvd-scope .steps{display:flex;justify-content:center;align-items:center;gap:8px;margin:4px 0 45px}.lwvd-scope .steps span{display:grid;place-items:center;width:19px;height:19px;background:#f0eaff;border-radius:50%;font-size:.66rem;color:#7665a8}.lwvd-scope .steps span.active{background:#6920e7;color:#fff}.lwvd-scope .steps i{width:35px;height:1px;background:#e8e0f8}.lwvd-scope .complete{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px}.lwvd-scope .complete h1{font-size:1.65rem}.lwvd-scope .complete .plant{width:105px;height:115px;margin:0 auto}.lwvd-scope .complete p{font-size:1rem;margin-bottom:45px}.lwvd-scope .complete button{width:100%}div.lwvd-scope[data-screen=onboarding]{padding-bottom:25px}div.lwvd-scope[data-screen=settings]{background:linear-gradient(#fbfaff,#f8f5ff)}.lwvd-scope .error{color:#aa2143;font-size:.8rem;margin:0}.lwvd-scope .card{padding:24px;border:1px solid #e5dff4;border-radius:18px;background:#fff}.lwvd-scope #notice:empty{display:none}.lwvd-scope #notice{font-size:.8rem;margin:15px 0 0;overflow-wrap:anywhere}.lwvd-scope h1:focus{outline:none}@media(max-width:360px){.shell.lwvd-scope{padding-left:16px;padding-right:16px}.lwvd-scope .payday-card,.lwvd-scope .daily-card{padding:12px 9px}.lwvd-scope .payday-card{gap:6px}.lwvd-scope .payday-card .calendar-icon{width:29px;height:29px}.lwvd-scope .calendar-icon svg{width:21px;height:21px}.lwvd-scope .daily-card .guide{font-size:1rem}.lwvd-scope .quick{gap:8px}.lwvd-scope .quick button{font-size:.73rem}.lwvd-scope .welcome{padding-top:17px}.lwvd-scope .welcome-brand{margin-bottom:20px}}
+.lwvd-scope .setting-row{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:12px;box-shadow:0 2px 8px #42308d08}.lwvd-scope .setting-row>div:last-child{flex:1;min-width:0}.lwvd-scope .setting-row label{display:block;margin-bottom:2px}.lwvd-scope .setting-row input,.lwvd-scope .setting-row select{border:0;box-shadow:none;background:transparent;padding:5px 0;min-height:44px;border-radius:4px;font-size:.9rem}.lwvd-scope .settings-panel .hint{margin:7px 0 14px}.lwvd-scope .setting-row .setting-icon{width:44px;height:44px}
+
 
 /* Direct ecosystem navigation uses the same arrow-and-label pattern as sibling apps. */
-.ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
-.ecosystem_nav_back>span:first-child{font-size:1rem;line-height:1}
-.home-back,.app-heading .brand{display:none}
-body:is([data-screen=home],[data-screen=settings]) header{position:static;margin-bottom:15px}
-body:is([data-screen=home],[data-screen=settings]) .home-back{display:inline-flex}
-body:is([data-screen=home],[data-screen=settings]) .app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
-body:is([data-screen=home],[data-screen=settings]) .app-heading .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-size:1.2rem;font-weight:700;min-width:0}
-.app-heading .brand img{width:36px;height:36px;flex-shrink:0}
-body[data-screen=home] .greeting{padding-right:0}
+.lwvd-scope .ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
+.lwvd-scope .ecosystem_nav_back>span:first-child{font-size:1rem;line-height:1}
+.lwvd-scope .home-back,.lwvd-scope .app-heading .brand{display:none}
+.lwvd-scope:is([data-screen=home],[data-screen=settings]) header{position:static;margin-bottom:15px}
+.lwvd-scope:is([data-screen=home],[data-screen=settings]) .home-back{display:inline-flex}
+.lwvd-scope:is([data-screen=home],[data-screen=settings]) .app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lwvd-scope:is([data-screen=home],[data-screen=settings]) .app-heading .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-size:1.2rem;font-weight:700;min-width:0}
+.lwvd-scope .app-heading .brand img{width:36px;height:36px;flex-shrink:0}
+.lwvd-scope[data-screen=home] .greeting{padding-right:0}
+
 
 /* The shared theme manager owns resolution, storage and color-scheme. */
-:root[data-theme=dark]{color:#eee8ff;background:#151020}
-:root[data-theme=dark] .shell{background:linear-gradient(135deg,#101019,#151020)}
-:root[data-theme=dark] p{color:#c1b8d9}
-:root[data-theme=dark] .ecosystem_nav_back,:root[data-theme=dark] #settings{color:#c19aff}
-:root[data-theme=dark] .story{background:#182f36}
-:root[data-theme=dark] .story h2{color:#d6b5ff}
-:root[data-theme=dark] .story .balance{color:#d6b5ff}
-:root[data-theme=dark] .payday-card{background:#242032;border-color:#393049;box-shadow:none}
-:root[data-theme=dark] .calendar-icon{background:#352647;color:#cca8ff}
-:root[data-theme=dark] .daily-card{background:#173d37}
-:root[data-theme=dark] .daily-card .guide{color:#8df0d7}
-:root[data-theme=dark] .section-title>span{color:#bfb2d4}
-:root[data-theme=dark] .quick button{background:#173a35;color:#e8fff8}
-:root[data-theme=dark] .quick button:nth-child(2){background:#3c2337;color:#ffe9f5}
-:root[data-theme=dark] .quick button:nth-child(3){background:#302345;color:#f0e7ff}
-:root[data-theme=dark] .quick small{color:#d2c8e0}
-:root[data-theme=dark] .quick button>span{background:#14695e}
-:root[data-theme=dark] .quick button:nth-child(2)>span{background:#a72b70}
-:root[data-theme=dark] .quick button:nth-child(3)>span{background:#6d36c5}
-:root[data-theme=dark] .goal{background:#2a203e}
-:root[data-theme=dark] .goal-star,:root[data-theme=dark] .motivation>span{color:#bd92ff}
-:root[data-theme=dark] .payday-prompt{background:#2a203e}
-:root[data-theme=dark] .payday-prompt.expired{background:#3c2d18}
-:root[data-theme=dark] .expired .calendar-icon{background:#594021;color:#ffd58c}
-:root[data-theme=dark] nav{background:#17131ff5;border-color:#383040}
-:root[data-theme=dark] nav button{color:#bdb0d5}
-:root[data-theme=dark] nav button[aria-current]{color:#c29bff}
-:root[data-theme=dark] .empty-icon{background:#2b2141;color:#c09aff}
-:root[data-theme=dark] body[data-screen=settings] .shell{background:linear-gradient(#14101d,#1b1427)}
-:root[data-theme=dark] .setting-row{background:#272031;box-shadow:none}
-:root[data-theme=dark] .setting-icon{background:#39294e;color:#c9a1ff}
-:root[data-theme=dark] .settings-panel h2{color:#c7a1ff}
-:root[data-theme=dark] button{border-color:#59496b;color:#d8bcff;background:#2d233d}
-:root[data-theme=dark] .primary{background:linear-gradient(120deg,#8055f5,#6945e8);color:#fff;border:0}
-:root[data-theme=dark] .text-button,:root[data-theme=dark] .settings-title button{background:transparent;color:#caa9ff}
-:root[data-theme=dark] input,:root[data-theme=dark] select{background:#251e32;color:#f0e9ff;border-color:#655477}
-:root[data-theme=dark] input::placeholder{color:#b5a7c8;opacity:1}
-:root[data-theme=dark] .setting-row input,:root[data-theme=dark] .setting-row select{background:transparent}
-:root[data-theme=dark] .welcome-brand h2{color:#c9a8ff}
-:root[data-theme=dark] .welcome .onboarding-question{color:#eee6ff}
-:root[data-theme=dark] .welcome:before{background:linear-gradient(#251b39,#17121f)}
-:root[data-theme=dark] .steps span{background:#342744;color:#d3c1ed}
-:root[data-theme=dark] .steps span.active{background:#8151ed;color:#fff}
-:root[data-theme=dark] .steps i{background:#4f3b68}
-:root[data-theme=dark] .error{color:#ff9fb9}
-:root[data-theme=dark] .card{background:#272031;border-color:#51405f}
-:root[data-theme=dark] button:focus-visible,:root[data-theme=dark] a:focus-visible,:root[data-theme=dark] input:focus-visible,:root[data-theme=dark] select:focus-visible{outline-color:#70dec4}
-:root[data-theme=dark] nav button{background:transparent;border:0}
+:root[data-theme=dark] .lwvd-scope{color:#eee8ff}
+:root[data-theme=dark] .shell.lwvd-scope{background:linear-gradient(135deg,#101019,#151020)}
+:root[data-theme=dark] .lwvd-scope p{color:#c1b8d9}
+:root[data-theme=dark] .lwvd-scope .ecosystem_nav_back,:root[data-theme=dark] .lwvd-scope #settings{color:#c19aff}
+:root[data-theme=dark] .lwvd-scope .story{background:#182f36}
+:root[data-theme=dark] .lwvd-scope .story h2{color:#d6b5ff}
+:root[data-theme=dark] .lwvd-scope .story .balance{color:#d6b5ff}
+:root[data-theme=dark] .lwvd-scope .payday-card{background:#242032;border-color:#393049;box-shadow:none}
+:root[data-theme=dark] .lwvd-scope .calendar-icon{background:#352647;color:#cca8ff}
+:root[data-theme=dark] .lwvd-scope .daily-card{background:#173d37}
+:root[data-theme=dark] .lwvd-scope .daily-card .guide{color:#8df0d7}
+:root[data-theme=dark] .lwvd-scope .section-title>span{color:#bfb2d4}
+:root[data-theme=dark] .lwvd-scope .quick button{background:#173a35;color:#e8fff8}
+:root[data-theme=dark] .lwvd-scope .quick button:nth-child(2){background:#3c2337;color:#ffe9f5}
+:root[data-theme=dark] .lwvd-scope .quick button:nth-child(3){background:#302345;color:#f0e7ff}
+:root[data-theme=dark] .lwvd-scope .quick small{color:#d2c8e0}
+:root[data-theme=dark] .lwvd-scope .quick button>span{background:#14695e}
+:root[data-theme=dark] .lwvd-scope .quick button:nth-child(2)>span{background:#a72b70}
+:root[data-theme=dark] .lwvd-scope .quick button:nth-child(3)>span{background:#6d36c5}
+:root[data-theme=dark] .lwvd-scope .goal{background:#2a203e}
+:root[data-theme=dark] .lwvd-scope .goal-star,:root[data-theme=dark] .lwvd-scope .motivation>span{color:#bd92ff}
+:root[data-theme=dark] .lwvd-scope .payday-prompt{background:#2a203e}
+:root[data-theme=dark] .lwvd-scope .payday-prompt.expired{background:#3c2d18}
+:root[data-theme=dark] .lwvd-scope .expired .calendar-icon{background:#594021;color:#ffd58c}
+:root[data-theme=dark] .lwvd-scope nav{background:#17131ff5;border-color:#383040}
+:root[data-theme=dark] .lwvd-scope nav button{color:#bdb0d5}
+:root[data-theme=dark] .lwvd-scope nav button[aria-current]{color:#c29bff}
+:root[data-theme=dark] .lwvd-scope .empty-icon{background:#2b2141;color:#c09aff}
+:root[data-theme=dark] .lwvd-scope[data-screen=settings]{background:linear-gradient(#14101d,#1b1427)}
+:root[data-theme=dark] .lwvd-scope .setting-row{background:#272031;box-shadow:none}
+:root[data-theme=dark] .lwvd-scope .setting-icon{background:#39294e;color:#c9a1ff}
+:root[data-theme=dark] .lwvd-scope .settings-panel h2{color:#c7a1ff}
+:root[data-theme=dark] .lwvd-scope button{border-color:#59496b;color:#d8bcff;background:#2d233d}
+:root[data-theme=dark] .lwvd-scope .primary{background:linear-gradient(120deg,#8055f5,#6945e8);color:#fff;border:0}
+:root[data-theme=dark] .lwvd-scope .text-button,:root[data-theme=dark] .lwvd-scope .settings-title button{background:transparent;color:#caa9ff}
+:root[data-theme=dark] .lwvd-scope input,:root[data-theme=dark] .lwvd-scope select{background:#251e32;color:#f0e9ff;border-color:#655477}
+:root[data-theme=dark] .lwvd-scope input::placeholder{color:#b5a7c8;opacity:1}
+:root[data-theme=dark] .lwvd-scope .setting-row input,:root[data-theme=dark] .lwvd-scope .setting-row select{background:transparent}
+:root[data-theme=dark] .lwvd-scope .welcome-brand h2{color:#c9a8ff}
+:root[data-theme=dark] .lwvd-scope .welcome .onboarding-question{color:#eee6ff}
+:root[data-theme=dark] .lwvd-scope .welcome:before{background:linear-gradient(#251b39,#17121f)}
+:root[data-theme=dark] .lwvd-scope .steps span{background:#342744;color:#d3c1ed}
+:root[data-theme=dark] .lwvd-scope .steps span.active{background:#8151ed;color:#fff}
+:root[data-theme=dark] .lwvd-scope .steps i{background:#4f3b68}
+:root[data-theme=dark] .lwvd-scope .error{color:#ff9fb9}
+:root[data-theme=dark] .lwvd-scope .card{background:#272031;border-color:#51405f}
+:root[data-theme=dark] .lwvd-scope button:focus-visible,:root[data-theme=dark] .lwvd-scope a:focus-visible,:root[data-theme=dark] .lwvd-scope input:focus-visible,:root[data-theme=dark] .lwvd-scope select:focus-visible{outline-color:#70dec4}
+:root[data-theme=dark] .lwvd-scope nav button{background:transparent;border:0}
 
-.balance-setting{width:100%;text-align:left;border:0;font-weight:400;color:inherit}
-.balance-setting .setting-label{display:block;font-size:.82rem;margin-bottom:2px}
-.balance-setting strong{font-size:.9rem;font-weight:400}
-.balance-setting .setting-icon img{width:24px;height:24px}
-:root[data-theme=dark] .balance-setting{background:#272031;color:#eee8ff}
-.balance-setting>div{flex:1;min-width:0}
+.lwvd-scope .balance-setting{width:100%;text-align:left;border:0;font-weight:400;color:inherit}
+.lwvd-scope .balance-setting .setting-label{display:block;font-size:.82rem;margin-bottom:2px}
+.lwvd-scope .balance-setting strong{font-size:.9rem;font-weight:400}
+.lwvd-scope .balance-setting .setting-icon img{width:24px;height:24px}
+:root[data-theme=dark] .lwvd-scope .balance-setting{background:#272031;color:#eee8ff}
+.lwvd-scope .balance-setting>div{flex:1;min-width:0}
 
 /* Sprint 2: the existing quick actions, local activity, and native bottom sheet. */
-@media(hover:hover) and (pointer:fine){.quick button:not(:disabled):hover{box-shadow:0 0 0 2px #9d7ce8 inset}}
-.quick button:not(:disabled):active{box-shadow:0 0 0 2px #9d7ce8 inset}
-.quick button:focus:not(:focus-visible){outline:none}
-.activity>h1{margin:8px 0 20px}.activity>label{display:block;font-size:.82rem;margin-bottom:7px}
-.activity-filters{display:flex;gap:8px;margin:12px 0 24px}.activity-filters button{flex:1;padding:9px 5px;font-size:.8rem}
-.activity-filters button[aria-pressed=true]{background:#ece3ff;border-color:#a582e5;color:#4c1ba7}
-.activity-group{margin:0 0 24px}.activity-group>h2{font-size:.85rem;color:#67568b;margin-bottom:9px}
-.activity-group ul{list-style:none;padding:0;margin:0;display:grid;gap:5px}
-.transaction-row{display:flex;gap:8px;align-items:center;width:100%;min-height:56px;padding:8px 10px;text-align:left;border:0;background:#f4f0fc;color:inherit}
-.transaction-icon{display:grid;place-items:center;width:32px;height:32px;flex-shrink:0;border-radius:50%;background:#e6dafb;color:#7246b7}
-.transaction-icon.income{background:#d8f5e9;color:#216f59}.transaction-icon.expense{background:#fce3f0;color:#973567}
-.transaction-text{flex:1;min-width:0}.transaction-text strong{display:block;font-size:.88rem;overflow-wrap:anywhere}.transaction-text small{display:block;margin-top:3px;font-size:.7rem;font-weight:400;color:#665782}
-.transaction-amount{font-size:.9rem;flex-shrink:0;max-width:45%;overflow-wrap:anywhere}.transaction-amount.income,.detail-amount.income{color:#216c55}.transaction-amount.expense,.detail-amount.expense{color:#9a3264}
-.activity-empty{text-align:center;padding:30px 14px}.activity-empty h2{font-size:1.15rem}.activity-empty p{font-size:.85rem}
+@media(hover:hover) and (pointer:fine){.lwvd-scope .quick button:not(:disabled):hover{box-shadow:0 0 0 2px #9d7ce8 inset}}
+.lwvd-scope .quick button:not(:disabled):active{box-shadow:0 0 0 2px #9d7ce8 inset}
+.lwvd-scope .quick button:focus:not(:focus-visible){outline:none}
+.lwvd-scope .activity>h1{margin:8px 0 20px}.lwvd-scope .activity>label{display:block;font-size:.82rem;margin-bottom:7px}
+.lwvd-scope .activity-filters{display:flex;gap:8px;margin:12px 0 24px}.lwvd-scope .activity-filters button{flex:1;padding:9px 5px;font-size:.8rem}
+.lwvd-scope .activity-filters button[aria-pressed=true]{background:#ece3ff;border-color:#a582e5;color:#4c1ba7}
+.lwvd-scope .activity-group{margin:0 0 24px}.lwvd-scope .activity-group>h2{font-size:.85rem;color:#67568b;margin-bottom:9px}
+.lwvd-scope .activity-group ul{list-style:none;padding:0;margin:0;display:grid;gap:5px}
+.lwvd-scope .transaction-row{display:flex;gap:8px;align-items:center;width:100%;min-height:56px;padding:8px 10px;text-align:left;border:0;background:#f4f0fc;color:inherit}
+.lwvd-scope .transaction-icon{display:grid;place-items:center;width:32px;height:32px;flex-shrink:0;border-radius:50%;background:#e6dafb;color:#7246b7}
+.lwvd-scope .transaction-icon.income{background:#d8f5e9;color:#216f59}.lwvd-scope .transaction-icon.expense{background:#fce3f0;color:#973567}
+.lwvd-scope .transaction-text{flex:1;min-width:0}.lwvd-scope .transaction-text strong{display:block;font-size:.88rem;overflow-wrap:anywhere}.lwvd-scope .transaction-text small{display:block;margin-top:3px;font-size:.7rem;font-weight:400;color:#665782}
+.lwvd-scope .transaction-amount{font-size:.9rem;flex-shrink:0;max-width:45%;overflow-wrap:anywhere}.lwvd-scope .transaction-amount.income,.lwvd-scope .detail-amount.income{color:#216c55}.lwvd-scope .transaction-amount.expense,.lwvd-scope .detail-amount.expense{color:#9a3264}
+.lwvd-scope .activity-empty{text-align:center;padding:30px 14px}.lwvd-scope .activity-empty h2{font-size:1.15rem}.lwvd-scope .activity-empty p{font-size:.85rem}
+
 /* Reset native dialog UA bounds; only the inner frame tracks the visible viewport. */
-:is(#transaction-sheet,#affordability-sheet){position:fixed;inset:0;margin:0;padding:0;border:0;width:100%;height:100%;max-width:none;max-height:none;overflow:hidden;overscroll-behavior:none;background:transparent;color:#170765}
-:is(#transaction-sheet,#affordability-sheet)[open]{display:block}
-:is(#transaction-sheet,#affordability-sheet)::backdrop{background:#160e295c}:is(#transaction-sheet,#affordability-sheet):focus{outline:none}
-.transaction-frame{position:absolute;top:var(--sheet-top,0px);left:var(--sheet-left,0px);width:var(--sheet-width,100%);height:var(--sheet-height,100dvh);display:flex;align-items:flex-end;justify-content:center;padding-top:max(12px,env(safe-area-inset-top));overflow:hidden}
-.transaction-panel{display:flex;flex-direction:column;width:min(100%,480px);max-height:100%;min-height:0;overflow:hidden;border:1px solid #ddd2ee;border-bottom:0;border-radius:24px 24px 0 0;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));background:#fcfaff;box-shadow:0 -10px 45px #28133b24}
-#transaction-sheet[data-view=details],#transaction-sheet[data-view=details]::backdrop{background:#fcfaff}
-.details-body{flex:1;display:flex;flex-direction:column}
-.details-centered{flex-shrink:0;width:100%;margin-block:auto}
-body:has(#transaction-sheet[data-view=details][open])>.shell,body:has(#transaction-sheet[open] #transaction-form)>.shell{visibility:hidden}
-.sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sheet-heading h2{font-size:1.3rem;margin:0}.sheet-heading h2:focus{outline:none}.sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
-:is(#transaction-sheet,#affordability-sheet) label{font-size:.87rem;font-weight:500}.sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.transaction-details dt{color:#675b80}.transaction-details dd{margin:0;overflow-wrap:anywhere}
-#notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;top:calc(10px + env(safe-area-inset-top));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
-:root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:#493061;color:#eee3ff;border-color:#a783ce}
-:root[data-theme=dark] .activity-group>h2{color:#bfb0d5}
-:root[data-theme=dark] .transaction-row{background:#292135;color:#eee8ff}
-:root[data-theme=dark] .transaction-text small,:root[data-theme=dark] .transaction-details dt{color:#c1b2d5}
-:root[data-theme=dark] .transaction-icon.income{background:#204d40;color:#96edcc}
-:root[data-theme=dark] .transaction-icon.expense{background:#542a45;color:#ffc1e0}
-:root[data-theme=dark] .transaction-amount.income,:root[data-theme=dark] .detail-amount.income{color:#96edcc}
-:root[data-theme=dark] .transaction-amount.expense,:root[data-theme=dark] .detail-amount.expense{color:#ffc1e0}
-:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet){color:#eee8ff}
-:root[data-theme=dark] .transaction-panel{background:#21192c;border-color:#53405f}
-:root[data-theme=dark] #transaction-sheet[data-view=details],:root[data-theme=dark] #transaction-sheet[data-view=details]::backdrop{background:#21192c}
-:root[data-theme=dark] .sheet-heading button{background:transparent}
-:root[data-theme=dark] #notice:not(:empty){background:#342443;color:#f0e7fa;border-color:#84629e}
-@media(max-width:360px){.transaction-panel{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.transaction-row{gap:8px;padding:8px 10px}.transaction-amount{font-size:.82rem}.transaction-icon{width:30px;height:30px}.activity-filters{gap:6px}}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope){position:fixed;inset:0;margin:0;padding:0;border:0;width:100%;height:100%;max-width:none;max-height:none;overflow:hidden;overscroll-behavior:none;background:transparent;color:#170765}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)[open]{display:block}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)::backdrop{background:#160e295c}:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):focus{outline:none}
+.lwvd-scope .transaction-frame{position:absolute;top:var(--sheet-top,0px);left:var(--sheet-left,0px);width:var(--sheet-width,100%);height:var(--sheet-height,100dvh);display:flex;align-items:flex-end;justify-content:center;padding-top:max(12px,env(safe-area-inset-top));overflow:hidden}
+.lwvd-scope .transaction-panel{display:flex;flex-direction:column;width:min(100%,480px);max-height:100%;min-height:0;overflow:hidden;border:1px solid #ddd2ee;border-bottom:0;border-radius:24px 24px 0 0;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));background:#fcfaff;box-shadow:0 -10px 45px #28133b24}
+#transaction-sheet.lwvd-scope[data-view=details],#transaction-sheet.lwvd-scope[data-view=details]::backdrop{background:#fcfaff}
+.lwvd-scope .details-body{flex:1;display:flex;flex-direction:column}
+.lwvd-scope .details-centered{flex-shrink:0;width:100%;margin-block:auto}
+body:has(#transaction-sheet[data-view=details][open])>.shell.lwvd-scope,body:has(#transaction-sheet[open] #transaction-form)>.shell.lwvd-scope{visibility:hidden}
+.lwvd-scope .sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.lwvd-scope .sheet-heading h2{font-size:1.3rem;margin:0}.lwvd-scope .sheet-heading h2:focus{outline:none}.lwvd-scope .sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope) label{font-size:.87rem;font-weight:500}.lwvd-scope .sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.lwvd-scope .detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.lwvd-scope .transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.lwvd-scope .transaction-details dt{color:#675b80}.lwvd-scope .transaction-details dd{margin:0;overflow-wrap:anywhere}
+.lwvd-scope #notice:not(:empty){position:fixed;z-index:3;left:16px;right:16px;top:calc(10px + env(safe-area-inset-top));max-width:448px;margin:0 auto;padding:13px 16px;border-radius:16px;background:#eee7fc;border:1px solid #c7b4e6;box-shadow:0 5px 24px #2e1d4526;color:#30234b;display:flex;align-items:center;justify-content:space-between;gap:12px}
+:root[data-theme=dark] .lwvd-scope .activity-filters button[aria-pressed=true]{background:#493061;color:#eee3ff;border-color:#a783ce}
+:root[data-theme=dark] .lwvd-scope .activity-group>h2{color:#bfb0d5}
+:root[data-theme=dark] .lwvd-scope .transaction-row{background:#292135;color:#eee8ff}
+:root[data-theme=dark] .lwvd-scope .transaction-text small,:root[data-theme=dark] .lwvd-scope .transaction-details dt{color:#c1b2d5}
+:root[data-theme=dark] .lwvd-scope .transaction-icon.income{background:#204d40;color:#96edcc}
+:root[data-theme=dark] .lwvd-scope .transaction-icon.expense{background:#542a45;color:#ffc1e0}
+:root[data-theme=dark] .lwvd-scope .transaction-amount.income,:root[data-theme=dark] .lwvd-scope .detail-amount.income{color:#96edcc}
+:root[data-theme=dark] .lwvd-scope .transaction-amount.expense,:root[data-theme=dark] .lwvd-scope .detail-amount.expense{color:#ffc1e0}
+:root[data-theme=dark] :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope){color:#eee8ff}
+:root[data-theme=dark] .lwvd-scope .transaction-panel{background:#21192c;border-color:#53405f}
+:root[data-theme=dark] #transaction-sheet.lwvd-scope[data-view=details],:root[data-theme=dark] #transaction-sheet.lwvd-scope[data-view=details]::backdrop{background:#21192c}
+:root[data-theme=dark] .lwvd-scope .sheet-heading button{background:transparent}
+:root[data-theme=dark] .lwvd-scope #notice:not(:empty){background:#342443;color:#f0e7fa;border-color:#84629e}
+@media(max-width:360px){.lwvd-scope .transaction-panel{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.lwvd-scope .transaction-row{gap:8px;padding:8px 10px}.lwvd-scope .transaction-amount{font-size:.82rem}.lwvd-scope .transaction-icon{width:30px;height:30px}.lwvd-scope .activity-filters{gap:6px}}
+
 
 /* Keep actions outside the scrolling field area, including keyboard-sized viewports. */
-:is(#transaction-form,#affordability-form){flex:1;display:flex;flex-direction:column;gap:0;min-height:0;overflow:hidden}
-.sheet-body{min-height:0;overflow:auto;overscroll-behavior:contain}
-.sheet-fields{display:grid;gap:10px;padding:2px 2px 4px}
-.sheet-fields .error{overflow-wrap:anywhere}
-.transaction-chevron{flex-shrink:0;color:#89779e;font-size:1.25rem;font-weight:400;line-height:1}
-.transaction-row:active{background:#e8dff6}
-:root[data-theme=dark] .transaction-chevron{color:#b5a3cb}
-:root[data-theme=dark] .transaction-row:active{background:#3c2e4b}
-#notice[data-kind=success]:not(:empty){left:16px;right:16px;width:max-content;max-width:calc(100% - 32px);padding:9px 14px;pointer-events:none;display:block;text-align:center}
-:is(#transaction-sheet,#affordability-sheet) input:focus-visible,:is(#transaction-sheet,#affordability-sheet) select:focus-visible{outline-offset:-3px}
+.lwvd-scope :is(#transaction-form,#affordability-form){flex:1;display:flex;flex-direction:column;gap:0;min-height:0;overflow:hidden}
+.lwvd-scope .sheet-body{min-height:0;overflow:auto;overscroll-behavior:contain}
+.lwvd-scope .sheet-fields{display:grid;gap:10px;padding:2px 2px 4px}
+.lwvd-scope .sheet-fields .error{overflow-wrap:anywhere}
+.lwvd-scope .transaction-chevron{flex-shrink:0;color:#89779e;font-size:1.25rem;font-weight:400;line-height:1}
+.lwvd-scope .transaction-row:active{background:#e8dff6}
+:root[data-theme=dark] .lwvd-scope .transaction-chevron{color:#b5a3cb}
+:root[data-theme=dark] .lwvd-scope .transaction-row:active{background:#3c2e4b}
+.lwvd-scope #notice[data-kind=success]:not(:empty){left:16px;right:16px;width:max-content;max-width:calc(100% - 32px);padding:9px 14px;pointer-events:none;display:block;text-align:center}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope) input:focus-visible,:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope) select:focus-visible{outline-offset:-3px}
+
 
 /* Touch may retain logical focus, but only keyboard navigation paints control outlines. */
-:root[data-focus-mode=pointer] :where(button,a,input,select,textarea,[role=button],[tabindex]):focus{outline:none}
+:root[data-focus-mode=pointer] .lwvd-scope :where(button,a,input,select,textarea,[role=button],[tabindex]):focus{outline:none}
+
 /* Keep each field intact in the existing scroller, with a separate action area. */
-:is(#transaction-form,#affordability-form) .sheet-fields{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;padding-bottom:12px;scroll-padding-block:4px 12px}
-:is(#transaction-form,#affordability-form) .sheet-fields>*{flex-shrink:0}
-#transaction-form .sheet-actions{position:static;margin-top:0;padding-top:12px;border-top:1px solid #e5dbef}
-.sheet-fields select{height:52px;min-height:52px;padding:0 32px 0 12px;line-height:normal}
-:is(#transaction-sheet,#affordability-sheet)[data-view=form],:is(#transaction-sheet,#affordability-sheet)[data-view=form]::backdrop{background:#fcfaff}
-:root[data-theme=dark] #transaction-form .sheet-actions{border-color:#53405f}
-:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet)[data-view=form],:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet)[data-view=form]::backdrop{background:#21192c}
+.lwvd-scope :is(#transaction-form,#affordability-form) .sheet-fields{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;padding-bottom:12px;scroll-padding-block:4px 12px}
+.lwvd-scope :is(#transaction-form,#affordability-form) .sheet-fields>*{flex-shrink:0}
+.lwvd-scope #transaction-form .sheet-actions{position:static;margin-top:0;padding-top:12px;border-top:1px solid #e5dbef}
+.lwvd-scope .sheet-fields select{height:52px;min-height:52px;padding:0 32px 0 12px;line-height:normal}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)[data-view=form],:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)[data-view=form]::backdrop{background:#fcfaff}
+:root[data-theme=dark] .lwvd-scope #transaction-form .sheet-actions{border-color:#53405f}
+:root[data-theme=dark] :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)[data-view=form],:root[data-theme=dark] :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope)[data-view=form]::backdrop{background:#21192c}
+
 
 /* Currency adornments leave the native editable value and keyboard unchanged. */
-.currency-input{position:relative;min-width:0}
-.currency-input>span{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#675b80;pointer-events:none}
-.currency-input>input{padding-left:34px}
-.welcome .currency-input>input[name=balance]{text-align:left}
-:root[data-theme=dark] .currency-input>span{color:#c1b2d5}
-.numeric,.currency-input,input[inputmode=decimal],input[type=date],.story .balance,.transaction-amount,.detail-amount,.balance-setting strong{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;font-variant-numeric:tabular-nums}
+.lwvd-scope .currency-input{position:relative;min-width:0}
+.lwvd-scope .currency-input>span{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#675b80;pointer-events:none}
+.lwvd-scope .currency-input>input{padding-left:34px}
+.lwvd-scope .welcome .currency-input>input[name=balance]{text-align:left}
+:root[data-theme=dark] .lwvd-scope .currency-input>span{color:#c1b2d5}
+.lwvd-scope .numeric,.lwvd-scope .currency-input,.lwvd-scope input[inputmode=decimal],.lwvd-scope input[type=date],.lwvd-scope .story .balance,.lwvd-scope .transaction-amount,.lwvd-scope .detail-amount,.lwvd-scope .balance-setting strong{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;font-variant-numeric:tabular-nums}
+
 
 /* Sprint 2.1: root coverage follows the existing dynamic viewport in Safari/PWA. */
-html{min-height:100%}
-body{min-height:100vh;min-height:100dvh;background:inherit}
-.shell{min-height:100vh;min-height:100dvh}
-nav{background:#fff}
-:root[data-theme=dark] nav{background:#17131f}
+html.lwvd-document{min-height:100%}
+body.lwvd-document{min-height:100vh;min-height:100dvh;background:inherit}
+.shell.lwvd-scope{min-height:100vh;min-height:100dvh}
+.lwvd-scope nav{background:#fff}
+:root[data-theme=dark] .lwvd-scope nav{background:#17131f}
 
-.settings-panel .setting-row{min-height:88px;padding:12px;gap:12px}
-#frequency option{background:#fff;color:#19124f}
-.setting-row .setting-icon{width:40px;height:40px;flex-shrink:0}
-.setting-row>div:not(.setting-icon){flex:1;min-width:0;display:grid;gap:2px}
-.setting-row label,.balance-setting .setting-label{margin:0;line-height:1.25;font-size:.82rem}
-.setting-row input,.setting-row select,.balance-setting strong{min-height:44px;padding:5px 0;font-size:.9rem}
-.balance-setting strong{display:flex;align-items:center}
-.balance-setting>span:last-child{flex-shrink:0}
-.settings-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.settings-actions button{min-height:48px;line-height:1.3;padding:10px}
-.story>p{line-height:1.3}
-.story .balance{margin:2px 0;font-size:2.85rem}
-.daily-card .guide{font-size:1.3rem;line-height:1.25}
-.activity-search{position:relative}
-.activity-search>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:19px;height:19px;color:#675b80;pointer-events:none}
-.activity-search input{padding-left:42px}
-.activity-filters{justify-content:space-evenly;gap:8px;margin:6px 0 18px}
-.activity-filters button{flex:0 1 auto;min-height:44px;padding:8px 12px;border:0;border-radius:0;background:transparent;color:#675b80;font-size:.82rem;font-weight:500;border-bottom:2px solid transparent}
-.activity-filters button[aria-pressed=true]{background:transparent;border-color:#7840d8;color:#4c1ba7;font-weight:500}
-:root[data-theme=dark] .activity-search>svg{color:#c1b2d5}
-:root[data-theme=dark] .activity-filters button{background:transparent;color:#c1b2d5}
-:root[data-theme=dark] .activity-filters button[aria-pressed=true]{background:transparent;border-color:#bd92ff;color:#e1caff}
-body[data-screen=settings] .settings-title{margin-bottom:16px}
-body[data-screen=settings] .settings-panel h2{margin:10px 0 0}
-.settings-panel .hint{margin:4px 0}
+.lwvd-scope .settings-panel .setting-row{min-height:88px;padding:12px;gap:12px}
+.lwvd-scope #frequency option{background:#fff;color:#19124f}
+.lwvd-scope .setting-row .setting-icon{width:40px;height:40px;flex-shrink:0}
+.lwvd-scope .setting-row>div:not(.setting-icon){flex:1;min-width:0;display:grid;gap:2px}
+.lwvd-scope .setting-row label,.lwvd-scope .balance-setting .setting-label{margin:0;line-height:1.25;font-size:.82rem}
+.lwvd-scope .setting-row input,.lwvd-scope .setting-row select,.lwvd-scope .balance-setting strong{min-height:44px;padding:5px 0;font-size:.9rem}
+.lwvd-scope .balance-setting strong{display:flex;align-items:center}
+.lwvd-scope .balance-setting>span:last-child{flex-shrink:0}
+.lwvd-scope .settings-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lwvd-scope .settings-actions button{min-height:48px;line-height:1.3;padding:10px}
+.lwvd-scope .story>p{line-height:1.3}
+.lwvd-scope .story .balance{margin:2px 0;font-size:2.85rem}
+.lwvd-scope .daily-card .guide{font-size:1.3rem;line-height:1.25}
+.lwvd-scope .activity-search{position:relative}
+.lwvd-scope .activity-search>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:19px;height:19px;color:#675b80;pointer-events:none}
+.lwvd-scope .activity-search input{padding-left:42px}
+.lwvd-scope .activity-filters{justify-content:space-evenly;gap:8px;margin:6px 0 18px}
+.lwvd-scope .activity-filters button{flex:0 1 auto;min-height:44px;padding:8px 12px;border:0;border-radius:0;background:transparent;color:#675b80;font-size:.82rem;font-weight:500;border-bottom:2px solid transparent}
+.lwvd-scope .activity-filters button[aria-pressed=true]{background:transparent;border-color:#7840d8;color:#4c1ba7;font-weight:500}
+:root[data-theme=dark] .lwvd-scope .activity-search>svg{color:#c1b2d5}
+:root[data-theme=dark] .lwvd-scope .activity-filters button{background:transparent;color:#c1b2d5}
+:root[data-theme=dark] .lwvd-scope .activity-filters button[aria-pressed=true]{background:transparent;border-color:#bd92ff;color:#e1caff}
+.lwvd-scope[data-screen=settings] .settings-title{margin-bottom:16px}
+.lwvd-scope[data-screen=settings] .settings-panel h2{margin:10px 0 0}
+.lwvd-scope .settings-panel .hint{margin:4px 0}
+
 
 /* Keep navigation in the app's flow, rather than a separate fixed viewport. */
-.shell{--shell-inline:22px;display:flex;flex-direction:column;padding-bottom:0}
-main{flex:1;min-width:0;align-content:start;padding-bottom:24px}
-nav{position:sticky;flex-shrink:0;width:calc(100% + var(--shell-inline) + var(--shell-inline));margin:0 calc(0px - var(--shell-inline));left:auto;right:auto}
+.shell.lwvd-scope{--shell-inline:22px;display:flex;flex-direction:column;padding-bottom:0}
+.lwvd-scope main{flex:1;min-width:0;align-content:start;padding-bottom:24px}
+.lwvd-scope nav{position:sticky;flex-shrink:0;width:calc(100% + var(--shell-inline) + var(--shell-inline));margin:0 calc(0px - var(--shell-inline));left:auto;right:auto}
 /* Installed iOS can underreport dvh at launch until the first root scroll.
    Use the stable viewport for shell coverage; keep normal root scrolling/sticky nav. */
-@media(display-mode:standalone){body,.shell{min-height:100vh}}
-body[data-screen=onboarding] .shell{display:block}
-body[data-screen=onboarding] main{padding-bottom:0}
-@media(max-width:360px){.shell{--shell-inline:16px}}
+@media(display-mode:standalone){body.lwvd-document,.shell.lwvd-scope{min-height:100vh}}
+div.lwvd-scope[data-screen=onboarding]{display:block}
+.lwvd-scope[data-screen=onboarding] main{padding-bottom:0}
+@media(max-width:360px){.shell.lwvd-scope{--shell-inline:16px}}
+
 /* Only financial values use Geist Mono; dates and surrounding copy stay unchanged. */
-.currency-input,input[inputmode=decimal],.story .balance,.guide .numeric,.transaction-amount,.detail-amount,.balance-setting strong{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+.lwvd-scope .currency-input,.lwvd-scope input[inputmode=decimal],.lwvd-scope .story .balance,.lwvd-scope .guide .numeric,.lwvd-scope .transaction-amount,.lwvd-scope .detail-amount,.lwvd-scope .balance-setting strong{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+
 
 /* Sprint 2.1.2: lighter weights; no viewport or navigation rule changes. */
-h1,h2,strong,b{font-weight:500}
-.currency-input,input[inputmode=decimal],.story .balance,.guide .numeric,.transaction-amount,.detail-amount,.balance-setting strong{font-weight:500}
+.lwvd-scope h1,.lwvd-scope h2,.lwvd-scope strong,.lwvd-scope b{font-weight:500}
+.lwvd-scope .currency-input,.lwvd-scope input[inputmode=decimal],.lwvd-scope .story .balance,.lwvd-scope .guide .numeric,.lwvd-scope .transaction-amount,.lwvd-scope .detail-amount,.lwvd-scope .balance-setting strong{font-weight:500}
+
 
 /* Sprint 3 uses the existing shell and full-screen form host. */
-.settings-title .back-circle,:root[data-theme=dark] .settings-title .back-circle{display:grid;place-items:center;flex:0 0 50px;width:50px;height:50px;min-height:50px;padding:0;border:0;border-radius:50%;background:#ece1ff;color:#6326b5}
-.back-circle svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-:root[data-theme=dark] .settings-title .back-circle{background:#3c2b51;color:#dfc6ff}
-.goal-list{display:grid;gap:14px;margin-top:20px}.goal-card h2,.featured h3{overflow-wrap:anywhere;margin:0 0 10px}.goal-actions{display:grid;gap:12px;margin-top:18px}.featured>div{width:100%;min-width:0}.featured button{margin-top:12px}.goal-card progress,.featured progress,#transaction-sheet progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}.story .numeric,.goals .numeric,.goal-card .numeric,.featured .numeric,#transaction-sheet .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.lwvd-scope .settings-title .back-circle,:root[data-theme=dark] .lwvd-scope .settings-title .back-circle{display:grid;place-items:center;flex:0 0 50px;width:50px;height:50px;min-height:50px;padding:0;border:0;border-radius:50%;background:#ece1ff;color:#6326b5}
+.lwvd-scope .back-circle svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+:root[data-theme=dark] .lwvd-scope .settings-title .back-circle{background:#3c2b51;color:#dfc6ff}
+.lwvd-scope .goal-list{display:grid;gap:14px;margin-top:20px}.lwvd-scope .goal-card h2,.lwvd-scope .featured h3{overflow-wrap:anywhere;margin:0 0 10px}.lwvd-scope .goal-actions{display:grid;gap:12px;margin-top:18px}.lwvd-scope .featured>div{width:100%;min-width:0}.lwvd-scope .featured button{margin-top:12px}.lwvd-scope .goal-card progress,.lwvd-scope .featured progress,#transaction-sheet.lwvd-scope progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}.lwvd-scope .story .numeric,.lwvd-scope .goals .numeric,.lwvd-scope .goal-card .numeric,.lwvd-scope .featured .numeric,#transaction-sheet.lwvd-scope .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+
 
 /* Goal progress is explicit across engines, including an empty purple track. */
-.goal-progress{appearance:none;-webkit-appearance:none;border:0;border-radius:6px;overflow:hidden;background:#8146cb;color:#2ee6c5}
-.goal-progress::-webkit-progress-bar{background:#8146cb;border-radius:6px}
-.goal-progress::-webkit-progress-value{background:#2ee6c5;border-radius:6px}
-.goal-progress::-moz-progress-bar{background:#2ee6c5;border-radius:6px}
-.goal-details-body{flex:1}
+.lwvd-scope .goal-progress{appearance:none;-webkit-appearance:none;border:0;border-radius:6px;overflow:hidden;background:#8146cb;color:#2ee6c5}
+.lwvd-scope .goal-progress::-webkit-progress-bar{background:#8146cb;border-radius:6px}
+.lwvd-scope .goal-progress::-webkit-progress-value{background:#2ee6c5;border-radius:6px}
+.lwvd-scope .goal-progress::-moz-progress-bar{background:#2ee6c5;border-radius:6px}
+.lwvd-scope .goal-details-body{flex:1}
+
 /* Match LLT's inset currentColor chevron while retaining the native select. */
-#goal-category{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+.lwvd-scope #goal-category{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+
 
 /* Leave the full 3px outline plus 3px offset inside the clipped goal form. */
-#transaction-form.goal-form .sheet-actions{padding-inline:6px;padding-bottom:6px}
+.lwvd-scope #transaction-form.goal-form .sheet-actions{padding-inline:6px;padding-bottom:6px}
+
 
 /* Keep editable Settings values above iOS's focus-zoom threshold. */
-.setting-row input,.setting-row select{font-size:max(16px,1rem)}
+.lwvd-scope .setting-row input,.lwvd-scope .setting-row select{font-size:max(16px,1rem)}
+
 
 /* A single native button covers the compact card; progress stays semantic. */
-.featured{position:relative;padding:14px 66px 14px 14px;gap:10px}
-.featured h3{font-size:1rem;margin:2px 0 4px}
-.featured progress{margin:8px 0 0}
-.featured .goal-star svg{width:32px;height:32px}
-.featured #featured-goal{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:17px;background:transparent;box-shadow:none;text-align:right}
-.navigation-chevron{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#7140bd}
-.navigation-chevron svg{width:24px;height:24px;fill:none;stroke-width:2.25}
-:root[data-theme=dark] .navigation-chevron{color:#c9a8ff}
-#featured-goal>.navigation-chevron{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(130,73,244,.10)}
-:root[data-theme=dark] #featured-goal>.navigation-chevron{background:rgba(201,168,255,.12)}
+.lwvd-scope .featured{position:relative;padding:14px 66px 14px 14px;gap:10px}
+.lwvd-scope .featured h3{font-size:1rem;margin:2px 0 4px}
+.lwvd-scope .featured progress{margin:8px 0 0}
+.lwvd-scope .featured .goal-star svg{width:32px;height:32px}
+.lwvd-scope .featured #featured-goal{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:17px;background:transparent;box-shadow:none;text-align:right}
+.lwvd-scope .navigation-chevron{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#7140bd}
+.lwvd-scope .navigation-chevron svg{width:24px;height:24px;fill:none;stroke-width:2.25}
+:root[data-theme=dark] .lwvd-scope .navigation-chevron{color:#c9a8ff}
+.lwvd-scope #featured-goal>.navigation-chevron{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(130,73,244,.10)}
+:root[data-theme=dark] .lwvd-scope #featured-goal>.navigation-chevron{background:rgba(201,168,255,.12)}
+
 
 /* Affordability retains its read-only preview and native expense handoff. */
-.affordability .afford-available{font-family:"Geist Mono",monospace;font-size:1.8rem;margin:4px 0;overflow-wrap:anywhere}
-.afford-result{padding:18px;border-radius:16px;background:#f0eaff;overflow-wrap:anywhere}
-.afford-result p{margin:0;font-size:.9rem}
-.afford-result .numeric{font-family:"Geist Mono",monospace}
-.afford-result[data-kind=affordable]{background:#d9faf3}
-.afford-result[data-kind=unaffordable],.afford-result[data-kind=invalid]{background:#fff0e2}
-#afford-buy{min-height:48px}
-#afford-buy:disabled{background:#e7e1ee;color:#6d617d;box-shadow:none}
-:root[data-theme=dark] .afford-result{background:#342744}
-:root[data-theme=dark] .afford-result[data-kind=affordable]{background:#204d40}
-:root[data-theme=dark] .afford-result:is([data-kind=unaffordable],[data-kind=invalid]){background:#4b3027}
-:root[data-theme=dark] #afford-buy:disabled{background:#382e43;color:#bdafcd}
+.lwvd-scope .affordability .afford-available{font-family:"Geist Mono",monospace;font-size:1.8rem;margin:4px 0;overflow-wrap:anywhere}
+.lwvd-scope .afford-result{padding:18px;border-radius:16px;background:#f0eaff;overflow-wrap:anywhere}
+.lwvd-scope .afford-result p{margin:0;font-size:.9rem}
+.lwvd-scope .afford-result .numeric{font-family:"Geist Mono",monospace}
+.lwvd-scope .afford-result[data-kind=affordable]{background:#d9faf3}
+.lwvd-scope .afford-result[data-kind=unaffordable],.lwvd-scope .afford-result[data-kind=invalid]{background:#fff0e2}
+.lwvd-scope #afford-buy{min-height:48px}
+.lwvd-scope #afford-buy:disabled{background:#e7e1ee;color:#6d617d;box-shadow:none}
+:root[data-theme=dark] .lwvd-scope .afford-result{background:#342744}
+:root[data-theme=dark] .lwvd-scope .afford-result[data-kind=affordable]{background:#204d40}
+:root[data-theme=dark] .lwvd-scope .afford-result:is([data-kind=unaffordable],[data-kind=invalid]){background:#4b3027}
+:root[data-theme=dark] .lwvd-scope #afford-buy:disabled{background:#382e43;color:#bdafcd}
+
 /* Keep Add Expense's native category indicator visible in both themes. */
-#transaction-label{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+.lwvd-scope #transaction-label{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+
 
 /* Match Settings values while retaining the native date picker. */
-.setting-row .payday-control{max-width:100%;text-align:left}
-.setting-row .payday-control:focus{background:#f3edff;outline:2px solid #c6a6ef;outline-offset:0}
-.payday-control::-webkit-date-and-time-value{text-align:left;min-height:1.25em}
-.payday-control::-webkit-datetime-edit{padding:0;text-align:left}
-:root[data-theme=dark] .setting-row .payday-control:focus{background:#3c2b51;outline-color:#a985d4}
+.lwvd-scope .setting-row .payday-control{max-width:100%;text-align:left}
+.lwvd-scope .setting-row .payday-control:focus{background:#f3edff;outline:2px solid #c6a6ef;outline-offset:0}
+.lwvd-scope .payday-control::-webkit-date-and-time-value{text-align:left;min-height:1.25em}
+.lwvd-scope .payday-control::-webkit-datetime-edit{padding:0;text-align:left}
+:root[data-theme=dark] .lwvd-scope .setting-row .payday-control:focus{background:#3c2b51;outline-color:#a985d4}
+
 
 /* Insights shares Activity's underline filters and the existing root/PWA shell. */
-.insights>h1{margin:8px 0 18px}.insight-filters{justify-content:space-evenly;gap:2px}.insight-filters button{padding:8px 4px;white-space:nowrap;font-size:.78rem;min-height:44px}
-#spending-report,.insights{min-width:0}.insight-card{padding:18px;border-radius:17px;background:#f2edff;margin-bottom:16px;overflow-wrap:anywhere}.insight-card h2{margin-bottom:10px}.insight-card p{font-size:.85rem}.insight-card .hint{font-size:.75rem}.your-insight{background:#e1faf5}.insight-card p:last-child{margin-bottom:0}
-.spending-chart{position:relative;width:min(100%,240px);margin:18px auto}.spending-chart>svg{display:block;width:100%;height:auto}.chart-total{position:absolute;inset:30%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none}.chart-total .numeric{font-size:1rem;max-width:100%;overflow-wrap:anywhere}.chart-total small{font-size:.7rem;color:#675b80}.insights .numeric{font-family:'Geist Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums}
-.spending-legend{list-style:none;margin:0;padding:0;display:grid;gap:12px}.spending-legend li{display:flex;justify-content:space-between;gap:12px;font-size:.82rem}.spending-legend .numeric{min-width:0;text-align:right;overflow-wrap:anywhere}.category-label{display:flex;align-items:center;gap:8px;flex-shrink:0}.category-label i{width:10px;height:10px;border-radius:50%;flex-shrink:0}.spending-empty{display:grid;justify-items:center;gap:12px;padding:28px 0 14px}.spending-empty svg{width:38px;height:38px}
-.small-purchases{background:#fff;border:1px solid #e5dff4;margin-bottom:0}.small-purchases form{margin-top:18px}.small-purchases label{font-size:.85rem}.small-purchases input,.small-purchases select{font-size:max(16px,1rem)}
-#small-frequency{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
-#small-result{padding:14px;border-radius:12px;background:#f2edff;min-height:52px}
-:root[data-theme=dark] .insight-card{background:#2a203e}:root[data-theme=dark] .your-insight{background:#173d37}:root[data-theme=dark] .small-purchases{background:#21192c;border-color:#51405f}:root[data-theme=dark] #small-result{background:#342744}:root[data-theme=dark] .chart-total small{color:#c1b2d5}
-:root[data-theme=dark] .insight-filters button{border-bottom-color:transparent}
-:root[data-theme=dark] .insight-filters button[aria-pressed=true]{border-bottom-color:#bd92ff}
+.lwvd-scope .insights>h1{margin:8px 0 18px}.lwvd-scope .insight-filters{justify-content:space-evenly;gap:2px}.lwvd-scope .insight-filters button{padding:8px 4px;white-space:nowrap;font-size:.78rem;min-height:44px}
+.lwvd-scope #spending-report,.lwvd-scope .insights{min-width:0}.lwvd-scope .insight-card{padding:18px;border-radius:17px;background:#f2edff;margin-bottom:16px;overflow-wrap:anywhere}.lwvd-scope .insight-card h2{margin-bottom:10px}.lwvd-scope .insight-card p{font-size:.85rem}.lwvd-scope .insight-card .hint{font-size:.75rem}.lwvd-scope .your-insight{background:#e1faf5}.lwvd-scope .insight-card p:last-child{margin-bottom:0}
+.lwvd-scope .spending-chart{position:relative;width:min(100%,240px);margin:18px auto}.lwvd-scope .spending-chart>svg{display:block;width:100%;height:auto}.lwvd-scope .chart-total{position:absolute;inset:30%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none}.lwvd-scope .chart-total .numeric{font-size:1rem;max-width:100%;overflow-wrap:anywhere}.lwvd-scope .chart-total small{font-size:.7rem;color:#675b80}.lwvd-scope .insights .numeric{font-family:'Geist Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.lwvd-scope .spending-legend{list-style:none;margin:0;padding:0;display:grid;gap:12px}.lwvd-scope .spending-legend li{display:flex;justify-content:space-between;gap:12px;font-size:.82rem}.lwvd-scope .spending-legend .numeric{min-width:0;text-align:right;overflow-wrap:anywhere}.lwvd-scope .category-label{display:flex;align-items:center;gap:8px;flex-shrink:0}.lwvd-scope .category-label i{width:10px;height:10px;border-radius:50%;flex-shrink:0}.lwvd-scope .spending-empty{display:grid;justify-items:center;gap:12px;padding:28px 0 14px}.lwvd-scope .spending-empty svg{width:38px;height:38px}
+.lwvd-scope .small-purchases{background:#fff;border:1px solid #e5dff4;margin-bottom:0}.lwvd-scope .small-purchases form{margin-top:18px}.lwvd-scope .small-purchases label{font-size:.85rem}.lwvd-scope .small-purchases input,.lwvd-scope .small-purchases select{font-size:max(16px,1rem)}
+.lwvd-scope #small-frequency{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 1.45rem) 50%,calc(100% - 1.05rem) 50%;background-repeat:no-repeat;background-size:.42rem .42rem,.42rem .42rem;padding-inline-end:3rem}
+.lwvd-scope #small-result{padding:14px;border-radius:12px;background:#f2edff;min-height:52px}
+:root[data-theme=dark] .lwvd-scope .insight-card{background:#2a203e}:root[data-theme=dark] .lwvd-scope .your-insight{background:#173d37}:root[data-theme=dark] .lwvd-scope .small-purchases{background:#21192c;border-color:#51405f}:root[data-theme=dark] .lwvd-scope #small-result{background:#342744}:root[data-theme=dark] .lwvd-scope .chart-total small{color:#c1b2d5}
+:root[data-theme=dark] .lwvd-scope .insight-filters button{border-bottom-color:transparent}
+:root[data-theme=dark] .lwvd-scope .insight-filters button[aria-pressed=true]{border-bottom-color:#bd92ff}
+
 
 /* Keep the blank calculator prompt quiet; retain the calculated result card. */
-#small-result.small-result-empty,:root[data-theme=dark] #small-result.small-result-empty{padding:0;border-radius:0;background:transparent;min-height:0}
-#small-result.small-result-empty p{display:flex;align-items:flex-start;gap:6px;font-size:.75rem;line-height:1.55;color:#675c8c}
-#small-result.small-result-empty svg{width:16px;height:16px;margin-top:1px}
-:root[data-theme=dark] #small-result.small-result-empty p{color:#c1b2d5}
+.lwvd-scope #small-result.small-result-empty,:root[data-theme=dark] .lwvd-scope #small-result.small-result-empty{padding:0;border-radius:0;background:transparent;min-height:0}
+.lwvd-scope #small-result.small-result-empty p{display:flex;align-items:flex-start;gap:6px;font-size:.75rem;line-height:1.55;color:#675c8c}
+.lwvd-scope #small-result.small-result-empty svg{width:16px;height:16px;margin-top:1px}
+:root[data-theme=dark] .lwvd-scope #small-result.small-result-empty p{color:#c1b2d5}
+
 
 /* Goals reuse Activity details and transaction forms; confirmations stay compact.
    The details/forms are pages in the shell now, so a compact confirmation
    opens over the page instead of hiding the shell. */
-#transaction-sheet[data-presentation=goal][data-view=confirm],
-#transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
-:root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm],
-:root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm]::backdrop{background:#21192c}
+#transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm],#transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm]::backdrop{background:#fcfaff}
+:root[data-theme=dark] #transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm],:root[data-theme=dark] #transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm]::backdrop{background:#21192c}
+
 
 /* Keep compact Goals confirmations centered; full-screen forms retain their layout. */
-#transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-frame{align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom))}
-#transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom:1px solid #ddd2ee;border-bottom-right-radius:24px;border-bottom-left-radius:24px}
-:root[data-theme=dark] #transaction-sheet[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom-color:#53405f}
+#transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm] .transaction-frame{align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+#transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom:1px solid #ddd2ee;border-bottom-right-radius:24px;border-bottom-left-radius:24px}
+:root[data-theme=dark] #transaction-sheet.lwvd-scope[data-presentation=goal][data-view=confirm] .transaction-panel{border-bottom-color:#53405f}
+
 
 /* LLT standalone Carb Calc: natural-height wrappers and visible inner overflow.
    The document is the only scrolling surface, including heading and actions. */
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]){position:relative;inset:auto;height:auto;min-height:100dvh;overflow:visible;touch-action:auto}
-body:has(:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm])[open])>.shell{display:none}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(#transaction-form,#affordability-form,.sheet-body){flex:none;overflow:visible;max-height:none}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
-:root[data-theme=dark] :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-panel{border-color:#53405f}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]){position:relative;inset:auto;height:auto;min-height:100dvh;overflow:visible;touch-action:auto}
+body:has(:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm])[open])>.shell.lwvd-scope{display:none}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) .transaction-frame{position:relative;inset:auto;width:100%;height:auto;min-height:100dvh;display:flex;align-items:safe center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow:visible}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) .transaction-panel{height:auto;max-height:none;overflow:visible;border:1px solid #ddd2ee;border-radius:24px;padding:22px max(22px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left));box-shadow:0 -10px 45px #28133b24}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) :is(#transaction-form,#affordability-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+:root[data-theme=dark] :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) .transaction-panel{border-color:#53405f}
+
 
 /* One painted document surface, including iOS keyboard overscroll and safe areas.
    Keep the standalone 100vh shell fallback above and native document scrolling. */
-:root{--app-surface:#fcfaff;background:var(--app-surface);scroll-padding-top:calc(12px + env(safe-area-inset-top))}
-:root[data-theme=dark]{--app-surface:#21192c;background:var(--app-surface)}
-body,.shell,body[data-screen=settings] .shell,
-:root[data-theme=dark] .shell,:root[data-theme=dark] body[data-screen=settings] .shell{background:var(--app-surface)}
+:root.lwvd-document{--app-surface:#fcfaff;background:var(--app-surface);scroll-padding-top:calc(12px + env(safe-area-inset-top))}
+:root.lwvd-document[data-theme=dark]{--app-surface:#21192c;background:var(--app-surface)}
+body.lwvd-document,.shell.lwvd-scope,div.lwvd-scope[data-screen=settings],:root[data-theme=dark] .shell.lwvd-scope,:root[data-theme=dark] .lwvd-scope[data-screen=settings]{background:var(--app-surface)}
+
 /* Paint above scrolling content beneath the installed iPhone status bar. */
-body::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--app-surface);z-index:10;pointer-events:none}
-:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame:has(form){align-items:flex-start}
+body.lwvd-document::after{content:'';position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--app-surface);z-index:10;pointer-events:none}
+:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) .transaction-frame:has(form){align-items:flex-start}
 @media(display-mode:standalone){
- :is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]),:is(#transaction-sheet,#affordability-sheet):not([data-view=confirm]) .transaction-frame{min-height:100vh}
-}
+ :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]),:is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope):not([data-view=confirm]) .transaction-frame{min-height:100vh}}
+
 /* Affordability uses the same dialog surface; keep its draft in place while
    Add Expense is open so cancel returns to the unchanged preview. */
-body:has(#affordability-sheet[open]):not(:has(#transaction-sheet[open]))>.shell{display:contents}
-body:has(#affordability-sheet[open])>.shell>:is(header,main,nav){display:none}
-body:has(#transaction-sheet[open]) #affordability-sheet{display:none}
+body:has(#affordability-sheet[open]):not(:has(#transaction-sheet[open]))>.shell.lwvd-scope{display:contents}
+body:has(#affordability-sheet[open])>.shell.lwvd-scope>:is(header,main,nav){display:none}
+body:has(#transaction-sheet[open]) #affordability-sheet.lwvd-scope{display:none}
 
-.money-progress { padding: 16px; }
-.money-progress h2, .money-progress h3 { font-size: 1rem; margin: 0 0 .4rem; }
-.money-progress h3 { margin-top: 1rem; }
-.money-progress p { font-size: .82rem; margin: .35rem 0; overflow-wrap: anywhere; }
-.money-progress progress { display: block; width: 100%; height: .55rem; margin: .65rem 0; accent-color: var(--primary, #9565db); }
-.money-progress .progress-help { font-size: .75rem; line-height: 1.45; opacity: .75; }
+.lwvd-scope .money-progress{ padding: 16px; }
+.lwvd-scope .money-progress h2,.lwvd-scope .money-progress h3{ font-size: 1rem; margin: 0 0 .4rem; }
+.lwvd-scope .money-progress h3{ margin-top: 1rem; }
+.lwvd-scope .money-progress p{ font-size: .82rem; margin: .35rem 0; overflow-wrap: anywhere; }
+.lwvd-scope .money-progress progress{ display: block; width: 100%; height: .55rem; margin: .65rem 0; accent-color: var(--primary, #9565db); }
+.lwvd-scope .money-progress .progress-help{ font-size: .75rem; line-height: 1.45; opacity: .75; }
+
 
 /* Floating footer: iMT pill geometry and resolved-theme palette. */
-nav {
+.lwvd-scope nav{
   --footer-surface: #17131f;
   --footer-border: #383040;
   --footer-inactive: #bdb0d5;
@@ -342,7 +367,7 @@ nav {
   backdrop-filter: none;
   isolation: isolate;
 }
-nav::before {
+.lwvd-scope nav::before{
   content: "";
   position: absolute;
   z-index: -2;
@@ -353,7 +378,7 @@ nav::before {
   background: linear-gradient(to bottom, transparent, rgb(33 25 44 / 90%) 100%);
   pointer-events: none;
 }
-nav button {
+.lwvd-scope nav button{
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -367,8 +392,8 @@ nav button {
   font-size: .68rem;
   line-height: 1.1;
 }
-nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
-:root:not([data-theme="dark"]) nav {
+.lwvd-scope nav button[aria-current]{ background: var(--footer-selected); color: var(--footer-active); }
+:root:not([data-theme="dark"]) .lwvd-scope nav{
   --footer-surface: #fff;
   --footer-border: #ebe6f5;
   --footer-inactive: #6660a4;
@@ -377,115 +402,124 @@ nav button[aria-current] { background: var(--footer-selected); color: var(--foot
   background: var(--footer-surface);
   box-shadow: 0 8px 28px #00000030;
 }
-:root:not([data-theme="dark"]) nav::before { background: linear-gradient(to bottom, transparent, rgb(252 250 255 / 85%) 100%); }
-:root:not([data-theme="dark"]) nav button { color: var(--footer-inactive); }
-:root:not([data-theme="dark"]) nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
-nav button svg { width: 24px; height: 24px; }
-.shell { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+:root:not([data-theme="dark"]) .lwvd-scope nav::before{ background: linear-gradient(to bottom, transparent, rgb(252 250 255 / 85%) 100%); }
+:root:not([data-theme="dark"]) .lwvd-scope nav button{ color: var(--footer-inactive); }
+:root:not([data-theme="dark"]) .lwvd-scope nav button[aria-current]{ background: var(--footer-selected); color: var(--footer-active); }
+.lwvd-scope nav button svg{ width: 24px; height: 24px; }
+.shell.lwvd-scope{ padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+
 
 /* Keep the pill opaque above its scrim, as in iMT's controls wrapper. */
-nav::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--footer-surface); pointer-events: none; }
-:root[data-theme=dark] nav { background: var(--footer-surface); border-color: var(--footer-border); }
-:root[data-theme=dark] nav button { color: var(--footer-inactive); }
-:root[data-theme=dark] nav button[aria-current] { background: var(--footer-selected); color: var(--footer-active); }
+.lwvd-scope nav::after{ content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--footer-surface); pointer-events: none; }
+:root[data-theme=dark] .lwvd-scope nav{ background: var(--footer-surface); border-color: var(--footer-border); }
+:root[data-theme=dark] .lwvd-scope nav button{ color: var(--footer-inactive); }
+:root[data-theme=dark] .lwvd-scope nav button[aria-current]{ background: var(--footer-selected); color: var(--footer-active); }
+
 
 /* LWVD quick actions sit above the unchanged floating navigation pill. */
-.floating-actions{position:fixed;z-index:4;right:max(16px,calc((100vw - 398px)/2));bottom:calc(100px + env(safe-area-inset-bottom));width:56px}
-.floating-actions[hidden],body:has(dialog[open]) .floating-actions{display:none}
-#quick-actions-toggle{display:grid;place-items:center;width:56px;height:56px;padding:0;border:1px solid #b59ae7;border-radius:50%;background:#8055f5;color:#fff;box-shadow:0 6px 22px #35205240}
-#quick-actions-toggle span{display:grid;place-items:center;width:32px;height:32px;transform-origin:50% 50%;transition:transform 200ms ease-in-out}
-#quick-actions-toggle svg{display:block;width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square}
-.floating-actions:has([aria-expanded=true]) #quick-actions-toggle span{transform:rotate(45deg)}
-.floating-actions-menu{position:absolute;right:0;bottom:68px;width:205px;display:grid;gap:6px;padding:8px;border:1px solid #d6c5ee;border-radius:18px;background:#fcfaff;box-shadow:0 8px 28px #35205230;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity 200ms ease-in-out,transform 200ms ease-in-out,visibility 200ms}
-.floating-actions:has([aria-expanded=true]) .floating-actions-menu{opacity:1;visibility:visible;transform:translateY(0)}
-.floating-actions-menu button{text-align:center;min-height:44px;background:#f0eaff;color:#5820c8;border:0;border-radius:12px}
-:root[data-theme=dark] #quick-actions-toggle{background:#9868dc;border-color:#c29bff;color:#1b112b}
-:root[data-theme=dark] .floating-actions-menu{background:#21182d;border-color:#59416e}
-:root[data-theme=dark] .floating-actions-menu button{background:#342744;color:#e1c9ff}
-body[data-screen]:has(.floating-actions:not([hidden])) .shell{padding-bottom:calc(178px + env(safe-area-inset-bottom))}
-.settings-actions{grid-template-columns:1fr}
-.settings-actions button{scroll-margin-block:24px}
-@media(prefers-reduced-motion:reduce){#quick-actions-toggle span,.floating-actions-menu{transition:none}}
+.lwvd-scope .floating-actions{position:fixed;z-index:4;right:max(16px,calc((100vw - 398px)/2));bottom:calc(100px + env(safe-area-inset-bottom));width:56px}
+.lwvd-scope .floating-actions[hidden],body:has(dialog[open]) .lwvd-scope .floating-actions{display:none}
+.lwvd-scope #quick-actions-toggle{display:grid;place-items:center;width:56px;height:56px;padding:0;border:1px solid #b59ae7;border-radius:50%;background:#8055f5;color:#fff;box-shadow:0 6px 22px #35205240}
+.lwvd-scope #quick-actions-toggle span{display:grid;place-items:center;width:32px;height:32px;transform-origin:50% 50%;transition:transform 200ms ease-in-out}
+.lwvd-scope #quick-actions-toggle svg{display:block;width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square}
+.lwvd-scope .floating-actions:has([aria-expanded=true]) #quick-actions-toggle span{transform:rotate(45deg)}
+.lwvd-scope .floating-actions-menu{position:absolute;right:0;bottom:68px;width:205px;display:grid;gap:6px;padding:8px;border:1px solid #d6c5ee;border-radius:18px;background:#fcfaff;box-shadow:0 8px 28px #35205230;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity 200ms ease-in-out,transform 200ms ease-in-out,visibility 200ms}
+.lwvd-scope .floating-actions:has([aria-expanded=true]) .floating-actions-menu{opacity:1;visibility:visible;transform:translateY(0)}
+.lwvd-scope .floating-actions-menu button{text-align:center;min-height:44px;background:#f0eaff;color:#5820c8;border:0;border-radius:12px}
+:root[data-theme=dark] .lwvd-scope #quick-actions-toggle{background:#9868dc;border-color:#c29bff;color:#1b112b}
+:root[data-theme=dark] .lwvd-scope .floating-actions-menu{background:#21182d;border-color:#59416e}
+:root[data-theme=dark] .lwvd-scope .floating-actions-menu button{background:#342744;color:#e1c9ff}
+div.lwvd-scope[data-screen]:has(.floating-actions:not([hidden])){padding-bottom:calc(178px + env(safe-area-inset-bottom))}
+.lwvd-scope .settings-actions{grid-template-columns:1fr}
+.lwvd-scope .settings-actions button{scroll-margin-block:24px}
+@media(prefers-reduced-motion:reduce){.lwvd-scope #quick-actions-toggle span,.lwvd-scope .floating-actions-menu{transition:none}}
+
 
 /* Keep the existing pill and quick action moving together, using LLT's threshold. */
-nav,.floating-actions{transition:transform 220ms ease,opacity 220ms ease,visibility 220ms}
-body.nav-scroll-hidden nav,body.nav-scroll-hidden .floating-actions{transform:translateY(220px);opacity:0;visibility:hidden;pointer-events:none}
-#notice:not(:empty){z-index:5;pointer-events:none}
+.lwvd-scope nav,.lwvd-scope .floating-actions{transition:transform 220ms ease,opacity 220ms ease,visibility 220ms}
+.lwvd-scope.nav-scroll-hidden nav,.lwvd-scope.nav-scroll-hidden .floating-actions{transform:translateY(220px);opacity:0;visibility:hidden;pointer-events:none}
+.lwvd-scope #notice:not(:empty){z-index:5;pointer-events:none}
 
 
-#notice button{pointer-events:auto;flex-shrink:0;min-width:44px;min-height:44px;padding:0;font-size:1.5rem;background:transparent;color:inherit;border:0}
-#notice[data-kind=success]:not(:empty){display:flex;pointer-events:none;width:auto;max-width:448px}
-dialog #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:auto;padding:8px 12px}
-@media(prefers-reduced-motion:reduce){nav,.floating-actions{transition:none}}
+.lwvd-scope #notice button{pointer-events:auto;flex-shrink:0;min-width:44px;min-height:44px;padding:0;font-size:1.5rem;background:transparent;color:inherit;border:0}
+.lwvd-scope #notice[data-kind=success]:not(:empty){display:flex;pointer-events:none;width:auto;max-width:448px}
+dialog.lwvd-scope #notice:not(:empty){position:static;margin:10px 0;max-width:100%;width:auto;padding:8px 12px}
+@media(prefers-reduced-motion:reduce){.lwvd-scope nav,.lwvd-scope .floating-actions{transition:none}}
+
 
 /* Existing form actions remain in flow, with one consistent pair/single layout. */
-:is(.sheet-actions, .settings-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-:is(.sheet-actions, .settings-actions) > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; line-height: 1.3; white-space: normal; }
-:is(.sheet-actions, .settings-actions) > :only-child { grid-column: 1 / -1; }
-.sheet-actions > button:not(.primary) { background: transparent; border: 1px solid currentColor; }
-.sheet-actions > .danger, .goal-actions > #goal-delete { color: #b42348; border-color: currentColor; }
-.sheet-actions > .primary.danger { background: #a21d41; color: #fff; border-color: #a21d41; }
-:root[data-theme=dark] .sheet-actions > .danger, :root[data-theme=dark] .goal-actions > #goal-delete { color: #ff9bb2; }
-:root[data-theme=dark] .sheet-actions > .primary.danger { color: #fff; }
-.sheet-heading button { display: grid; place-items: center; width: 44px; height: 44px; padding: 8px; }
-.settings-title .back-circle, :root[data-theme=dark] .settings-title .back-circle { width: 50px; min-width: 50px; height: 50px; min-height: 50px; border-radius: 0; background: transparent; }
-.settings-title .back-circle svg { width: 24px; height: 24px; }
-.goal-actions > button { width: 100%; min-height: 52px; border-radius: 9999px; }
+.lwvd-scope :is(.sheet-actions, .settings-actions){ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lwvd-scope :is(.sheet-actions, .settings-actions) > button{ width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; line-height: 1.3; white-space: normal; }
+.lwvd-scope :is(.sheet-actions, .settings-actions) > :only-child{ grid-column: 1 / -1; }
+.lwvd-scope .sheet-actions > button:not(.primary){ background: transparent; border: 1px solid currentColor; }
+.lwvd-scope .sheet-actions > .danger,.lwvd-scope .goal-actions > #goal-delete{ color: #b42348; border-color: currentColor; }
+.lwvd-scope .sheet-actions > .primary.danger{ background: #a21d41; color: #fff; border-color: #a21d41; }
+:root[data-theme=dark] .lwvd-scope .sheet-actions > .danger,:root[data-theme=dark] .lwvd-scope .goal-actions > #goal-delete{ color: #ff9bb2; }
+:root[data-theme=dark] .lwvd-scope .sheet-actions > .primary.danger{ color: #fff; }
+.lwvd-scope .sheet-heading button{ display: grid; place-items: center; width: 44px; height: 44px; padding: 8px; }
+.lwvd-scope .settings-title .back-circle,:root[data-theme=dark] .lwvd-scope .settings-title .back-circle{ width: 50px; min-width: 50px; height: 50px; min-height: 50px; border-radius: 0; background: transparent; }
+.lwvd-scope .settings-title .back-circle svg{ width: 24px; height: 24px; }
+.lwvd-scope .goal-actions > button{ width: 100%; min-height: 52px; border-radius: 9999px; }
 
-.form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.form-actions > button { width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; }
-.form-actions > :only-child { grid-column: 1 / -1; }
-.form-actions > .text-button { border: 1px solid currentColor; background: transparent; }
+.lwvd-scope .form-actions{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lwvd-scope .form-actions > button{ width: 100%; min-width: 0; min-height: 52px; border-radius: 9999px; }
+.lwvd-scope .form-actions > :only-child{ grid-column: 1 / -1; }
+.lwvd-scope .form-actions > .text-button{ border: 1px solid currentColor; background: transparent; }
 
-.sheet-actions.sheet-actions--stacked { grid-template-columns: minmax(0, 1fr); }
-#settings { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 1px solid #ded8f1; border-radius: 6px; }
-:root[data-theme=dark] #settings { border-color: #53405f; }
-#settings svg { width: 24px; height: 24px; }
+.lwvd-scope .sheet-actions.sheet-actions--stacked{ grid-template-columns: minmax(0, 1fr); }
+.lwvd-scope #settings{ display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 1px solid #ded8f1; border-radius: 6px; }
+:root[data-theme=dark] .lwvd-scope #settings{ border-color: #53405f; }
+.lwvd-scope #settings svg{ width: 24px; height: 24px; }
+
 
 /* Sheet pages: long forms and details render in the tab content as real
    pages instead of the fixed sheet dialog (small confirmations keep the
    dialog). The frame/panel become plain document flow. */
-body[data-screen=sheet] .shell{padding-bottom:25px}
-.sheet-page-frame{position:static;width:100%;height:auto;display:block;padding-top:0;overflow:visible}
-.sheet-page-frame .transaction-panel{width:100%;max-height:none;min-height:0;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:4px 0 24px}
-.sheet-page-frame :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
-.sheet-page-frame label{font-size:.87rem;font-weight:500}
-.sheet-page-frame .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
-.sheet-page-frame progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}
-.sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
-.sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
-body[data-screen=sheet] #settings{display:none}
+div.lwvd-scope[data-screen=sheet]{padding-bottom:25px}
+.lwvd-scope .sheet-page-frame{position:static;width:100%;height:auto;display:block;padding-top:0;overflow:visible}
+.lwvd-scope .sheet-page-frame .transaction-panel{width:100%;max-height:none;min-height:0;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:4px 0 24px}
+.lwvd-scope .sheet-page-frame :is(#transaction-form,.sheet-body){flex:none;overflow:visible;max-height:none}
+.lwvd-scope .sheet-page-frame label{font-size:.87rem;font-weight:500}
+.lwvd-scope .sheet-page-frame .numeric{font-family:"Geist Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.lwvd-scope .sheet-page-frame progress{display:block;width:100%;height:12px;accent-color:#2ee6c5;margin:12px 0}
+.lwvd-scope .sheet-page-frame :is(input,select,textarea,button){scroll-margin-block-start:5rem;scroll-margin-block-end:calc(6.25rem + env(safe-area-inset-bottom,0px))}
+.lwvd-scope .sheet-page-frame :is(input,select):focus-visible{outline-offset:-3px}
+.lwvd-scope[data-screen=sheet] #settings{display:none}
+
 
 /* Details page: give the facts a card with room to breathe instead of bare rows at the top. */
-.sheet-page-frame:has(.details-body) .transaction-panel{display:flex;flex-direction:column;min-height:calc(100dvh - 132px)}
-.details-centered{background:#fff;border:1px solid #e5dff4;border-radius:18px;padding:22px 20px;box-shadow:0 2px 8px #42308d08}
-:root[data-theme=dark] .details-centered{background:#292135;border-color:#53405f;box-shadow:none}
-.details-centered .detail-amount{margin-bottom:16px}
-.details-centered .transaction-details{gap:0 12px}
-.details-centered .transaction-details dt,.details-centered .transaction-details dd{padding:11px 0;border-top:1px solid #eee7f8}
-.details-centered .transaction-details dt:first-of-type,.details-centered .transaction-details dd:first-of-type{border-top:0;padding-top:0}
-.details-centered .transaction-details dt:last-of-type,.details-centered .transaction-details dd:last-of-type{padding-bottom:0}
-:root[data-theme=dark] .details-centered .transaction-details dt,:root[data-theme=dark] .details-centered .transaction-details dd{border-top-color:#453257}
-.details-centered .sheet-actions{margin-top:20px}
+.lwvd-scope .sheet-page-frame:has(.details-body) .transaction-panel{display:flex;flex-direction:column;min-height:calc(100dvh - 132px)}
+.lwvd-scope .details-centered{background:#fff;border:1px solid #e5dff4;border-radius:18px;padding:22px 20px;box-shadow:0 2px 8px #42308d08}
+:root[data-theme=dark] .lwvd-scope .details-centered{background:#292135;border-color:#53405f;box-shadow:none}
+.lwvd-scope .details-centered .detail-amount{margin-bottom:16px}
+.lwvd-scope .details-centered .transaction-details{gap:0 12px}
+.lwvd-scope .details-centered .transaction-details dt,.lwvd-scope .details-centered .transaction-details dd{padding:11px 0;border-top:1px solid #eee7f8}
+.lwvd-scope .details-centered .transaction-details dt:first-of-type,.lwvd-scope .details-centered .transaction-details dd:first-of-type{border-top:0;padding-top:0}
+.lwvd-scope .details-centered .transaction-details dt:last-of-type,.lwvd-scope .details-centered .transaction-details dd:last-of-type{padding-bottom:0}
+:root[data-theme=dark] .lwvd-scope .details-centered .transaction-details dt,:root[data-theme=dark] .lwvd-scope .details-centered .transaction-details dd{border-top-color:#453257}
+.lwvd-scope .details-centered .sheet-actions{margin-top:20px}
+
 
 /* Settings fields must read as editable: visible box, not bare text in the row. */
-.settings-panel .setting-row input,.settings-panel .setting-row select{border:1px solid #d6d0ea;background:#ffffffb8;border-radius:10px;padding:5px 10px}
-:root[data-theme=dark] .settings-panel .setting-row input,:root[data-theme=dark] .settings-panel .setting-row select{border-color:#53405f;background:#1d1626;color:#eee8ff}
+.lwvd-scope .settings-panel .setting-row input,.lwvd-scope .settings-panel .setting-row select{border:1px solid #d6d0ea;background:#ffffffb8;border-radius:10px;padding:5px 10px}
+:root[data-theme=dark] .lwvd-scope .settings-panel .setting-row input,:root[data-theme=dark] .lwvd-scope .settings-panel .setting-row select{border-color:#53405f;background:#1d1626;color:#eee8ff}
+
 
 /* Floating chrome: frosted surfaces with a soft lift shadow. */
-nav{backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -6px 20px #35205212}
-:root[data-theme=dark] nav{background:#17131ff2;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -8px 24px #00000059}
-#quick-actions-toggle{box-shadow:0 8px 24px #3520524d}
-:root[data-theme=dark] #quick-actions-toggle{box-shadow:0 8px 24px #00000073}
+.lwvd-scope nav{backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -6px 20px #35205212}
+:root[data-theme=dark] .lwvd-scope nav{background:#17131ff2;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 -8px 24px #00000059}
+.lwvd-scope #quick-actions-toggle{box-shadow:0 8px 24px #3520524d}
+:root[data-theme=dark] .lwvd-scope #quick-actions-toggle{box-shadow:0 8px 24px #00000073}
+
 /* Success confirmations read as a brief modal, modeled on the sheet dialogs:
    a centered card over a soft scrim. No decision is required and nothing is
    interactive (the notice stays pointer-events:none) — it dismisses itself
    on the existing timer. In-dialog notices keep the static inline variant,
    and error notices keep the top banner with their dismiss button. */
-.shell>#notice[data-kind=success]:not(:empty){top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 48px));max-width:none;padding:24px 22px;border-radius:20px;background:#fcfaff;border:1px solid #ddd2ee;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #28133b38;flex-direction:column;align-items:center;gap:12px;text-align:center;font-size:1rem;font-weight:500;color:#30234b;animation:lwvd-notice-in .18s ease-out}
-#notice .notice-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#d8f5e9;color:#216f59;font-style:normal;flex-shrink:0}
-#notice .notice-icon svg{width:28px;height:28px;stroke-width:2.4}
-:root[data-theme=dark] .shell>#notice[data-kind=success]:not(:empty){background:#342443;border-color:#84629e;color:#f0e7fa;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #00000066}
-:root[data-theme=dark] #notice .notice-icon{background:#1e3d33;color:#7fe3bb}
+.shell.lwvd-scope>#notice[data-kind=success]:not(:empty){top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 48px));max-width:none;padding:24px 22px;border-radius:20px;background:#fcfaff;border:1px solid #ddd2ee;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #28133b38;flex-direction:column;align-items:center;gap:12px;text-align:center;font-size:1rem;font-weight:500;color:#30234b;animation:lwvd-notice-in .18s ease-out}
+.lwvd-scope #notice .notice-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#d8f5e9;color:#216f59;font-style:normal;flex-shrink:0}
+.lwvd-scope #notice .notice-icon svg{width:28px;height:28px;stroke-width:2.4}
+:root[data-theme=dark] .shell.lwvd-scope>#notice[data-kind=success]:not(:empty){background:#342443;border-color:#84629e;color:#f0e7fa;box-shadow:0 0 0 100vmax #160e295c,0 18px 50px #00000066}
+:root[data-theme=dark] .lwvd-scope #notice .notice-icon{background:#1e3d33;color:#7fe3bb}
 @keyframes lwvd-notice-in{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
-@media (prefers-reduced-motion:reduce){.shell>#notice[data-kind=success]:not(:empty){animation:none}}
+@media (prefers-reduced-motion:reduce){.shell.lwvd-scope>#notice[data-kind=success]:not(:empty){animation:none}}
