@@ -4,7 +4,7 @@ const content = root.querySelector('main'), nav = root.querySelector('nav'), gea
 let appActive = true;
 let pendingRaw = null;
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
-let noticeTimer = null, sheetOpener = null, sheetScroll = null;
+let noticeTimer = null, sheetOpener = null, sheetScroll = null, sheetExitDismissal = false;
 let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
@@ -29,7 +29,7 @@ const icons = {
  user: '<circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3Z"/>',
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
-const plant = '<img class="plant" src="../icons/violet-dineros.svg" alt="" aria-hidden="true">';
+const plant = '<img class="plant" src="icons/violet-dineros.svg" alt="" aria-hidden="true">';
 function dismissNotice() {
   clearTimeout(noticeTimer);
   const notice = document.querySelector('#notice');
@@ -120,7 +120,7 @@ function onboarding() {
   focusPageStart();
 }
 function settings() {
-  content.innerHTML = `<section class="settings-panel"><div class="settings-title"><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
+  content.innerHTML = `<section class="settings-panel"><div class="settings-title"><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
@@ -148,7 +148,7 @@ function editStartingBalance() {
     }
   };
 }
-const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
+const launcherBack = `<a class="ecosystem_nav_back" href="#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 const quickActions = document.createElement('div');
 quickActions.className = 'floating-actions';
 quickActions.hidden = true;
@@ -178,13 +178,25 @@ quickActions.addEventListener('keydown', event => {
 });
 window.addEventListener('hashchange', () => { if (appActive) closeQuickActions(); });
 window.addEventListener('popstate', () => { if (appActive) closeQuickActions(); });
-// In the standalone document LWVD is always active. PR 2's shell router
-// will flip this switch when another app is showing; the document/window
+// Leaving the route with a confirmation open (browser Back from Archive
+// Goal, say) must not strand the modal over the launcher: a showModal
+// dialog lives in the top layer, so hiding the view does not hide it, and
+// its document scroll lock would keep the visible launcher frozen.
+// Dismiss it without running its action; restoreSheet releases the lock
+// and the modal state, skipping scroll/focus restoration into the view
+// being hidden. The view itself stays mounted, so the page underneath
+// the confirmation (Goal Details, a form draft) survives the round trip.
+function dismissSheetForRouteExit() {
+  if (!transactionSheet.open) return;
+  sheetExitDismissal = true;
+  transactionSheet.close();
+}
+// The shell router flips this switch as routes change; the document/window
 // handlers in this module check it first, so an inactive LWVD stays inert.
 window.LandoLWVD = {
   setActive(value) {
     appActive = Boolean(value);
-    if (!appActive) { closeQuickActions(); return; }
+    if (!appActive) { closeQuickActions(); dismissSheetForRouteExit(); return; }
     // Pick up any cross-tab change deferred while inactive. If a draft
     // is open this is a no-op: the draft keeps its base revision (see
     // applyPendingSync), so its save still conflict-checks correctly.
@@ -213,6 +225,7 @@ document.addEventListener('focusin', event => {
   if (event.target.closest('nav,.floating-actions')) showFloatingNav();
 });
 function render() {
+  applyPendingSync();
   dismissNotice(); showFloatingNav();
   closeQuickActions();
   quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
@@ -409,6 +422,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   }
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
+    sheetExitDismissal = false;
     sheetOpener = document.activeElement;
     sheetScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
     document.body.style.overflow = 'hidden';
@@ -556,6 +570,10 @@ document.addEventListener('keydown', event => {
 });
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
+  // Consume the route-exit flag first: whichever close lands here, a
+  // later normal close must restore scroll and focus as usual.
+  const exitDismissal = sheetExitDismissal;
+  sheetExitDismissal = false;
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
   applyPendingSync();
@@ -564,11 +582,14 @@ function restoreSheet() {
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
     document.body.style.overflow = sheetScroll.overflow;
-    window.scrollTo({left: sheetScroll.x, top: sheetScroll.y, behavior:'instant'}); sheetScroll = null;
+    if (!exitDismissal) window.scrollTo({left: sheetScroll.x, top: sheetScroll.y, behavior:'instant'});
+    sheetScroll = null;
   }
-  const target = sheetOpener?.isConnected ? sheetOpener : content.querySelector('h1');
-  if (target?.matches('h1')) target.tabIndex = -1;
-  target?.focus({preventScroll:true});
+  if (!exitDismissal) {
+    const target = sheetOpener?.isConnected ? sheetOpener : content.querySelector('h1');
+    if (target?.matches('h1')) target.tabIndex = -1;
+    target?.focus({preventScroll:true});
+  }
   sheetOpener = null;
 }
 // A cross-tab change that arrives while LWVD is inactive is deferred,
@@ -577,10 +598,14 @@ function restoreSheet() {
 // overwriting the newer data with the draft's stale fields. Instead the
 // validated raw value waits here; applyPendingSync applies it when LWVD
 // is reactivated or when the open draft closes — never while a draft
-// (sheet page or dialog) is open, so the draft's save keeps comparing
-// storage against the revision the draft was opened from.
+// is open, so the draft's save keeps comparing storage against the
+// revision the draft was opened from. Drafts are the sheet pages and
+// transaction dialog, and also the Settings and Starting Balance tabs:
+// those are regular forms holding unsaved input, and applying there (or
+// rendering over them on reactivation) would silently discard typing.
 function applyPendingSync() {
-  if (pendingRaw === null || sheetPage || transactionSheet.open) return false;
+  if (pendingRaw === null || sheetPage || transactionSheet.open
+    || tab === 'Settings' || tab === 'Balance') return false;
   try {
     const next = JSON.parse(pendingRaw);
     if (!validState(next)) throw Error();

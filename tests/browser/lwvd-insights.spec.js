@@ -1,10 +1,10 @@
 import {test,expect} from '@playwright/test';
 const key='lando-world:lwvd:v1';
 const seed={onboarded:true,firstName:'Violet',balanceCents:20000,payday:'2026-10-30',frequency:'weekly',transactions:[['a','Food',250,'2026-10-23'],['b','Shopping',750,'2026-10-25'],['c','Fun',500,'2026-09-30']].map(([id,label,amountCents,date])=>({id,type:'expense',label,amountCents,description:'',createdAt:date+'T12:00:00'}))};
-async function start(page,data=seed){await page.clock.install({time:new Date('2026-10-25T16:00:00')});await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('seed')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('seed','yes');}},{key,data});await page.goto('/violet-dineros/index.html');await page.getByRole('button',{name:'Insights',exact:true}).click();}
+async function start(page,data=seed){await page.clock.install({time:new Date('2026-10-25T16:00:00')});await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('seed')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('seed','yes');}},{key,data});await page.goto('/#/violet-dineros');await page.getByRole('button',{name:'Insights',exact:true}).click();}
 test('shared filters, accessible chart and independent read-only what-if',async({page})=>{
  await start(page);const before=await page.evaluate(key=>localStorage.getItem(key),key);
- await expect(page.locator('h1')).toBeFocused();await expect(page.locator('.chart-total')).toContainText('$10.00');await expect(page.locator('.your-insight')).toContainText('Shopping');
+ await expect(page.locator('#violet-dineros-view h1')).toBeFocused();await expect(page.locator('.chart-total')).toContainText('$10.00');await expect(page.locator('.your-insight')).toContainText('Shopping');
  await expect(page.locator('#small-result')).toHaveClass('small-result-empty');
  await expect(page.locator('#small-result')).toContainText('Enter an amount to see how it adds up.');
  await page.getByLabel('Purchase amount ($)',{exact:true}).fill('2.50');await expect(page.locator('#small-result')).not.toHaveClass('small-result-empty');await expect(page.locator('#small-result')).toContainText('$130.00');await page.getByLabel('How often?').selectOption('daily');await expect(page.locator('#small-result')).toContainText('$912.50');
@@ -24,7 +24,7 @@ for(const theme of ['light','dark'])test(`${theme} narrow layouts, tap targets, 
  expect(await page.locator('.insight-filters').evaluate(e=>getComputedStyle(e).justifyContent)).toBe('space-evenly');
  for(const b of await page.locator('[data-period]').all()){const rect=await b.boundingBox();expect(rect.height).toBeGreaterThanOrEqual(44);}
  await expect(page.locator('.spending-chart')).toBeInViewport();await page.getByLabel('Purchase amount ($)',{exact:true}).fill('3');await expect(page.getByLabel('Purchase amount ($)',{exact:true})).toBeFocused();expect(await page.locator('#small-amount').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
- await page.locator('#small-hint').scrollIntoViewIfNeeded();await expect(page.locator('#small-hint')).toBeInViewport();await expect(page.locator('nav')).toBeInViewport();
+ await page.locator('#small-hint').scrollIntoViewIfNeeded();await expect(page.locator('#small-hint')).toBeInViewport();await expect(page.locator('#violet-dineros-view nav')).toBeInViewport();
  await page.screenshot({path:info.outputPath(`insights-${theme}-${width}.png`),fullPage:true});
  await page.locator('#small-amount').fill('');
  await expect(page.locator('#small-amount')).toBeFocused();

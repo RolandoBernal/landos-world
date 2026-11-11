@@ -4,7 +4,7 @@ const seed={firstName:'Violet',balanceCents:10000,payday:'',frequency:'',onboard
 async function start(page,theme='light'){
  await page.setViewportSize({width:320,height:600});
  await page.addInitScript(({key,seed,theme})=>{if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{key,seed,theme});
- await page.goto('/violet-dineros/index.html');
+ await page.goto('/#/violet-dineros');
 }
 async function expense(page,amount){
  await page.locator('#quick-actions-toggle').click();await page.getByRole('button',{name:'Add Expense',exact:true}).click();
@@ -24,21 +24,21 @@ for(const theme of ['light','dark'])test(`${theme}: exact warning amounts, repla
  await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(notice).toBeEmpty();
  await expense(page,'100.01');await expect(notice).toContainText('$0.01 short');await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await expense(page,'40');await expect(notice).toContainText('Expense saved');expect((await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key)).goals).toEqual(seed.goals);
- await page.locator('nav [data-tab=Goals]').click();await expect(notice).toBeEmpty();
+ await page.locator('#violet-dineros-view nav [data-tab=Goals]').click();await expect(notice).toBeEmpty();
 });
 test('LLT scroll threshold hides and reveals both controls; notices clear on another task',async({page})=>{
  await start(page);await expense(page,'40');await expect(page.locator('#notice')).toContainText('Expense saved');
  // Give Home enough scroll range without changing its actual controls.
- await page.locator('main').evaluate(e=>e.style.minHeight='2200px');
+ await page.locator('#violet-dineros-view main').evaluate(e=>e.style.minHeight='2200px');
  await page.evaluate(()=>scrollTo(0,200));await expect(page.locator('.shell')).toHaveClass(/nav-scroll-hidden/);
- await expect(page.locator('nav')).toHaveCSS('visibility','hidden');await expect(page.locator('.floating-actions')).toHaveCSS('visibility','hidden');
+ await expect(page.locator('#violet-dineros-view nav')).toHaveCSS('visibility','hidden');await expect(page.locator('.floating-actions')).toHaveCSS('visibility','hidden');
  const hiddenBottom=await page.locator('#notice').evaluate(e=>parseFloat(getComputedStyle(e).bottom));expect(hiddenBottom).toBe(16);
  await page.evaluate(()=>scrollTo(0,195));await expect(page.locator('.shell')).toHaveClass(/nav-scroll-hidden/);
  await page.evaluate(()=>scrollTo(0,175));await expect(page.locator('.shell')).not.toHaveClass(/nav-scroll-hidden/);
- await expect(page.locator('nav')).toHaveCSS('visibility','visible');
+ await expect(page.locator('#violet-dineros-view nav')).toHaveCSS('visibility','visible');
  const n=await page.locator('#notice').boundingBox(),q=await page.locator('.floating-actions').boundingBox();expect(n.y+n.height).toBeLessThanOrEqual(q.y);
  await page.locator('#quick-actions-toggle').click();await expect(page.locator('#notice')).toBeEmpty();
- await page.locator('nav [data-tab=Activity]').click();await expect(page.locator('.shell')).not.toHaveClass(/nav-scroll-hidden/);
+ await page.locator('#violet-dineros-view nav [data-tab=Activity]').click();await expect(page.locator('.shell')).not.toHaveClass(/nav-scroll-hidden/);
 });
 
 test('expense just below available balance saves with no warning and keeps reservations',async({page})=>{

@@ -412,7 +412,7 @@ test('Sprints launcher action survives preference renders and hidden direct navi
   await expect(page.locator('#open-sprints')).toHaveCount(0);
 });
 
-test('LWVD: existing preferences, visibility, accessible ordering, official icon and standalone entry', async ({ page }) => {
+test('LWVD: existing preferences, visibility, accessible ordering, official icon and shell entry', async ({ page }) => {
   const saved = { schemaVersion: 1, visibleAppIds: ['digital-clock', 'weather'], appOrder: ['digital-clock', 'weather', 'lee-lees-tracker', 'violet-sprints', 'violet-futbol-game-tracker', 'road-bike-checklist', 'maintenance-total', 'death-on-notecards'] };
   await page.addInitScript(({key, saved}) => { if (!sessionStorage.getItem('lwvd-seeded')) { localStorage.setItem(key, JSON.stringify(saved)); sessionStorage.setItem('lwvd-seeded','yes'); } }, {key, saved});
   await open(page);
@@ -420,7 +420,7 @@ test('LWVD: existing preferences, visibility, accessible ordering, official icon
   await expect(toggle(page, 'violet-dineros')).not.toBeChecked();
   await expect(page.locator('#open-violet-dineros')).toHaveCount(0);
   await toggle(page, 'violet-dineros').check();
-  await expect(page.locator('#open-violet-dineros')).toHaveAttribute('href', 'violet-dineros/index.html');
+  await expect(page.locator('#open-violet-dineros')).toHaveAttribute('data-route', 'violet-dineros');
   await moveButton(page, 'violet-dineros', 'up').click();
   expect((await rowOrder(page)).at(-2)).toBe('violet-dineros');
   await moveButton(page, 'violet-dineros', 'down').click();
@@ -435,8 +435,8 @@ test('LWVD: existing preferences, visibility, accessible ordering, official icon
   await expect(card).toContainText('Your money. Your goals.');
   await expect(card.locator('img')).toHaveAttribute('src', 'icons/violet-dineros.png');
   expect(await card.locator('img').evaluate(img => img.complete && img.naturalWidth === 1024)).toBe(true);
-  await page.locator('#open-violet-dineros').click(); await expect(page).toHaveURL(/\/violet-dineros\/index.html$/);
-  await expect(page.locator('.plant')).toHaveAttribute('src','../icons/violet-dineros.svg');
+  await page.locator('#open-violet-dineros').click(); await expect(page).toHaveURL(/#\/violet-dineros$/);
+  await expect(page.locator('.plant')).toHaveAttribute('src','icons/violet-dineros.svg');
 });
 
 test('LWVD: drag ordering uses existing launcher controls', async ({ page }) => {

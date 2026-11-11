@@ -3,7 +3,7 @@ for(const theme of ['light','dark']) test(`floating actions and Settings in ${th
   await page.setViewportSize({width:390,height:844});
   const raw=JSON.stringify({firstName:'Violet',balanceCents:10000,payday:'',frequency:'',onboarded:true});
   await page.addInitScript(({raw,theme})=>{localStorage.setItem('lando-world:lwvd:v1',raw);localStorage.setItem('landos_world_appearance_preference_v1',theme);},{raw,theme});
-  await page.goto('/violet-dineros/index.html');
+  await page.goto('/#/violet-dineros');
   const toggle=page.getByRole('button',{name:'Quick actions',exact:true}), menu=page.locator('#quick-actions-menu'), nav=page.getByRole('navigation');
   await expect(toggle).toBeVisible(); await expect(page.getByRole('heading',{name:'Quick Actions'})).toHaveCount(0);
   const box=await toggle.boundingBox(), pill=await nav.boundingBox();expect(box.y+box.height).toBeLessThan(pill.y);expect(box.x+box.width).toBeLessThanOrEqual(390);
@@ -11,7 +11,7 @@ for(const theme of ['light','dark']) test(`floating actions and Settings in ${th
   await page.waitForTimeout(220);expect(await toggle.boundingBox()).toEqual(box);
   expect(await toggle.locator('span').evaluate(e=>getComputedStyle(e).transform)).not.toBe('none');
   await page.screenshot({path:`test-results/floating-${theme}-${test.info().project.name}.png`});
-  await page.locator('h1').click();await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await page.locator('#violet-dineros-view h1').click();await expect(toggle).toHaveAttribute('aria-expanded','false');
   await toggle.click();await toggle.press('Escape');await expect(toggle).toBeFocused();await expect(toggle).toHaveAttribute('aria-expanded','false');
   for(const label of ['Add Money','Add Expense','Can I Afford This?']){
     await toggle.click();await menu.getByRole('button',{name:label,exact:true}).click();await expect(toggle).toBeHidden();

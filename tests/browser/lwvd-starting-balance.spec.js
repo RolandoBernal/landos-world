@@ -19,7 +19,7 @@ async function setup(page, theme = 'light') {
     const setItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function(name,value) { if (name === key) window.balanceWrites++; return setItem.call(this,name,value); };
   },{key,launcherKey,initial,preferences,theme});
-  await page.goto('/violet-dineros/index.html');
+  await page.goto('/#/violet-dineros');
   await page.getByRole('button',{name:'Settings',exact:true}).click();
   await expect(page.locator('#edit-starting-balance')).toContainText('$150.00');
   return initial;
@@ -91,7 +91,7 @@ for (const theme of ['light','dark','system']) {
   });
 }
 test('onboarding establishes the same Starting Balance shown and edited in Settings',async ({page})=>{
-  await page.goto('/violet-dineros/index.html');
+  await page.goto('/#/violet-dineros');
   await page.getByLabel('What’s your first name?').fill('Levi');await page.getByRole('button',{name:'Continue'}).click();
   await page.getByLabel('Your money ($)').fill('75.50');await page.getByRole('button',{name:'Continue'}).click();
   await page.getByRole('button',{name:'Skip for now'}).click();await page.getByRole('button',{name:'Go to My Dashboard'}).click();

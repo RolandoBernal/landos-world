@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 const seed = {firstName:'Violet',balanceCents:10000,payday:'',frequency:'',onboarded:true,transactions:[{id:'expense',type:'expense',amountCents:500,label:'Food',description:'Lunch',date:'2026-10-25',createdAt:'2026-10-25T12:00:00.000Z'}],goals:[]};
 for (const theme of ['light','dark']) test(`${theme} shared surface covers tabs, secondary pages and document forms`, async ({page}, testInfo) => {
  await page.setViewportSize({width:320,height:640});
- await page.goto('/violet-dineros/index.html');
+ await page.goto('/#/violet-dineros');
  await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});
  await page.reload();
  async function surface() {
@@ -36,7 +36,7 @@ for (const theme of ['light','dark']) test(`${theme} shared surface covers tabs,
 });
 test('Edit Expense keeps autofocus at safe top and paints status area while document scrolls',async({page},testInfo)=>{
  await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top,0px)','44px').replaceAll('env(safe-area-inset-top)','44px')});});
- await page.goto('/violet-dineros/index.html');await page.evaluate(seed=>localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed)),seed);await page.reload();
+ await page.goto('/#/violet-dineros');await page.evaluate(seed=>localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed)),seed);await page.reload();
  await page.getByRole('navigation').getByRole('button',{name:'Activity',exact:true}).click();await page.locator('[data-transaction-id]').first().click();await page.getByRole('button',{name:'Edit',exact:true}).click();
  await expect(page.locator('#transaction-amount')).toBeFocused();
  await page.setViewportSize({width:390,height:320});
@@ -50,7 +50,7 @@ test('Edit Expense keeps autofocus at safe top and paints status area while docu
 
 for (const theme of ['light','dark']) test(`${theme} affordability autofocus opens at the same safe top as transaction forms`,async({page})=>{
  await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top,0px)','44px').replaceAll('env(safe-area-inset-top)','44px')});});
- await page.goto('/violet-dineros/index.html');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
+ await page.goto('/#/violet-dineros');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
  // Record focus options as WebKit viewport resizing cannot open a physical iOS keyboard.
  await page.evaluate(()=>{const focus=HTMLElement.prototype.focus;window.affordFocusOptions=[];HTMLElement.prototype.focus=function(options){if(this.id==='afford-price')window.affordFocusOptions.push(options);return focus.call(this,options);};});
  for(const height of [844,400]){
@@ -72,7 +72,7 @@ for (const theme of ['light','dark']) test(`${theme} affordability autofocus ope
 
 for(const theme of ['light','dark']) test(`${theme} all entry panels share native opening and document scrolling`,async({page})=>{
  await page.setViewportSize({width:390,height:844});
- await page.goto('/violet-dineros/index.html');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
+ await page.goto('/#/violet-dineros');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
  await page.evaluate(()=>{const show=HTMLDialogElement.prototype.show;window.panelOpenings=[];HTMLDialogElement.prototype.show=function(){window.panelOpenings.push(this.id);return show.call(this);};});
  const layouts=[];
  for(const action of ['Add Money','Add Expense','Can I Afford This?']){
@@ -94,7 +94,7 @@ for(const theme of ['light','dark']) test(`${theme} all entry panels share nativ
 
 for(const theme of ['light','dark']) test(`${theme} focused price field matches the money and expense field geometry`,async({page},testInfo)=>{
  await page.route('**/violet-dineros/styles.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replaceAll('env(safe-area-inset-top,0px)','44px').replaceAll('env(safe-area-inset-top)','44px')});});
- await page.goto('/violet-dineros/index.html');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
+ await page.goto('/#/violet-dineros');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
  for(const width of [320,390])for(const height of [844,400]){
   await page.setViewportSize({width,height});
   const fields=[];
