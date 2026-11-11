@@ -178,3 +178,41 @@ for (const theme of ['light', 'dark', 'system']) test(`${theme}: iMT and LWVD Se
   expect(await gear.boundingBox()).toEqual(before);
   await gear.click(); await expect(gear).toHaveAttribute('aria-label', 'Settings');
 });
+
+test('back link arrow aligns with the app content edge in LLT, iMT and LWVD', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Seed LWVD so its Home screen renders (its header back link is home-only).
+  await page.addInitScript(() => {
+    const key = 'lando-world:lwvd:v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ firstName: 'Violet', balanceCents: 10000, payday: '', frequency: '', onboarded: true, goals: [{ id: 'goal', name: 'Bike', emoji: '🚲', targetCents: 10000, reservedCents: 6000, archived: false }] }));
+  });
+  const arrowAndEdge = (linkSel, refSel) => page.evaluate(([linkSel, refSel]) => {
+    const visible = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+    const link = [...document.querySelectorAll(linkSel)].find((el) => visible(el));
+    const ref = [...document.querySelectorAll(refSel)].find((el) => visible(el));
+    if (!link || !ref) return null;
+    const arrow = link.querySelector('span');
+    return { arrow: (arrow || link).getBoundingClientRect().left, edge: ref.getBoundingClientRect().left };
+  }, [linkSel, refSel]);
+  // The shared base rule gives the back link a gutter padding-left meant for
+  // unpadded chrome (LLT). iMT's nav and LWVD's shell already supply the page
+  // inset, so their links must not add it again — the arrow belongs exactly
+  // on each app's content edge.
+  for (const [route, linkSel, refSel] of [
+    ['/#/lee-lees-tracker', '#lee-lees-tracker-view .ecosystem_nav_back', '.lee_lee_diabetes_shell > *'],
+    ['/#/maintenance-total', '#maintenance-total-view .ecosystem_nav_back', '#maintenance-total-root > div'],
+    ['/#/violet-dineros', '#violet-dineros-view .home-back', '.app-heading'],
+  ]) {
+    await open(page, route);
+    await page.waitForTimeout(800);
+    const m = await arrowAndEdge(linkSel, refSel);
+    expect(m, `${route} back link and content reference should render`).not.toBeNull();
+    expect(Math.abs(m.arrow - m.edge), `${route} arrow ${m.arrow} should align with content edge ${m.edge}`).toBeLessThanOrEqual(1);
+  }
+  // LWVD's in-content back link (Goals tab) follows the same rule.
+  await page.locator('#violet-dineros-view nav button[data-tab="Goals"]').click();
+  await page.waitForTimeout(400);
+  const goals = await arrowAndEdge('#content .ecosystem_nav_back', '#content h1');
+  expect(goals).not.toBeNull();
+  expect(Math.abs(goals.arrow - goals.edge)).toBeLessThanOrEqual(1);
+});

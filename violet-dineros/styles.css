@@ -5,7 +5,10 @@
 
 
 /* Direct ecosystem navigation uses the same arrow-and-label pattern as sibling apps. */
-.lwvd-scope .ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
+/* The shell already supplies the page inset (22px side padding), so the shared
+   base rule's gutter padding-left would double it and push the arrow 16px
+   right of the content edge. LLT needs the base padding; LWVD must not add it. */
+.lwvd-scope .ecosystem_nav_back{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;padding-left:0;color:#5820c8;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.92rem;font-weight:800;line-height:1;margin:-10px 0 5px}
 .lwvd-scope .ecosystem_nav_back>span:first-child{font-size:1rem;line-height:1}
 .lwvd-scope .home-back,.lwvd-scope .app-heading .brand{display:none}
 .lwvd-scope:is([data-screen=home],[data-screen=settings]) header{position:static;margin-bottom:15px}
