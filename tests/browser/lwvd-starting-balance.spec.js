@@ -62,11 +62,13 @@ test('invalid amounts are rejected without writing, then a corrected value saves
   await page.getByRole('button',{name:'Save',exact:true}).click();
   expect(await stored(page)).toEqual({...initial,balanceCents:17525,moneyProgress:expect.objectContaining({xp:0})});
 });
-test('unchanged save, Cancel, Back and tab navigation do not update the balance',async ({page})=>{
+test('unchanged save, Cancel and tab navigation do not update the balance',async ({page})=>{
   const initial = await setup(page); await openEditor(page);
+  // The page's separate Back to Settings button was removed: Cancel is the way back.
+  await expect(page.getByRole('button',{name:'Back to Settings',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Save',exact:true}).click();
   await expect(page.getByLabel('First name',{exact:true})).toBeFocused();
-  for (const button of ['Cancel','Back to Settings']) {
+  for (const button of ['Cancel']) {
     await openEditor(page); await page.getByLabel('Starting Balance ($)',{exact:true}).fill('999');
     await page.getByRole('button',{name:button,exact:true}).click();
     expect(await stored(page)).toEqual(initial);
@@ -83,7 +85,7 @@ for (const theme of ['light','dark','system']) {
     for (const width of [320,390,430]) {
       await page.setViewportSize({width,height:844});
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      for (const name of ['Save','Cancel','Back to Settings']) {
+      for (const name of ['Save','Cancel']) {
         const box = await page.getByRole('button',{name,exact:true}).boundingBox(); expect(box.height).toBeGreaterThanOrEqual(44);
       }
     }

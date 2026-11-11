@@ -129,9 +129,8 @@ function settings() {
   content.querySelector('#edit-starting-balance').onclick = () => { tab = 'Balance'; render(); focusPageStart(); };
 }
 function editStartingBalance() {
-  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><button type="button" id="balance-back" class="back-circle" aria-label="Back to Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><div class="sheet-actions"><button type="button" id="balance-cancel">Cancel</button><button class="primary">Save</button></div></form></section>`;
+  content.innerHTML = `${launcherBack}<section class="settings-panel"><div class="settings-title"><h1>Edit Starting Balance</h1></div><form><p>How much money did you start with?</p><label for="starting-balance">Starting Balance ($)</label><div class="currency-input"><span aria-hidden="true">$</span><input id="starting-balance" name="startingBalance" inputmode="decimal" value="${(state.balanceCents / 100).toFixed(2)}" aria-describedby="balance-error"></div><p class="error" id="balance-error" role="alert"></p><div class="sheet-actions"><button type="button" id="balance-cancel">Cancel</button><button class="primary">Save</button></div></form></section>`;
   const back = () => { tab = 'Settings'; render(); focusPageStart(); };
-  content.querySelector('#balance-back').onclick = back;
   content.querySelector('#balance-cancel').onclick = back;
   content.querySelector('form').onsubmit = event => {
     event.preventDefault();
