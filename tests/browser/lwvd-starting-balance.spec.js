@@ -108,3 +108,17 @@ test('storage failure keeps the editor open and preserves saved information',asy
   await expect(page.getByRole('heading',{name:'Edit Starting Balance',exact:true})).toBeVisible();
   expect(await stored(page)).toEqual(initial);
 });
+
+test('Settings Cancel discards edits and returns Home without writing',async ({page})=>{
+  const initial = await setup(page);
+  await page.getByLabel('First name',{exact:true}).fill('Changed');
+  // Cancel is stacked directly under Save Settings (the house pattern).
+  const boxes = await page.locator('.settings-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {top:r.top,width:r.width};}));
+  expect(boxes).toHaveLength(2); expect(boxes[1].top).toBeGreaterThan(boxes[0].top); expect(boxes[1].width).toBe(boxes[0].width);
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();
+  expect(await stored(page)).toEqual(initial);
+  expect(await page.evaluate(()=>window.balanceWrites)).toBe(0);
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await expect(page.getByLabel('First name',{exact:true})).toHaveValue('Max');
+});
