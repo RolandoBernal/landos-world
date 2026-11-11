@@ -4,7 +4,7 @@ const content = root.querySelector('main'), nav = root.querySelector('nav'), gea
 let appActive = true;
 let pendingRaw = null;
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
-let noticeTimer = null, sheetOpener = null, sheetScroll = null;
+let noticeTimer = null, sheetOpener = null, sheetScroll = null, sheetExitDismissal = false;
 let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
@@ -178,12 +178,25 @@ quickActions.addEventListener('keydown', event => {
 });
 window.addEventListener('hashchange', () => { if (appActive) closeQuickActions(); });
 window.addEventListener('popstate', () => { if (appActive) closeQuickActions(); });
+// Leaving the route with a confirmation open (browser Back from Archive
+// Goal, say) must not strand the modal over the launcher: a showModal
+// dialog lives in the top layer, so hiding the view does not hide it, and
+// its document scroll lock would keep the visible launcher frozen.
+// Dismiss it without running its action; restoreSheet releases the lock
+// and the modal state, skipping scroll/focus restoration into the view
+// being hidden. The view itself stays mounted, so the page underneath
+// the confirmation (Goal Details, a form draft) survives the round trip.
+function dismissSheetForRouteExit() {
+  if (!transactionSheet.open) return;
+  sheetExitDismissal = true;
+  transactionSheet.close();
+}
 // The shell router flips this switch as routes change; the document/window
 // handlers in this module check it first, so an inactive LWVD stays inert.
 window.LandoLWVD = {
   setActive(value) {
     appActive = Boolean(value);
-    if (!appActive) { closeQuickActions(); return; }
+    if (!appActive) { closeQuickActions(); dismissSheetForRouteExit(); return; }
     // Pick up any cross-tab change deferred while inactive. If a draft
     // is open this is a no-op: the draft keeps its base revision (see
     // applyPendingSync), so its save still conflict-checks correctly.
@@ -409,6 +422,7 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   }
   const dialog = document.querySelector('#transaction-sheet');
   if (!dialog.open) {
+    sheetExitDismissal = false;
     sheetOpener = document.activeElement;
     sheetScroll = { overflow: document.body.style.overflow, x: window.scrollX, y: window.scrollY };
     document.body.style.overflow = 'hidden';
@@ -556,6 +570,10 @@ document.addEventListener('keydown', event => {
 });
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
+  // Consume the route-exit flag first: whichever close lands here, a
+  // later normal close must restore scroll and focus as usual.
+  const exitDismissal = sheetExitDismissal;
+  sheetExitDismissal = false;
   // A queued close event can arrive after a rapid reopen or a second close.
   if (transactionSheet.open || !sheetScroll) return;
   applyPendingSync();
@@ -564,11 +582,14 @@ function restoreSheet() {
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
     document.body.style.overflow = sheetScroll.overflow;
-    window.scrollTo({left: sheetScroll.x, top: sheetScroll.y, behavior:'instant'}); sheetScroll = null;
+    if (!exitDismissal) window.scrollTo({left: sheetScroll.x, top: sheetScroll.y, behavior:'instant'});
+    sheetScroll = null;
   }
-  const target = sheetOpener?.isConnected ? sheetOpener : content.querySelector('h1');
-  if (target?.matches('h1')) target.tabIndex = -1;
-  target?.focus({preventScroll:true});
+  if (!exitDismissal) {
+    const target = sheetOpener?.isConnected ? sheetOpener : content.querySelector('h1');
+    if (target?.matches('h1')) target.tabIndex = -1;
+    target?.focus({preventScroll:true});
+  }
   sheetOpener = null;
 }
 // A cross-tab change that arrives while LWVD is inactive is deferred,

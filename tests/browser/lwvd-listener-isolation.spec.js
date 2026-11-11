@@ -184,3 +184,40 @@ test('reactivation preserves a Starting Balance draft and conflict-checks its sa
  await page.locator('#settings').click();
  await expect(page.locator('.story')).toContainText('$50.00');
 });
+
+test('browser Back with an open confirmation leaves a working launcher and an unarchived goal',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.addInitScript(({key,seed})=>{if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1','light');},{key,seed});
+ // Enter LWVD from the launcher so browser Back returns to the launcher.
+ await page.goto('/#/');
+ await page.locator('#lando-launcher [data-route="violet-dineros"]').click();
+ await expect.poll(()=>page.evaluate(()=>window.LandoLWVD?.isActive())).toBe(true);
+ // Goals → Manage Goal → Archive Goal opens the native confirmation:
+ // a modal dialog that locks document scrolling while it is open.
+ await page.locator('#violet-dineros-view nav [data-tab=Goals]').click();
+ await page.getByRole('button',{name:'Manage Goal: Bike'}).click();
+ await page.getByRole('button',{name:'Archive Goal',exact:true}).click();
+ const openState=await page.evaluate(()=>{const d=document.querySelector('#transaction-sheet');return {open:d.open,view:d.dataset.view,overflow:document.body.style.overflow};});
+ expect(openState).toEqual({open:true,view:'confirm',overflow:'hidden'});
+ // Safari Back: the route leaves LWVD and the launcher becomes visible.
+ await page.goBack();
+ await expect(page).toHaveURL(/#\/$/);
+ await expect.poll(()=>page.evaluate(()=>window.LandoLWVD?.isActive())).toBe(false);
+ // The confirmation must be dismissed without running its action, and
+ // its document scroll lock must be released.
+ const exitState=await page.evaluate(()=>{const d=document.querySelector('#transaction-sheet');return {open:d.open,overflow:document.body.style.overflow};});
+ expect(exitState.open).toBe(false);
+ expect(exitState.overflow).not.toBe('hidden');
+ const stored=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+ expect(stored.goals[0].archived).toBe(false);
+ expect(stored.goals[0].reservedCents).toBe(6000);
+ // The launcher scrolls again.
+ await page.evaluate(()=>{document.querySelector('#lando-launcher').style.minHeight='2200px';scrollTo(0,300);});
+ await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(300);
+ await page.evaluate(()=>scrollTo(0,0));
+ // And it answers taps: re-entering LWVD lands on the still-mounted
+ // Goal Details page (the round trip kept the view and its state).
+ await page.locator('#lando-launcher [data-route="violet-dineros"]').click();
+ await expect.poll(()=>page.evaluate(()=>window.LandoLWVD?.isActive())).toBe(true);
+ await expect(page.getByRole('button',{name:'Archive Goal',exact:true})).toBeVisible();
+});
