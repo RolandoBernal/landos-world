@@ -585,6 +585,16 @@
     if (isLocalDeviceDevelopment()) {
       offlineReadiness = 'unavailable';
       updateUi();
+      // A worker registered on this origin by an earlier session (served in
+      // a registering mode) would otherwise keep serving its first cached
+      // build forever: the cache name is keyed to a build SHA that only the
+      // production deploy substitutes. Local-device mode never registers a
+      // worker, so remove any it finds, exactly like local previews do.
+      try {
+        await disableLocalPreviewServiceWorkers();
+      } catch (error) {
+        console.warn('Local-device service-worker cleanup failed.', error);
+      }
       return;
     }
     if (!('serviceWorker' in navigator)) {

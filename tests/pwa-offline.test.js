@@ -277,6 +277,29 @@ test('explicit local-device mode skips service-worker registration and deployed-
   assert.equal(elements['pwa-network-status'].textContent, 'Online');
 });
 
+test('explicit local-device mode unregisters a stale service worker left by an earlier session', async () => {
+  let registerCalls = 0;
+  let unregisterCalls = 0;
+  const serviceWorker = {
+    register: async () => { registerCalls += 1; throw new Error('must not register in local-device mode'); },
+    getRegistrations: async () => [{ unregister: async () => { unregisterCalls += 1; return true; } }],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    // The stale worker still controls the page, so cleanup must also
+    // trigger the guarded one-time reload that frees the page from it.
+    controller: {},
+  };
+  const { context } = createPwaContext({
+    buildMetadata: { environment: 'local-device', appVersion: '1.0.0' },
+    serviceWorker,
+    fetchImplementation: async () => { throw new Error('must not fetch in local-device mode'); },
+  });
+  await flushAsync();
+  assert.equal(registerCalls, 0);
+  assert.equal(unregisterCalls, 1);
+  assert.equal(context.location.reloadCount, 1);
+});
+
 test('auth preview never registers, unregisters, clears caches or fetches deployment metadata', async () => {
   const forbidden = () => { throw new Error('Preview must not touch PWA infrastructure'); };
   const { elements } = createPwaContext({
