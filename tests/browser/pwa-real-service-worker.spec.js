@@ -237,11 +237,19 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
     await font.load(); return font.status;
   })).toBe('loaded');
   fixtureNetworkUnavailable = false;
-  await page.goto(`${baseUrl}/violet-dineros/index.html`);
+  await page.goto(`${baseUrl}/#/violet-dineros`);
   await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
   expect(await page.evaluate(async()=>{const faces=await document.fonts.load('500 16px "Geist Mono"');return faces.length>0&&faces.every(face=>face.status==='loaded');})).toBe(true);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(lwvdRecord);
 
+  // Safeguard 3 (in-shell restructure PR 2): the legacy standalone URL is
+  // precached as a redirect shim, so even with the network unavailable it
+  // lands on the in-shell route served from the app cache.
+  fixtureNetworkUnavailable = true;
+  await page.goto(`${baseUrl}/violet-dineros/index.html`);
+  await expect(page).toHaveURL(/#\/violet-dineros$/);
+  await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
+  fixtureNetworkUnavailable = false;
 });
 
 test('cache preservation invariant accepts additions but rejects asset loss and unexpected identities', () => {

@@ -76,7 +76,7 @@ async function openApp() {
     addEventListener('pageshow', (event) => window.__persistedEvents.push(event.persisted));
     localStorage.setItem(KEY, JSON.stringify({ firstName: 'Max', balanceCents: 15000, payday, frequency: 'monthly', onboarded: true }));
   }, { KEY, payday });
-  await page.goto(`${base}/violet-dineros/index.html`);
+  await page.goto(`${base}/#/violet-dineros`);
   await expect(page.getByRole('heading', { name: 'Hey, Max!' })).toBeVisible();
   return { browser, page };
 }

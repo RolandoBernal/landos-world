@@ -14,7 +14,8 @@
 :root[data-theme="light"][data-status-app="imt"] { --status-surface: #EDEFEA; }
 :root[data-status-app="llt"] { --status-surface: #EDEEF1; }
 :root[data-status-app="llt"][data-theme="dark"] { --status-surface: #171923; }
-:root[data-status-app="lwvd"] { --status-surface: var(--app-surface); }
+:root[data-status-app="lwvd"] { --status-surface: #fcfaff; }
+:root[data-status-app="lwvd"][data-theme="dark"] { --status-surface: #21192c; }
 :root[data-status-app] body::after {
   content: ""; position: fixed; inset: 0 0 auto; height: var(--status-inset);
   background: var(--status-surface);

@@ -8,7 +8,7 @@ for (const theme of ['light','dark']) test(`compact Money Progress persists on n
     }
     localStorage.setItem('landos_world_appearance_preference_v1',theme);
   },theme);
-  await page.goto('/violet-dineros/index.html');
+  await page.goto('/#/violet-dineros');
   const progress=page.getByRole('region',{name:'Money Progress'});
   await expect(progress).toContainText('Level 1 · Money Rookie');
   await expect(progress).toContainText('0 XP total');

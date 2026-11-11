@@ -20,7 +20,7 @@ function setup({ installed = true, media = false, pathname = '/', hash = '#/', v
 test('installed ecosystem routes receive presentation adapters without changing location', () => {
   const state = setup();
   for (const route of ['', 'settings', 'daily-chief-briefing', 'weather', 'lee-lees-tracker',
-    'digital-clock', 'violet-sprints', 'violet-futbol-game-tracker', 'road-bike-checklist', 'maintenance-total']) {
+    'digital-clock', 'violet-sprints', 'violet-futbol-game-tracker', 'road-bike-checklist', 'maintenance-total', 'violet-dineros']) {
     state.location.hash = `#/${route}`;
     state.events.hashchange();
     assert.ok(state.root.dataset.statusApp, route || 'launcher');
@@ -42,8 +42,8 @@ test('regular browser mode remains ungated until standalone display changes', ()
   assert.equal(state.root.dataset.statusApp, undefined);
 });
 
-test('LWVD standalone entry and pageshow use the approved adapter', () => {
-  const state = setup({ pathname: '/landos-world/violet-dineros/index.html' });
+test('LWVD in-shell route and pageshow use the approved adapter', () => {
+  const state = setup({ hash: '#/violet-dineros' });
   assert.equal(state.root.dataset.statusApp, 'lwvd');
   delete state.root.dataset.statusApp;
   state.events.pageshow();

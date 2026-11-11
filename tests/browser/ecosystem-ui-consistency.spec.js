@@ -85,7 +85,7 @@ for (const theme of ['light', 'dark', 'system']) {
 for (const theme of ['light', 'dark', 'system']) {
   test(`${theme}: LWVD complete action-flow inventory keeps pair ordering and mobile bounds`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 740 });
-    await open(page, '/violet-dineros/index.html');
+    await open(page, '/#/violet-dineros');
     await page.evaluate(theme => {
       window.LandosTheme.setPreference(theme);
       localStorage.setItem('lando-world:lwvd:v1', JSON.stringify({ firstName: 'Violet', balanceCents: 100000, payday: '', frequency: '', onboarded: true,
@@ -168,7 +168,7 @@ for (const theme of ['light', 'dark', 'system']) test(`${theme}: iMT and LWVD Se
     expect(await button.evaluate(n => { const s = getComputedStyle(n.parentElement); return Math.abs(n.getBoundingClientRect().width - (n.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))); })).toBeLessThan(2);
   }
   await imt.click(); await expect(page.locator('.imt_add_button')).toHaveCount(1);
-  await open(page, '/violet-dineros/index.html');
+  await open(page, '/#/violet-dineros');
   await page.evaluate(t => { window.LandosTheme.setPreference(t); localStorage.setItem('lando-world:lwvd:v1', JSON.stringify({ firstName: 'Violet', balanceCents: 10000, payday: '', frequency: '', onboarded: true })); }, theme);
   await page.reload();
   const gear = page.locator('#settings'), before = await gear.boundingBox();

@@ -29,7 +29,7 @@ const icons = {
  user: '<circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3Z"/>',
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
-const plant = '<img class="plant" src="../icons/violet-dineros.svg" alt="" aria-hidden="true">';
+const plant = '<img class="plant" src="icons/violet-dineros.svg" alt="" aria-hidden="true">';
 function dismissNotice() {
   clearTimeout(noticeTimer);
   const notice = document.querySelector('#notice');
@@ -120,7 +120,7 @@ function onboarding() {
   focusPageStart();
 }
 function settings() {
-  content.innerHTML = `<section class="settings-panel"><div class="settings-title"><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="../icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
+  content.innerHTML = `<section class="settings-panel"><div class="settings-title"><h1>Settings</h1></div><form><h2>Personalization</h2><div class="setting-row"><div class="setting-icon">${icon('user')}</div><div><label for="name">First name</label><input id="name" name="firstName" required maxlength="40" autocomplete="given-name" value="${escape(state.firstName)}"></div></div><h2>Your Money</h2><button type="button" id="edit-starting-balance" class="setting-row balance-setting"><span class="setting-icon"><img src="icons/violet-dineros.svg" alt=""></span><div><span class="setting-label">Starting Balance</span><strong>${money(state.balanceCents)}</strong></div><span class="navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="payday">Next payday</label><input id="payday" class="payday-control" name="payday" type="date" value="${effectivePayday(state.payday, state.frequency)}"></div></div><div class="setting-row"><div class="setting-icon">${icon('calendar')}</div><div><label for="frequency">Pay frequency (optional)</label><select id="frequency" name="frequency">${[['', 'Not set'], ['weekly', 'Weekly'], ['biweekly', 'Every Two Weeks'], ['monthly', 'Monthly']].map(([value, label]) => `<option value="${value}" ${state.frequency === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div><p class="hint">Recurring dates move forward after payday. Monthly dates use the last day of shorter months, then return to your chosen day. Money is never added automatically.</p><p class="error" role="alert"></p><div class="settings-actions"><button class="primary">Save Settings</button></div></form></section>`;
   content.querySelector('form').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target), firstName = data.get('firstName').trim(), payday = data.get('payday'), frequency = data.get('frequency'); if (!firstName) { content.querySelector('.error').textContent = 'Please enter your first name.'; return; }
     // Keep the original monthly anchor when the displayed recurring date is unchanged.
     const anchor = payday === effectivePayday(state.payday, state.frequency) && frequency === state.frequency ? state.payday : payday;
@@ -148,7 +148,7 @@ function editStartingBalance() {
     }
   };
 }
-const launcherBack = `<a class="ecosystem_nav_back" href="../index.html#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
+const launcherBack = `<a class="ecosystem_nav_back" href="#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>`;
 const quickActions = document.createElement('div');
 quickActions.className = 'floating-actions';
 quickActions.hidden = true;
@@ -178,8 +178,7 @@ quickActions.addEventListener('keydown', event => {
 });
 window.addEventListener('hashchange', () => { if (appActive) closeQuickActions(); });
 window.addEventListener('popstate', () => { if (appActive) closeQuickActions(); });
-// In the standalone document LWVD is always active. PR 2's shell router
-// will flip this switch when another app is showing; the document/window
+// The shell router flips this switch as routes change; the document/window
 // handlers in this module check it first, so an inactive LWVD stays inert.
 window.LandoLWVD = {
   setActive(value) {
@@ -213,6 +212,7 @@ document.addEventListener('focusin', event => {
   if (event.target.closest('nav,.floating-actions')) showFloatingNav();
 });
 function render() {
+  applyPendingSync();
   dismissNotice(); showFloatingNav();
   closeQuickActions();
   quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
@@ -577,10 +577,14 @@ function restoreSheet() {
 // overwriting the newer data with the draft's stale fields. Instead the
 // validated raw value waits here; applyPendingSync applies it when LWVD
 // is reactivated or when the open draft closes — never while a draft
-// (sheet page or dialog) is open, so the draft's save keeps comparing
-// storage against the revision the draft was opened from.
+// is open, so the draft's save keeps comparing storage against the
+// revision the draft was opened from. Drafts are the sheet pages and
+// transaction dialog, and also the Settings and Starting Balance tabs:
+// those are regular forms holding unsaved input, and applying there (or
+// rendering over them on reactivation) would silently discard typing.
 function applyPendingSync() {
-  if (pendingRaw === null || sheetPage || transactionSheet.open) return false;
+  if (pendingRaw === null || sheetPage || transactionSheet.open
+    || tab === 'Settings' || tab === 'Balance') return false;
   try {
     const next = JSON.parse(pendingRaw);
     if (!validState(next)) throw Error();

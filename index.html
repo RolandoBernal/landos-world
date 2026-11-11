@@ -14,10 +14,6 @@
   <link rel="canonical" href="https://rolandobernal.github.io/landos-world/">
   <link rel="icon" type="image/svg+xml" href="favicon-landos-world.svg?v=2">
   <link rel="manifest" href="manifest.webmanifest?v=20260804-2">
-  <link rel="prefetch" href="violet-dineros/index.html">
-  <link rel="prefetch" href="violet-dineros/styles.css">
-  <link rel="prefetch" href="violet-dineros/app.js">
-  <link rel="prefetch" href="violet-dineros/model.js">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-landos-world-v2.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -53,6 +49,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
   <link rel="stylesheet" href="css/violet-futbol-game-tracker.css?v=20260919-2">
   <link rel="stylesheet" href="css/road-bike-checklist.css?v=20260822-4">
   <link rel="stylesheet" href="css/maintenance-total.css?v=20260918-1">
+  <link rel="stylesheet" href="violet-dineros/styles.css">
   <link rel="stylesheet" href="css/status-scrim.css">
   <script defer src="js/status-scrim.js"></script>
 </head>
@@ -372,6 +369,19 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
           <path class="settings_close_icon" d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
     <main class="maintenance_total_app" id="maintenance-total-root" aria-label="iMaintenanceTotal"><p>Loading maintenance manager...</p></main>
   </div>
+  <div id="violet-dineros-view" hidden>
+    <div class="shell lwvd-scope">
+      <header>
+        <a class="ecosystem_nav_back home-back" href="#/" aria-label="Return to Lando's World home"><span aria-hidden="true">←</span><span>Lando’s World</span></a>
+        <div class="app-heading"><a class="brand" href="#/violet-dineros"><img src="icons/violet-dineros.svg" alt=""><span>Violet Dineros</span></a><button id="settings" aria-label="Settings" hidden>⚙</button></div>
+      </header>
+      <main id="content"></main>
+      <p id="notice" role="status"></p>
+      <nav aria-label="Main navigation" hidden></nav>
+    </div>
+    <dialog id="transaction-sheet" class="lwvd-scope" aria-labelledby="sheet-title"></dialog>
+    <dialog id="affordability-sheet" class="lwvd-scope" aria-labelledby="afford-title" aria-modal="true"></dialog>
+  </div>
   <div class="pwa_network_status" id="pwa-network-status" role="status" aria-live="polite" hidden></div>
   <div class="pwa_toast" id="pwa-toast" role="status" aria-live="polite" hidden></div>
   <script src="js/weather-service.js?v=20260801-1"></script>
@@ -536,7 +546,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         description: 'Your money. Your goals.',
         buttonId: 'open-violet-dineros',
         buttonLabel: 'Open Violet Dineros',
-        href: 'violet-dineros/index.html',
+        route: 'violet-dineros',
         accent: 'purple',
         theme: 'violet-sprints',
       },
@@ -1066,6 +1076,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       'violet-futbol-game-tracker',
       'road-bike-checklist',
       'maintenance-total',
+      'violet-dineros',
     ]);
     const LANDO_SCROLL_RESTORATION_SUPPORTED = 'scrollRestoration' in window.history;
     if (LANDO_SCROLL_RESTORATION_SUPPORTED) {
@@ -1085,6 +1096,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         'violet-futbol-game-tracker': document.getElementById('violet-futbol-game-tracker-view'),
         'road-bike-checklist': document.getElementById('road-bike-checklist-view'),
         'maintenance-total': document.getElementById('maintenance-total-view'),
+        'violet-dineros': document.getElementById('violet-dineros-view'),
       };
       Object.entries(views).forEach(([name, element]) => {
         if (element) element.hidden = name !== viewName;
@@ -1103,6 +1115,7 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       if (viewName === 'violet-futbol-game-tracker') return 'Violet Futbol Game Tracker';
       if (viewName === 'road-bike-checklist') return 'Road Bike Trip Checklist';
       if (viewName === 'maintenance-total') return 'iMaintenanceTotal';
+      if (viewName === 'violet-dineros') return 'Violet Dineros';
       return "Lando's World";
     }
 
@@ -1160,6 +1173,18 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
       document.body.classList.toggle('is-child-app-active', isChildApp);
     }
 
+    let lwvdModulePromise = null;
+    function ensureVioletDinerosLoaded() {
+      if (!lwvdModulePromise) {
+        lwvdModulePromise = import('./violet-dineros/app.js')
+          .then(() => {
+            window.LandoLWVD?.setActive?.(normalizeRouteFromHash() === 'violet-dineros');
+          })
+          .catch(() => { lwvdModulePromise = null; });
+      }
+      return lwvdModulePromise;
+    }
+
     function handleRouteChange() {
       const route = normalizeRouteFromHash();
       updateEcosystemAppState(route);
@@ -1180,6 +1205,8 @@ const WEATHER_API_KEY = window.__WEATHER_API_KEY__ || 'REPLACE_ME';
         activeView = setActiveView('home');
         closeMobileSettingsMenu();
       }
+      if (route === 'violet-dineros') ensureVioletDinerosLoaded();
+      window.LandoLWVD?.setActive?.(route === 'violet-dineros');
       if (shouldResetScroll) {
         resetEcosystemScrollPosition(activeView);
         window.requestAnimationFrame?.(() => {

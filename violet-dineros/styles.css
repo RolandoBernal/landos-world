@@ -523,3 +523,9 @@ div.lwvd-scope[data-screen=sheet]{padding-bottom:25px}
 :root[data-theme=dark] .lwvd-scope #notice .notice-icon{background:#1e3d33;color:#7fe3bb}
 @keyframes lwvd-notice-in{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @media (prefers-reduced-motion:reduce){.shell.lwvd-scope>#notice[data-kind=success]:not(:empty){animation:none}}
+/* In-shell surface (PR 2): the standalone paint block keys --app-surface
+   to :root.lwvd-document, which never matches inside the shell. The view
+   wrapper carries the same values so the app's surface color is unchanged
+   in both themes; the standalone document keeps using the paint block. */
+#violet-dineros-view{--app-surface:#fcfaff;background:var(--app-surface)}
+:root[data-theme=dark] #violet-dineros-view{--app-surface:#21192c}

@@ -13,7 +13,7 @@ for (const theme of ['light', 'dark']) test(`installed shared headers move down 
     Object.defineProperty(navigator, 'standalone', {get: () => true});
     localStorage.setItem('lando-world:lwvd:v1', JSON.stringify({firstName: 'Test', balanceCents: 10000, payday: '', frequency: '', onboarded: true}));
   });
-  for (const route of ['/', '/#/settings', '/#/weather', '/#/lee-lees-tracker', '/#/digital-clock', '/#/daily-chief-briefing', '/#/violet-sprints', '/#/violet-futbol-game-tracker', '/#/road-bike-checklist', '/#/maintenance-total', '/violet-dineros/index.html']) {
+  for (const route of ['/', '/#/settings', '/#/weather', '/#/lee-lees-tracker', '/#/digital-clock', '/#/daily-chief-briefing', '/#/violet-sprints', '/#/violet-futbol-game-tracker', '/#/road-bike-checklist', '/#/maintenance-total', '/#/violet-dineros']) {
     await page.goto(base + route);
     await page.evaluate(theme => {
       window.LandosTheme.setPreference(theme);

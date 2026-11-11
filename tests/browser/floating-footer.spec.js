@@ -17,7 +17,7 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
    localStorage.setItem('lando-world:lwvd:v1',JSON.stringify({firstName:'Max',balanceCents:42800,payday:'2099-01-31',frequency:'monthly',onboarded:true}));
    localStorage.setItem('lando-world:lee-lees-tracker:v1',JSON.stringify({schemaVersion:1,records:[],settings:{glucoseTargetMin:70,glucoseTargetMax:180},insulinPlans:[],foodLibrary:[],savedMeals:[],metadata:{}}));
   },{theme});
-  await page.goto(baseURL+(app==='llt'?'/#/lee-lees-tracker':'/violet-dineros/index.html'));
+  await page.goto(baseURL+(app==='llt'?'/#/lee-lees-tracker':'/#/violet-dineros'));
   const nav=page.locator(app==='llt'?'.lee_lee_diabetes_bottom_nav':'nav');
   await expect(nav).toBeVisible();
   const names=app==='llt'?['Today','History','Reports','Foods']:['Home','Activity','Goals','Insights'];
@@ -87,7 +87,7 @@ for(const theme of ['dark','light']) test(`three-app spacing parity and LLT form
   if(!localStorage.getItem('lando-world:lwvd:v1')) localStorage.setItem('lando-world:lwvd:v1',JSON.stringify({firstName:'Max',balanceCents:42800,payday:'2099-01-31',frequency:'monthly',onboarded:true}));
  },theme);
  const metrics=[];
- for(const [path,selector] of [['/#/maintenance-total','.imt_bottom_nav'],['/violet-dineros/index.html','nav'],['/#/lee-lees-tracker','.lee_lee_diabetes_bottom_nav']]){
+ for(const [path,selector] of [['/#/maintenance-total','.imt_bottom_nav'],['/#/violet-dineros','nav'],['/#/lee-lees-tracker','.lee_lee_diabetes_bottom_nav']]){
   await page.goto(baseURL+path);const nav=page.locator(selector);await expect(nav).toBeVisible();
   const box=await nav.boundingBox();metrics.push({x:box.x,width:box.width,bottom:box.y+box.height,height:box.height});
   if(selector==='.imt_bottom_nav'){

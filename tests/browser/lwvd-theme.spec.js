@@ -21,24 +21,24 @@ async function seed(page, preference, onboarded = true) {
 for (const [preference, device, expected] of [['light','dark','light'], ['dark','light','dark'], ['system','dark','dark'], ['system','light','light']]) {
   test(`LWVD ${preference} preference with ${device} device resolves before body paint`, async ({page}) => {
     await page.setViewportSize({width:390,height:844}); await page.emulateMedia({colorScheme:device}); await seed(page,preference);
-    await page.goto('/violet-dineros/index.html');
+    await page.goto('/#/violet-dineros');
     await expect(page.locator('html')).toHaveAttribute('data-theme',expected);
     expect(await page.evaluate(() => window.firstBodyTheme)).toBe(expected);
     const before = await page.evaluate(({moneyKey,launcherKey}) => [localStorage.getItem(moneyKey),localStorage.getItem(launcherKey)],{moneyKey,launcherKey});
     await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();
-    for (const name of ['Activity','Goals','Insights','Home']) { await page.getByRole('button',{name,exact:true}).click(); await expect(page.locator('main h1')).toBeVisible(); }
+    for (const name of ['Activity','Goals','Insights','Home']) { await page.getByRole('button',{name,exact:true}).click(); await expect(page.locator('#violet-dineros-view main h1')).toBeVisible(); }
     await page.getByRole('button',{name:'Settings',exact:true}).click(); await expect(page.getByLabel('First name',{exact:true})).toHaveValue('Max');
     await page.locator('#settings-back').click();
     for (const width of [320,390,430]) { await page.setViewportSize({width,height:844}); expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true); }
     await page.reload(); await expect(page.locator('html')).toHaveAttribute('data-theme',expected);
-    await page.getByRole('link',{name:"Return to Lando's World home"}).click(); await expect(page).toHaveURL(/\/index.html#\/$/);
+    await page.getByRole('link',{name:"Return to Lando's World home"}).click(); await expect(page).toHaveURL(/#\/$/);
     await page.locator('#open-violet-dineros').click();
     expect(await page.evaluate(({moneyKey,launcherKey}) => [localStorage.getItem(moneyKey),localStorage.getItem(launcherKey)],{moneyKey,launcherKey})).toEqual(before);
     expect(await page.evaluate(k => localStorage.getItem(k),appearanceKey)).toBe(preference);
   });
 }
 test('System follows live device changes and launcher preference is reused on next entry',async ({page})=>{
-  await page.emulateMedia({colorScheme:'light'});await seed(page,'system');await page.goto('/violet-dineros/index.html');
+  await page.emulateMedia({colorScheme:'light'});await seed(page,'system');await page.goto('/#/violet-dineros');
   await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
   await page.emulateMedia({colorScheme:'light'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   await page.getByRole('link',{name:"Return to Lando's World home"}).click();
@@ -48,7 +48,7 @@ test('System follows live device changes and launcher preference is reused on ne
 });
 for (const theme of ['light','dark']) {
   test(`onboarding completes and persists in ${theme}`,async ({page})=>{
-    await page.setViewportSize({width:390,height:844});await seed(page,theme,false);await page.goto('/violet-dineros/index.html');
+    await page.setViewportSize({width:390,height:844});await seed(page,theme,false);await page.goto('/#/violet-dineros');
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
     await page.getByLabel('What’s your first name?').fill('Levi');await page.getByRole('button',{name:'Continue'}).click();
     await page.getByLabel('Your money ($)').fill('150.25');await page.getByRole('button',{name:'Continue'}).click();
@@ -61,11 +61,11 @@ for (const theme of ['light','dark']) {
 for (const tab of ['Home', 'Activity', 'Goals', 'Insights', 'Settings']) {
   test(`launcher return works from ${tab} without changing saved data`, async ({page}) => {
     await page.setViewportSize({width:390,height:844});
-    await seed(page,'dark'); await page.goto('/violet-dineros/index.html');
+    await seed(page,'dark'); await page.goto('/#/violet-dineros');
     await page.getByRole('button',{name:tab,exact:true}).click();
     const back = page.getByRole('link',{name:"Return to Lando's World home"});
-    await expect(back).toBeVisible(); await expect(back).toHaveAttribute('href','../index.html#/');
-    await back.click(); await expect(page).toHaveURL(/\/index.html#\/$/);
+    await expect(back).toBeVisible(); await expect(back).toHaveAttribute('href','#/');
+    await back.click(); await expect(page).toHaveURL(/#\/$/);
     expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),moneyKey)).toEqual(financial);
     expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),launcherKey)).toEqual(selection);
   });
@@ -73,7 +73,7 @@ for (const tab of ['Home', 'Activity', 'Goals', 'Insights', 'Settings']) {
 
 for (const theme of ['dark', 'light']) test(`LWVD ${theme}: standalone viewport policy and visible footer gap match the launcher`, async ({page}) => {
  await page.setViewportSize({width:390,height:844});await seed(page,theme);
- await page.goto('/violet-dineros/index.html');
+ await page.goto('/#/violet-dineros');
  const reference=await page.evaluate(async()=>{
   const html=await (await fetch('../index.html')).text();
   return new DOMParser().parseFromString(html,'text/html').querySelector('meta[name=viewport]').content;
@@ -89,11 +89,11 @@ for (const theme of ['dark', 'light']) test(`LWVD ${theme}: standalone viewport 
  for(const height of [568,844,932]){
   await page.setViewportSize({width:390,height});
   for(const name of ['Home','Activity','Goals','Insights']){
-   await page.locator('nav').getByRole('button',{name,exact:true}).click();
+   await page.locator('#violet-dineros-view nav').getByRole('button',{name,exact:true}).click();
    for(const fraction of [0,1]){
     await page.evaluate(fraction=>{document.documentElement.style.scrollBehavior='auto';scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*fraction,behavior:'instant'});},fraction);
     const geometry=await page.evaluate(()=>{
-     const nav=document.querySelector('nav'),r=nav.getBoundingClientRect(),v=visualViewport;
+     const nav=document.querySelector('#violet-dineros-view nav'),r=nav.getBoundingClientRect(),v=visualViewport;
      const probe=document.createElement('div');probe.style.paddingBottom='env(safe-area-inset-bottom)';document.body.append(probe);
      const safe=parseFloat(getComputedStyle(probe).paddingBottom);probe.remove();
      const parents=[];for(let el=nav.parentElement;el;el=el.parentElement)parents.push(getComputedStyle(el).transform);
@@ -111,8 +111,8 @@ for (const theme of ['dark', 'light']) test(`LWVD ${theme}: standalone viewport 
 for(const [preference,device,theme] of [['light','dark','light'],['dark','light','dark'],['system','light','light'],['system','dark','dark']]){
  test(`original LWVD nav palette: ${preference} on ${device}`,async({page})=>{
   await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:device});await seed(page,preference);
-  await page.goto('/violet-dineros/index.html');
-  const nav=page.locator('nav');
+  await page.goto('/#/violet-dineros');
+  const nav=page.locator('#violet-dineros-view nav');
   const expected=theme==='dark'?{surface:'rgb(23, 19, 31)',border:'rgb(56, 48, 64)',inactive:'rgb(189, 176, 213)',active:'rgb(194, 155, 255)',selected:'rgb(52, 39, 68)'}:{surface:'rgb(255, 255, 255)',border:'rgb(235, 230, 245)',inactive:'rgb(102, 96, 164)',active:'rgb(107, 29, 255)',selected:'rgb(240, 234, 255)'};
   const before=await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'));
   await expect(nav).toHaveCSS('background-color',expected.surface);await expect(nav).toHaveCSS('border-top-color',expected.border);

@@ -22,7 +22,7 @@ async function setup(page,theme='light',transactions) {
   await page.addInitScript(({key,launcher,preferences,initial,theme})=>{
     if(!localStorage.getItem('sprint2-seeded')){localStorage.setItem(key,JSON.stringify(initial));localStorage.setItem(launcher,JSON.stringify(preferences));localStorage.setItem('other-app-test','untouched');localStorage.setItem('landos_world_appearance_preference_v1',theme);localStorage.setItem('sprint2-seeded','true');}
   },{key,launcher,preferences,initial,theme});
-  await page.goto('/violet-dineros/index.html');await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();return initial;
+  await page.goto('/#/violet-dineros');await expect(page.getByRole('heading',{name:'Hey, Max!'})).toBeVisible();return initial;
 }
 const saved=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
 const sheet=page=>page.locator('.sheet-page-frame');
@@ -103,7 +103,7 @@ test('stale saves cannot overwrite newer raw financial data',async({page})=>{
 });
 
 test('another tab updates the balance without losing transactions',async({page,context})=>{
-  await setup(page);await add(page,'income','30','Gift');const second=await context.newPage();await second.goto('/violet-dineros/index.html');await add(second,'expense','10','Gas');await expect(page.locator('.balance')).toHaveText('$170.00');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);expect((await saved(page)).transactions).toHaveLength(2);
+  await setup(page);await add(page,'income','30','Gift');const second=await context.newPage();await second.goto('/#/violet-dineros');await add(second,'expense','10','Gas');await expect(page.locator('.balance')).toHaveText('$170.00');await expect(page.getByRole('button',{name:'Undo',exact:true})).toHaveCount(0);expect((await saved(page)).transactions).toHaveLength(2);
 });
 
 test('storage failures preserve saved data, keep the sheet open and show no success or Undo',async({page})=>{
@@ -168,7 +168,7 @@ test('repeated pages restore focus and page position through top, middle and bot
 });
 
 test('Home has no disclaimer and compact Activity rows communicate interactive details',async({page})=>{
-  await setup(page);await expect(page.locator('main')).not.toContainText('A gentle guide, not a strict spending limit.');
+  await setup(page);await expect(page.locator('#violet-dineros-view main')).not.toContainText('A gentle guide, not a strict spending limit.');
   await add(page,'expense','6','Food','Coffee');await activity(page);
   const row=page.locator('.transaction-row');await expect(row).toHaveAccessibleName(/View transaction details: Coffee, Expense/);
   await expect(row.locator('.transaction-chevron svg')).toHaveAttribute('viewBox','0 0 24 24');await expect(row.locator('.transaction-chevron')).toHaveAttribute('aria-hidden','true');
@@ -192,8 +192,8 @@ for(const mode of ['Add Money','Add Expense','Edit Money In','Edit Expense','Det
     await page.setViewportSize({width:390,height:320});await continuous(page);
     // Pages do not trap focus; the app chrome is hidden instead, so focus
     // cannot leave the page for the navigation behind it.
-    await expect(page.locator('nav')).toBeHidden();await page.locator('nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('.sheet-page-frame').contains(document.activeElement))).toBe(true);
-    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.sheet-page-frame')).toHaveCount(0);await expect(page.locator('nav')).toBeVisible();
+    await expect(page.locator('#violet-dineros-view nav')).toBeHidden();await page.locator('#violet-dineros-view nav button').first().evaluate(button=>button.focus());expect(await page.evaluate(()=>document.querySelector('.sheet-page-frame').contains(document.activeElement))).toBe(true);
+    await sheet(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.sheet-page-frame')).toHaveCount(0);await expect(page.locator('#violet-dineros-view nav')).toBeVisible();
     expect((await saved(page)).transactions).toHaveLength(2);
   });
 }
@@ -203,7 +203,7 @@ for(const type of ['income','expense']){
     const createdAt=new Date().toISOString(),label=type==='income'?'Gift':'Food';
     await setup(page,'dark',[{id:'detail',type,amountCents:600,label,description:'Coffee',createdAt}]);await activity(page);
     await page.getByRole('button',{name:type==='income'?'Money In':'Expenses',exact:true}).click();await page.getByLabel('Search activity').fill('Coffee');await page.locator('.transaction-row').click();
-    await expect(sheet(page).locator('#sheet-title')).toHaveText(type==='income'?'Money In':'Expense');await expect(page.locator('nav')).toBeHidden();
+    await expect(sheet(page).locator('#sheet-title')).toHaveText(type==='income'?'Money In':'Expense');await expect(page.locator('#violet-dineros-view nav')).toBeHidden();
     await continuous(page);
     expect(await page.locator('.sheet-page-frame .transaction-panel').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(33, 25, 44)');
     await expect(sheet(page)).toContainText(type==='income'?'Money In':'Expense');await expect(sheet(page)).toContainText(label);await expect(sheet(page)).toContainText('Coffee');
@@ -260,7 +260,7 @@ for(const theme of ['light','dark']){
       expect(await page.locator('.sheet-page-frame .transaction-panel').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(theme==='light'?'rgb(252, 250, 255)':'rgb(33, 25, 44)');
       for(const height of [320,844]){
         await page.setViewportSize({width:390,height});
-        await continuous(page);await expect(page.locator('nav')).toBeHidden();
+        await continuous(page);await expect(page.locator('#violet-dineros-view nav')).toBeHidden();
         const select=sheet(page).getByLabel(income?'Where did it come from?':'Category',{exact:true});await select.selectOption(income?'Paycheck':'Shopping');
         const metrics=await select.evaluate(el=>{const style=getComputedStyle(el);return {height:el.getBoundingClientRect().height,paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,lineHeight:style.lineHeight,value:el.value};});
         expect(metrics.height).toBe(52);expect(metrics.paddingTop).toBe('0px');expect(metrics.paddingBottom).toBe('0px');expect(metrics.lineHeight).toBe('normal');expect(metrics.value).toBe(income?'Paycheck':'Shopping');
@@ -297,9 +297,9 @@ for(const theme of ['light','dark','system'])test(`${theme} Sprint 2.1 viewport,
     await page.setViewportSize({width,height:844});
     for(const tab of ['Home','Activity','Goals','Insights']){
       await page.getByRole('button',{name:tab,exact:true}).click();
-      const geometry=await page.evaluate(()=>({height:innerHeight,body:document.body.getBoundingClientRect().height,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom,rootColor:getComputedStyle(document.documentElement).backgroundColor,bodyColor:getComputedStyle(document.body).backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth}));
-      expect(geometry.body).toBeGreaterThanOrEqual(geometry.height-1);expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height-1);expect(Math.abs(geometry.nav-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.overflow).toBe(false);expect(geometry.rootColor).not.toBe('rgb(0, 0, 0)');expect(geometry.bodyColor).toBe(geometry.rootColor);
-      expect(await page.locator('nav [data-tab="Goals"] svg').innerHTML()).toBe(bullseye);
+      const geometry=await page.evaluate(()=>({height:innerHeight,view:document.querySelector('#violet-dineros-view').getBoundingClientRect().height,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('#violet-dineros-view nav').getBoundingClientRect().bottom,viewColor:getComputedStyle(document.querySelector('#violet-dineros-view')).backgroundColor,shellColor:getComputedStyle(document.querySelector('.shell')).backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth}));
+      expect(geometry.view).toBeGreaterThanOrEqual(geometry.height-1);expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height-1);expect(Math.abs(geometry.nav-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.overflow).toBe(false);expect(geometry.viewColor).not.toBe('rgb(0, 0, 0)');expect(geometry.shellColor).toBe(geometry.viewColor);
+      expect(await page.locator('#violet-dineros-view nav [data-tab="Goals"] svg').innerHTML()).toBe(bullseye);
       if(tab==='Goals')expect(await page.locator('.empty-icon svg').innerHTML()).toBe(bullseye);
     }
   }
@@ -329,7 +329,7 @@ test('Sprint 2.1.1 navigation follows the viewport for short and scrolling tabs;
       if(tab==='Settings')await home(page);
       await page.getByRole('button',{name:tab,exact:true}).click();
       if(tab==='Activity'){await page.getByLabel('Search activity').fill('missing');await expect(page.locator('.transaction-row')).toHaveCount(0);}
-      const check=async()=>{const geometry=await page.evaluate(()=>{const nav=document.querySelector('nav').getBoundingClientRect();return {bottom:nav.bottom,height:innerHeight,width:nav.width,position:getComputedStyle(document.querySelector('nav')).position,overflow:document.documentElement.scrollWidth>innerWidth};});expect(Math.abs(geometry.bottom-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.width).toBe(358);expect(geometry.position).toBe('fixed');expect(geometry.overflow).toBe(false);};
+      const check=async()=>{const geometry=await page.evaluate(()=>{const nav=document.querySelector('#violet-dineros-view nav').getBoundingClientRect();return {bottom:nav.bottom,height:innerHeight,width:nav.width,position:getComputedStyle(document.querySelector('#violet-dineros-view nav')).position,overflow:document.documentElement.scrollWidth>innerWidth};});expect(Math.abs(geometry.bottom-(geometry.height-12))).toBeLessThanOrEqual(1);expect(geometry.width).toBe(358);expect(geometry.position).toBe('fixed');expect(geometry.overflow).toBe(false);};
       for(const fraction of [0,0.5,1]){await page.evaluate(fraction=>window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*fraction),fraction);await check();}
       if(tab==='Activity'){
         await page.getByLabel('Search activity').fill('');await expect(page.locator('.transaction-row')).toHaveCount(40);
@@ -354,7 +354,7 @@ for(const theme of ['light','dark'])test(`${theme} diagnostics are removed while
   expect(await saved(page)).toEqual(before);expect(errors).toEqual([]);
 });
 
-test('standalone shell stays full height when launch dvh underreports by 33px',async({page})=>{
+test('app shell stays full height when launch dvh underreports by 33px',async({page})=>{
   // Desktop engines do not reproduce the installed-iPhone viewport bug. Model
   // only its smaller dvh and activate the real standalone CSS rule below.
   await page.route('**/violet-dineros/styles.css',async route=>{
@@ -364,7 +364,8 @@ test('standalone shell stays full height when launch dvh underreports by 33px',a
   });
   await setup(page,'dark');const before=await saved(page);
   await page.evaluate(()=>{
-    const rules=[...document.styleSheets].flatMap(sheet=>[...sheet.cssRules]);
+    const sheet=[...document.styleSheets].find(sheet=>sheet.href?.includes('violet-dineros/styles.css'));
+    const rules=[...(sheet?.cssRules||[])];
     const standalone=rules.find(rule=>rule.conditionText==='(display-mode: standalone)');
     if(!standalone)throw Error('Missing standalone viewport rule');
     standalone.media.mediaText='all';
@@ -374,7 +375,7 @@ test('standalone shell stays full height when launch dvh underreports by 33px',a
     for(const tab of ['Home','Activity','Goals','Insights']){
       await page.getByRole('button',{name:tab,exact:true}).click();
       await page.evaluate(()=>window.scrollTo(0,0));
-      const geometry=await page.evaluate(()=>({height:innerHeight,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('nav').getBoundingClientRect().bottom}));
+      const geometry=await page.evaluate(()=>({height:innerHeight,shell:document.querySelector('.shell').getBoundingClientRect().height,nav:document.querySelector('#violet-dineros-view nav').getBoundingClientRect().bottom}));
       expect(geometry.shell).toBeGreaterThanOrEqual(geometry.height);
       expect(geometry.nav).toBe(geometry.height-12);
     }
