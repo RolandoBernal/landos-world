@@ -164,6 +164,10 @@
   margin: 0 0 12px;
   padding: 0 16px;
 }
+/* The nav above already supplies the 16px page inset, so the shared base
+   rule's gutter padding-left would double it and push the arrow 16px right
+   of the content edge. Apps with unpadded chrome (LLT) keep the base padding. */
+.maintenance_total_view .ecosystem_nav_back { padding-left: 0; }
 .maintenance_total_view .digit_clock_header,
 .maintenance_total_view .maintenance_total_app { width: 100%; padding-inline: 16px; }
 .maintenance_total_view .digit_clock_header { margin-bottom: 8px; }
