@@ -13,7 +13,17 @@ for (const theme of ['light', 'dark']) {
       const nav = page.locator('.imt_bottom_nav');
       const before = await page.evaluate(k => localStorage.getItem(k), KEY);
       expect((await view.evaluate(el => getComputedStyle(el).fontFamily)).replaceAll('"', '')).toBe('Outfit, system-ui, -apple-system, Segoe UI, sans-serif');
-      await expect(nav).toHaveCSS('background-color', theme === 'light' ? 'color(srgb 1 1 1 / 0.84)' : 'color(srgb 0.0901961 0.129412 0.113725 / 0.84)');
+      // The frosted pill is surface at 84% opacity; engines serialize the
+      // color(srgb ...) channels at different precisions, so compare the
+      // numeric channels with a small tolerance instead of the string.
+      const navChannels = await nav.evaluate(el => {
+        const raw = getComputedStyle(el).backgroundColor;
+        const nums = raw.match(/[\d.]+/g).map(Number);
+        if (raw.startsWith('rgb')) { const [r, g, b, a = 1] = nums; return [r / 255, g / 255, b / 255, a]; }
+        const [r, g, b, a = 1] = nums; return [r, g, b, a];
+      });
+      const expectedNav = theme === 'light' ? [1, 1, 1, 0.84] : [23 / 255, 33 / 255, 29 / 255, 0.84];
+      navChannels.forEach((v, i) => expect(Math.abs(v - expectedNav[i])).toBeLessThan(0.002));
       await expect(nav).toHaveCSS('border-radius', '36px');
       await expect(nav.locator('button:not(.is-active)').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(nav.locator('button')).toHaveText(['Today', 'Garage', 'Plan', 'History']);
