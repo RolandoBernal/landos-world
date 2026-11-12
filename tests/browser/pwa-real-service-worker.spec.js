@@ -169,6 +169,10 @@ test.afterAll(async () => {
 });
 
 test('legacy waiting-worker restart message migrates to the real deployed worker identity and network-only release endpoint', async ({ page }) => {
+  // Like the offline test below: keep the fixture shell from invoking the
+  // loopback-only guard that unregisters workers on local preview origins;
+  // this test measures the deployed worker, not the development guard.
+  isolateLoopbackGuard = true;
   await page.goto(`${baseUrl}/__pwa-integration__.html`);
   await page.evaluate(async () => {
     if (!window.testRegistration) window.testRegistration = await navigator.serviceWorker.register('./service-worker.js');
@@ -238,7 +242,7 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
   })).toBe('loaded');
   fixtureNetworkUnavailable = false;
   await page.goto(`${baseUrl}/#/violet-dineros`);
-  await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
+  await expect(page.locator('.story')).toHaveText('You have$103.50available to spend right now.');
   expect(await page.evaluate(async()=>{const faces=await document.fonts.load('500 16px "Geist Mono"');return faces.length>0&&faces.every(face=>face.status==='loaded');})).toBe(true);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(lwvdRecord);
 
@@ -248,7 +252,7 @@ test('legacy waiting-worker restart message migrates to the real deployed worker
   fixtureNetworkUnavailable = true;
   await page.goto(`${baseUrl}/violet-dineros/index.html`);
   await expect(page).toHaveURL(/#\/violet-dineros$/);
-  await expect(page.locator('.story')).toHaveText('You have$103.50right now.');
+  await expect(page.locator('.story')).toHaveText('You have$103.50available to spend right now.');
   fixtureNetworkUnavailable = false;
 });
 
@@ -296,8 +300,8 @@ test('personalized launcher survives an offline reload and hiding preserves cach
   fixtureNetworkUnavailable = true;
   await page.goto(`${baseUrl}/#/`);
   await page.reload();
-  await expect(page.locator('#lando-launcher .clock_utility_card')).toHaveCount(2);
-  expect(await page.locator('#lando-launcher [data-route]').evaluateAll((buttons) => buttons.map((button) => button.dataset.route))).toEqual(['weather', 'digital-clock']);
+  await expect(page.locator('#lando-launcher .clock_utility_card')).toHaveCount(4);
+  expect(await page.locator('#lando-launcher [data-route]').evaluateAll((buttons) => buttons.map((button) => button.dataset.route))).toEqual(['weather', 'digital-clock', 'violet-dineros', 'maintenance-total']);
   await page.goto(`${baseUrl}/#/settings`);
   await page.locator('[data-my-app-for="digital-clock"][data-my-app-move="up"]').click();
   await page.reload();

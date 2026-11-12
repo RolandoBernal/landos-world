@@ -12,9 +12,9 @@ test('legacy, explicit recommended, reload, show all, empty recovery and routes'
   await expect(cards(page)).toHaveCount(9);
   expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
   await recommended(page).click();
-  await expect(cards(page)).toHaveCount(3);
-  expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.map((b) => b.dataset.route))).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
-  await page.reload(); await expect(cards(page)).toHaveCount(3);
+  await expect(cards(page)).toHaveCount(5);
+  expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.map((b) => b.dataset.route))).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
+  await page.reload(); await expect(cards(page)).toHaveCount(5);
   await page.getByRole('button', { name: 'Show All Apps' }).click();
   await expect(cards(page)).toHaveCount(9);
   for (const input of await page.locator('[data-my-app-id]').all()) await input.uncheck();
@@ -55,7 +55,7 @@ test('malformed and future schema recovery, denied writes report session-only ch
   await page.addInitScript((k) => localStorage.setItem(k, '{'), key);
   await open(page); await expect(cards(page)).toHaveCount(9);
   await expect(page.locator('#my-apps-status')).toContainText('could not be read');
-  await recommended(page).click(); await expect(cards(page)).toHaveCount(3);
+  await recommended(page).click(); await expect(cards(page)).toHaveCount(5);
   await page.evaluate((k) => { localStorage.setItem(k, '{"schemaVersion":2}'); window.dispatchEvent(new StorageEvent('storage', { key: k })); }, key);
   await expect(recommended(page)).toBeDisabled();
   expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBe('{"schemaVersion":2}');
@@ -64,9 +64,9 @@ test('malformed and future schema recovery, denied writes report session-only ch
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = function(name, value) { if (name === k) throw Error('quota'); return original.call(this, name, value); };
   }, key);
-  await recommended(page).click(); await expect(cards(page)).toHaveCount(3);
+  await recommended(page).click(); await expect(cards(page)).toHaveCount(5);
   await expect(page.locator('#my-apps-status')).toContainText('session only');
-  await toggle(page, 'weather').uncheck(); await expect(cards(page)).toHaveCount(2);
+  await toggle(page, 'weather').uncheck(); await expect(cards(page)).toHaveCount(4);
 });
 for (const width of [320, 375, 430, 768, 1440]) {
   test(`responsive controls and home at ${width}px`, async ({ page }) => {
@@ -74,7 +74,7 @@ for (const width of [320, 375, 430, 768, 1440]) {
     await recommended(page).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await toggle(page, 'weather').evaluate((el) => !!el.labels.length)).toBe(true);
-    await page.goto('/#/'); await expect(cards(page)).toHaveCount(3);
+    await page.goto('/#/'); await expect(cards(page)).toHaveCount(5);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
@@ -88,7 +88,7 @@ test('read-denied storage keeps management available and reports unsaved changes
   await expect(cards(page)).toHaveCount(9);
   await expect(page.locator('#my-apps-status')).toContainText('could not be read');
   await recommended(page).click();
-  await expect(cards(page)).toHaveCount(3);
+  await expect(cards(page)).toHaveCount(5);
 });
 
 test('re-enabling rehydrates card summaries and changes only the launcher key', async ({ page }) => {
@@ -137,15 +137,15 @@ async function beginMouseDrag(page, id) {
 
 test('ordering: keyboard controls retain focus, announce positions and stop at boundaries', async ({ page }) => {
   await open(page); await trackPreferenceWrites(page);
-  await expect(moveButton(page, 'weather', 'up')).toHaveAttribute('aria-disabled', 'true');
-  await moveButton(page, 'weather', 'up').focus(); await page.keyboard.press('Enter');
+  await expect(moveButton(page, 'digital-clock', 'up')).toHaveAttribute('aria-disabled', 'true');
+  await moveButton(page, 'digital-clock', 'up').focus(); await page.keyboard.press('Enter');
   expect(await page.evaluate(() => window.orderWrites)).toBe(0);
-  const down = moveButton(page, 'weather', 'down');
+  const down = moveButton(page, 'digital-clock', 'down');
   await down.focus(); await page.keyboard.press('Enter');
   await expect(down).toBeFocused();
-  expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
+  expect((await rowOrder(page)).slice(0, 2)).toEqual(['weather', 'digital-clock']);
   await expect(page.locator('#my-apps-order-status')).toContainText('position 2 of 9');
-  const up = moveButton(page, 'weather', 'up'); await up.focus(); await page.keyboard.press('Space');
+  const up = moveButton(page, 'digital-clock', 'up'); await up.focus(); await page.keyboard.press('Space');
   await expect(up).toBeFocused(); await expect(up).toHaveAttribute('aria-disabled', 'true');
   await expect(up).toHaveCSS('outline-style', 'solid');
   await page.keyboard.press('Enter'); expect(await page.evaluate(() => window.orderWrites)).toBe(2);
@@ -156,17 +156,16 @@ test('ordering: hidden positions, Show All, recommended order, reload and empty 
   await open(page); await recommended(page).click();
   await moveButton(page, 'death-on-notecards', 'up').click();
   const order = await rowOrder(page);
-  expect(order[6]).toBe('death-on-notecards');
-  expect((await preference(page)).visibleAppIds).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
+  expect(order[7]).toBe('death-on-notecards');
+  expect((await preference(page)).visibleAppIds).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
   await toggle(page, 'death-on-notecards').check();
   expect((await preference(page)).appOrder).toEqual(order);
   await toggle(page, 'weather').uncheck(); await toggle(page, 'weather').check();
   expect((await preference(page)).appOrder).toEqual(order);
   await page.getByRole('button', { name: 'Show All Apps' }).click();
-  expect(await rowOrder(page)).toEqual(order); await expect(cards(page)).toHaveCount(9);
-  await page.reload(); expect(await rowOrder(page)).toEqual(order);
-  await recommended(page).click(); expect((await rowOrder(page)).slice(0, 3)).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
-  expect((await rowOrder(page)).slice(3)).toEqual(order.slice(3));
+  expect(await rowOrder(page)).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total', 'road-bike-checklist', 'violet-futbol-game-tracker', 'violet-sprints', 'death-on-notecards']); await expect(cards(page)).toHaveCount(9);
+  await page.reload(); expect(await rowOrder(page)).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total', 'road-bike-checklist', 'violet-futbol-game-tracker', 'violet-sprints', 'death-on-notecards']);
+  await recommended(page).click(); expect(await rowOrder(page)).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total', 'road-bike-checklist', 'violet-futbol-game-tracker', 'violet-sprints', 'death-on-notecards']);
   for (const input of await page.locator('[data-my-app-id]').all()) await input.uncheck();
   await moveButton(page, 'weather', 'up').click();
   expect((await preference(page)).visibleAppIds).toEqual([]);
@@ -179,17 +178,17 @@ test('ordering: hidden positions, Show All, recommended order, reload and empty 
 
 test('ordering: mouse handle drag previews without writes and commits once', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 1400 }); await open(page); await trackPreferenceWrites(page);
-  const original = await rowOrder(page); const box = await beginMouseDrag(page, 'weather');
+  const original = await rowOrder(page); const box = await beginMouseDrag(page, 'digital-clock');
   const target = await rows(page).nth(1).boundingBox();
   await page.mouse.move(box.x + box.width / 2, target.y + target.height - 5, { steps: 8 });
   await expect(page.locator('.my_apps_dragging')).toHaveCount(1);
   await expect(page.locator('.my_apps_drop_before, .my_apps_drop_after')).toHaveCount(1);
   expect(await rowOrder(page)).toEqual(original); expect(await page.evaluate(() => window.orderWrites)).toBe(0);
-  await page.mouse.up(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
+  await page.mouse.up(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['weather', 'digital-clock']);
   expect(await page.evaluate(() => window.orderWrites)).toBe(1);
   expect((await preference(page)).visibleAppIds).toHaveLength(9);
-  expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.slice(0, 2).map((b) => b.dataset.route))).toEqual(['digital-clock', 'weather']);
-  await page.reload(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
+  expect(await cards(page).locator('button').evaluateAll((buttons) => buttons.slice(0, 2).map((b) => b.dataset.route))).toEqual(['weather', 'digital-clock']);
+  await page.reload(); expect((await rowOrder(page)).slice(0, 2)).toEqual(['weather', 'digital-clock']);
 });
 
 test('ordering: cancelled, unchanged and outside drops do not persist or toggle apps', async ({ page }) => {
@@ -224,14 +223,14 @@ test('ordering: touch handle drag and natural row scrolling use separate gesture
   await page.setViewportSize({ width: 390, height: 850 }); await open(page); await trackPreferenceWrites(page);
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
-  const first = page.locator('[data-my-app-drag="weather"]'); await first.scrollIntoViewIfNeeded();
+  const first = page.locator('[data-my-app-drag="digital-clock"]'); await first.scrollIntoViewIfNeeded();
   const box = await first.boundingBox(); const target = await rows(page).nth(1).boundingBox();
   const x = box.x + 22; const y = box.y + 22; const end = target.y + target.height - 8;
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: end }] });
   await expect(page.locator('.my_apps_dragging')).toHaveCount(1);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  expect((await rowOrder(page)).slice(0, 2)).toEqual(['digital-clock', 'weather']);
+  expect((await rowOrder(page)).slice(0, 2)).toEqual(['weather', 'digital-clock']);
   expect(await page.evaluate(() => window.orderWrites)).toBe(1);
   const before = await rowOrder(page); const scroll = await page.evaluate(() => window.scrollY);
   const label = await page.locator('.my_apps_identity').first().boundingBox();
@@ -428,8 +427,8 @@ test('LWVD: existing preferences, visibility, accessible ordering, official icon
   await page.reload(); await expect(toggle(page, 'violet-dineros')).toBeChecked();
   await toggle(page, 'violet-dineros').uncheck(); await expect(page.locator('#open-violet-dineros')).toHaveCount(0);
   await page.getByRole('button', {name: 'Show All Apps'}).click(); await expect(toggle(page, 'violet-dineros')).toBeChecked();
-  await recommended(page).click(); await expect(toggle(page, 'violet-dineros')).not.toBeChecked();
-  expect((await preference(page)).visibleAppIds).toEqual(['digital-clock', 'weather', 'lee-lees-tracker']);
+  await recommended(page).click(); await expect(toggle(page, 'violet-dineros')).toBeChecked();
+  expect((await preference(page)).visibleAppIds).toEqual(['digital-clock', 'weather', 'lee-lees-tracker', 'violet-dineros', 'maintenance-total']);
   await toggle(page, 'violet-dineros').check(); await page.goto('/#/');
   const card = page.locator('.clock_utility_card').filter({has: page.locator('#open-violet-dineros')});
   await expect(card).toContainText('Your money. Your goals.');
