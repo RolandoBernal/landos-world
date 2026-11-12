@@ -143,3 +143,35 @@ test('remote library edits still reach Foods after the document has been saved',
   await expect(page.locator('[data-food-library-discovery]')).toContainText('Updated remote food');
   await expect(page.locator('[data-food-library-discovery]')).toContainText('Updated remote meal');
 });
+
+test('a queued Foods restore does not scroll the launcher after a route exit', async ({ page }) => {
+  await open(page);
+  const star = page.locator('[data-action="toggle-food-favorite"][data-id="food-25"]');
+  await star.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(400);
+  // Hold the restore's frame, the way a controlled probe can: capture
+  // whatever the favorite toggle queues, exit to the launcher (which
+  // lands at the top), then release the held callback. Only the
+  // active-view guard can stop the held restore — scroll and focus —
+  // from landing on the launcher.
+  await page.evaluate(() => {
+    window.heldRestoreFrames = [];
+    window.realRafForHold = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) => { window.heldRestoreFrames.push(callback); return window.heldRestoreFrames.length; };
+  });
+  await star.click();
+  await page.evaluate(() => { window.requestAnimationFrame = window.realRafForHold; });
+  const held = await page.evaluate(() => window.heldRestoreFrames.length);
+  expect(held).toBeGreaterThanOrEqual(1);
+  const stored = await page.evaluate(k => JSON.parse(localStorage.getItem(k)), key);
+  expect(stored.foodLibrary.find(f => f.id === 'food-25').favorite).toBe(true);
+  await page.locator('#lee-lees-tracker-view [data-ecosystem-nav] a[href="#/"]').click();
+  await expect(page.locator('#lee-lees-tracker-view')).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => { const frames = window.heldRestoreFrames.splice(0); frames.forEach(callback => callback(performance.now())); });
+  await page.waitForTimeout(300);
+  const launcherScroll = await page.evaluate(() => window.scrollY);
+  expect(launcherScroll).toBeLessThanOrEqual(150);
+});

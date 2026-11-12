@@ -4951,8 +4951,13 @@
     refreshFoodLibraryDiscovery();
     // Restore after the refreshed list has laid out, the same pattern
     // Settings uses: a scrollTo in the same task as the innerHTML swap
-    // does not survive WebKit's layout pass.
+    // does not survive WebKit's layout pass. Skip both the scroll and
+    // the focus if the shell has since routed away and hidden the
+    // tracker: the restore would otherwise move whatever the shell is
+    // showing instead (the launcher, in the route-exit probe) — the
+    // same guard the History/Reports restore uses.
     const restore = () => {
+      if (document.getElementById('lee-lees-tracker-view')?.hidden !== false) return;
       window.scrollTo(0, scrollY);
       getRoot()?.querySelector(`[data-action="${action}"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     };
