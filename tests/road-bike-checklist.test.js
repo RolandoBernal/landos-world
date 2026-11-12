@@ -289,7 +289,7 @@ test('opening the checklist route resets the checklist view to the top without c
   assert.match(html, /target\.scrollTo\(\{ top: 0, left: 0, behavior: 'instant' \}\)/);
   assert.match(html, /window\.scrollTo\(\{ top: 0, left: 0, behavior: 'instant' \}\)/);
   assert.match(html, /window\.requestAnimationFrame\?\.\(\(\) => \{/);
-  assert.match(html, /updateEcosystemNavState\(\)/);
+  assert.match(html, /updateEcosystemAppState\(route\)/);
   assert.match(html, /'road-bike-checklist',/);
   assert.match(html, /const hash = route === 'home' \? '#\/' : `#\/\$\{route\}`;/);
   assert.match(html, /window\.history\.replaceState\(null, '', hash\)/);

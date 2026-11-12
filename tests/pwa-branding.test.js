@@ -121,5 +121,5 @@ test('ecosystem router exposes shared scroll reset behavior for app navigation',
   assert.match(html, /function resetEcosystemScrollPosition\(activeView\)/);
   assert.match(html, /behavior: 'instant'/);
   assert.match(html, /pendingEcosystemScrollReset = true/);
-  assert.match(html, /function updateEcosystemNavState\(\)/);
+  assert.match(html, /function updateEcosystemAppState\(route\)/);
 });

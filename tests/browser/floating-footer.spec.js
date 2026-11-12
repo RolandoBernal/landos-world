@@ -18,12 +18,19 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
    localStorage.setItem('lando-world:lee-lees-tracker:v1',JSON.stringify({schemaVersion:1,records:[],settings:{glucoseTargetMin:70,glucoseTargetMax:180},insulinPlans:[],foodLibrary:[],savedMeals:[],metadata:{}}));
   },{theme});
   await page.goto(baseURL+(app==='llt'?'/#/lee-lees-tracker':'/#/violet-dineros'));
-  const nav=page.locator(app==='llt'?'.lee_lee_diabetes_bottom_nav':'nav');
+  const nav=page.locator(app==='llt'?'.lee_lee_diabetes_bottom_nav':'#violet-dineros-view nav[aria-label="Main navigation"]');
   await expect(nav).toBeVisible();
-  const names=app==='llt'?['Today','History','Reports','Foods']:['Home','Activity','Goals','Insights'];
+  const names=app==='llt'?['Today','History','Carb Calc','Reports','Foods']:['Home','Activity','Goals','Insights'];
   await expect(nav.getByRole('button')).toHaveCount(names.length);
   if(app==='llt') expect(await nav.getByRole('button').evaluateAll(buttons=>buttons.map(b=>b.getAttribute('aria-label')))).toEqual(names);
   for(const name of names){
+   if(name==='Carb Calc'){
+    await nav.getByRole('button',{name,exact:true}).click();
+    await expect(page.getByRole('heading',{name:'Carb Calculator'})).toBeVisible();
+    await page.locator('[data-action="close-carb-calculator"]').click();
+    await expect(nav).toBeVisible();
+    continue;
+   }
    await nav.getByRole('button',{name,exact:true}).click();
    await expect(nav.getByRole('button',{name,exact:true})).toHaveAttribute('aria-current','page');
   }
@@ -31,12 +38,12 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
   expect(metrics.width).toBe(358);expect(metrics.radius).toBe('36px');expect(metrics.height).toBe(68);
   expect(metrics.x).toBe(16);
   expect(metrics.bottom).toBe(832);expect(metrics.scrimTop).toBe(app==='llt'?'0px':'-1px');expect(metrics.scrimPointer).toBe('none');
-  expect(metrics.bg).toBe(theme==='light'?'rgb(255, 255, 255)':app==='lwvd'?'rgb(23, 19, 31)':'rgb(23, 25, 28)');
+  expect(metrics.bg).toBe(app==='llt'?(theme==='light'?'color(srgb 1 1 1 / 0.84)':'color(srgb 0.101961 0.12549 0.172549 / 0.84)'):(theme==='light'?'rgb(255, 255, 255)':'rgba(23, 19, 31, 0.95)'));
   if(app==='llt'){
    const plus=page.getByRole('button',{name:'Log Entry',exact:true});
    await expect(nav.getByRole('button',{name:'Log Entry',exact:true})).toHaveCount(0);
-   await expect(plus).toHaveCSS('background-color',theme==='light'?'rgb(9, 104, 195)':'rgb(58, 160, 255)');
-   await expect(plus.locator('svg')).toHaveCSS('color','rgb(255, 255, 255)');
+   await expect(plus).toHaveCSS('background-color','rgb(13, 176, 43)');
+   await expect(plus.locator('svg')).toHaveCSS('color','rgb(0, 0, 0)');
    const box=await plus.boundingBox();expect(box.width).toBe(56);expect(box.height).toBe(56);
    expect(box.y+box.height).toBe(metrics.y-12);expect(box.x+box.width).toBe(metrics.x+metrics.width);
    await plus.click();
@@ -87,11 +94,11 @@ for(const theme of ['dark','light']) test(`three-app spacing parity and LLT form
   if(!localStorage.getItem('lando-world:lwvd:v1')) localStorage.setItem('lando-world:lwvd:v1',JSON.stringify({firstName:'Max',balanceCents:42800,payday:'2099-01-31',frequency:'monthly',onboarded:true}));
  },theme);
  const metrics=[];
- for(const [path,selector] of [['/#/maintenance-total','.imt_bottom_nav'],['/#/violet-dineros','nav'],['/#/lee-lees-tracker','.lee_lee_diabetes_bottom_nav']]){
+ for(const [path,selector] of [['/#/maintenance-total','.imt_bottom_nav'],['/#/violet-dineros','#violet-dineros-view nav[aria-label="Main navigation"]'],['/#/lee-lees-tracker','.lee_lee_diabetes_bottom_nav']]){
   await page.goto(baseURL+path);const nav=page.locator(selector);await expect(nav).toBeVisible();
   const box=await nav.boundingBox();metrics.push({x:box.x,width:box.width,bottom:box.y+box.height,height:box.height});
   if(selector==='.imt_bottom_nav'){
-   for(const name of ['History','Assets','More','Home']){await nav.getByRole('button',{name,exact:true}).click();await expect(nav.getByRole('button',{name,exact:true})).toHaveAttribute('aria-current','page');}
+   for(const name of ['Today','Garage','Plan','History']){await nav.getByRole('button',{name,exact:true}).click();await expect(nav.getByRole('button',{name,exact:true})).toHaveAttribute('aria-current','page');}
    const fab=await page.locator('.imt_add_button').boundingBox();expect(fab.width).toBe(56);expect(fab.height).toBe(56);expect(fab.y+fab.height).toBe(box.y-12);
   }
  }
@@ -103,7 +110,6 @@ for(const theme of ['dark','light']) test(`three-app spacing parity and LLT form
  await expect(fab).toHaveCount(0);
  await page.locator('[data-meal-builder] [data-action="cancel-saved-meal-builder"]').first().click();
  await expect(fab).toBeVisible();
- await page.locator('[data-food-library-accordion="foods"] > summary').click();
  await page.locator('[data-action="open-food-library-editor"]').click();
  await expect(fab).toHaveCount(0);
  await page.locator('[data-action="cancel-food-library-editor"]').filter({hasText:'Cancel'}).first().click();
