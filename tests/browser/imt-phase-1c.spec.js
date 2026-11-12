@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test';
+const fixture={version:1,bikes:[{id:'bike',name:'Test bicycle',active:true,currentMileage:100}],components:[],records:[]};
 for (const theme of ['dark','light']) {
   test(`floating controls, bottom clearance and actions in ${theme}`, async ({page}, info) => {
     await page.emulateMedia({colorScheme:theme});
+    await page.addInitScript(f=>localStorage.setItem('lando-world:maintenance-total:v1',JSON.stringify(f)),fixture);
     await page.goto('/#/maintenance-total');
     const root=page.locator('#maintenance-total-root');
     const nav=root.locator('.imt_bottom_nav');
     const add=root.getByRole('button',{name:'Add',exact:true});
+    await nav.getByRole('button',{name:'Garage',exact:true}).click();
     for (const width of [320,390,430,1280]) {
       await page.setViewportSize({width,height:844});
       const shell=await page.locator('#maintenance-total-view').boundingBox();
@@ -26,15 +29,15 @@ for (const theme of ['dark','light']) {
       if(width===1280) await page.screenshot({path:info.outputPath(`${theme}-desktop.png`)});
     }
     await page.setViewportSize({width:390,height:844});
-    await expect(nav.locator('.is-active')).toHaveCSS('background-color',theme==='dark'?'rgb(42, 44, 48)':'rgb(229, 231, 235)');
+    await expect(nav.locator('.is-active')).toHaveCSS('background-color',theme==='dark'?'rgb(30, 43, 38)':'rgb(243, 244, 240)');
     await page.screenshot({path:info.outputPath(`${theme}-home.png`)});
-    for (const [label,heading] of [['History','Maintenance History'],['Assets','Assets & Categories'],['More','More'],['Home','iMaintenanceTotal']]) {
+    for (const [label,heading] of [['History','History & costs'],['Garage','Garage'],['Plan','Plan'],['Today','Today']]) {
       await nav.getByRole('button',{name:label,exact:true}).click();
       await expect(root.getByRole('heading',{name:heading,exact:true})).toBeVisible();
       await expect(nav.getByRole('button',{name:label,exact:true})).toHaveAttribute('aria-current','page');
     }
     await add.click();
-    await expect(root.getByRole('heading',{name:'Add Maintenance Record'})).toBeVisible();
+    await expect(root.getByRole('heading',{name:'Log service'})).toBeVisible();
     await expect(root.getByLabel('Asset *',{exact:true})).toHaveValue('');
     await root.getByLabel('Notes',{exact:true}).fill('Scroll clearance check');
     await page.evaluate(()=>document.activeElement.blur());
@@ -47,7 +50,7 @@ for (const theme of ['dark','light']) {
     await page.screenshot({path:info.outputPath(`${theme}-form-bottom.png`)});
     await save.click();
     await expect(root.locator('form')).toBeVisible();
-    expect(await page.evaluate(()=>localStorage.getItem('lando-world:maintenance-total:v1'))).toBeNull();
+    expect(await page.evaluate(()=>localStorage.getItem('lando-world:maintenance-total:v1'))).toBe(JSON.stringify(fixture));
     await page.evaluate(theme=>window.LandosTheme.setPreference(theme),theme);
     await page.emulateMedia({colorScheme:theme==='dark'?'light':'dark'});
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
