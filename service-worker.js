@@ -60,7 +60,6 @@ const PRECACHE_URLS = [
   './js/sprints-app.js',
   './js/violet-futbol-game-tracker.js',
   './js/road-bike-checklist.js',
-  './js/maintenance-total.js',
   './js/maintenance-total-v2.js',
   './violet-dineros/app.js',
   './violet-dineros/model.js',

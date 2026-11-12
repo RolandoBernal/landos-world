@@ -13,14 +13,16 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
     const nav=await root.locator('.imt_bottom_nav').boundingBox();
     expect(nav.width).toBe(bounds.width - 32);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    for(const label of ['Home','History','Assets','More']) await expect(root.locator('.imt_nav_label',{hasText:label})).toBeVisible();
+    for(const label of ['Today','Garage','Plan','History']) await expect(root.locator('.imt_nav_label',{hasText:label})).toBeVisible();
   }
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:info.outputPath('dark-home.png'),fullPage:true});
-  const add = root.locator('[data-imt-nav="add"]');
-  await expect(add.locator('circle')).toHaveCount(0);
-  await expect(add.locator('.imt_nav_icon')).toHaveCSS('width','24px');
-  await expect(add).toHaveCSS('color','rgb(8, 9, 11)');
+  const add = root.locator('.imt_add_button');
+  await expect(add).toBeVisible();
+  const addBox = await add.boundingBox();
+  expect(addBox.width).toBe(56);
+  expect(addBox.height).toBe(56);
+  await expect(add).toHaveCSS('background-color','rgb(42, 154, 140)');
   await add.click();
   await expect(add).toHaveCount(0);
   const assertBack = async () => {
@@ -39,7 +41,7 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
   await page.screenshot({path:info.outputPath('dark-form.png'),fullPage:true});
   await page.emulateMedia({colorScheme:'light'});
   await expect(page.locator('html')).toHaveAttribute('data-theme','light');
-  await expect(view).toHaveCSS('color','rgb(21, 35, 56)');
+  await expect(view).toHaveCSS('color','rgb(20, 33, 30)');
   await assertBack();
   await root.locator('.imt_back').click();
   await expect(root.locator('form')).toHaveCount(0);

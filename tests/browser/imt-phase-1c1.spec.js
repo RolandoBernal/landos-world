@@ -10,17 +10,17 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
     await expect(root.getByRole('heading',{name:title,exact:true})).toBeVisible();await expect(fab).toHaveCount(0);
     await expect(nav.getByRole('button')).toHaveCount(4);
     const save=root.getByRole('button',{name:'Save',exact:true});
-    await expect(save).toHaveCSS('background-color',theme==='dark'?'rgb(192, 196, 202)':'rgb(52, 55, 60)');
+    await expect(save).toHaveCSS('background-color',theme==='dark'?'rgb(42, 154, 140)':'rgb(14, 74, 68)');
     await page.evaluate(()=>document.activeElement.blur());await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
     const s=await save.boundingBox(),n=await nav.boundingBox();expect(s.y+s.height).toBeLessThan(n.y);await expect(save).toBeInViewport();
-    if(title==='Add Bike')await page.screenshot({path:info.outputPath(`${theme}-save-clear.png`)});
+    if(title==='Add Asset')await page.screenshot({path:info.outputPath(`${theme}-save-clear.png`)});
     await save.click();await expect(root.locator('form')).toHaveCount(0);await regular();
   };
-  await regular();await root.locator('[data-action="add-bike"]').click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Bike');
-  await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Bike');
+  await regular();await root.locator('[data-action="add-bike"]').click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Asset');
+  await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset');
   await root.locator('[data-action="add-component"]').click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component');
   await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component');
-  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task *',{exact:true}).selectOption('Inspect');await submit('Add Maintenance Record');
-  await root.locator('[data-edit-record="record"]').click();await submit('Edit Service Record');
-  for(const label of ['Home','History','Assets','More']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
+  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await root.getByLabel('Record type *',{exact:true}).selectOption('Inspect');await submit('Log service');
+  await root.locator('[data-edit-record="record"]').click();await submit('Edit service record');
+  for(const label of ['Today','History','Garage','Plan']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
 });

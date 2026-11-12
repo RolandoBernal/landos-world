@@ -44,7 +44,6 @@ export const PAGES_RUNTIME_FILES = [
   'js/lee-lees-tracker-config.js',
   'js/lee-lees-tracker-sync.js',
   'js/maintenance-total-v2.js',
-  'js/maintenance-total.js',
   'js/pwa-manager.js',
   'js/road-bike-checklist.js',
   'js/sprints-app.js',

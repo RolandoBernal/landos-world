@@ -28,12 +28,19 @@ test('download uses current raw storage, preserving formatting, IDs, deleted rec
 for(const [label,raw] of [['malformed','{broken'],['empty',''],['unsupported-version','{"version":2}'],['invalid-shape','{"version":1,"bikes":{},"components":[],"records":[]}']]){
   test(`${label} storage stays protected through navigation and reload and can be exported`,async({page},testInfo)=>{
     await open(page,raw);
-    for(const name of ['Today','History','Add','Garage','Settings']){
-      if(name==='Settings')await page.locator('#imt_settings_toggle').click();
-      else await root(page).getByRole('button',{name,exact:true}).click();
-      await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');
-      await expect(root(page).locator('form')).toHaveCount(0);expect(await stored(page)).toBe(raw);
-    }
+    // Protected mode renders a single no-nav screen: there are no Today /
+    // History / Add / Garage buttons to click, by design. Protection is
+    // asserted directly and through the Settings gear, the only navigation
+    // the protected screen offers.
+    await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');
+    await expect(root(page).locator('form')).toHaveCount(0);
+    await expect(page.locator('.imt_bottom_nav')).toHaveCount(0);
+    expect(await stored(page)).toBe(raw);
+    await page.locator('#imt_settings_toggle').click();
+    await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');
+    await expect(root(page).locator('form')).toHaveCount(0);expect(await stored(page)).toBe(raw);
+    await page.locator('#imt_settings_toggle').click();
+    await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');expect(await stored(page)).toBe(raw);
     await download(page,testInfo,raw);await page.reload();
     await expect(root(page).getByRole('alert')).toContainText('Editing is disabled');expect(await stored(page)).toBe(raw);
   });
