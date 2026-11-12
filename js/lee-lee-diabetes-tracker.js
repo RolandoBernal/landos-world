@@ -10380,10 +10380,10 @@
           refreshCarbCalculatorLibrarySearch(getRoot()?.querySelector('[data-lee-lee-editor]'));
         }
         if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'foods', 'settings'].includes(currentEditor.mode)) {
-          if (currentEditor?.mode === 'history') renderHistory();
-          else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
-          else if (currentEditor?.mode === 'reports') renderReports();
-          else if (currentEditor?.mode === 'export') renderReports();
+          if (currentEditor?.mode === 'history') renderKeepingScroll(renderHistory);
+          else if (currentEditor?.mode === 'history-day') renderKeepingScroll(() => renderHistoryDay(currentEditor.dateKey));
+          else if (currentEditor?.mode === 'reports') renderKeepingScroll(renderReports);
+          else if (currentEditor?.mode === 'export') renderKeepingScroll(renderReports);
           else if (currentEditor?.mode === 'foods') {
             if (renderedFoodLibraryDiscovery !== renderFoodLibraryDiscovery()) renderFoodLibrary();
           }
@@ -10397,10 +10397,10 @@
         patientSettingsMessage = '';
         patientSettingsError = '';
         if (!currentEditor || ['history', 'history-day', 'reports', 'export', 'settings'].includes(currentEditor.mode)) {
-          if (currentEditor?.mode === 'history') renderHistory();
-          else if (currentEditor?.mode === 'history-day') renderHistoryDay(currentEditor.dateKey);
-          else if (currentEditor?.mode === 'reports') renderReports();
-          else if (currentEditor?.mode === 'export') renderReports();
+          if (currentEditor?.mode === 'history') renderKeepingScroll(renderHistory);
+          else if (currentEditor?.mode === 'history-day') renderKeepingScroll(() => renderHistoryDay(currentEditor.dateKey));
+          else if (currentEditor?.mode === 'reports') renderKeepingScroll(renderReports);
+          else if (currentEditor?.mode === 'export') renderKeepingScroll(renderReports);
           else if (currentEditor?.mode === 'settings') renderSettings();
           else renderHome();
         }
@@ -10466,6 +10466,39 @@
     renderHome();
   }
 
+  // A sync-driven re-render rebuilds the whole screen; keep the reader
+  // where they are in the long views, the same preservation Foods got
+  // for its sync refresh in PR #233. Restore after the refreshed view
+  // has laid out: a scrollTo in the same task as the innerHTML swap
+  // does not survive WebKit's layout pass.
+  // The first captured position for the current view wins until the
+  // pending restore runs: reconciliation can call the remote handler
+  // back-to-back (foods, then saved meals), and a second render before
+  // the restore's frame would otherwise capture the position the first
+  // render already reset and override the good restore.
+  // The restore also requires the tracker view to still be the shell's
+  // active view: the internal mode survives the shell hiding LLT, and
+  // restoring then would scroll whatever the shell is showing instead
+  // (the launcher, in the route-exit probe).
+  let pendingScrollRestore = null;
+  function renderKeepingScroll(render) {
+    if (!pendingScrollRestore) {
+      const view = currentEditor ? `${currentEditor.mode}:${currentEditor.dateKey || ''}` : '';
+      pendingScrollRestore = { view, scrollY: window.scrollY };
+      const restore = () => {
+        const pending = pendingScrollRestore;
+        pendingScrollRestore = null;
+        if (!pending) return;
+        const viewNow = currentEditor ? `${currentEditor.mode}:${currentEditor.dateKey || ''}` : '';
+        const trackerViewActive = document.getElementById('lee-lees-tracker-view')?.hidden === false;
+        if (viewNow === pending.view && trackerViewActive) window.scrollTo(0, pending.scrollY);
+      };
+      if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
+      else window.setTimeout(restore, 0);
+    }
+    render();
+  }
+
   function refreshCurrentViewForSync() {
     if (!shouldShowProtectedApp()) {
       renderInitialRoute();
@@ -10490,9 +10523,12 @@
       const status = getRoot()?.querySelector('.lee_lee_diabetes_top .lee_lee_diabetes_save_status');
       if (status) status.outerHTML = renderPersistenceStatus({ surface: 'foods' });
     }
-    if (currentEditor.mode === 'history') renderHistory();
-    if (currentEditor.mode === 'reports') renderReports();
-    if (currentEditor.mode === 'export') renderReports();
+    if (currentEditor.mode === 'history' || currentEditor.mode === 'reports' || currentEditor.mode === 'export') {
+      renderKeepingScroll(() => {
+        if (currentEditor.mode === 'history') renderHistory();
+        else renderReports();
+      });
+    }
   }
 
   function logSyncDiagnosticSnapshot(label, status = syncStatus) {
