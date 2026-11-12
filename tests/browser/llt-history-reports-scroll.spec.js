@@ -134,6 +134,36 @@ test('History day view keeps its scroll position when two remote callbacks land 
   expect(Math.abs(after - before)).toBeLessThanOrEqual(150);
 });
 
+test('a queued Reports restore does not scroll the launcher after a route exit', async ({ page }) => {
+  await exposeSyncCallbacks(page);
+  await open(page, 'Reports');
+  const before = await scrollDeep(page);
+  expect(before).toBeGreaterThan(1000);
+  // Hold the restore's frame, the way a controlled probe can: capture
+  // whatever the sync render queues, exit to the launcher (which lands
+  // at the top through the shell's own route reset), then release the
+  // held callback. LLT's internal mode does not change when the shell
+  // hides the tracker, so only an active-view check can stop the held
+  // restore from scrolling the launcher.
+  await page.evaluate(() => {
+    window.heldRestoreFrames = [];
+    const realRaf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) => { window.heldRestoreFrames.push(callback); return window.heldRestoreFrames.length; };
+    const data = JSON.parse(localStorage.getItem('lando-world:lee-lees-tracker:v1'));
+    window.testRemoteLibrary({ records: data.records.map(record => record.id === 'scroll-record-5' ? { ...record, notes: 'Updated remotely' } : record) });
+    window.requestAnimationFrame = realRaf;
+  });
+  const held = await page.evaluate(() => window.heldRestoreFrames.length);
+  expect(held).toBeGreaterThanOrEqual(1);
+  await page.locator('#lee-lees-tracker-view [data-ecosystem-nav] a[href="#/"]').click();
+  await expect(page.locator('#lee-lees-tracker-view')).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => { const frames = window.heldRestoreFrames.splice(0); frames.forEach(callback => callback(performance.now())); });
+  await page.waitForTimeout(300);
+  const launcherScroll = await page.evaluate(() => window.scrollY);
+  expect(launcherScroll).toBeLessThanOrEqual(150);
+});
+
 test('Reports keeps its scroll position across sync refreshes', async ({ page }) => {
   await exposeSyncCallbacks(page);
   await open(page, 'Reports');

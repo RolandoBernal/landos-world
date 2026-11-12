@@ -10476,6 +10476,10 @@
   // back-to-back (foods, then saved meals), and a second render before
   // the restore's frame would otherwise capture the position the first
   // render already reset and override the good restore.
+  // The restore also requires the tracker view to still be the shell's
+  // active view: the internal mode survives the shell hiding LLT, and
+  // restoring then would scroll whatever the shell is showing instead
+  // (the launcher, in the route-exit probe).
   let pendingScrollRestore = null;
   function renderKeepingScroll(render) {
     if (!pendingScrollRestore) {
@@ -10486,7 +10490,8 @@
         pendingScrollRestore = null;
         if (!pending) return;
         const viewNow = currentEditor ? `${currentEditor.mode}:${currentEditor.dateKey || ''}` : '';
-        if (viewNow === pending.view) window.scrollTo(0, pending.scrollY);
+        const trackerViewActive = document.getElementById('lee-lees-tracker-view')?.hidden === false;
+        if (viewNow === pending.view && trackerViewActive) window.scrollTo(0, pending.scrollY);
       };
       if (window.requestAnimationFrame) window.requestAnimationFrame(restore);
       else window.setTimeout(restore, 0);
