@@ -8,3 +8,27 @@ test('yearly costs, filtering, exact full export and real edit/delete',async({pa
 test('origin back, household usage, asset change and failed write recovery',async({page})=>{await start(page);await page.getByRole('button',{name:'Garage',exact:true}).click();await page.locator('[data-bike="house"]').click();await page.getByRole('button',{name:'Log service for this asset →'}).click();await expect(page.locator('#r-mileage')).toBeHidden();await page.getByRole('button',{name:'← Back',exact:true}).click();await expect(page.getByRole('heading',{name:'Real house',exact:true})).toBeVisible();await page.getByRole('button',{name:'Log service for this asset →'}).click();await page.locator('#r-asset').selectOption('bike');await page.locator('#r-component').selectOption('chain');await page.getByLabel('Notes').fill('draft');await page.locator('#r-asset').selectOption('car');await expect(page.locator('#r-component')).toHaveValue('');await expect(page.locator('#r-component option[value="chain"]')).toHaveCount(0);await expect(page.getByLabel('Notes')).toHaveValue('draft');await page.evaluate(()=>{window.savedSet=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new Error('quota')};});await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.locator('.imt_error')).toContainText('Unable to save');expect(await page.evaluate(k=>localStorage.getItem(k),key)).toBe(JSON.stringify(fixture()));await page.evaluate(()=>Storage.prototype.setItem=window.savedSet);await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs'})).toBeVisible();expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).records.length,key)).toBe(6);});
 test('themes and narrow mobile History/form layout',async({page},info)=>{await start(page);for(const theme of ['light','dark','system']){await page.evaluate(t=>window.LandosTheme.setPreference(t),theme);await page.setViewportSize({width:320,height:700});await page.getByRole('button',{name:'History',exact:true}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(theme+'-history.png'),fullPage:true});await page.getByRole('button',{name:'Add',exact:true}).first().click();await page.screenshot({path:info.outputPath(theme+'-log.png'),fullPage:true});await expect(page.locator('.imt_add_button')).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.getByRole('button',{name:'Cancel',exact:true}).click();}});
 test('same-day ordering and invalid numeric input never writes',async({page})=>{await start(page);await page.evaluate(k=>{const s=JSON.parse(localStorage.getItem(k));s.records.push({id:'same-old',assetId:'bike',date:'2090-01-01',createdAt:'2026-01-01T00:00:00Z',taskType:'Inspect',cost:1},{id:'same-new',assetId:'bike',date:'2090-01-01',createdAt:'2026-02-01T00:00:00Z',taskType:'Replace',cost:2});localStorage.setItem(k,JSON.stringify(s));},key);await page.reload();await page.getByRole('button',{name:'History',exact:true}).click();await expect(page.locator('.imt_record_card').first()).toContainText('Replace');await page.locator('[data-action="add-record"]').click();await page.locator('#r-asset').selectOption('bike');await page.locator('#r-cost').fill('-1');await page.getByRole('button',{name:'Save',exact:true}).click();expect(await page.locator('#r-cost').evaluate(e=>e.validity.rangeUnderflow)).toBe(true);expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).records.length,key)).toBe(7);await page.locator('#imt-form').evaluate(f=>f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));await expect(page.locator('.imt_error')).toContainText('non-negative');expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).records.length,key)).toBe(7);});
+
+test('editing a record preserves its stored type, including a missing one',async({page})=>{
+  await start(page);
+  // Simulate a legacy record whose type was never stored.
+  await page.evaluate(k=>{const s=JSON.parse(localStorage.getItem(k));delete s.records.find(r=>r.id==='car-log').taskType;localStorage.setItem(k,JSON.stringify(s));},key);
+  await page.reload();
+  await page.getByRole('button',{name:'History',exact:true}).click();
+  // Edit only the notes of a typed record: the type must survive untouched.
+  await page.locator('[data-edit-record="old"]').click();
+  await page.getByLabel('Notes').fill('Edited notes only');
+  await page.getByRole('button',{name:'Save',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'History & costs'})).toBeVisible();
+  let saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+  expect(saved.records.find(r=>r.id==='old')).toMatchObject({taskType:'Lubricate',notes:'Edited notes only'});
+  // Edit only the cost of the typeless record: no type may be written in.
+  await page.locator('[data-edit-record="car-log"]').click();
+  await page.locator('#r-cost').fill('81.25');
+  await page.getByRole('button',{name:'Save',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'History & costs'})).toBeVisible();
+  saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+  const carLog=saved.records.find(r=>r.id==='car-log');
+  expect(carLog.cost).toBe(81.25);
+  expect('taskType' in carLog).toBe(false);
+});
