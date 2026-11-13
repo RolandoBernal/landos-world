@@ -75,3 +75,21 @@ test('a dual-axis task shows only the winning axis reason',async({page})=>{
   await expect(next).toContainText('Overdue by 500 miles');
   await expect(next).not.toContainText('Due Dec');
 });
+
+test('a compact card keeps the baseline warning next to the winning reason',async({page})=>{
+  // Time axis is Overdue; the miles axis cannot be assessed because the
+  // asset has no current reading. The Phase 2 compact card must keep the
+  // compact reason AND the existing baseline warning — on Today and Plan.
+  const warn={version:1,bikes:[{id:'w',name:'Warn Bike',category:'bikes',active:true}],components:[{id:'wt',assetId:'w',name:'Chain',intervalMiles:500,intervalMonths:1}],records:[{id:'r-wt',assetId:'w',componentId:'wt',date:'2026-09-02',mileage:300,taskType:'Service'}]};
+  await open(page,warn);
+  const card=page.locator('[data-task="wt"]');
+  await expect(card.locator('.imt_status')).toHaveText('Overdue');
+  await expect(card.locator('p.imt_meta')).toContainText('overdue by 31 days');
+  const todayText=await card.textContent();
+  expect(todayText.match(/Mileage baseline or current reading missing/g)).toHaveLength(1);
+  await page.getByRole('button',{name:'Plan',exact:true}).click();
+  const planCard=page.locator('[data-task="wt"]');
+  await expect(planCard.locator('p.imt_meta')).toContainText('overdue by 31 days');
+  const planText=await planCard.textContent();
+  expect(planText.match(/Mileage baseline or current reading missing/g)).toHaveLength(1);
+});

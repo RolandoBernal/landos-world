@@ -150,7 +150,7 @@
     result.status=first&&(result.complete||first.rank<3)?['Overdue','Due','Soon','Current'][first.rank]:'Needs baseline';
     result.reason=[first?first.reason:'',...result.warnings].filter(Boolean).join(' ');
     result.axis=first?first.axis:null;
-    if(!record&&axes.length)result.reason+=' Based on task creation; no service record yet.';
+    if(!record&&axes.length){result.reason+=' Based on task creation; no service record yet.';result.fromCreation=true;}
     return result;
   }
   function componentStatus(c){const d=dueState(c,bike(c.assetId));return d.status==='Not scheduled'?(componentRecords(c).length?'Service recorded':'No service record'):d.status;}
@@ -179,7 +179,7 @@
     if((due.status==='Due'||due.status==='Soon')&&due.axis==='miles'&&due.milesLeft!==null&&due.milesLeft!==undefined)return `In ${fmtNum(due.milesLeft)} mi`;
     return due.status;
   }
-  function taskCard(t,done=false){const {c,asset,due}=t;const initials=(asset?.name||'?').split(/\s+/).map(n=>n[0]).join('').slice(0,2);const sub=done?'Service logged today. Undo or correct it in History.':[asset?.name||'Unknown asset',compactReason(c,due),positive(c.estMinutes)?`${c.estMinutes} min`:'',nonnegative(c.estCost)!==null?money(Number(c.estCost)):''].filter(Boolean).join(' · ');return `<article class="imt_task" data-task="${esc(c.id)}"><span class="imt_task_icon imt_category--${['cars','household'].includes(asset?.category)?asset.category:'bikes'}">${esc(initials)}</span><div class="imt_task_body"><button type="button" class="imt_task_link" data-open-task="${esc(c.id)}">${esc(c.name)}</button><p class="imt_meta">${esc(sub)}</p><span class="imt_status imt_status--${done?'good':statusClass(due.status)}">${done?'Done':esc(pillLabel(due))}</span></div>${done?`<span class="imt_task_done is-done" aria-hidden="true">✓</span>`:`<button type="button" class="imt_task_done" data-done-task="${esc(c.id)}" aria-label="Mark ${esc(c.name)} done"></button>`}</article>`;}
+  function taskCard(t,done=false){const {c,asset,due}=t;const initials=(asset?.name||'?').split(/\s+/).map(n=>n[0]).join('').slice(0,2);const extras=done||due.status==='Needs baseline'||due.status==='Not scheduled'?[]:[...(due.warnings||[]),...(due.fromCreation?['Based on task creation; no service record yet']:[])];const sub=done?'Service logged today. Undo or correct it in History.':[asset?.name||'Unknown asset',compactReason(c,due),...extras,positive(c.estMinutes)?`${c.estMinutes} min`:'',nonnegative(c.estCost)!==null?money(Number(c.estCost)):''].filter(Boolean).join(' · ');return `<article class="imt_task" data-task="${esc(c.id)}"><span class="imt_task_icon imt_category--${['cars','household'].includes(asset?.category)?asset.category:'bikes'}">${esc(initials)}</span><div class="imt_task_body"><button type="button" class="imt_task_link" data-open-task="${esc(c.id)}">${esc(c.name)}</button><p class="imt_meta">${esc(sub)}</p><span class="imt_status imt_status--${done?'good':statusClass(due.status)}">${done?'Done':esc(pillLabel(due))}</span></div>${done?`<span class="imt_task_done is-done" aria-hidden="true">✓</span>`:`<button type="button" class="imt_task_done" data-done-task="${esc(c.id)}" aria-label="Mark ${esc(c.name)} done"></button>`}</article>`;}
   function bindTasks(){
     root.querySelectorAll('[data-open-task]').forEach(x=>x.onclick=()=>componentDetail(x.dataset.openTask));
     root.querySelectorAll('[data-done-task]').forEach(x=>x.onclick=()=>{
