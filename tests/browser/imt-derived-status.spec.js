@@ -32,7 +32,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
 });
 test('adding service recomputes detail and return from each main destination',async({page})=>{
   await open(page);await component(page);await page.locator('[data-action="add-record"]').click();await page.getByLabel('Date *',{exact:true}).fill('2026-11-02');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Nov 2, 2026');
-  for(const [nav,heading] of [['home','Today'],['assets','Garage'],['plan','Plan'],['history','History & costs']]){await page.locator(`[data-imt-nav="${nav}"]`).click();await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();}
+  for(const [nav,heading] of [['home',/Good (morning|afternoon|evening), Chief\./],['assets','Garage'],['plan','Coming up'],['history','History & costs']]){await page.locator(`[data-imt-nav="${nav}"]`).click();await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();}
 });
 test('same-day records use edit/create timestamps and preserve valid raw export',async({page},info)=>{
   const data=structuredClone(fixture);data.records.push({id:'same-day',assetId:'a',componentId:'c',date:'2026-10-01',updatedAt:'2026-10-02T12:00:00Z',taskType:'Tune-up',mileage:55,cost:10});

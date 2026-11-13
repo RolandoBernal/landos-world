@@ -31,7 +31,7 @@ for (const theme of ['dark','light']) {
     await page.setViewportSize({width:390,height:844});
     await expect(nav.locator('.is-active')).toHaveCSS('background-color',theme==='dark'?'rgb(30, 43, 38)':'rgb(243, 244, 240)');
     await page.screenshot({path:info.outputPath(`${theme}-home.png`)});
-    for (const [label,heading] of [['History','History & costs'],['Garage','Garage'],['Plan','Plan'],['Today','Today']]) {
+    for (const [label,heading] of [['History','History & costs'],['Garage','Garage'],['Plan','Coming up'],['Today',/Good (morning|afternoon|evening), Chief\./]]) {
       await nav.getByRole('button',{name:label,exact:true}).click();
       await expect(root.getByRole('heading',{name:heading,exact:true})).toBeVisible();
       await expect(nav.getByRole('button',{name:label,exact:true})).toHaveAttribute('aria-current','page');

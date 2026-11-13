@@ -40,7 +40,7 @@ for (const theme of ['light', 'dark']) {
       await page.evaluate(() => scrollBy(0, -50));
       await expect(floating).not.toHaveClass(/is-scroll-hidden/);
       await page.evaluate(() => scrollTo(0, 0));
-      for (const [label, heading] of [['Garage', 'Garage'], ['Plan', 'Plan'], ['History', 'History & costs'], ['Today', 'Today']]) {
+      for (const [label, heading] of [['Garage', 'Garage'], ['Plan', 'Coming up'], ['History', 'History & costs'], ['Today', /Good (morning|afternoon|evening), Chief\./]]) {
         await nav.getByRole('button', { name: label, exact: true }).click();
         await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
         await expect(nav.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');

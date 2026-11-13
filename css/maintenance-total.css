@@ -13,6 +13,7 @@
   /* Tokens not redefined by the interactive mockup's dark block keep light values. */
   --house:#B7791F; --car2:#5B7FA6;
   --phone-bg:#F6F7F4; --phone-ink:#16211E;
+  --label:#8A9A92;
   --radius:18px; --radius-lg:26px;
   --shadow:0 18px 50px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
   --shadow-sm:0 6px 20px rgba(0,0,0,.3);
@@ -27,6 +28,7 @@
   --blue:#3A7CA5; --blue-soft:#DFEBF2;
   --green:#2E7D5B; --green-soft:#DDEEE5;
   --phone-bg:#F6F7F4; --phone-ink:#16211E;
+  --label:#5B6B64;
   --radius:18px; --radius-lg:26px;
   --shadow:0 18px 50px rgba(20,33,30,.14), 0 2px 8px rgba(20,33,30,.08);
   --shadow-sm:0 6px 20px rgba(20,33,30,.08);
@@ -279,11 +281,11 @@
   --imt-nav-accent: var(--ink); --imt-nav-inactive: var(--ink3);
   --imt-nav-active-bg: var(--surface2); --imt-primary: var(--teal); --imt-primary-text: #FFFFFF;
   --app-accent: var(--teal);
-  background: linear-gradient(180deg, var(--bg), var(--bg2)); color: var(--ink);
+  background: var(--bg); color: var(--ink);
   font-family: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: dark;
 }
-:root[data-theme="light"] .maintenance_total_view { color-scheme: light; }
+:root[data-theme="light"] .maintenance_total_view { color-scheme: light; background: var(--phone-bg); }
 .maintenance_total_view .imt_back { font-family: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif; }
 .maintenance_total_view .mono,
 .maintenance_total_view input[type="number"] { font-family: "IBM Plex Mono", ui-monospace, monospace; }
@@ -453,3 +455,18 @@
 #imt_settings_toggle { width: 44px; height: 44px; min-width: 44px; padding: 9px; border: 1px solid var(--color-border-strong); border-radius: 6px; }
 
 .imt_actions.imt_actions--stacked { grid-template-columns: minmax(0, 1fr); }
+
+/* KeepUp Phase 2 — the mockup's visual system: groups sit on the flat
+   background under small uppercase labels instead of white section cards;
+   task cards are compact with reason-bearing pills; mono is for figures.
+   Settings keeps its cards (the mockup has no Settings screen). */
+#maintenance-total-root:not([data-imt-page="more"]) .imt_section:not(.imt_garage_hero):not(.imt_form) { background: transparent; border-color: transparent; box-shadow: none; border-radius: 0; padding: 2px 0 0; }
+#maintenance-total-root:not([data-imt-page="more"]) .imt_section:not(.imt_garage_hero):not(.imt_form) > :is(h2, h3),
+#maintenance-total-root:not([data-imt-page="more"]) .imt_section:not(.imt_garage_hero):not(.imt_form) > .imt_header :is(h2, h3) { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--label); margin: 0 0 10px; }
+.maintenance_total_view .imt_greeting { font-weight: 800; }
+.maintenance_total_view .imt_task { border-radius: 16px; padding: 12px; margin: 8px 0; box-shadow: none; }
+:root[data-theme="light"] .maintenance_total_view :is(.imt_task, .imt_asset_card, .imt_today_stats .imt_stat) { border-color: #E2E6E0; }
+.maintenance_total_view .imt_status { font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: .3rem .5rem; }
+.maintenance_total_view .imt_task .imt_status { margin-top: 7px; }
+.maintenance_total_view .imt_health { border-radius: 20px; }
+:root[data-theme="light"] .maintenance_total_view .imt_floating_controls::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--phone-bg) 85%, transparent) 100%); }
