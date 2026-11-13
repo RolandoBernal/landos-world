@@ -378,7 +378,8 @@
 .maintenance_total_view .imt_task .imt_status { display:inline-flex;margin-top:8px; }
 .maintenance_total_view .imt_task p { margin:5px 0 0; }
 .maintenance_total_view .imt_task_done { flex:none;width:34px;height:34px;display:grid;place-items:center;border:2px solid var(--line2);border-radius:50%;background:var(--surface);color:var(--ink);font:inherit;font-weight:700;cursor:pointer; }
-.maintenance_total_view .imt_task_done:hover { background:var(--teal-soft); }
+.maintenance_total_view button.imt_task_done:hover { background:var(--teal-soft); }
+.maintenance_total_view .imt_task_done.is-done { background:var(--green);border-color:var(--green);color:#fff;cursor:default; }
 .maintenance_total_view .imt_task_done:disabled { opacity:.5; }
 .maintenance_total_view .imt_status--neutral { background:var(--surface2);color:var(--ink2); }
 @media (max-width:360px) {

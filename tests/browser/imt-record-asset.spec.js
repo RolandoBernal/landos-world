@@ -16,18 +16,16 @@ test('general Add requires an asset and persists the chosen bike across reload a
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   const asset = page.getByLabel('Asset *', { exact: true });
   await expect(asset).toHaveValue('');
-  await page.getByLabel('Record type *', { exact: true }).selectOption('Clean');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect(await asset.evaluate(el => el.validity.valueMissing)).toBe(true);
   expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).records, key)).toEqual([]);
   await asset.selectOption('mandalorian');
-  await page.getByLabel('Record type *', { exact: true }).selectOption('Clean');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Saved successfully.')).toBeVisible();
   await expect.poll(() => page.evaluate(k => JSON.parse(localStorage.getItem(k)).records.at(-1).assetId, key)).toBe('mandalorian');
   await page.reload();
   await page.getByRole('button', { name: 'History', exact: true }).click();
-  await page.locator('.imt_card').filter({ hasText: 'Clean ·' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator('.imt_card').filter({ hasText: 'Service ·' }).getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(asset).toHaveValue('mandalorian');
 });
 test('component context is visible and changing assets clears the old component', async ({ page }) => {
@@ -39,7 +37,6 @@ test('component context is visible and changing assets clears the old component'
   await page.getByRole('button', { name: '＋ Add Service Record' }).click();
   await expect(page.getByLabel('Asset *', { exact: true })).toHaveValue('madone');
   await expect(page.getByLabel('Task')).toHaveValue('madone-brakes');
-  await page.getByLabel('Record type *', { exact: true }).selectOption('Inspect');
   await page.getByLabel('Notes').fill('Keep this draft');
   await page.getByLabel('Asset *', { exact: true }).selectOption('el-viento');
   await expect(page.getByLabel('Task')).toHaveValue('');

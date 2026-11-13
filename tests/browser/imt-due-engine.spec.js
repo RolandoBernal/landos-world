@@ -57,3 +57,18 @@ test('Plan Done writes service and returns to the recomputed Plan',async({page})
 test('empty task list reports no health and does not claim Current',async({page})=>{
   await open(page,{version:1,bikes:[],components:[],records:[]});await expect(page.locator('.imt_health_ring')).toContainText('—');await expect(page.locator('#maintenance-total-root')).toContainText('No tasks yet.');await expect(page.locator('#maintenance-total-root')).not.toContainText('Everything is current.');
 });
+
+test('a dual-axis task shows only the winning axis reason',async({page})=>{
+  // Miles axis is Overdue (rank 0); time axis is merely Due (rank 1).
+  // §3: one reason — the one from the axis the engine's own status
+  // determination selected — never both concatenated.
+  const dual={version:1,bikes:[{id:'a',name:'Actual Bike',category:'bikes',active:true,currentMileage:1000}],components:[{id:'dual',assetId:'a',name:'Tires',intervalMiles:500,intervalMonths:6}],records:[{id:'r-dual',assetId:'a',componentId:'dual',date:'2026-06-02',mileage:0,taskType:'Service'}]};
+  await open(page,dual);
+  const card=page.locator('[data-task="dual"]');
+  await expect(card.locator('.imt_status')).toHaveText('Overdue');
+  await expect(card.locator('p.imt_meta')).toHaveText('Overdue by 500 miles');
+  await page.locator('[data-imt-nav="assets"]').click();
+  const next=page.locator('[data-bike="a"] .imt_asset_next');
+  await expect(next).toContainText('Overdue by 500 miles');
+  await expect(next).not.toContainText('Due Dec');
+});

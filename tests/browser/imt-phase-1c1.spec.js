@@ -20,7 +20,7 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
   await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset');
   await root.locator('[data-action="add-component"]').click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component');
   await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component');
-  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await root.getByLabel('Record type *',{exact:true}).selectOption('Inspect');await submit('Log service');
+  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service');
   await root.locator('[data-edit-record="record"]').click();await submit('Edit service record');
   for(const label of ['Today','History','Garage','Plan']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
 });
