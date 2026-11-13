@@ -32,3 +32,17 @@ test('editing a record preserves its stored type, including a missing one',async
   expect(carLog.cost).toBe(81.25);
   expect('taskType' in carLog).toBe(false);
 });
+
+test('long History offers Back to Top and returns to the page top; short History does not',async({page})=>{
+  const many=fixture();many.records=Array.from({length:25},(_,i)=>({id:'m'+i,assetId:'bike',componentId:'chain',date:`${year}-01-${String(i+1).padStart(2,'0')}`,taskType:'Service',cost:1}));
+  await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem("seeded")){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem("seeded","yes");}},{key,data:many});
+  await page.goto('/#/maintenance-total');
+  await page.getByRole('button',{name:'History',exact:true}).click();
+  await expect(page.locator('.imt_record_card')).toHaveCount(25);
+  const top=page.getByRole('button',{name:'Back to Top ↑',exact:true});
+  await top.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(()=>window.scrollY)).toBeGreaterThan(0);
+  await top.click();
+  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+});
+test('short History does not offer Back to Top',async({page})=>{await start(page);await page.getByRole('button',{name:'History',exact:true}).click();await expect(page.getByRole('button',{name:'Back to Top ↑'})).toHaveCount(0);});
