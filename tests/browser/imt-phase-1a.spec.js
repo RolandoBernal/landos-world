@@ -70,7 +70,6 @@ test('existing bicycle, component and maintenance add/edit/filter/delete workflo
   await root(page).getByRole('button',{name:'＋ Add Service Record',exact:true}).click();
   await expect(root(page).getByLabel('Asset *',{exact:true})).toHaveValue('bike-original');
   await expect(root(page).getByLabel('Task',{exact:true})).toHaveValue('component-original');
-  await root(page).getByLabel('Record type *',{exact:true}).selectOption('Inspect');
   await root(page).getByLabel('Date *',{exact:true}).fill('2026-10-27');
   await root(page).getByLabel('Notes',{exact:true}).fill('New record');await root(page).getByRole('button',{name:'Save',exact:true}).click();
   await expect(root(page).getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();
@@ -85,6 +84,6 @@ test('existing bicycle, component and maintenance add/edit/filter/delete workflo
   expect(saved.bikes[0]).toMatchObject({id:'bike-original',name:'Edited bicycle',custom:'preserve'});
   expect(saved.components[0]).toMatchObject({id:'component-original',assetId:'bike-original',extra:42,notes:'Component edited'});
   expect(saved.records[0]).toMatchObject({id:'record-original',extra:'keep',notes:'Edited record',deletedAt:expect.any(String)});
-  expect(saved.unknown).toEqual(fixture.unknown);expect(saved.records[1]).toMatchObject({assetId:'bike-original',componentId:'component-original',taskType:'Inspect'});
+  expect(saved.unknown).toEqual(fixture.unknown);expect(saved.records[1]).toMatchObject({assetId:'bike-original',componentId:'component-original',taskType:'Clean'});
   await page.reload();await root(page).getByRole('button',{name:'History',exact:true}).click();await expect(root(page).locator('.imt_record_card')).toHaveCount(1);
 });

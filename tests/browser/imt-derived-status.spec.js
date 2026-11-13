@@ -9,15 +9,15 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
   await expect(page.locator('html')).toHaveAttribute('data-theme',theme==='system'?'dark':theme);
   await component(page);
   await expect(page.locator('.imt_status').first()).toHaveText('Service recorded');
-  await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('2026-10-01');
+  await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Oct 1, 2026');
   await expect(page.locator('.imt_stat').filter({hasText:'Mileage'})).toContainText('0');
   await expect(page.locator('.imt_stat').filter({hasText:'Cost'})).toContainText('$0');
   await expect(page.locator('.imt_record_card')).toHaveCount(2);
   await expect(page.locator('#maintenance-total-root')).not.toContainText('Hand entered fiction');
   await page.locator('header [data-action="edit-component"]').click();await expect(page.locator('#c-status')).toHaveCount(0);await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:'Chain',exact:true})).toBeVisible();
   await page.locator('[data-action="add-record"]').click();await page.getByRole('button',{name:'Back',exact:false}).click();await expect(page.getByRole('heading',{name:'Chain',exact:true})).toBeVisible();
-  await page.locator('[data-edit-record="latest"]').click();await page.getByLabel('Date *',{exact:true}).fill('2025-01-01');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('2026-01-01');
-  page.once('dialog',d=>d.accept());await page.locator('[data-delete-record="older"]').click();await expect(page.getByRole('heading',{name:'Chain',exact:true})).toBeVisible();await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('2025-01-01');
+  await page.locator('[data-edit-record="latest"]').click();await page.getByLabel('Date *',{exact:true}).fill('2025-01-01');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Jan 1, 2026');
+  page.once('dialog',d=>d.accept());await page.locator('[data-delete-record="older"]').click();await expect(page.getByRole('heading',{name:'Chain',exact:true})).toBeVisible();await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Jan 1, 2025');
   page.once('dialog',d=>d.accept());await page.locator('[data-delete-record="latest"]').click();await expect(page.locator('.imt_status').first()).toHaveText('No service record');
   await page.screenshot({path:info.outputPath(`${theme}-component.png`),fullPage:true});
   await page.locator('[data-action="back"]').click();await expect(page.getByRole('heading',{name:'Actual asset',exact:true})).toBeVisible();await page.locator('[data-action="home"]').click();await expect(page.getByRole('heading',{name:'Garage',exact:true})).toBeVisible();
@@ -31,7 +31,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
   if(theme==='system'){await page.emulateMedia({colorScheme:'light'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');}
 });
 test('adding service recomputes detail and return from each main destination',async({page})=>{
-  await open(page);await component(page);await page.locator('[data-action="add-record"]').click();await page.getByLabel('Record type *',{exact:true}).selectOption('Service');await page.getByLabel('Date *',{exact:true}).fill('2026-11-02');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('2026-11-02');
+  await open(page);await component(page);await page.locator('[data-action="add-record"]').click();await page.getByLabel('Date *',{exact:true}).fill('2026-11-02');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Nov 2, 2026');
   for(const [nav,heading] of [['home','Today'],['assets','Garage'],['plan','Plan'],['history','History & costs']]){await page.locator(`[data-imt-nav="${nav}"]`).click();await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();}
 });
 test('same-day records use edit/create timestamps and preserve valid raw export',async({page},info)=>{
