@@ -17,11 +17,11 @@ test('general Add requires an asset and persists the chosen bike across reload a
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   const asset = page.getByLabel('Asset *', { exact: true });
   await expect(asset).toHaveValue('');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Save to history →', exact: true }).click();
   expect(await asset.evaluate(el => el.validity.valueMissing)).toBe(true);
   expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).records, key)).toEqual([]);
   await asset.selectOption('mandalorian');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Save to history →', exact: true }).click();
   await expect(page.getByText('Saved successfully.')).toBeVisible();
   await expect.poll(() => page.evaluate(k => JSON.parse(localStorage.getItem(k)).records.at(-1).assetId, key)).toBe('mandalorian');
   await page.reload();
@@ -42,7 +42,7 @@ test('component context is visible and changing assets clears the old component'
   await page.getByLabel('Asset *', { exact: true }).selectOption('el-viento');
   await expect(page.getByLabel('Task')).toHaveValue('');
   await expect(page.getByLabel('Notes')).toHaveValue('Keep this draft');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Save to history →', exact: true }).click();
   const saved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)).records.at(-1), key);
   expect(saved.assetId).toBe('el-viento');
   expect(saved.componentId).toBeUndefined();

@@ -6,22 +6,23 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
   await page.goto('/#/maintenance-total');
   const root=page.locator('#maintenance-total-root'),fab=root.locator('.imt_add_button'),nav=root.locator('.imt_bottom_nav');
   const regular=async()=>{await expect(fab).toHaveCount(0);await expect(nav.getByRole('button')).toHaveCount(4);};
-  const submit=async(title)=>{
+  const fabHere=async()=>{await expect(fab).toBeVisible();await expect(nav.getByRole('button')).toHaveCount(4);};
+  const submit=async(title,chrome='regular')=>{
     await expect(root.getByRole('heading',{name:title,exact:true})).toBeVisible();await expect(fab).toHaveCount(0);
     await expect(nav.getByRole('button')).toHaveCount(4);
-    const save=root.getByRole('button',{name:'Save',exact:true});
+    const save=root.getByRole('button',{name:/^Save/});
     await expect(save).toHaveCSS('background-color',theme==='dark'?'rgb(42, 154, 140)':'rgb(14, 74, 68)');
     await page.evaluate(()=>document.activeElement.blur());await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
     const s=await save.boundingBox(),n=await nav.boundingBox();expect(s.y+s.height).toBeLessThan(n.y);await expect(save).toBeInViewport();
     if(title==='Add Asset')await page.screenshot({path:info.outputPath(`${theme}-save-clear.png`)});
-    await save.click();await expect(root.locator('form')).toHaveCount(0);await regular();
+    await save.click();await expect(root.locator('form')).toHaveCount(0);if(chrome==='fabHere')await fabHere();else await regular();
   };
-  await regular();await root.locator('[data-action="add-bike"]').click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Asset');
+  await fabHere();await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-action="add-bike"]').click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Asset');
   await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset');
   await root.locator('[data-action="add-component"]').click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component');
   await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component');
-  await root.locator('[data-action="add-record"]').click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service');
-  await root.locator('[data-edit-record="record"]').click();await submit('Edit service record');
-  for(const label of ['Today','History','Garage']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
+  await root.locator('[data-action="add-record"]').click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service','fabHere');
+  await root.locator('[data-edit-record="record"]').click();await submit('Edit service record','fabHere');
+  for(const label of ['Today','History','Garage']){await nav.getByRole('button',{name:label,exact:true}).click();if(label==='Garage')await regular();else await fabHere();}
   await nav.getByRole('button',{name:'Plan',exact:true}).click();await expect(fab).toBeVisible();await expect(nav.getByRole('button')).toHaveCount(4);
 });

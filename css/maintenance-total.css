@@ -407,7 +407,6 @@
 .maintenance_total_view .imt_asset_healthbar > span { display:block;height:100%;border-radius:99px;background:var(--asset-accent); }
 .maintenance_total_view .imt_asset_next { display:block;margin-top:12px;font-size:.85rem;color:var(--ink2); }
 .maintenance_total_view .imt_asset_next strong { color:var(--ink); }
-.maintenance_total_view .imt_asset_open { display:block;text-align:right;margin-top:8px;font-size:.8rem;font-weight:700;color:var(--ink2); }
 .maintenance_total_view .imt_garage_hero { background:#14211E;color:#fff;border-radius:26px;padding:18px; }
 .maintenance_total_view .imt_garage_hero .imt_header { display:flex;gap:10px;align-items:center; }
 .maintenance_total_view .imt_garage_hero h1 { min-width:0;flex:1;font-size:1.3rem;margin:0;color:inherit;overflow-wrap:anywhere; }
@@ -470,3 +469,19 @@
 .maintenance_total_view .imt_task .imt_status { margin-top: 7px; }
 .maintenance_total_view .imt_health { border-radius: 20px; }
 :root[data-theme="light"] .maintenance_total_view .imt_floating_controls::before { background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--phone-bg) 85%, transparent) 100%); }
+
+/* KeepUp Phase 3 — screen cleanup: Plan groups carry the mockup's amber
+   left border; History rows flatten to hairline-separated rows and its
+   totals become two mini stat cards; the Log form pairs its short fields;
+   Garage's Add asset is a
+   full-width button under the list. */
+#maintenance-total-root:not([data-imt-page="more"])[data-imt-page="plan"] .imt_section:not(.imt_garage_hero):not(.imt_form) { border-left: 3px solid var(--amber); padding-left: 14px; }
+#maintenance-total-root[data-imt-page="history"] .imt_record_card { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 12px 2px; }
+.maintenance_total_view .imt_history_stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.maintenance_total_view .imt_history_stats .imt_stat { display: flex; flex-direction: column; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+.maintenance_total_view .imt_history_stats .imt_stat strong { font-size: 1.3rem; }
+.maintenance_total_view .imt_history_stats .imt_stat span { color: var(--ink2); font-size: .8rem; }
+:root[data-theme="light"] .maintenance_total_view .imt_history_stats .imt_stat { border-color: #E2E6E0; }
+.maintenance_total_view .imt_field_pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.maintenance_total_view .imt_garage_add { width: 100%; margin-top: 12px; }
+.maintenance_total_view .imt_asset_next:has(> strong) { color: var(--ink); font-weight: 600; }

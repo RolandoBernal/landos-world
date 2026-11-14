@@ -35,8 +35,8 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
   };
   await assertBack();
   await root.getByLabel('Notes',{exact:true}).fill('Keyboard and scrolling check');
-  await root.getByRole('button',{name:'Save',exact:true}).scrollIntoViewIfNeeded();
-  const save=await root.getByRole('button',{name:'Save',exact:true}).boundingBox();
+  await root.getByRole('button',{name:'Save to history →',exact:true}).scrollIntoViewIfNeeded();
+  const save=await root.getByRole('button',{name:'Save to history →',exact:true}).boundingBox();
   const nav=await root.locator('.imt_bottom_nav').boundingBox();
   expect(save.y+save.height).toBeLessThanOrEqual(nav.y);
   await page.screenshot({path:info.outputPath('dark-form.png'),fullPage:true});

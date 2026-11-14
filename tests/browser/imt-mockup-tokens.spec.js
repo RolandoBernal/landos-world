@@ -28,7 +28,7 @@ for (const theme of ['light', 'dark']) {
       await expect(nav.locator('button:not(.is-active)').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(nav.locator('button')).toHaveText(['Today', 'Garage', 'Plan', 'History']);
       const n = await nav.boundingBox();
-      await expect(page.locator('.imt_add_button')).toHaveCount(0);
+      await expect(page.locator('.imt_add_button')).toHaveCount(1);
       expect(n.y + n.height).toBeLessThanOrEqual(832);
       await expect(page.locator('.imt_status--attention').first()).toHaveCSS('background-color', 'rgb(251, 227, 219)');
       await page.screenshot({ path: info.outputPath(`${theme}-${width}-today.png`), fullPage: true });
@@ -60,7 +60,7 @@ for (const theme of ['light', 'dark']) {
       await page.getByLabel('Notes', { exact: true }).focus();
       await expect(page.locator('.imt_floating_controls')).toHaveClass(/is-form-focused/);
       await page.setViewportSize({ width, height: 360 });
-      for (const label of ['Save', 'Cancel']) {
+      for (const label of ['Save to history →', 'Cancel']) {
         const button = page.getByRole('button', { name: label, exact: true });
         await button.focus();
         await expect.poll(async () => { const r = await button.boundingBox(); return r.y + r.height; }).toBeLessThanOrEqual(344);
