@@ -18,14 +18,16 @@ for(const theme of ['light','dark','system'])test(`Today, Done, reload, undo, na
   await expect(page.locator('.imt_health')).toContainText('75%');await expect(page.locator('.imt_health')).toContainText('2 unassessed');
   await expect(page.locator('[data-task="unknown"]')).toContainText('Needs baseline');await expect(page.locator('[data-task="unscheduled"]')).toContainText('Not scheduled');
   await page.screenshot({path:info.outputPath(`${theme}-today.png`),fullPage:true});
+  await page.locator('.imt_bottom_nav [data-imt-nav="plan"]').click();
   const geometry=await page.locator('.imt_floating_controls').evaluate(el=>{const nav=el.querySelector('nav'),add=el.querySelector('.imt_add_button'),n=nav.getBoundingClientRect(),a=add.getBoundingClientRect();return {radius:getComputedStyle(nav).borderRadius,width:a.width,height:a.height,gap:n.top-a.bottom,right:n.right-a.right};});
   expect(geometry).toMatchObject({radius:'36px',width:56,height:56,gap:12,right:0});
+  await page.locator('.imt_bottom_nav [data-imt-nav="home"]').click();
   await attention.getByRole('button',{name:'Mark Chain done'}).click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(0);
   await expect(page.locator('.imt_health')).toContainText('100%');
   const done=page.locator('.imt_section').filter({has:page.getByRole('heading',{name:'Done today',exact:true})});await expect(done).toContainText('Chain');
   let saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.records).toHaveLength(5);expect(saved.records.at(-1)).toMatchObject({assetId:'a',componentId:'overdue',date:'2026-11-02',mileage:1000,cost:12.5,serviceProvider:'',taskType:'Service'});expect(saved.records.slice(0,4)).toEqual(fixture.records);expect(saved.components).toEqual(fixture.components);expect(saved.unknown).toEqual(fixture.unknown);expect(saved.version).toBe(1);
   await page.reload();await expect(page.locator('.imt_health')).toContainText('100%');await page.locator('[data-imt-nav="history"]').click();const record=saved.records.at(-1);
-  page.once('dialog',d=>d.accept());await page.locator(`[data-delete-record="${record.id}"]`).click();await page.locator('[data-imt-nav="home"]').click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(1);await expect(page.locator('.imt_health')).toContainText('75%');
+  page.once('dialog',d=>d.accept());await page.locator(`[data-delete-record="${record.id}"]`).click();await page.locator('.imt_bottom_nav [data-imt-nav="home"]').click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(1);await expect(page.locator('.imt_health')).toContainText('75%');
   await page.getByRole('button',{name:'Plan',exact:true}).click();await expect(page.getByRole('heading',{name:'This week',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'By mileage',exact:true})).toBeVisible();await expect(page.locator('[data-task="unknown"]')).toHaveCount(0);await expect(page.locator('[data-task="soon"] .imt_status')).toHaveCSS('background-color','rgb(223, 235, 242)');await expect(page.locator('[data-task="soon"] .imt_status')).toHaveCSS('color','rgb(42, 95, 130)');
   await page.screenshot({path:info.outputPath(`${theme}-plan.png`),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -52,7 +54,7 @@ test('missing mileage directs Done to real form; missing baselines do not claim 
   await open(page,{...fixture,bikes:[{...fixture.bikes[0],currentMileage:''}],components:[{id:'c',assetId:'a',name:'Unknown task',intervalMiles:500}],records:[]});await expect(page.locator('.imt_health_ring')).toContainText('—');await expect(page.locator('[data-task="c"]')).toContainText('Needs baseline');await page.getByRole('button',{name:'Mark Unknown task done'}).click();await expect(page.getByLabel('Asset *',{exact:true})).toHaveValue('a');await expect(page.getByLabel('Task',{exact:true})).toHaveValue('c');await expect(page.locator('.imt_add_button')).toHaveCount(0);expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).records.length,key)).toBe(0);
 });
 test('Plan Done writes service and returns to the recomputed Plan',async({page})=>{
-  await open(page);await page.getByRole('button',{name:'Plan',exact:true}).click();await page.getByRole('button',{name:'Mark Pads done'}).click();await expect(page.getByRole('heading',{name:'Plan',exact:true})).toBeVisible();await expect(page.locator('[data-task="due"]')).toHaveCount(0);const saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.records.at(-1)).toMatchObject({componentId:'due',assetId:'a',mileage:1000,date:'2026-11-02'});await page.locator('[data-open-task="soon"]').click();await page.locator('[data-action="back"]').click();await expect(page.getByRole('heading',{name:'Plan',exact:true})).toBeVisible();
+  await open(page);await page.getByRole('button',{name:'Plan',exact:true}).click();await page.getByRole('button',{name:'Mark Pads done'}).click();await expect(page.getByRole('heading',{name:'Coming up',exact:true})).toBeVisible();await expect(page.locator('[data-task="due"]')).toHaveCount(0);const saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.records.at(-1)).toMatchObject({componentId:'due',assetId:'a',mileage:1000,date:'2026-11-02'});await page.locator('[data-open-task="soon"]').click();await page.locator('[data-action="back"]').click();await expect(page.getByRole('heading',{name:'Coming up',exact:true})).toBeVisible();
 });
 test('empty task list reports no health and does not claim Current',async({page})=>{
   await open(page,{version:1,bikes:[],components:[],records:[]});await expect(page.locator('.imt_health_ring')).toContainText('—');await expect(page.locator('#maintenance-total-root')).toContainText('No tasks yet.');await expect(page.locator('#maintenance-total-root')).not.toContainText('Everything is current.');
@@ -66,9 +68,30 @@ test('a dual-axis task shows only the winning axis reason',async({page})=>{
   await open(page,dual);
   const card=page.locator('[data-task="dual"]');
   await expect(card.locator('.imt_status')).toHaveText('Overdue');
-  await expect(card.locator('p.imt_meta')).toHaveText('Overdue by 500 miles');
+  // Phase 2 compact card: the sub-line carries the winning axis in compact
+  // form, and the losing axis's reason appears nowhere on the card.
+  await expect(card.locator('p.imt_meta')).toHaveText('Actual Bike · overdue by 500 mi');
+  await expect(card).not.toContainText('Due Dec');
   await page.locator('[data-imt-nav="assets"]').click();
   const next=page.locator('[data-bike="a"] .imt_asset_next');
   await expect(next).toContainText('Overdue by 500 miles');
   await expect(next).not.toContainText('Due Dec');
+});
+
+test('a compact card keeps the baseline warning next to the winning reason',async({page})=>{
+  // Time axis is Overdue; the miles axis cannot be assessed because the
+  // asset has no current reading. The Phase 2 compact card must keep the
+  // compact reason AND the existing baseline warning — on Today and Plan.
+  const warn={version:1,bikes:[{id:'w',name:'Warn Bike',category:'bikes',active:true}],components:[{id:'wt',assetId:'w',name:'Chain',intervalMiles:500,intervalMonths:1}],records:[{id:'r-wt',assetId:'w',componentId:'wt',date:'2026-09-02',mileage:300,taskType:'Service'}]};
+  await open(page,warn);
+  const card=page.locator('[data-task="wt"]');
+  await expect(card.locator('.imt_status')).toHaveText('Overdue');
+  await expect(card.locator('p.imt_meta')).toContainText('overdue by 31 days');
+  const todayText=await card.textContent();
+  expect(todayText.match(/Mileage baseline or current reading missing/g)).toHaveLength(1);
+  await page.getByRole('button',{name:'Plan',exact:true}).click();
+  const planCard=page.locator('[data-task="wt"]');
+  await expect(planCard.locator('p.imt_meta')).toContainText('overdue by 31 days');
+  const planText=await planCard.textContent();
+  expect(planText.match(/Mileage baseline or current reading missing/g)).toHaveLength(1);
 });

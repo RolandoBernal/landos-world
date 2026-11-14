@@ -17,6 +17,7 @@ test('phone shell, themes, navigation and long forms', async ({page}, info) => {
   }
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:info.outputPath('dark-home.png'),fullPage:true});
+  await root.locator('.imt_bottom_nav [data-imt-nav="plan"]').click();
   const add = root.locator('.imt_add_button');
   await expect(add).toBeVisible();
   const addBox = await add.boundingBox();

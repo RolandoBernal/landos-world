@@ -5,7 +5,7 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
   await page.addInitScript(f=>localStorage.setItem('lando-world:maintenance-total:v1',JSON.stringify(f)),fixture);
   await page.goto('/#/maintenance-total');
   const root=page.locator('#maintenance-total-root'),fab=root.locator('.imt_add_button'),nav=root.locator('.imt_bottom_nav');
-  const regular=async()=>{await expect(fab).toBeVisible();await expect(nav.getByRole('button')).toHaveCount(4);};
+  const regular=async()=>{await expect(fab).toHaveCount(0);await expect(nav.getByRole('button')).toHaveCount(4);};
   const submit=async(title)=>{
     await expect(root.getByRole('heading',{name:title,exact:true})).toBeVisible();await expect(fab).toHaveCount(0);
     await expect(nav.getByRole('button')).toHaveCount(4);
@@ -20,7 +20,8 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
   await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset');
   await root.locator('[data-action="add-component"]').click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component');
   await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component');
-  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service');
+  await root.locator('[data-action="add-record"]').click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service');
   await root.locator('[data-edit-record="record"]').click();await submit('Edit service record');
-  for(const label of ['Today','History','Garage','Plan']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
+  for(const label of ['Today','History','Garage']){await nav.getByRole('button',{name:label,exact:true}).click();await regular();}
+  await nav.getByRole('button',{name:'Plan',exact:true}).click();await expect(fab).toBeVisible();await expect(nav.getByRole('button')).toHaveCount(4);
 });
