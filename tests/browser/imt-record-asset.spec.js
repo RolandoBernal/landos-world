@@ -13,6 +13,7 @@ test.beforeEach(async ({ page }) => {
 });
 test('general Add requires an asset and persists the chosen bike across reload and edit', async ({ page }) => {
   await page.goto('/#/maintenance-total');
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   const asset = page.getByLabel('Asset *', { exact: true });
   await expect(asset).toHaveValue('');

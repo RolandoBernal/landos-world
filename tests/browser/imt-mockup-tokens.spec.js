@@ -27,10 +27,8 @@ for (const theme of ['light', 'dark']) {
       await expect(nav).toHaveCSS('border-radius', '36px');
       await expect(nav.locator('button:not(.is-active)').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(nav.locator('button')).toHaveText(['Today', 'Garage', 'Plan', 'History']);
-      const n = await nav.boundingBox(), plus = await page.locator('.imt_add_button').boundingBox();
-      expect(plus.width).toBe(56); expect(plus.height).toBe(56);
-      expect(plus.x + plus.width).toBeCloseTo(n.x + n.width, 0);
-      expect(plus.y + plus.height + 12).toBeCloseTo(n.y, 0);
+      const n = await nav.boundingBox();
+      await expect(page.locator('.imt_add_button')).toHaveCount(0);
       expect(n.y + n.height).toBeLessThanOrEqual(832);
       await expect(page.locator('.imt_status--attention').first()).toHaveCSS('background-color', 'rgb(251, 227, 219)');
       await page.screenshot({ path: info.outputPath(`${theme}-${width}-today.png`), fullPage: true });
@@ -45,6 +43,11 @@ for (const theme of ['light', 'dark']) {
         await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
         await expect(nav.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
       }
+      await nav.getByRole('button', { name: 'Plan', exact: true }).click();
+      const plus = await page.locator('.imt_add_button').boundingBox();
+      expect(plus.width).toBe(56); expect(plus.height).toBe(56);
+      expect(plus.x + plus.width).toBeCloseTo(n.x + n.width, 0);
+      expect(plus.y + plus.height + 12).toBeCloseTo(n.y, 0);
       await page.locator('#imt_settings_toggle').click();
       await expect(page.getByRole('heading', { name: 'Settings', exact: true }).first()).toBeVisible();
       await expect(page.getByRole('button', { name: 'Download maintenance JSON' })).toBeVisible();

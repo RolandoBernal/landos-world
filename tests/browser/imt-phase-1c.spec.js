@@ -8,7 +8,7 @@ for (const theme of ['dark','light']) {
     const root=page.locator('#maintenance-total-root');
     const nav=root.locator('.imt_bottom_nav');
     const add=root.getByRole('button',{name:'Add',exact:true});
-    await nav.getByRole('button',{name:'Garage',exact:true}).click();
+    await nav.getByRole('button',{name:'Plan',exact:true}).click();
     for (const width of [320,390,430,1280]) {
       await page.setViewportSize({width,height:844});
       const shell=await page.locator('#maintenance-total-view').boundingBox();
@@ -23,7 +23,7 @@ for (const theme of ['dark','light']) {
       await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
       expect((await nav.boundingBox()).y).toBeCloseTo(n.y,0);
       expect((await add.boundingBox()).y).toBeCloseTo(a.y,0);
-      const last=await root.locator('[data-bike]').last().boundingBox();
+      const last=await root.locator('.imt_section').last().boundingBox();
       expect(last.y+last.height).toBeLessThan(a.y);
       await page.evaluate(()=>scrollTo(0,0));
       if(width===1280) await page.screenshot({path:info.outputPath(`${theme}-desktop.png`)});
@@ -36,6 +36,7 @@ for (const theme of ['dark','light']) {
       await expect(root.getByRole('heading',{name:heading,exact:true})).toBeVisible();
       await expect(nav.getByRole('button',{name:label,exact:true})).toHaveAttribute('aria-current','page');
     }
+    await nav.getByRole('button',{name:'Plan',exact:true}).click();
     await add.click();
     await expect(root.getByRole('heading',{name:'Log service'})).toBeVisible();
     await expect(root.getByLabel('Asset *',{exact:true})).toHaveValue('');

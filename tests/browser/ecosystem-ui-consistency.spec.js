@@ -167,7 +167,7 @@ for (const theme of ['light', 'dark', 'system']) test(`${theme}: iMT and LWVD Se
     const button = page.locator(`#maintenance-total-root [data-action="${action}"]`);
     expect(await button.evaluate(n => { const s = getComputedStyle(n.parentElement); return Math.abs(n.getBoundingClientRect().width - (n.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))); })).toBeLessThan(2);
   }
-  await imt.click(); await expect(page.locator('.imt_add_button')).toHaveCount(1);
+  await imt.click(); await expect(page.locator('.imt_add_button')).toHaveCount(0);
   await open(page, '/#/violet-dineros');
   await page.evaluate(t => { window.LandosTheme.setPreference(t); localStorage.setItem('lando-world:lwvd:v1', JSON.stringify({ firstName: 'Violet', balanceCents: 10000, payday: '', frequency: '', onboarded: true })); }, theme);
   await page.reload();

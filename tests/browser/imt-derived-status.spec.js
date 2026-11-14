@@ -24,7 +24,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
   await page.locator('[data-imt-nav="history"]').click();await expect(page.locator('.imt_record_card').first()).toContainText('Other asset');
   await page.getByLabel('Filter by asset').selectOption('b');await page.locator('[data-edit-record="wrong-asset"]').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
   await page.locator('#imt_settings_toggle').click();await page.locator('#imt_settings_toggle').click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
-  await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
+  await page.locator('[data-action="add-record"]').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
   const saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.components).toEqual(fixture.components);expect(saved.bikes).toEqual(fixture.bikes);expect(saved.unknown).toEqual(fixture.unknown);expect(saved.version).toBe(1);expect(saved.records.find(r=>r.id==='latest')).toMatchObject({cost:0,mileage:0,serviceProvider:'Real provider'});
   await page.reload();await component(page);await expect(page.locator('.imt_status').first()).toHaveText('No service record');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -32,7 +32,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
 });
 test('adding service recomputes detail and return from each main destination',async({page})=>{
   await open(page);await component(page);await page.locator('[data-action="add-record"]').click();await page.getByLabel('Date *',{exact:true}).fill('2026-11-02');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();await component(page);await expect(page.locator('.imt_stat').filter({hasText:'Service date'})).toContainText('Nov 2, 2026');
-  for(const [nav,heading] of [['home',/Good (morning|afternoon|evening), Chief\./],['assets','Garage'],['plan','Coming up'],['history','History & costs']]){await page.locator(`[data-imt-nav="${nav}"]`).click();await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();}
+  const openers={home:'[data-action="add-bike"]',assets:'[data-action="add-bike"]',plan:'.imt_add_button',history:'[data-action="add-record"]'};for(const [nav,heading] of [['home',/Good (morning|afternoon|evening), Chief\./],['assets','Garage'],['plan','Coming up'],['history','History & costs']]){await page.locator(`[data-imt-nav="${nav}"]`).click();await page.locator(openers[nav]).click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();}
 });
 test('same-day records use edit/create timestamps and preserve valid raw export',async({page},info)=>{
   const data=structuredClone(fixture);data.records.push({id:'same-day',assetId:'a',componentId:'c',date:'2026-10-01',updatedAt:'2026-10-02T12:00:00Z',taskType:'Tune-up',mileage:55,cost:10});

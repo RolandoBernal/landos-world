@@ -18,14 +18,16 @@ for(const theme of ['light','dark','system'])test(`Today, Done, reload, undo, na
   await expect(page.locator('.imt_health')).toContainText('75%');await expect(page.locator('.imt_health')).toContainText('2 unassessed');
   await expect(page.locator('[data-task="unknown"]')).toContainText('Needs baseline');await expect(page.locator('[data-task="unscheduled"]')).toContainText('Not scheduled');
   await page.screenshot({path:info.outputPath(`${theme}-today.png`),fullPage:true});
+  await page.locator('.imt_bottom_nav [data-imt-nav="plan"]').click();
   const geometry=await page.locator('.imt_floating_controls').evaluate(el=>{const nav=el.querySelector('nav'),add=el.querySelector('.imt_add_button'),n=nav.getBoundingClientRect(),a=add.getBoundingClientRect();return {radius:getComputedStyle(nav).borderRadius,width:a.width,height:a.height,gap:n.top-a.bottom,right:n.right-a.right};});
   expect(geometry).toMatchObject({radius:'36px',width:56,height:56,gap:12,right:0});
+  await page.locator('.imt_bottom_nav [data-imt-nav="home"]').click();
   await attention.getByRole('button',{name:'Mark Chain done'}).click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(0);
   await expect(page.locator('.imt_health')).toContainText('100%');
   const done=page.locator('.imt_section').filter({has:page.getByRole('heading',{name:'Done today',exact:true})});await expect(done).toContainText('Chain');
   let saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.records).toHaveLength(5);expect(saved.records.at(-1)).toMatchObject({assetId:'a',componentId:'overdue',date:'2026-11-02',mileage:1000,cost:12.5,serviceProvider:'',taskType:'Service'});expect(saved.records.slice(0,4)).toEqual(fixture.records);expect(saved.components).toEqual(fixture.components);expect(saved.unknown).toEqual(fixture.unknown);expect(saved.version).toBe(1);
   await page.reload();await expect(page.locator('.imt_health')).toContainText('100%');await page.locator('[data-imt-nav="history"]').click();const record=saved.records.at(-1);
-  page.once('dialog',d=>d.accept());await page.locator(`[data-delete-record="${record.id}"]`).click();await page.locator('[data-imt-nav="home"]').click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(1);await expect(page.locator('.imt_health')).toContainText('75%');
+  page.once('dialog',d=>d.accept());await page.locator(`[data-delete-record="${record.id}"]`).click();await page.locator('.imt_bottom_nav [data-imt-nav="home"]').click();await expect(attention.locator('[data-task="overdue"]')).toHaveCount(1);await expect(page.locator('.imt_health')).toContainText('75%');
   await page.getByRole('button',{name:'Plan',exact:true}).click();await expect(page.getByRole('heading',{name:'This week',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'By mileage',exact:true})).toBeVisible();await expect(page.locator('[data-task="unknown"]')).toHaveCount(0);await expect(page.locator('[data-task="soon"] .imt_status')).toHaveCSS('background-color','rgb(223, 235, 242)');await expect(page.locator('[data-task="soon"] .imt_status')).toHaveCSS('color','rgb(42, 95, 130)');
   await page.screenshot({path:info.outputPath(`${theme}-plan.png`),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

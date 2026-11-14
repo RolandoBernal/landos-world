@@ -99,6 +99,7 @@ for(const theme of ['dark','light']) test(`three-app spacing parity and LLT form
   const box=await nav.boundingBox();metrics.push({x:box.x,width:box.width,bottom:box.y+box.height,height:box.height});
   if(selector==='.imt_bottom_nav'){
    for(const name of ['Today','Garage','Plan','History']){await nav.getByRole('button',{name,exact:true}).click();await expect(nav.getByRole('button',{name,exact:true})).toHaveAttribute('aria-current','page');}
+   await nav.getByRole('button',{name:'Plan',exact:true}).click();
    const fab=await page.locator('.imt_add_button').boundingBox();expect(fab.width).toBe(56);expect(fab.height).toBe(56);expect(fab.y+fab.height).toBe(box.y-12);
   }
  }
