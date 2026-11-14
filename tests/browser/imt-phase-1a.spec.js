@@ -71,12 +71,12 @@ test('existing bicycle, component and maintenance add/edit/filter/delete workflo
   await expect(root(page).getByLabel('Asset *',{exact:true})).toHaveValue('bike-original');
   await expect(root(page).getByLabel('Task',{exact:true})).toHaveValue('component-original');
   await root(page).getByLabel('Date *',{exact:true}).fill('2026-10-27');
-  await root(page).getByLabel('Notes',{exact:true}).fill('New record');await root(page).getByRole('button',{name:'Save',exact:true}).click();
+  await root(page).getByLabel('Notes',{exact:true}).fill('New record');await root(page).getByRole('button',{name:'Save to history →',exact:true}).click();
   await expect(root(page).getByRole('heading',{name:'History & costs',exact:true})).toBeVisible();
   await root(page).getByLabel('Filter by asset').selectOption('bike-original');
   await expect(root(page).locator('.imt_record_card')).toHaveCount(2);
   await root(page).locator('[data-edit-record="record-original"]').click();
-  await root(page).getByLabel('Notes',{exact:true}).fill('Edited record');await root(page).getByRole('button',{name:'Save',exact:true}).click();
+  await root(page).getByLabel('Notes',{exact:true}).fill('Edited record');await root(page).getByRole('button',{name:'Save to history →',exact:true}).click();
   await expect(root(page).getByRole('heading',{name:'History & costs'})).toBeVisible();
   page.once('dialog',dialog=>dialog.accept());await root(page).locator('[data-delete-record="record-original"]').click();
   await expect(root(page).locator('.imt_record_card')).toHaveCount(1);
