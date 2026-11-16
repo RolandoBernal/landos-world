@@ -57,38 +57,42 @@ for (const theme of ['light','dark']) test(`${theme} affordability autofocus ope
   await page.setViewportSize({width:390,height});
   const tops=[];
   for(const action of ['Add Money','Add Expense','Can I Afford This?']){
+   await page.locator('#quick-actions-toggle').click();
    await page.getByRole('button',{name:action,exact:true}).click();
    const afford=action==='Can I Afford This?';
    await expect(page.locator(afford?'#afford-price':'#transaction-amount')).toBeFocused();
-   tops.push((await page.locator(afford?'.affordability':'dialog .transaction-panel').boundingBox()).y);
+   tops.push((await page.locator('.sheet-page-frame .transaction-panel').boundingBox()).y);
    expect(await page.evaluate(()=>scrollY)).toBe(0);
    await page.getByRole('button',{name:afford?'Back to Home':'Cancel',exact:true}).click();
   }
-  expect(tops).toEqual([44,44,44]);
+  expect(tops[0]).toBeGreaterThanOrEqual(44);
+  expect(tops[1]).toBe(tops[0]);
+  expect(tops[2]).toBe(tops[0]);
  }
- expect(await page.evaluate(()=>window.affordFocusOptions)).toEqual([{preventScroll:true},{preventScroll:true}]);
+ expect(await page.evaluate(()=>window.affordFocusOptions)).toEqual([{preventScroll:false},{preventScroll:false}]);
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(seed);
 });
 
-for(const theme of ['light','dark']) test(`${theme} all entry panels share native opening and document scrolling`,async({page})=>{
+for(const theme of ['light','dark']) test(`${theme} all entry panels share the page layout and document scrolling`,async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto('/#/violet-dineros');await page.evaluate(({seed,theme})=>{localStorage.setItem('lando-world:lwvd:v1',JSON.stringify(seed));localStorage.setItem('landos_world_appearance_preference_v1',theme);},{seed,theme});await page.reload();
  await page.evaluate(()=>{const show=HTMLDialogElement.prototype.show;window.panelOpenings=[];HTMLDialogElement.prototype.show=function(){window.panelOpenings.push(this.id);return show.call(this);};});
  const layouts=[];
  for(const action of ['Add Money','Add Expense','Can I Afford This?']){
+  await page.locator('#quick-actions-toggle').click();
   await page.getByRole('button',{name:action,exact:true}).click();
-  const dialog=page.getByRole('dialog');await expect(dialog).toHaveAttribute('open','');
-  const input=dialog.locator('input[autofocus]');await expect(input).toBeFocused();
-  layouts.push(await dialog.evaluate(e=>[e,e.querySelector('.transaction-frame'),e.querySelector('.transaction-panel'),e.querySelector('form'),e.querySelector('.sheet-body')].map(n=>{const s=getComputedStyle(n);return {position:s.position,overflow:s.overflowY,minHeight:s.minHeight,padding:s.padding,border:s.border,radius:s.borderRadius,align:s.alignItems};})));
+  const frame=page.locator('.sheet-page-frame');
+  const input=frame.locator('input[autofocus]');await expect(input).toBeFocused();
+  layouts.push(await frame.evaluate(e=>[e,e.querySelector('.transaction-panel'),e.querySelector('form'),e.querySelector('.sheet-body')].map(n=>{const s=getComputedStyle(n);return {position:s.position,overflow:s.overflowY,minHeight:s.minHeight,padding:s.padding,border:s.border,radius:s.borderRadius,align:s.alignItems};})));
   for(const height of [400,844]){
    await page.setViewportSize({width:390,height});
-   for(const control of await dialog.locator('input,select,button').all()){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
-   for(const layer of [dialog,dialog.locator('.transaction-frame'),dialog.locator('.transaction-panel')])await expect(layer).toHaveCSS('overflow-y','visible');
+   for(const control of await frame.locator('input,select,button').all()){await control.scrollIntoViewIfNeeded();await expect(control).toBeInViewport();}
+   for(const layer of [frame,frame.locator('.transaction-panel')])await expect(layer).toHaveCSS('overflow-y','visible');
   }
   await page.keyboard.press('Escape');await expect(page.getByRole('heading',{name:'Hey, Violet!'})).toBeVisible();
  }
  expect(layouts[1]).toEqual(layouts[0]);expect(layouts[2]).toEqual(layouts[0]);
- expect(await page.evaluate(()=>window.panelOpenings)).toEqual(['transaction-sheet','transaction-sheet','affordability-sheet']);
+ expect(await page.evaluate(()=>window.panelOpenings)).toEqual([]);
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('lando-world:lwvd:v1')))).toEqual(seed);
 });
 

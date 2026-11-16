@@ -91,7 +91,7 @@ test('History day, entry and internal food screens start at top without resettin
   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   await root(page).locator('[data-lee-lee-editor] [data-action="cancel"]').click();await top(page);
   await nav(page).getByRole('button',{name:'Foods',exact:true}).click();
-  await root(page).getByRole('button',{name:'+ Add New Food',exact:true}).click();
+  await root(page).locator('[data-action="toggle-add-menu"]').click();await root(page).getByRole('button',{name:'Add New Food',exact:true}).click();
   const fields=root(page).locator('[data-food-library-fields]');await expect(fields).toHaveJSProperty('scrollTop',0);
   await page.setViewportSize({width:390,height:430});
   await fields.evaluate(node=>node.scrollTop=node.scrollHeight);const before=await fields.evaluate(node=>node.scrollTop);
@@ -99,5 +99,5 @@ test('History day, entry and internal food screens start at top without resettin
   // Native WebKit can round the resized scrollport by a couple of pixels.
   expect(Math.abs(await fields.evaluate(node=>node.scrollTop)-before)).toBeLessThanOrEqual(3);
   page.once('dialog',dialog=>dialog.accept());await root(page).getByRole('button',{name:'Cancel',exact:true}).click();
-  await root(page).getByRole('button',{name:'+ Add New Food',exact:true}).click();await expect(fields).toHaveJSProperty('scrollTop',0);
+  await root(page).locator('[data-action="toggle-add-menu"]').click();await root(page).getByRole('button',{name:'Add New Food',exact:true}).click();await expect(fields).toHaveJSProperty('scrollTop',0);
 });

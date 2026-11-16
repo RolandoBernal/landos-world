@@ -1487,11 +1487,11 @@ test('LLT Issue #11 UI and data fonts remain distinct across responsive surfaces
         }
       }
       if (section === 'Foods') {
-        await page.getByRole('button', { name: '+ Add New Meal' }).click();
+        await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
         await capture(`Meal-builder-${width}`);
         await page.locator('[data-action="cancel-saved-meal-builder"]').last().click();
         await page.locator('[data-food-library-accordion="foods"] summary').click();
-        await page.getByRole('button', { name: '+ Add New Food' }).click();
+        await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Food' }).click();
         await capture(`Food-editor-${width}`);
         await page.locator('button[data-action="cancel-food-library-editor"]').last().click();
       }
@@ -1616,7 +1616,7 @@ for (const surface of ['Today', 'History', 'Reports', 'Foods', 'Settings', 'New 
     if (surface === 'Settings') await page.locator('#lee_lee_settings_toggle').click();
     if (surface === 'My Meal Builder') {
       await chooseLeeLeeSection(page, 'Foods');
-      await page.getByRole('button', { name: '+ Add New Meal' }).click();
+      await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
       await expect(page.locator('[data-meal-builder]')).toBeVisible();
     }
     if (surface === 'Edit Entry') {
@@ -3192,7 +3192,7 @@ test('Lee-Lee My Meals builder creates, edits, favorites, quick-uses, and soft-d
   await chooseLeeLeeSection(page, 'Foods');
   await openFoodLibraryAccordion(page, 'meals');
 
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
   const builder = page.locator('[data-meal-builder]');
   await expect(builder.getByRole('heading', { name: 'Add Meal' })).toBeVisible();
   await expect(builder.getByText('Enter a total you already know, or add food items and LLT will calculate it.')).toBeVisible();
@@ -3368,7 +3368,7 @@ test('Lee-Lee Meal Builder controls keep stable dimensions from zero through ten
   });
   await chooseLeeLeeSection(page, 'Foods');
   await openFoodLibraryAccordion(page, 'meals');
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
 
   const builder = page.locator('[data-meal-builder]');
   const measureStableControls = () => builder.evaluate((dialog) => {
@@ -3542,7 +3542,7 @@ test('Lee-Lee Meal Builder rejects incomplete drafts and permits duplicate names
   });
   await chooseLeeLeeSection(page, 'Foods');
   await openFoodLibraryAccordion(page, 'meals');
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
   let builder = page.locator('[data-meal-builder]');
   await builder.getByRole('button', { name: 'Save Meal' }).click();
   await expect(builder.getByRole('alert')).toHaveText('Enter a meal name.');
@@ -3565,7 +3565,7 @@ test('Lee-Lee Meal Builder rejects incomplete drafts and permits duplicate names
   await builder.getByRole('button', { name: 'Remove Invalid Quantity Food' }).click();
   await expect(builder.getByLabel('Meal Carbs')).toHaveValue('');
   await builder.getByRole('button', { name: 'Cancel', exact: true }).first().click();
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
   builder = page.locator('[data-meal-builder]');
   await builder.getByLabel('Meal Name').fill('Repeatable Meal');
   await builder.getByLabel('Meal Carbs').fill('62');
@@ -3591,7 +3591,7 @@ test('Lee-Lee Meal Builder rejects incomplete drafts and permits duplicate names
   await chooseLeeLeeSection(page, 'Foods');
   await openFoodLibraryAccordion(page, 'meals');
 
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
   builder = page.locator('[data-meal-builder]');
   await builder.getByLabel('Meal Name').fill('Itemized Meal');
   await builder.getByRole('button', { name: '+ Add Food Item' }).click();
@@ -3604,7 +3604,7 @@ test('Lee-Lee Meal Builder rejects incomplete drafts and permits duplicate names
   expect(await page.evaluate(() => window.LeeLeeTrackerStorage.loadTrackerData().savedMeals)).toHaveLength(1);
   await builder.getByLabel('Invalid Quantity Food carbs').fill('5');
   await builder.getByRole('button', { name: 'Save Meal' }).click();
-  await page.getByRole('button', { name: '+ Add New Meal' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Meal' }).click();
   builder = page.locator('[data-meal-builder]');
   await builder.getByLabel('Meal Name').fill('Itemized Meal');
   await builder.getByRole('button', { name: '+ Add Food Item' }).click();
@@ -4218,7 +4218,7 @@ test('Lee-Lee Food Library uses a focused Add/Edit Food screen', async ({ page }
 
   await page.evaluate(() => window.LandosTheme?.setPreference?.('light'));
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByRole('button', { name: '+ Add New Food' }).click();
+  await page.locator('[data-action="toggle-add-menu"]').click(); await page.getByRole('button', { name: 'Add New Food' }).click();
   await expect(editorLayer.getByRole('heading', { name: 'Add New Food' })).toBeVisible();
   await editorLayer.getByRole('button', { name: 'Cancel' }).first().click();
   await expect(page.locator('[data-food-library-editor-layer]')).toHaveCount(0);

@@ -5,7 +5,7 @@ let appActive = true;
 let pendingRaw = null;
 let state = null, draft = { firstName: '', balanceCents: 0, payday: '', frequency: '', onboarded: true }, step = 1, tab = 'Home', storageBlocked = false, lastRaw = null;
 let noticeTimer = null, sheetOpener = null, sheetScroll = null, sheetExitDismissal = false;
-let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0;
+let sheetPage = null, pageOpener = null, pageScroll = null, sheetMountId = 0, sheetReturnFocus = null;
 let activitySearch = '', activityFilter = 'all', affordabilityInput = '';
 let affordabilityRaw = null;
 let insightFilter = 'budget', smallAmount = '', smallFrequency = 'weekly';
@@ -55,7 +55,7 @@ function showNotice(message, kind, duration) {
     close.onclick = dismissNotice;
     notice.append(text, close);
   }
-  const dialog = document.querySelector('#transaction-sheet[open],#affordability-sheet[open]');
+  const dialog = document.querySelector('#transaction-sheet[open]');
   if (dialog) {
     const error = dialog.querySelector('.error');
     (error || dialog.querySelector('.sheet-body') || dialog).append(notice);
@@ -154,7 +154,7 @@ const launcherBack = `<a class="ecosystem_nav_back" href="#/" aria-label="Return
 const quickActions = document.createElement('div');
 quickActions.className = 'floating-actions';
 quickActions.hidden = true;
-quickActions.innerHTML = `<div id="quick-actions-menu" class="floating-actions-menu" inert aria-label="Quick actions"><button type="button" data-transaction-type="income">Add Money</button><button type="button" data-transaction-type="expense">Add Expense</button><button type="button" id="check-affordability">Can I Afford This?</button></div><button type="button" id="quick-actions-toggle" aria-label="Quick actions" aria-expanded="false" aria-controls="quick-actions-menu"><span aria-hidden="true"><svg viewBox="0 0 32 32" width="32" height="32" focusable="false"><path d="M16 6v20M6 16h20"/></svg></span></button>`;
+quickActions.innerHTML = `<button type="button" id="quick-actions-toggle" aria-label="Quick actions" aria-expanded="false" aria-controls="quick-actions-menu"><span aria-hidden="true"><svg viewBox="0 0 32 32" width="32" height="32" focusable="false"><path d="M16 6v20M6 16h20"/></svg></span></button><div id="quick-actions-menu" class="floating-actions-menu" inert aria-label="Quick actions"><button type="button" data-transaction-type="income"><span class="floating-actions-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg></span>Add Money</button><button type="button" data-transaction-type="expense"><span class="floating-actions-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span>Add Expense</button><button type="button" id="check-affordability"><span class="floating-actions-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></svg></span>Can I Afford This?</button></div>`;
 root.append(quickActions);
 const quickToggle = quickActions.querySelector('#quick-actions-toggle');
 function closeQuickActions() {
@@ -213,7 +213,7 @@ function showFloatingNav() {
 }
 window.addEventListener('scroll', () => {
   if (!appActive) return;
-  if (nav.hidden || document.querySelector('#transaction-sheet[open],#affordability-sheet[open]')) return;
+  if (nav.hidden || document.querySelector('#transaction-sheet[open]')) return;
   const y = Math.max(0, Math.min(window.scrollY, document.documentElement.scrollHeight - innerHeight));
   if (y <= 12) showFloatingNav();
   else if (Math.abs(y - scrollAnchor) >= 12) {
@@ -232,7 +232,6 @@ function render() {
   closeQuickActions();
   quickActions.hidden = !state || !['Home', 'Activity', 'Goals', 'Insights'].includes(tab);
   if (!state) { onboarding(); return; }
-  if (tab !== 'Afford') { const preview = document.querySelector('#affordability-sheet'); preview.close(); preview.replaceChildren(); }
   if (sheetPage) { renderSheetPage(); return; }
   root.dataset.screen = tab.toLowerCase();
   gear.hidden = !['Home', 'Settings'].includes(tab); nav.hidden = ['Afford', 'Settings'].includes(tab);
@@ -254,10 +253,11 @@ function render() {
   content.querySelector('#set-payday')?.addEventListener('click', openSettings);
 }
 function renderAffordability() {
-  const preview = document.querySelector('#affordability-sheet');
   affordabilityRaw = lastRaw;
-  showDocumentPanel(preview, `<div class="sheet-heading"><h2 id="afford-title" tabindex="-1">Can I Afford This?</h2><button type="button" id="afford-back" aria-label="Back to Home">${icon('close')}</button></div><form id="affordability-form" novalidate><div class="sheet-body sheet-fields"><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" autofocus name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></div></form>`, '#afford-title', 'affordability');
-  const input = preview.querySelector('#afford-price'), result = preview.querySelector('#afford-result'), buy = preview.querySelector('#afford-buy');
+  openSheet(`<div class="sheet-heading"><h2 id="afford-title" tabindex="-1">Can I Afford This?</h2><button type="button" id="afford-back" aria-label="Back to Home">${icon('close')}</button></div><form id="affordability-form" novalidate><div class="sheet-body sheet-fields"><label for="afford-price">How much does it cost?</label><div class="currency-input"><span aria-hidden="true">$</span><input id="afford-price" autofocus name="price" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escape(affordabilityInput)}" aria-describedby="afford-hint"></div><p class="hint" id="afford-hint">Enter a price like 25 or 25.50, without commas or a $ sign.</p><div class="story"><p>Available to spend</p><p class="afford-available numeric">${money(availableBalance(state))}</p><p>Money saved for your goals stays set aside.</p></div><div id="afford-result" class="afford-result" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="primary" id="afford-buy" disabled>Buy It</button><p class="hint">Just a preview. Buy It opens Add Expense; only Save Expense records a purchase.</p></div></form>`, '#afford-title', 'form');
+  if (sheetPage) sheetPage.afford = true;
+  const input = content.querySelector('#afford-price'), result = content.querySelector('#afford-result'), buy = content.querySelector('#afford-buy');
+  if (!input || !result || !buy) return;
   const update = () => {
     affordabilityInput = input.value;
     const check = affordability(state, input.value);
@@ -267,13 +267,13 @@ function renderAffordability() {
     result.innerHTML = check.status === 'blank' ? '<h2>Something caught your eye?</h2><p>Enter its price to see how it fits.</p>' : check.status === 'invalid' ? '<h2>Let’s check that price.</h2><p>Use an amount greater than zero with up to two decimal places.</p>' : check.affordable ? `<h2>Yes, it fits!</h2><p>You’d have <span class="numeric">${money(check.remainingCents)}</span> left to spend.${check.remainingCents === 0 ? ' That uses all your available spending money.' : ''}</p>` : `<h2>Not quite yet.</h2><p>You’d need <span class="numeric">${money(check.shortageCents)}</span> more, keeping your goal savings safe.</p>`;
   };
   input.oninput = update; update();
-  preview.querySelector('#afford-back').onclick = closeAffordability;
-  preview.querySelector('form').onsubmit = event => {
+  content.querySelector('#afford-back').onclick = closeAffordability;
+  content.querySelector('#affordability-form').onsubmit = event => {
     event.preventDefault();
     if (transactionSheet.open) return;
     if (!affordabilityIsCurrent(affordabilityRaw)) return;
     const check = affordability(state, input.value); update();
-    if (check.affordable) { buy.focus({preventScroll:true}); openTransactionForm('expense', null, check.priceCents); }
+    if (check.affordable) { sheetReturnFocus = '#afford-buy'; pageOpener = buy; openTransactionForm('expense', null, check.priceCents); }
   };
 }
 function affordabilityIsCurrent(expectedRaw) {
@@ -375,17 +375,10 @@ function renderActivityRows() {
   list.innerHTML = groups.map(group => `<section class="activity-group"><h2>${escape(group.label)}</h2><ul>${group.transactions.map(t => `<li><button class="transaction-row" type="button" data-transaction-id="${escape(t.id)}" aria-label="${escape(`View transaction details: ${t.description || t.label}, ${t.type === 'income' ? 'Money In +' : 'Expense −'}${money(t.amountCents)}, ${t.label}`)}"><span class="transaction-icon ${t.type}">${icon(t.type === 'income' ? 'plus' : 'expense')}</span><span class="transaction-text"><strong>${escape(t.description || t.label)}</strong><small>${t.type === 'income' ? 'Money In' : 'Expense'} · ${escape(t.label)}</small></span><strong class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${money(t.amountCents)}</strong><span class="transaction-chevron navigation-chevron" aria-hidden="true">${icon('chevron')}</span></button></li>`).join('')}</ul></section>`).join('');
   list.querySelectorAll('[data-transaction-id]').forEach(button => button.onclick = () => { button.focus({preventScroll:true}); showTransaction(button.dataset.transactionId); });
 }
-// All three entry surfaces use the same native dialog opening, document-flow
-// wrappers, initial scroll position and field focus sequence.
-function showDocumentPanel(dialog, html, focusSelector, panelClass = '') {
-  dialog.dataset.view = 'form';
-  dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel ${panelClass}">${html}</section></div>`;
-  if (!dialog.open) dialog.show();
-  window.scrollTo({left:0, top:0, behavior:'instant'});
-  if (!focusFirstField(dialog)) dialog.querySelector(focusSelector).focus({preventScroll:true});
-}
 function closeAffordability() {
-  affordabilityInput = ''; tab = 'Home'; render();
+  affordabilityInput = ''; tab = 'Home';
+  if (sheetPage?.afford) sheetPage = null;
+  render();
   window.scrollTo({left:0, top:0, behavior:'instant'});
   quickToggle.focus({preventScroll:true});
 }
@@ -411,8 +404,6 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
     // Long forms and details are pages: they replace the tab content
     // instead of opening the sheet dialog. Only the small confirmations
     // below still use the dialog.
-    const preview = document.querySelector('#affordability-sheet');
-    if (preview.open) { preview.close(); preview.replaceChildren(); }
     if (transactionSheet.open) transactionSheet.close();
     if (!sheetPage) {
       pageOpener = document.activeElement;
@@ -434,11 +425,9 @@ function openSheet(html, focusSelector = '#sheet-title', view = 'form', presenta
   if (dialog.open && (dialog.dataset.view === 'confirm') !== compact) dialog.close();
   document.body.style.overflow = compact ? 'hidden' : sheetScroll.overflow;
   root.inert = true;
-  document.querySelector('#affordability-sheet').inert = true;
   dialog.setAttribute('aria-modal', 'true');
   dialog.dataset.view = view;
   dialog.dataset.presentation = presentation;
-  if (!compact) { showDocumentPanel(dialog, html, focusSelector); dialog.dataset.view = view; return; }
   dialog.innerHTML = `<div class="transaction-frame"><section class="transaction-panel">${html}</section></div>`;
   if (!dialog.open) dialog.showModal();
   fitSheetViewport();
@@ -454,8 +443,14 @@ function closeSheet() {
     applyPendingSync();
     if (transactionSheet.open) { sheetScroll = null; sheetOpener = null; transactionSheet.close(); }
     root.inert = false;
-    document.querySelector('#affordability-sheet').inert = false;
     render();
+    if (sheetPage) {
+      const target = sheetReturnFocus ? content.querySelector(sheetReturnFocus) : null;
+      sheetReturnFocus = null;
+      (target || content.querySelector(sheetPage.focusSelector))?.focus({ preventScroll: true });
+      pageOpener = null; pageScroll = null;
+      return;
+    }
     if (pageScroll) {
       document.body.style.overflow = pageScroll.overflow;
       window.scrollTo({left: pageScroll.x, top: pageScroll.y, behavior:'instant'});
@@ -555,7 +550,7 @@ transactionSheet.addEventListener('focusin', event => {
 function handleEntryKeys(event) {
   const dialog = event.currentTarget;
   if (dialog.dataset.view === 'confirm') return;
-  if (event.key === 'Escape') { event.preventDefault(); if (dialog === transactionSheet) closeSheet(); else closeAffordability(); }
+  if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
   if (event.key !== 'Tab') return;
   const controls = [...dialog.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el => !el.disabled && el.tabIndex >= 0);
   const first = controls[0], last = controls.at(-1);
@@ -563,12 +558,10 @@ function handleEntryKeys(event) {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
 }
 transactionSheet.addEventListener('keydown', handleEntryKeys);
-document.querySelector('#affordability-sheet').addEventListener('keydown', handleEntryKeys);
-document.querySelector('#affordability-sheet').addEventListener('cancel', event => {event.preventDefault();closeAffordability();});
 transactionSheet.addEventListener('cancel', event => { event.preventDefault(); closeSheet(); });
 document.addEventListener('keydown', event => {
   if (!appActive) return;
-  if (event.key === 'Escape' && sheetPage && !transactionSheet.open) { event.preventDefault(); closeSheet(); }
+  if (event.key === 'Escape' && sheetPage && !transactionSheet.open) { event.preventDefault(); if (sheetPage.afford) closeAffordability(); else closeSheet(); }
 });
 transactionSheet.addEventListener('close', restoreSheet);
 function restoreSheet() {
@@ -580,7 +573,6 @@ function restoreSheet() {
   if (transactionSheet.open || !sheetScroll) return;
   applyPendingSync();
   root.inert = false;
-  document.querySelector('#affordability-sheet').inert = false;
   for (const property of ['--sheet-height', '--sheet-width', '--sheet-top', '--sheet-left']) transactionSheet.style.removeProperty(property);
   if (sheetScroll) {
     document.body.style.overflow = sheetScroll.overflow;
