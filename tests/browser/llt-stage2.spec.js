@@ -481,3 +481,10 @@ test('Foods add menu: keyboard order, visible focus, Escape and scroll-hide clos
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(menu).toBeHidden();
 });
+
+test('Foods add menu opens without animation under reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page); await foods(page);
+  await root(page).locator('[data-action="toggle-add-menu"]').click();
+  await expect(root(page).locator('.lee_lee_diabetes_floating_menu')).toHaveCSS('transition-duration', '0s');
+});

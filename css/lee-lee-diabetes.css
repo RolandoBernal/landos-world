@@ -3950,7 +3950,7 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
-  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out, visibility 0s;
+  transition-delay: 0s;
   pointer-events: auto;
 }
 .lee_lee_diabetes_floating_menu button {

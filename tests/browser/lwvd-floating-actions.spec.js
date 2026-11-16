@@ -29,3 +29,24 @@ for(const theme of ['light','dark']) test(`floating actions and Settings in ${th
   await page.emulateMedia({reducedMotion:'reduce'});await toggle.click();expect(await toggle.locator('span').evaluate(e=>getComputedStyle(e).transitionDuration)).toBe('0s');
   expect(await page.evaluate(()=>localStorage.getItem('lando-world:lwvd:v1'))).toBe(raw);
 });
+
+test('quick actions are keyboard-reachable immediately and Escape restores focus', async ({ page, browserName }) => {
+  await page.addInitScript(() => localStorage.setItem('lando-world:lwvd:v1', JSON.stringify({
+    firstName: 'Violet', balanceCents: 10000, payday: '', frequency: '', onboarded: true,
+  })));
+  await page.goto('/#/violet-dineros');
+  const toggle = page.getByRole('button', { name: 'Quick actions', exact: true });
+  const menu = page.locator('#quick-actions-menu');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await expect(menu.getByRole('button', { name: 'Add Money', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toHaveJSProperty('inert', true);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCSS('transition-duration', '0s');
+});
