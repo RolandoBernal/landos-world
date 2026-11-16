@@ -179,3 +179,12 @@ test('Reports keeps its scroll position across sync refreshes', async ({ page })
   const afterStatus = await page.evaluate(() => window.scrollY);
   expect(Math.abs(afterStatus - before)).toBeLessThanOrEqual(150);
 });
+
+test('Reports shows no floating log button; History keeps it', async ({ page }) => {
+  await open(page, 'Reports');
+  await expect(page.getByRole('button', { name: 'Print or Save as PDF' })).toBeVisible();
+  await expect(page.locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
+  const nav = page.getByRole('navigation', { name: 'Lee-Lee’s Tracker mobile navigation' });
+  await nav.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.locator('.lee_lee_diabetes_floating_log')).toBeVisible();
+});

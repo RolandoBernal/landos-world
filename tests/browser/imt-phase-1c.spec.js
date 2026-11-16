@@ -7,7 +7,7 @@ for (const theme of ['dark','light']) {
     await page.goto('/#/maintenance-total');
     const root=page.locator('#maintenance-total-root');
     const nav=root.locator('.imt_bottom_nav');
-    const add=root.getByRole('button',{name:'Add',exact:true});
+    const add=root.getByRole('button',{name:'Add record',exact:true});
     await nav.getByRole('button',{name:'Plan',exact:true}).click();
     for (const width of [320,390,430,1280]) {
       await page.setViewportSize({width,height:844});

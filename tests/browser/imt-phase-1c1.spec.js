@@ -17,12 +17,33 @@ for(const theme of ['dark','light']) test(`all six Add/Edit forms hide floating 
     if(title==='Add Asset')await page.screenshot({path:info.outputPath(`${theme}-save-clear.png`)});
     await save.click();await expect(root.locator('form')).toHaveCount(0);if(chrome==='fabHere')await fabHere();else await regular();
   };
-  await fabHere();await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-action="add-bike"]').click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Asset');
-  await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await regular();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset');
-  await root.locator('[data-action="add-component"]').click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component');
-  await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component');
-  await root.locator('[data-action="add-record"]').click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service','fabHere');
+  await fabHere();await nav.getByRole('button',{name:'Garage',exact:true}).click();await fab.click();await root.getByLabel('Name *',{exact:true}).fill('New bicycle');await submit('Add Asset','fabHere');
+  await nav.getByRole('button',{name:'Garage',exact:true}).click();await root.locator('[data-bike="bike"]').click();await fabHere();await root.locator('[data-action="edit-bike"]').click();await submit('Edit Asset','fabHere');
+  await fab.click();await root.getByLabel('Component name *',{exact:true}).fill('New component');await submit('Add Component','fabHere');
+  await root.locator('[data-component="chain"]').click();await root.locator('[data-action="edit-component"]').click();await submit('Edit Component','fabHere');
+  await fab.click();await root.getByLabel('Asset *',{exact:true}).selectOption('bike');await root.getByLabel('Task',{exact:true}).selectOption('chain');await submit('Log service','fabHere');
   await root.locator('[data-edit-record="record"]').click();await submit('Edit service record','fabHere');
-  for(const label of ['Today','History','Garage']){await nav.getByRole('button',{name:label,exact:true}).click();if(label==='Garage')await regular();else await fabHere();}
+  for(const label of ['Today','History','Garage']){await nav.getByRole('button',{name:label,exact:true}).click();await fabHere();}
   await nav.getByRole('button',{name:'Plan',exact:true}).click();await expect(fab).toBeVisible();await expect(nav.getByRole('button')).toHaveCount(4);
+});
+
+test('floating add is contextual: label and target follow the current view', async ({ page }) => {
+  await page.addInitScript(f => localStorage.setItem('lando-world:maintenance-total:v1', JSON.stringify(f)), fixture);
+  await page.goto('/#/maintenance-total');
+  const root = page.locator('#maintenance-total-root'), fab = root.locator('.imt_add_button'), nav = root.locator('.imt_bottom_nav');
+  await expect(fab).toHaveAttribute('aria-label', 'Add record');
+  await nav.getByRole('button', { name: 'Garage', exact: true }).click();
+  await expect(fab).toHaveAttribute('aria-label', 'Add asset');
+  await page.locator('[data-category="cars"]').click();
+  await fab.click();
+  await expect(page.getByLabel('Category *')).toHaveValue('cars');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('[data-category="all"]').click();
+  await page.locator('[data-bike="bike"]').click();
+  await expect(fab).toHaveAttribute('aria-label', 'Add task');
+  await page.locator('[data-component="chain"]').click();
+  await expect(fab).toHaveAttribute('aria-label', 'Add record');
+  await fab.click();
+  await expect(page.locator('#r-asset')).toHaveValue('bike');
+  await expect(page.locator('#r-component')).toHaveValue('chain');
 });

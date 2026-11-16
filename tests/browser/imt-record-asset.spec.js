@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test('general Add requires an asset and persists the chosen bike across reload and edit', async ({ page }) => {
   await page.goto('/#/maintenance-total');
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add record', exact: true }).click();
   const asset = page.getByLabel('Asset *', { exact: true });
   await expect(asset).toHaveValue('');
   await page.getByRole('button', { name: 'Save to history →', exact: true }).click();
@@ -35,7 +35,7 @@ test('component context is visible and changing assets clears the old component'
 
   await page.locator('[data-bike="madone"]').click();
   await page.locator('[data-component="madone-brakes"]').click();
-  await page.getByRole('button', { name: '＋ Add Service Record' }).click();
+  await page.locator('.imt_add_button').click();
   await expect(page.getByLabel('Asset *', { exact: true })).toHaveValue('madone');
   await expect(page.getByLabel('Task')).toHaveValue('madone-brakes');
   await page.getByLabel('Notes').fill('Keep this draft');
