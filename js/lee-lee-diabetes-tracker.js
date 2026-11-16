@@ -4548,7 +4548,16 @@
       nav.classList.remove('is-scroll-hidden');
       nav.dataset.scrollAnchor = String(y);
     } else if (Math.abs(y - anchor) >= 12) {
-      nav.classList.toggle('is-scroll-hidden', y > anchor);
+      const hidden = y > anchor;
+      nav.classList.toggle('is-scroll-hidden', hidden);
+      if (hidden) {
+        const addToggle = nav.querySelector('.lee_lee_diabetes_floating_log[data-action="toggle-add-menu"][aria-expanded="true"]');
+        if (addToggle) {
+          addToggle.setAttribute('aria-expanded', 'false');
+          const addMenu = nav.querySelector('.lee_lee_diabetes_floating_menu');
+          if (addMenu) addMenu.inert = true;
+        }
+      }
       nav.dataset.scrollAnchor = String(y);
     }
   }
@@ -4558,12 +4567,12 @@
     const showLogAction = active !== 'settings' && active !== 'reports' && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     const logAction = !showLogAction ? '' : active === 'foods' ? `
+        <button type="button" class="lee_lee_diabetes_floating_log" data-action="toggle-add-menu" aria-label="Add" title="Add" aria-expanded="false" aria-controls="lee-lee-add-menu"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>
         <div class="lee_lee_diabetes_floating_menu" id="lee-lee-add-menu" inert aria-label="Add">
           <button type="button" data-action="log-entry"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('log')}</span>Log Entry</button>
           <button type="button" data-action="open-food-library-editor"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('apple')}</span>Add New Food</button>
           <button type="button" data-action="open-saved-meal-builder"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('utensils-crossed')}</span>Add New Meal</button>
-        </div>
-        <button type="button" class="lee_lee_diabetes_floating_log" data-action="toggle-add-menu" aria-label="Add" title="Add" aria-expanded="false" aria-controls="lee-lee-add-menu"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>`
+        </div>`
       : `<button type="button" class="lee_lee_diabetes_floating_log" data-action="log-entry" aria-label="Log Entry" title="Log Entry"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>`;
     return `
       <div class="lee_lee_diabetes_nav_shell" data-scroll-anchor="${Math.max(0, window.scrollY)}">

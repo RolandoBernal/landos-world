@@ -454,3 +454,26 @@ test('Foods + opens the add menu with Log Entry, Add New Food and Add New Meal',
   await menu.getByRole('button', { name: 'Log Entry', exact: true }).click();
   await expect(toggle).toHaveCount(0);
 });
+
+test('Foods add menu: keyboard order, visible focus, Escape and scroll-hide close', async ({ page }) => {
+  await open(page); await foods(page);
+  const toggle = root(page).locator('[data-action="toggle-add-menu"]');
+  const menu = root(page).locator('.lee_lee_diabetes_floating_menu');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('button', { name: 'Log Entry', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  const outline = await toggle.evaluate(node => { const s = getComputedStyle(node); return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) }; });
+  expect(outline.style).toBe('solid');
+  expect(outline.width).toBeGreaterThanOrEqual(2);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.evaluate(() => window.scrollTo(0, 800));
+  await expect(root(page).locator('.lee_lee_diabetes_nav_shell')).toHaveClass(/is-scroll-hidden/);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeHidden();
+});
