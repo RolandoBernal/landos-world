@@ -76,3 +76,15 @@ test('purchase save failure retains draft; retry saves once and updates Home dai
  await page.evaluate(()=>Storage.prototype.setItem=window.originalSetItem);await page.getByRole('button',{name:'Save Expense',exact:true}).click();await expect(page.locator('.story .balance')).toHaveText('$15.00');await expect(page.locator('.daily-card .numeric')).toHaveText('$1.50');await expect(page.locator('#violet-dineros-view h1')).toBeFocused();expect((await saved(page)).transactions).toHaveLength(1);
  await page.locator('#violet-dineros-view nav').getByRole('button',{name:'Activity',exact:true}).click();await page.locator('.transaction-row').click();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByLabel('How much?',{exact:true}).fill('20');await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.getByRole('heading',{name:'Activity',exact:true})).toBeVisible();expect((await saved(page)).transactions).toHaveLength(1);
 });
+test('affordability opens as the page itself: launching page hidden, form at the top', async ({ page }) => {
+  for (const theme of ['light', 'dark']) {
+    await start(page);
+    await page.evaluate(theme => localStorage.setItem('landos_world_appearance_preference_v1', theme), theme);
+    await page.reload(); await quickAction(page, 'Can I Afford This?');
+    await expect(page.locator('.shell.lwvd-scope')).toBeHidden();
+    const box = await page.getByRole('heading', { name: 'Can I Afford This?' }).boundingBox();
+    expect(box.y).toBeLessThan(80);
+    await page.locator('#afford-back').click();
+    await expect(page.locator('.shell.lwvd-scope')).toBeVisible();
+  }
+});

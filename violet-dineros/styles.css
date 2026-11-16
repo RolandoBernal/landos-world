@@ -101,7 +101,7 @@
 #transaction-sheet.lwvd-scope[data-view=details],#transaction-sheet.lwvd-scope[data-view=details]::backdrop{background:#fcfaff}
 .lwvd-scope .details-body{flex:1;display:flex;flex-direction:column}
 .lwvd-scope .details-centered{flex-shrink:0;width:100%;margin-block:auto}
-body:has(#transaction-sheet[data-view=details][open])>.shell.lwvd-scope,body:has(#transaction-sheet[open] #transaction-form)>.shell.lwvd-scope{visibility:hidden}
+body:has(#transaction-sheet[data-view=details][open]) #violet-dineros-view>.shell.lwvd-scope,body:has(#transaction-sheet[open] #transaction-form) #violet-dineros-view>.shell.lwvd-scope,body:has(#affordability-sheet[open] #affordability-form) #violet-dineros-view>.shell.lwvd-scope{display:none}
 .lwvd-scope .sheet-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.lwvd-scope .sheet-heading h2{font-size:1.3rem;margin:0}.lwvd-scope .sheet-heading h2:focus{outline:none}.lwvd-scope .sheet-heading button{border:0;background:transparent;font-size:1.65rem;line-height:1;min-width:44px;padding:8px}
 :is(#transaction-sheet.lwvd-scope,#affordability-sheet.lwvd-scope) label{font-size:.87rem;font-weight:500}.lwvd-scope .sheet-actions{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .lwvd-scope .detail-amount{font-size:2.1rem;font-weight:500;overflow-wrap:anywhere}.lwvd-scope .transaction-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;font-size:.88rem}.lwvd-scope .transaction-details dt{color:#675b80}.lwvd-scope .transaction-details dd{margin:0;overflow-wrap:anywhere}
