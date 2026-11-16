@@ -483,7 +483,6 @@
 .maintenance_total_view .imt_history_stats .imt_stat span { color: var(--ink2); font-size: .8rem; }
 :root[data-theme="light"] .maintenance_total_view .imt_history_stats .imt_stat { border-color: #E2E6E0; }
 .maintenance_total_view .imt_field_pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
-.maintenance_total_view .imt_garage_add { width: 100%; margin-top: 12px; }
 .maintenance_total_view .imt_asset_next:has(> strong) { color: var(--ink); font-weight: 600; }
 /* D-D destructive treatment: outline/red in both themes via the coral token
    (the same color Delete actions use), over the secondary base. */

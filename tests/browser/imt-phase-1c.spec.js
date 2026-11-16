@@ -7,7 +7,7 @@ for (const theme of ['dark','light']) {
     await page.goto('/#/maintenance-total');
     const root=page.locator('#maintenance-total-root');
     const nav=root.locator('.imt_bottom_nav');
-    const add=root.getByRole('button',{name:'Add',exact:true});
+    const add=root.getByRole('button',{name:'Add record',exact:true});
     await nav.getByRole('button',{name:'Plan',exact:true}).click();
     for (const width of [320,390,430,1280]) {
       await page.setViewportSize({width,height:844});
@@ -43,7 +43,7 @@ for (const theme of ['dark','light']) {
     await root.getByLabel('Notes',{exact:true}).fill('Scroll clearance check');
     await page.evaluate(()=>document.activeElement.blur());
     await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
-    const save=root.getByRole('button',{name:'Save to history →',exact:true});
+    const save=root.getByRole('button',{name:'Save',exact:true});
     const s=await save.boundingBox(), n=await nav.boundingBox();
     await expect(add).toHaveCount(0);
     expect(s.y+s.height).toBeLessThan(n.y);

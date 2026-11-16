@@ -73,7 +73,7 @@ for (const theme of ['light', 'dark', 'system']) {
     await expect(page.locator('.road_bike_confirm__actions button').first()).toHaveText('Cancel');
     await open(page, '/#/maintenance-total');
     await page.locator('[data-imt-nav="assets"]').filter({ visible: true }).first().click();
-    await page.locator('[data-action="add-bike"]').click();
+    await page.locator('.imt_add_button').click();
     await pair(page.locator('#imt-form .imt_actions'));
     await expect(page.locator('#imt-form .imt_actions button').first()).toHaveText('Cancel');
     await open(page, '/#/violet-futbol-game-tracker'); await page.locator('#vfgt_settings_toggle').click();

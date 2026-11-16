@@ -60,7 +60,7 @@ for (const theme of ['light', 'dark']) {
       await page.getByLabel('Notes', { exact: true }).focus();
       await expect(page.locator('.imt_floating_controls')).toHaveClass(/is-form-focused/);
       await page.setViewportSize({ width, height: 360 });
-      for (const label of ['Save to history →', 'Cancel']) {
+      for (const label of ['Save', 'Cancel']) {
         const button = page.getByRole('button', { name: label, exact: true });
         await button.focus();
         await expect.poll(async () => { const r = await button.boundingBox(); return r.y + r.height; }).toBeLessThanOrEqual(344);

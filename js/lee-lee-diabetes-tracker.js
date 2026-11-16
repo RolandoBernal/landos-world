@@ -4553,7 +4553,7 @@
 
   function renderTrackerNav(active) {
     if (active === 'settings' || currentEditor?.carbCalculatorOpen || currentEditor?.foodLibraryEditorOpen || mealBuilderState) return '';
-    const showLogAction = active !== 'settings' && !currentEditor?.carbCalculatorItemEditorMode
+    const showLogAction = active !== 'settings' && active !== 'reports' && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     return `
       <div class="lee_lee_diabetes_nav_shell" data-scroll-anchor="${Math.max(0, window.scrollY)}">
