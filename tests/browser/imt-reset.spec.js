@@ -146,3 +146,16 @@ test('restore rejects invalid files and protects existing unreadable or unsuppor
     expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(raw);
   }
 });
+
+test('reset button carries the destructive outline treatment in light and dark', async ({ page }) => {
+  await page.addInitScript(({ key, empty }) => localStorage.setItem(key, JSON.stringify(empty)), { key, empty });
+  await page.goto('/#/maintenance-total');
+  await page.locator('#imt_settings_toggle').click();
+  const reset = page.getByRole('button', { name: 'Reset iMT Data', exact: true });
+  await expect(reset).toBeVisible();
+  for (const [theme, label, outline] of [['light', 'rgb(194, 78, 42)', 'rgb(217, 93, 57)'], ['dark', 'rgb(240, 120, 86)', 'rgb(240, 120, 86)']]) {
+    await page.evaluate(t => window.LandosTheme.setPreference(t), theme);
+    await expect(reset).toHaveCSS('color', label);
+    await expect(reset).toHaveCSS('border-color', outline);
+  }
+});

@@ -43,7 +43,7 @@ for (const theme of ['dark','light']) {
     await root.getByLabel('Notes',{exact:true}).fill('Scroll clearance check');
     await page.evaluate(()=>document.activeElement.blur());
     await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
-    const save=root.getByRole('button',{name:'Save',exact:true});
+    const save=root.getByRole('button',{name:'Save to history →',exact:true});
     const s=await save.boundingBox(), n=await nav.boundingBox();
     await expect(add).toHaveCount(0);
     expect(s.y+s.height).toBeLessThan(n.y);

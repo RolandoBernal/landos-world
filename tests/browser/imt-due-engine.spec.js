@@ -15,7 +15,7 @@ for(const theme of ['light','dark','system'])test(`Today, Done, reload, undo, na
   await expect(page.locator('html')).toHaveAttribute('data-theme',theme==='system'?'dark':theme);
   const attention=page.locator('.imt_section').filter({has:page.getByRole('heading',{name:'Needs attention',exact:true})});
   await expect(attention.locator('[data-task]')).toHaveCount(2);await expect(attention.locator('[data-task]').first()).toHaveAttribute('data-task','overdue');
-  await expect(page.locator('.imt_health')).toContainText('75%');await expect(page.locator('.imt_health')).toContainText('2 unassessed');
+  await expect(page.locator('.imt_health')).toContainText('75%');await expect(page.locator('.imt_health')).not.toContainText('unassessed');
   await expect(page.locator('[data-task="unknown"]')).toContainText('Needs baseline');await expect(page.locator('[data-task="unscheduled"]')).toContainText('Not scheduled');
   await page.screenshot({path:info.outputPath(`${theme}-today.png`),fullPage:true});
   await page.locator('.imt_bottom_nav [data-imt-nav="plan"]').click();
@@ -73,9 +73,10 @@ test('a dual-axis task shows only the winning axis reason',async({page})=>{
   await expect(card.locator('p.imt_meta')).toHaveText('Actual Bike · overdue by 500 mi');
   await expect(card).not.toContainText('Due Dec');
   await page.locator('[data-imt-nav="assets"]').click();
-  const next=page.locator('[data-bike="a"] .imt_asset_next');
-  await expect(next).toContainText('Overdue by 500 miles');
-  await expect(next).not.toContainText('Due Dec');
+  const bikeCard=page.locator('[data-bike="a"]');
+  await expect(bikeCard.locator('.imt_asset_next')).toContainText('Next · Tires');
+  await expect(bikeCard).toContainText('Overdue by 500 miles');
+  await expect(bikeCard).not.toContainText('Due Dec');
 });
 
 test('a compact card keeps the baseline warning next to the winning reason',async({page})=>{
