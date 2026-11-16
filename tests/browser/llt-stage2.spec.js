@@ -464,8 +464,8 @@ test('Foods add menu: keyboard order, visible focus, Escape and scroll-hide clos
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await page.waitForFunction(() => { const m = document.querySelector('.lee_lee_diabetes_floating_menu'); const st = getComputedStyle(m); return st.visibility === 'visible' && st.opacity === '1'; });
   // Safari/WebKit traverses focus with Option-Tab unless full keyboard access is on.
+  // No delay: the actions must be reachable the moment the menu opens.
   await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
   await expect(menu.getByRole('button', { name: 'Log Entry', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

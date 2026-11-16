@@ -3943,13 +3943,14 @@ dialog.lee_lee_diabetes_carb_calc_layer::backdrop { background: transparent; }
   opacity: 0;
   visibility: hidden;
   transform: translateY(8px);
-  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out, visibility 200ms;
+  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out, visibility 0s linear 200ms;
   pointer-events: none;
 }
 .lee_lee_diabetes_nav_shell:has(.lee_lee_diabetes_floating_log[aria-expanded="true"]) .lee_lee_diabetes_floating_menu {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out, visibility 0s;
   pointer-events: auto;
 }
 .lee_lee_diabetes_floating_menu button {
