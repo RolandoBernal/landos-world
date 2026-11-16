@@ -40,6 +40,7 @@ for (const app of ['llt','lwvd']) for (const theme of ['dark','light','system'])
   expect(metrics.bottom).toBe(832);expect(metrics.scrimTop).toBe(app==='llt'?'0px':'-1px');expect(metrics.scrimPointer).toBe('none');
   expect(metrics.bg).toBe(app==='llt'?(theme==='light'?'color(srgb 1 1 1 / 0.84)':'color(srgb 0.101961 0.12549 0.172549 / 0.84)'):(theme==='light'?'rgb(255, 255, 255)':'rgba(23, 19, 31, 0.95)'));
   if(app==='llt'){
+   await nav.getByRole('button',{name:'Today',exact:true}).click();
    const plus=page.getByRole('button',{name:'Log Entry',exact:true});
    await expect(nav.getByRole('button',{name:'Log Entry',exact:true})).toHaveCount(0);
    await expect(plus).toHaveCSS('background-color','rgb(13, 176, 43)');
@@ -107,11 +108,13 @@ for(const theme of ['dark','light']) test(`three-app spacing parity and LLT form
  expect(metrics[0]).toEqual({x:16,width:358,bottom:832,height:68});
  const fab=page.locator('.lee_lee_diabetes_floating_log');
  await page.getByRole('button',{name:'Foods',exact:true}).click();
- await page.getByRole('button',{name:'+ Add New Meal',exact:true}).click();
+ await page.locator('[data-action="toggle-add-menu"]').click();
+ await page.getByRole('button',{name:'Add New Meal',exact:true}).click();
  await expect(fab).toHaveCount(0);
  await page.locator('[data-meal-builder] [data-action="cancel-saved-meal-builder"]').first().click();
  await expect(fab).toBeVisible();
- await page.locator('[data-action="open-food-library-editor"]').click();
+ await page.locator('[data-action="toggle-add-menu"]').click();
+ await page.getByRole('button',{name:'Add New Food',exact:true}).click();
  await expect(fab).toHaveCount(0);
  await page.locator('[data-action="cancel-food-library-editor"]').filter({hasText:'Cancel'}).first().click();
  await expect(fab).toBeVisible();

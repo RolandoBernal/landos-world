@@ -4509,6 +4509,8 @@
       foods: '<path d="M4 11h16v1a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z"></path><path d="M8 8c0-2 1-3 2-4"></path><path d="M12 8c0-2 1-3 2-4"></path><path d="M16 8c0-2 1-3 2-4"></path>',
       'open-standalone-carb-calculator': '<rect x="5" y="2" width="14" height="20" rx="3"></rect><path d="M8 6h8M8 10h1m6 0h1M8 14h1m6 0h1M8 18h1m6 0h1"></path>',
       log: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+      apple: '<path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"></path><path d="M10 2c1 .5 2 2 2 5"></path>',
+      'utensils-crossed': '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"></path><path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7"></path><path d="m2.1 21.8 6.4-6.3"></path><path d="m19 5-7 7"></path>',
     };
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[action] || paths.today}</svg>`;
   }
@@ -4555,6 +4557,14 @@
     if (active === 'settings' || currentEditor?.carbCalculatorOpen || currentEditor?.foodLibraryEditorOpen || mealBuilderState) return '';
     const showLogAction = active !== 'settings' && active !== 'reports' && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
+    const logAction = !showLogAction ? '' : active === 'foods' ? `
+        <div class="lee_lee_diabetes_floating_menu" id="lee-lee-add-menu" inert aria-label="Add">
+          <button type="button" data-action="log-entry"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('log')}</span>Log Entry</button>
+          <button type="button" data-action="open-food-library-editor"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('apple')}</span>Add New Food</button>
+          <button type="button" data-action="open-saved-meal-builder"><span class="lee_lee_diabetes_floating_menu_icon">${renderTrackerNavIcon('utensils-crossed')}</span>Add New Meal</button>
+        </div>
+        <button type="button" class="lee_lee_diabetes_floating_log" data-action="toggle-add-menu" aria-label="Add" title="Add" aria-expanded="false" aria-controls="lee-lee-add-menu"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>`
+      : `<button type="button" class="lee_lee_diabetes_floating_log" data-action="log-entry" aria-label="Log Entry" title="Log Entry"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>`;
     return `
       <div class="lee_lee_diabetes_nav_shell" data-scroll-anchor="${Math.max(0, window.scrollY)}">
         <nav class="lee_lee_diabetes_bottom_nav" aria-label="Lee-Lee’s Tracker mobile navigation">
@@ -4569,7 +4579,7 @@
             ><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon(action)}</span><span class="lee_lee_diabetes_sr_only">${escapeHtml(label)}</span></button>
           `).join('')}
         </nav>
-        ${showLogAction ? `<button type="button" class="lee_lee_diabetes_floating_log" data-action="log-entry" aria-label="Log Entry" title="Log Entry"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>` : ''}
+        ${logAction}
       </div>
     `;
   }
@@ -4894,10 +4904,6 @@
       ${renderTrackerNav('foods')}
       <section id="lee-lee-foods-panel" aria-label="Food and meal library">
       ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<label class="lee_lee_diabetes_field lee_lee_diabetes_library_search">Search foods and meals<input class="lee_lee_diabetes_input" name="foodLibrarySearch" type="search" value="${escapeHtml(foodLibrarySearch)}" placeholder="Search your entire library" autocomplete="off"></label>`}
-      ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div class="lee_lee_diabetes_food_library_actions">
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--primary" data-action="open-food-library-editor">+ Add New Food</button>
-        <button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="open-saved-meal-builder">+ Add New Meal</button>
-      </div>`}
       ${foodLibraryError ? `<p class="lee_lee_diabetes_error">${escapeHtml(foodLibraryError)}</p>` : ''}
       ${currentEditor.foodLibraryEditorOpen || mealBuilderState ? '' : `<div data-food-library-discovery>${renderedFoodLibraryDiscovery}</div>`}
       ${currentEditor.foodLibraryEditorOpen ? renderFoodLibraryEditor(editorFood, editorTitle) : ''}
@@ -10663,6 +10669,22 @@
       if (carbDiscoveryPointer) carbDiscoveryPointer.moved = true;
       pendingCarbCalculatorUsePointerId = null;
     }, true);
+    const closeAddMenu = (refocus = false) => {
+      const toggle = root.querySelector('.lee_lee_diabetes_floating_log[data-action="toggle-add-menu"][aria-expanded="true"]');
+      if (!toggle) return;
+      toggle.setAttribute('aria-expanded', 'false');
+      const menu = root.querySelector('.lee_lee_diabetes_floating_menu');
+      if (menu) menu.inert = true;
+      if (refocus) toggle.focus({ preventScroll: true });
+    };
+    document.addEventListener('pointerdown', (event) => {
+      const eventTarget = event.target instanceof Element ? event.target : event.target?.parentElement;
+      if (eventTarget?.closest?.('.lee_lee_diabetes_floating_menu, .lee_lee_diabetes_floating_log')) return;
+      closeAddMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAddMenu(true);
+    });
     root.addEventListener('click', (event) => {
       if (event.target.closest?.('[data-action="start-pre-meal-timer"], [data-action="restart-pre-meal-timer"]')) window.LeeLeeDeadlineAlerts?.unlock();
       focusCarbCalculatorInputOnPointer(event);
@@ -10739,6 +10761,13 @@
       }
       if (action === 'extra') {
         openExtraEditor();
+      }
+      if (action === 'toggle-add-menu') {
+        const menu = root.querySelector('.lee_lee_diabetes_floating_menu');
+        const open = target.getAttribute('aria-expanded') !== 'true';
+        target.setAttribute('aria-expanded', String(open));
+        if (menu) menu.inert = !open;
+        return;
       }
       if (action === 'log-entry') openNewLogEntryFromToday();
       if (action === 'open-saved-meal-builder') {

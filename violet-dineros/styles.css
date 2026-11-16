@@ -423,9 +423,11 @@ body:has(#transaction-sheet[open]) #affordability-sheet.lwvd-scope{display:none}
 .lwvd-scope #quick-actions-toggle span{display:grid;place-items:center;width:32px;height:32px;transform-origin:50% 50%;transition:transform 200ms ease-in-out}
 .lwvd-scope #quick-actions-toggle svg{display:block;width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square}
 .lwvd-scope .floating-actions:has([aria-expanded=true]) #quick-actions-toggle span{transform:rotate(45deg)}
-.lwvd-scope .floating-actions-menu{position:absolute;right:0;bottom:68px;width:205px;display:grid;gap:6px;padding:8px;border:1px solid #d6c5ee;border-radius:18px;background:#fcfaff;box-shadow:0 8px 28px #35205230;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity 200ms ease-in-out,transform 200ms ease-in-out,visibility 200ms}
+.lwvd-scope .floating-actions-menu{position:absolute;right:0;bottom:68px;width:232px;display:grid;gap:6px;padding:8px;border:1px solid #d6c5ee;border-radius:18px;background:#fcfaff;box-shadow:0 8px 28px #35205230;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity 200ms ease-in-out,transform 200ms ease-in-out,visibility 200ms}
 .lwvd-scope .floating-actions:has([aria-expanded=true]) .floating-actions-menu{opacity:1;visibility:visible;transform:translateY(0)}
-.lwvd-scope .floating-actions-menu button{text-align:center;min-height:44px;background:#f0eaff;color:#5820c8;border:0;border-radius:12px}
+.lwvd-scope .floating-actions-menu button{display:flex;align-items:center;gap:10px;text-align:left;min-height:44px;padding:0 14px;background:#f0eaff;color:#5820c8;border:0;border-radius:12px}
+.lwvd-scope .floating-actions-menu-icon{display:grid;place-items:center;width:20px;height:20px;flex:none}
+.lwvd-scope .floating-actions-menu-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 :root[data-theme=dark] .lwvd-scope #quick-actions-toggle{background:#9868dc;border-color:#c29bff;color:#1b112b}
 :root[data-theme=dark] .lwvd-scope .floating-actions-menu{background:#21182d;border-color:#59416e}
 :root[data-theme=dark] .lwvd-scope .floating-actions-menu button{background:#342744;color:#e1c9ff}

@@ -95,6 +95,7 @@ test('Light Dark System, portrait landscape, touch targets and screenshots', asy
     await nav(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath(`carb-calc-${theme}.png`) });
     await root(page).getByRole('button', { name: 'Done', exact: true }).click();
+    await root(page).locator('[data-action="toggle-add-menu"]').click();
     await root(page).getByRole('button', { name: 'Log Entry', exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath(`new-entry-${theme}.png`) });
     await root(page).locator('[data-lee-lee-editor] [data-action="cancel"]').click();
@@ -120,7 +121,7 @@ test('Light Dark System, portrait landscape, touch targets and screenshots', asy
 test('Foods create edit favorite and delete preserve records and treatment settings', async ({ page }) => {
   await open(page); await seedLibrary(page); await foods(page);
   const before = await page.evaluate(key => { const data = JSON.parse(localStorage.getItem(key)); return { records: data.records, settings: data.settings, insulinPlans: data.insulinPlans }; }, key);
-  await root(page).getByRole('button', { name: '+ Add New Food', exact: true }).click();
+  await root(page).locator('[data-action="toggle-add-menu"]').click(); await root(page).getByRole('button', { name: 'Add New Food', exact: true }).click();
   const editor = root(page).locator('[data-food-library-editor]');
   await editor.getByLabel('Food Name', { exact: true }).fill('Acceptance test food');
   await editor.getByLabel('Carbs', { exact: true }).fill('18');
@@ -360,12 +361,16 @@ test('Food and Meal editors are full pages with one Cancel and no horizontal ove
     await page.evaluate(theme => window.LandosTheme.setPreference(theme), theme);
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
-      const buttons = root(page).locator('.lee_lee_diabetes_food_library_actions > button');
-      const widths = await buttons.evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().width));
-      expect(widths[0]).toBeCloseTo(widths[1], 1);
-      expect(await buttons.evaluateAll(nodes=>nodes[0].getBoundingClientRect().top===nodes[1].getBoundingClientRect().top)).toBe(true);
+      const toggle = root(page).locator('[data-action="toggle-add-menu"]');
+      await toggle.click();
+      const items = root(page).locator('.lee_lee_diabetes_floating_menu > button');
+      await expect(items).toHaveCount(3);
+      const heights = await items.evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
+      for (const height of heights) expect(height).toBeGreaterThanOrEqual(48);
+      await toggle.click();
       for (const kind of ['Food', 'Meal']) {
-        await root(page).getByRole('button', { name: `+ Add New ${kind}`, exact: true }).click();
+        await toggle.click();
+        await root(page).getByRole('button', { name: `Add New ${kind}`, exact: true }).click();
         const panel = root(page).locator(kind === 'Food' ? '[data-food-library-editor-dialog]' : '[data-meal-builder]');
         await expect(panel.getByRole('heading', { name: `Add New ${kind}`, exact: true })).toBeVisible();
         await expect(panel.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(1);
@@ -400,7 +405,7 @@ test('focus rings remain visible inside scrollports in both themes and food draf
     await page.evaluate(theme=>window.LandosTheme.setPreference(theme),theme);
     await ring(root(page).locator('[name="foodLibrarySearch"]'));
     await ring(root(page).locator('[data-collection="favorites"]'));
-    await root(page).getByRole('button',{name:'+ Add New Food',exact:true}).click();
+    await root(page).locator('[data-action="toggle-add-menu"]').click();await root(page).getByRole('button',{name:'Add New Food',exact:true}).click();
     const panel=root(page).locator('[data-food-library-editor-dialog]');
     await ring(panel.locator('[name="foodName"]'));
     await ring(panel.locator('[name="foodCarbs"]'));
@@ -412,9 +417,40 @@ test('focus rings remain visible inside scrollports in both themes and food draf
     await expect(panel).toBeVisible();
     page.once('dialog',dialog=>dialog.accept());
     await panel.getByRole('button',{name:'Cancel',exact:true}).click();
+    await root(page).locator('[data-action="toggle-add-menu"]').click();
     await root(page).getByRole('button',{name:'Log Entry',exact:true}).click();
     await ring(root(page).locator('[name="type"]'));
     await root(page).locator('[data-lee-lee-editor] [data-action="cancel"]').click();
     await foods(page);
   }
+});
+
+test('Foods + opens the add menu with Log Entry, Add New Food and Add New Meal', async ({ page }) => {
+  await open(page); await foods(page);
+  const toggle = root(page).locator('[data-action="toggle-add-menu"]');
+  const menu = root(page).locator('.lee_lee_diabetes_floating_menu');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(root(page).getByRole('button', { name: '+ Add New Food', exact: true })).toHaveCount(0);
+  await expect(root(page).getByRole('button', { name: '+ Add New Meal', exact: true })).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('button')).toHaveCount(3);
+  await expect(menu.locator('.lee_lee_diabetes_floating_menu_icon svg')).toHaveCount(3);
+  await root(page).locator('#lee-lee-diabetes-title').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await menu.getByRole('button', { name: 'Add New Food', exact: true }).click();
+  await expect(root(page).locator('[data-food-library-editor-dialog]')).toBeVisible();
+  await root(page).locator('[data-action="cancel-food-library-editor"]').filter({ hasText: 'Cancel' }).first().click();
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await menu.getByRole('button', { name: 'Add New Meal', exact: true }).click();
+  await expect(root(page).locator('[data-meal-builder]')).toBeVisible();
+  await root(page).locator('[data-meal-builder] [data-action="cancel-saved-meal-builder"]').first().click();
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await menu.getByRole('button', { name: 'Log Entry', exact: true }).click();
+  await expect(toggle).toHaveCount(0);
 });

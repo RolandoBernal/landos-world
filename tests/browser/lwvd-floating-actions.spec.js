@@ -7,7 +7,7 @@ for(const theme of ['light','dark']) test(`floating actions and Settings in ${th
   const toggle=page.getByRole('button',{name:'Quick actions',exact:true}), menu=page.locator('#quick-actions-menu'), nav=page.getByRole('navigation');
   await expect(toggle).toBeVisible(); await expect(page.getByRole('heading',{name:'Quick Actions'})).toHaveCount(0);
   const box=await toggle.boundingBox(), pill=await nav.boundingBox();expect(box.y+box.height).toBeLessThan(pill.y);expect(box.x+box.width).toBeLessThanOrEqual(390);
-  await toggle.click();await expect(toggle).toHaveAttribute('aria-expanded','true');await expect(menu).toBeVisible();
+  await toggle.click();await expect(toggle).toHaveAttribute('aria-expanded','true');await expect(menu).toBeVisible();await expect(menu.locator('.floating-actions-menu-icon svg')).toHaveCount(3);
   await page.waitForTimeout(220);expect(await toggle.boundingBox()).toEqual(box);
   expect(await toggle.locator('span').evaluate(e=>getComputedStyle(e).transform)).not.toBe('none');
   await page.screenshot({path:`test-results/floating-${theme}-${test.info().project.name}.png`});

@@ -71,7 +71,7 @@ test('Favorite checkbox and label fully clear the Food footer with and without k
     await page.evaluate(theme=>window.LandosTheme.setPreference(theme),theme);
     for(const width of [320,390]) {
       await page.setViewportSize({width,height:844});
-      await root(page).getByRole('button',{name:'+ Add New Food',exact:true}).click();
+      await root(page).locator('[data-action="toggle-add-menu"]').click();await root(page).getByRole('button',{name:'Add New Food',exact:true}).click();
       const panel=root(page).locator('[data-food-library-editor-dialog]');
       const favorite=panel.locator('.lee_lee_diabetes_checkline');
       for(const keyboard of [false,true]) {
