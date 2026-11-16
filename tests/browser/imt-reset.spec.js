@@ -153,9 +153,9 @@ test('reset button carries the destructive outline treatment in light and dark',
   await page.locator('#imt_settings_toggle').click();
   const reset = page.getByRole('button', { name: 'Reset iMT Data', exact: true });
   await expect(reset).toBeVisible();
-  for (const [theme, coral] of [['light', 'rgb(217, 93, 57)'], ['dark', 'rgb(240, 120, 86)']]) {
+  for (const [theme, label, outline] of [['light', 'rgb(194, 78, 42)', 'rgb(217, 93, 57)'], ['dark', 'rgb(240, 120, 86)', 'rgb(240, 120, 86)']]) {
     await page.evaluate(t => window.LandosTheme.setPreference(t), theme);
-    await expect(reset).toHaveCSS('color', coral);
-    await expect(reset).toHaveCSS('border-color', coral);
+    await expect(reset).toHaveCSS('color', label);
+    await expect(reset).toHaveCSS('border-color', outline);
   }
 });

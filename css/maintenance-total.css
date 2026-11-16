@@ -488,3 +488,7 @@
 /* D-D destructive treatment: outline/red in both themes via the coral token
    (the same color Delete actions use), over the secondary base. */
 .maintenance_total_view .imt_button--danger { color: var(--coral); border-color: var(--coral); background: transparent; }
+/* Light label only: coral on white is 3.77:1, under WCAG AA's 4.5:1 for text,
+   so the light label uses a darker red (4.75:1); the outline stays coral.
+   Dark's coral label already passes at 5.92:1 and is unchanged. */
+:root[data-theme="light"] .maintenance_total_view .imt_button--danger { color: #C24E2A; }
