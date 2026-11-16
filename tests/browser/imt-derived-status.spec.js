@@ -24,7 +24,7 @@ for(const theme of ['light','dark','system']) test(`derived records, safe naviga
   await page.locator('[data-imt-nav="history"]').click();await expect(page.locator('.imt_record_card').first()).toContainText('Other asset');
   await page.getByLabel('Filter by asset').selectOption('b');await page.locator('[data-edit-record="wrong-asset"]').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
   await page.locator('#imt_settings_toggle').click();await page.locator('#imt_settings_toggle').click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
-  await page.locator('.imt_add_button').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
+  await page.locator('.imt_add_button').click();await expect(page.locator('#r-asset')).toHaveValue('b');await page.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Filter by asset')).toHaveValue('b');
   const saved=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);expect(saved.components).toEqual(fixture.components);expect(saved.bikes).toEqual(fixture.bikes);expect(saved.unknown).toEqual(fixture.unknown);expect(saved.version).toBe(1);expect(saved.records.find(r=>r.id==='latest')).toMatchObject({cost:0,mileage:0,serviceProvider:'Real provider'});
   await page.reload();await component(page);await expect(page.locator('.imt_status').first()).toHaveText('No service record');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
