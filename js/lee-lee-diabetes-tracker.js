@@ -1334,7 +1334,8 @@
         <form data-lee-lee-editor data-standalone-calculator>
           ${renderCarbCalculator(currentEditor.carbCalculatorRows)}
         </form>
-      </section>`);
+      </section>
+      ${renderTrackerNav('open-standalone-carb-calculator')}`);
     if (currentEditor.carbCalculatorMealEditorOpen) {
       applySavedMealPanelFocus(root);
       return;
@@ -4563,8 +4564,10 @@
   }
 
   function renderTrackerNav(active) {
-    if (active === 'settings' || currentEditor?.carbCalculatorOpen || currentEditor?.foodLibraryEditorOpen || mealBuilderState) return '';
-    const showLogAction = active !== 'settings' && active !== 'reports' && !currentEditor?.carbCalculatorItemEditorMode
+    const standaloneCalculator = active === 'open-standalone-carb-calculator' && currentEditor?.mode === 'standalone-calculator'
+      && !currentEditor?.carbCalculatorItemEditorMode && !currentEditor?.carbCalculatorFoodEditorOpen && !currentEditor?.carbCalculatorMealEditorOpen;
+    if (active === 'settings' || (currentEditor?.carbCalculatorOpen && !standaloneCalculator) || currentEditor?.foodLibraryEditorOpen || mealBuilderState) return '';
+    const showLogAction = active !== 'settings' && active !== 'reports' && !standaloneCalculator && !currentEditor?.carbCalculatorItemEditorMode
       && !currentEditor?.foodLibraryEditorOpen && !mealBuilderState;
     const logAction = !showLogAction ? '' : active === 'foods' ? `
         <button type="button" class="lee_lee_diabetes_floating_log" data-action="toggle-add-menu" aria-label="Add" title="Add" aria-expanded="false" aria-controls="lee-lee-add-menu"><span class="lee_lee_diabetes_bottom_nav_icon">${renderTrackerNavIcon('log')}</span></button>

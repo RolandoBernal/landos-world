@@ -118,7 +118,9 @@ test('standalone reuses all library lists and saves reusable meals without clini
     await page.screenshot({ path: testInfo.outputPath(`shared-calculator-${theme}.png`) });
     const bounds = await page.locator('[data-carb-calculator]').boundingBox();
     expect(bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
-    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(0);
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(1);
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav [data-action="open-standalone-carb-calculator"]')).toHaveClass(/is-active/);
+    await expect(page.locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
     await expect(page.locator('[data-carb-calculator]')).not.toHaveAttribute('aria-modal', 'true');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
@@ -209,7 +211,9 @@ for (const theme of ['light', 'dark']) {
     });
     await scratch(page);
     await manual(page, '12', 'Test amount');
-    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(0);
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav')).toHaveCount(1);
+    await expect(page.locator('.lee_lee_diabetes_bottom_nav [data-action="open-standalone-carb-calculator"]')).toHaveClass(/is-active/);
+    await expect(page.locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
     const standalone = await presentation();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: '/private/tmp/llt-visual-' + testInfo.project.name + '-' + theme + '-standalone.png' });

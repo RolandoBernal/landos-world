@@ -42,7 +42,8 @@ test('five destinations, center calculator, floating entry and scratch preservat
   await expect(root(page).locator('.lee_lee_diabetes_floating_log')).toBeVisible();
   const before = await page.evaluate(key => localStorage.getItem(key), key);
   await nav(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
-  await expect(nav(page)).toHaveCount(0);
+  await expect(nav(page)).toHaveCount(1);
+  await expect(nav(page).getByRole('button', { name: 'Carb Calc', exact: true })).toHaveClass(/is-active/);
   await expect(root(page).locator('[data-foods-view-switcher]')).toHaveCount(0);
   await expect(root(page).locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
   await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
@@ -234,7 +235,8 @@ test('standalone Done restores each launching destination and retains scratch st
   for (const destination of ['Today', 'History', 'Reports', 'Foods']) {
     await nav(page).getByRole('button', { name: destination, exact: true }).click();
     await nav(page).getByRole('button', { name: 'Carb Calc', exact: true }).click();
-    await expect(root(page).locator('.lee_lee_diabetes_nav_shell, .lee_lee_diabetes_floating_log')).toHaveCount(0);
+    await expect(root(page).locator('.lee_lee_diabetes_nav_shell')).toHaveCount(1);
+    await expect(root(page).locator('.lee_lee_diabetes_floating_log')).toHaveCount(0);
     if (destination === 'Today') {
       await root(page).getByRole('button', { name: '+ Add Manual Amount' }).click();
       await root(page).locator('[name="carbItemCarbs"]').fill('17.5');
@@ -455,14 +457,16 @@ test('Foods + opens the add menu with Log Entry, Add New Food and Add New Meal',
   await expect(toggle).toHaveCount(0);
 });
 
-test('Foods add menu: keyboard order, visible focus, Escape and scroll-hide close', async ({ page }) => {
+test('Foods add menu: keyboard order, visible focus, Escape and scroll-hide close', async ({ page, browserName }) => {
   await open(page); await foods(page);
   const toggle = root(page).locator('[data-action="toggle-add-menu"]');
   const menu = root(page).locator('.lee_lee_diabetes_floating_menu');
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => { const m = document.querySelector('.lee_lee_diabetes_floating_menu'); const st = getComputedStyle(m); return st.visibility === 'visible' && st.opacity === '1'; });
+  // Safari/WebKit traverses focus with Option-Tab unless full keyboard access is on.
+  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
   await expect(menu.getByRole('button', { name: 'Log Entry', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
