@@ -314,6 +314,26 @@ test('History sheet fits portrait landscape and keyboard viewport with reachable
   }
 });
 
+test('History filter selects keep their element through changes and apply in one pass', async ({ page }) => {
+  await open(page);
+  await nav(page).getByRole('button', { name: 'History', exact: true }).click();
+  await root(page).locator('[data-action="open-history-filters"]').click();
+  const sheet = root(page).locator('[data-history-filter-sheet]');
+  const range = sheet.locator('[name="range"]');
+  await range.evaluate(el => { window.__rangeSel = el; });
+  await range.selectOption('custom');
+  // The select the user is interacting with must survive the change:
+  // replacing it mid-interaction makes the iOS picker drop the first pick.
+  expect(await range.evaluate(el => el === window.__rangeSel && el.isConnected)).toBe(true);
+  await expect(sheet.locator('[data-custom-range-field="history-draft"]').first()).toBeVisible();
+  await range.selectOption('last7');
+  expect(await range.evaluate(el => el === window.__rangeSel && el.isConnected)).toBe(true);
+  await expect(range).toHaveValue('last7');
+  await expect(sheet.locator('[data-custom-range-field="history-draft"]').first()).toBeHidden();
+  await sheet.locator('button[data-action="apply-history-filters"]').click();
+  await expect(root(page).locator('[data-history-filter-sheet]')).toHaveCount(0);
+});
+
 test('Foods four filters stay on one row at narrow iPhone widths', async ({ page }, testInfo) => {
   await open(page); await seedLibrary(page); await foods(page);
   for (const theme of ['dark', 'light']) {

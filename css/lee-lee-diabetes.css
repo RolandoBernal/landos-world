@@ -262,6 +262,10 @@
   gap: 0.75rem;
 }
 
+.lee_lee_diabetes_history_list + .lee_lee_diabetes_actions {
+  margin-top: 0.9rem;
+}
+
 .lee_lee_diabetes_card,
 .lee_lee_diabetes_timeline_item,
 .lee_lee_diabetes_editor,

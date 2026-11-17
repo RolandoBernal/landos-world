@@ -212,6 +212,12 @@ test('History day list offers Back to Top once older days are loaded', async ({ 
   await expect(root.locator('[data-action="history-date"]')).toHaveCount(30);
   await expect(root.getByRole('button', { name: 'Load Older Records', exact: true })).toBeVisible();
   await expect(root.getByRole('button', { name: 'Back to Top ↑', exact: true })).toHaveCount(0);
+  const footerGap = await root.evaluate(el => {
+    const cards = el.querySelectorAll('[data-action="history-date"]');
+    const row = el.querySelector('.lee_lee_diabetes_history_list + .lee_lee_diabetes_actions');
+    return row.getBoundingClientRect().top - cards[cards.length - 1].getBoundingClientRect().bottom;
+  });
+  expect(footerGap).toBeGreaterThanOrEqual(12);
   await root.getByRole('button', { name: 'Load Older Records', exact: true }).click();
   await expect(root.locator('[data-action="history-date"]')).toHaveCount(35);
   const backToTop = root.getByRole('button', { name: 'Back to Top ↑', exact: true });
