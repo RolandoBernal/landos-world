@@ -4818,8 +4818,8 @@
     const groups = groupRecordsByLocalDate(filtered);
     const visibleGroups = getVisibleHistoryGroups(groups, historyVisibleDayCount);
     const hasOlderGroups = visibleGroups.length < groups.length;
-    const initialWindowDays = getHistoryInitialWindowDays() ?? DEFAULT_HISTORY_WINDOW_DAYS;
-    const showHistoryBackToTop = visibleGroups.length > initialWindowDays && groups.length > initialWindowDays;
+    const initialWindowDays = getHistoryInitialWindowDays();
+    const showHistoryBackToTop = initialWindowDays !== null && visibleGroups.length > initialWindowDays && groups.length > initialWindowDays;
     const emptyMessage = visibleRecords.length
       ? `
         <p class="lee_lee_diabetes_empty" role="status">No records match these filters.</p>

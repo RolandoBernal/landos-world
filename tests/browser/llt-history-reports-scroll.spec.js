@@ -223,3 +223,28 @@ test('History day list offers Back to Top once older days are loaded', async ({ 
   await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5000 }).toBe(0);
   await expect(page.locator('#lee-lee-diabetes-title')).toBeFocused();
 });
+
+test('History with All Records window shows every day and no footer actions', async ({ page }) => {
+  const dayRecords = Array.from({ length: 40 }, (_, i) => ({
+    id: `all-record-${i}`,
+    eventType: 'note',
+    type: 'Other',
+    notes: `All record ${i}`,
+    recordTimestamp: new Date(now - i * 86400000).toISOString(),
+    timestamp: now - i * 86400000,
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+  await page.addInitScript(({ key, records }) => {
+    localStorage.setItem(key, JSON.stringify({ schemaVersion: 1, records, settings: { glucoseTargetMin: 70, glucoseTargetMax: 180, historyInitialWindowDays: 'all' }, insulinPlans: [], foodLibrary: [], savedMeals: [], metadata: {} }));
+  }, { key, records: dayRecords });
+  await page.goto(`${baseURL}/#/lee-lees-tracker`);
+  const nav = page.getByRole('navigation', { name: 'Lee-Lee’s Tracker mobile navigation' });
+  await nav.getByRole('button', { name: 'History', exact: true }).click();
+  const root = page.locator('#lee-lee-diabetes-root');
+  await expect(root.locator('[data-action="history-date"]')).toHaveCount(40);
+  await expect(root.getByRole('button', { name: 'Load Older Records', exact: true })).toHaveCount(0);
+  await expect(root.getByRole('button', { name: 'Back to Top ↑', exact: true })).toHaveCount(0);
+});
