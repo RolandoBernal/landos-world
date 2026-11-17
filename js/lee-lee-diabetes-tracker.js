@@ -10262,8 +10262,13 @@
       startDate: form.elements.startDate?.value || '',
       endDate: form.elements.endDate?.value || '',
     };
-    historyFilterSheetOpen = true;
-    renderHistory();
+    // Toggle the custom-range fields in place. Re-rendering here would
+    // replace the select mid-interaction, and iOS drops the picker's
+    // first selection when its element leaves the DOM.
+    const showCustomRange = historyDraftFilters.range === 'custom';
+    form.querySelectorAll('[data-custom-range-field="history-draft"]').forEach((field) => {
+      field.classList.toggle('is-hidden', !showCustomRange);
+    });
   }
 
   function applyHistoryFilters() {
