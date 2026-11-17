@@ -28,6 +28,7 @@ test('greeting header and flat backgrounds in both themes', async ({ page }) => 
   await openSeeded(page, RICH);
   await expect(page.locator('.imt_header').first()).toContainText(/Good (morning|afternoon|evening), Chief\./);
   const view = page.locator('#maintenance-total-view');
+  await page.evaluate(() => window.LandosTheme.setPreference('light'));
   await expect(view).toHaveCSS('background-color', 'rgb(246, 247, 244)');
   await page.evaluate(() => window.LandosTheme.setPreference('dark'));
   await expect(view).toHaveCSS('background-color', 'rgb(13, 19, 17)');
