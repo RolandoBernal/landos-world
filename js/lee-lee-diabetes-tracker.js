@@ -4818,6 +4818,8 @@
     const groups = groupRecordsByLocalDate(filtered);
     const visibleGroups = getVisibleHistoryGroups(groups, historyVisibleDayCount);
     const hasOlderGroups = visibleGroups.length < groups.length;
+    const initialWindowDays = getHistoryInitialWindowDays() ?? DEFAULT_HISTORY_WINDOW_DAYS;
+    const showHistoryBackToTop = visibleGroups.length > initialWindowDays && groups.length > initialWindowDays;
     const emptyMessage = visibleRecords.length
       ? `
         <p class="lee_lee_diabetes_empty" role="status">No records match these filters.</p>
@@ -4834,7 +4836,7 @@
       <section class="lee_lee_diabetes_history_list" aria-label="History dates">
         ${visibleGroups.length ? visibleGroups.map(renderHistoryDateCard).join('') : emptyMessage}
       </section>
-      ${hasOlderGroups ? `<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost lee_lee_diabetes_extra" data-action="load-older-history">Load Older Records</button>` : ''}
+      ${hasOlderGroups || showHistoryBackToTop ? `<div class="lee_lee_diabetes_actions">${hasOlderGroups ? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="load-older-history">Load Older Records</button>' : ''}${showHistoryBackToTop ? '<button type="button" class="lee_lee_diabetes_button lee_lee_diabetes_button--ghost" data-action="history-top">Back to Top ↑</button>' : ''}</div>` : ''}
       ${renderHistoryFilterSheet()}
     `);
     focusHistorySheet(root);
@@ -10853,7 +10855,7 @@
         root.querySelector('[data-action="food-library-show-more"], [data-action="food-library-top"]')?.focus({ preventScroll: true });
         return;
       }
-      if (action === 'food-library-top') {
+      if (action === 'food-library-top' || action === 'history-top') {
         const heading = root.querySelector('#lee-lee-diabetes-title');
         heading?.setAttribute('tabindex', '-1');
         heading?.focus({ preventScroll: true });

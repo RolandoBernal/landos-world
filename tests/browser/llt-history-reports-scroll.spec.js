@@ -188,3 +188,38 @@ test('Reports shows no floating log button; History keeps it', async ({ page }) 
   await nav.getByRole('button', { name: 'History', exact: true }).click();
   await expect(page.locator('.lee_lee_diabetes_floating_log')).toBeVisible();
 });
+
+test('History day list offers Back to Top once older days are loaded', async ({ page }) => {
+  const dayRecords = Array.from({ length: 35 }, (_, i) => ({
+    id: `day-record-${i}`,
+    eventType: 'note',
+    type: 'Other',
+    notes: `Day record ${i}`,
+    recordTimestamp: new Date(now - i * 86400000).toISOString(),
+    timestamp: now - i * 86400000,
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+  await page.addInitScript(({ key, records }) => {
+    localStorage.setItem(key, JSON.stringify({ schemaVersion: 1, records, settings: { glucoseTargetMin: 70, glucoseTargetMax: 180 }, insulinPlans: [], foodLibrary: [], savedMeals: [], metadata: {} }));
+  }, { key, records: dayRecords });
+  await page.goto(`${baseURL}/#/lee-lees-tracker`);
+  const nav = page.getByRole('navigation', { name: 'Lee-Lee’s Tracker mobile navigation' });
+  await nav.getByRole('button', { name: 'History', exact: true }).click();
+  const root = page.locator('#lee-lee-diabetes-root');
+  await expect(root.locator('[data-action="history-date"]')).toHaveCount(30);
+  await expect(root.getByRole('button', { name: 'Load Older Records', exact: true })).toBeVisible();
+  await expect(root.getByRole('button', { name: 'Back to Top ↑', exact: true })).toHaveCount(0);
+  await root.getByRole('button', { name: 'Load Older Records', exact: true }).click();
+  await expect(root.locator('[data-action="history-date"]')).toHaveCount(35);
+  const backToTop = root.getByRole('button', { name: 'Back to Top ↑', exact: true });
+  await expect(backToTop).toBeVisible();
+  await expect(root.getByRole('button', { name: 'Load Older Records', exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  await backToTop.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5000 }).toBe(0);
+  await expect(page.locator('#lee-lee-diabetes-title')).toBeFocused();
+});
