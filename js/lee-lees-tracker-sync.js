@@ -1,6 +1,6 @@
 (() => {
   const CONFIG_GLOBAL = 'LEE_LEE_TRACKER_SUPABASE_CONFIG';
-  const SUPABASE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  const SUPABASE_MODULE_URL = './vendor/supabase-js.esm.js';
 
   function isUsableSession(session, now = Date.now()) {
     return Boolean(session?.user?.id) && Number.isFinite(session.expires_at)
@@ -140,7 +140,7 @@
   async function loadSupabaseFactory() {
     if (globalThis.supabase?.createClient) return globalThis.supabase.createClient;
     if (globalThis.createClient) return globalThis.createClient;
-    const module = await import(SUPABASE_CDN_URL);
+    const module = await import(SUPABASE_MODULE_URL);
     return module.createClient;
   }
 

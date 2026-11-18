@@ -50,6 +50,10 @@
     return buildMetadata.environment === 'local' || isLocalDeviceDevelopment() || buildMetadata.environment === 'local-auth-preview';
   }
 
+  function isNativeApp() {
+    return Boolean(window.Capacitor?.isNativePlatform?.());
+  }
+
   async function disableLocalPreviewServiceWorkers() {
     if (!navigator.serviceWorker?.getRegistrations) return;
     const registrations = await navigator.serviceWorker.getRegistrations();
@@ -331,7 +335,7 @@
 
   async function checkForDeployedRelease({ resurface = false } = {}) {
     const checkSequence = ++releaseCheckSequence;
-    if (isLocalBuild()) {
+    if (isLocalBuild() || isNativeApp()) {
       releaseStatus = 'local';
       latestRelease = null;
       updateUi();
@@ -567,6 +571,14 @@
   }
 
   async function registerServiceWorker() {
+    if (isNativeApp()) {
+      // The native bundle is local by construction: no service worker to
+      // register and no deployed-release updater to run. App updates arrive
+      // as new native builds.
+      offlineReadiness = 'ready';
+      updateUi();
+      return;
+    }
     if (buildMetadata.environment === 'local-auth-preview') {
       offlineReadiness = 'unavailable';
       updateUi();
