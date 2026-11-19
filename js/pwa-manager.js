@@ -19,7 +19,7 @@
   let lastCacheUpdate = null;
   let offlineReadiness = 'preparing';
   let storageEstimate = null;
-  let isInstalled = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let isInstalled = detectInstalled();
   let updateRequested = false;
   let updateTargetCommit = '';
   let updateFeedback = '';
@@ -52,6 +52,12 @@
 
   function isNativeApp() {
     return Boolean(window.Capacitor?.isNativePlatform?.());
+  }
+
+  function detectInstalled() {
+    // The native shell is an installed app by construction; its WKWebView
+    // reports neither the standalone display mode nor navigator.standalone.
+    return isNativeApp() || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   }
 
   async function disableLocalPreviewServiceWorkers() {
@@ -707,7 +713,7 @@
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice.catch(() => null);
     deferredInstallPrompt = null;
-    isInstalled = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    isInstalled = detectInstalled();
     updateUi();
   }
 

@@ -39,6 +39,7 @@ function createPwaContext({
   caches,
   storage,
   standalone = false,
+  capacitor = null,
   buildMetadata = { environment: 'unknown', appVersion: '1.0.0' },
   fetchImplementation,
   visibleForms = [],
@@ -128,6 +129,7 @@ function createPwaContext({
   };
   context.window = context;
   context.globalThis = context;
+  if (capacitor) context.Capacitor = capacitor;
   context.LandoWorldBuildMetadata = buildMetadata;
   const sessionStore = new Map();
   context.sessionStorage = {
@@ -840,6 +842,15 @@ test('PWA panel reports browser connection separately from installation status',
   context.navigator.onLine = false;
   windowListeners.offline[0]();
   assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Connection<\/dt>\s*<dd class="[^"]*">Offline<\/dd>/);
+});
+
+test('PWA panel reports the native shell as installed without standalone signals', () => {
+  const { elements } = createPwaContext({
+    standalone: false,
+    capacitor: { isNativePlatform: () => true },
+  });
+
+  assert.match(elements['pwa-offline-settings'].innerHTML, /<dt>Application Installed<\/dt>\s*<dd class="[^"]*">Yes<\/dd>/);
 });
 
 test('PWA panel marks offline readiness from app-shell cache status', async () => {
