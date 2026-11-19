@@ -35,6 +35,20 @@
 :root[data-status-app="checklist"] #road-bike-checklist-view {
   padding-top: var(--landos-page-top-space);
 }
+/* Native shell only: frosted cover in the floating-chrome treatment — the
+   per-app surface at 84% over a blur, with a 12px soft fade below the safe
+   area so scrolled content melts away instead of colliding with the clock.
+   The installed-PWA cover above stays opaque and exactly the safe-area
+   height; that behaviour is pinned by the shared-status-clearance spec. */
+:root[data-status-app][data-native-app] body::after {
+  height: calc(var(--status-inset) + 12px);
+  background: color-mix(in srgb, var(--status-surface) 84%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 12px), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 12px), transparent);
+}
+
 /* iMT owns a compact shell and a back link without a negative top margin. */
 :root[data-status-app="imt"] #maintenance-total-view {
   padding-top: calc(12px + var(--status-content-inset));
