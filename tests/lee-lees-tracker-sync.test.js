@@ -64,6 +64,7 @@ function createSyncContext({
   config = null,
   location = { hostname: 'localhost', protocol: 'http:' },
   buildMetadata = { environment: 'unknown' },
+  capacitor = null,
   isSecureContext = true,
   fetchImplementation = async () => ({ ok: true }),
 } = {}) {
@@ -96,6 +97,7 @@ function createSyncContext({
   context.window = context;
   context.globalThis = context;
   context.LandoWorldBuildMetadata = buildMetadata;
+  if (capacitor) context.Capacitor = capacitor;
   if (config) context.LEE_LEE_TRACKER_SUPABASE_CONFIG = config;
   if (supabase) context.supabase = supabase;
   vm.runInNewContext(syncSource, context);
@@ -2292,6 +2294,33 @@ test('explicit local-device mode exposes local-only LLT state without constructi
 
   assert.equal(clientCreations, 0);
   assert.equal(remoteRequests, 0);
+});
+
+test('native app password reset directs to the web flow without contacting Supabase', async () => {
+  let clientCreations = 0;
+  let resetRequests = 0;
+  const context = createSyncContext({
+    buildMetadata: { environment: 'production' },
+    capacitor: { isNativePlatform: () => true },
+    config: { url: 'https://example.supabase.co', publishableKey: 'publishable-key-for-browser-tests-123' },
+    supabase: {
+      createClient() {
+        clientCreations += 1;
+        const mock = createMockSupabase();
+        mock.client.auth.resetPasswordForEmail = async () => { resetRequests += 1; return { error: null }; };
+        return mock.client;
+      },
+    },
+  });
+  const repository = context.LeeLeeTrackerSync.createRepository(createDocumentStore());
+
+  const resetResult = await repository.sendPasswordReset('test@example.com');
+  assert.equal(resetResult.error, undefined);
+  assert.equal(resetResult.ok, undefined);
+  assert.match(resetResult.notice, /not available in the app/);
+  assert.match(resetResult.notice, /on the web/);
+  assert.equal(clientCreations, 0);
+  assert.equal(resetRequests, 0);
 });
 
 

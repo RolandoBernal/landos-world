@@ -203,6 +203,10 @@
     return globalThis.LandoWorldBuildMetadata?.environment === 'local-device';
   }
 
+  function isNativeApp() {
+    return Boolean(globalThis.Capacitor?.isNativePlatform?.());
+  }
+
   function isAuthenticationPreview() {
     return globalThis.LandoWorldBuildMetadata?.environment === 'local-auth-preview';
   }
@@ -1668,6 +1672,7 @@
     async function sendPasswordReset(email) {
       if (isAuthenticationPreview()) return { error: 'Password reset is not available in authentication preview.' };
       if (isLocalDeviceDevelopment()) return { error: 'Password reset is disabled in local-device development.' };
+      if (isNativeApp()) return { notice: 'Password reset is not available in the app. Open Lando\'s World on the web and choose "Forgot password" to reset it there, then sign in here with your new password.' };
       const client = await ensureClient();
       if (!client) return { error: 'Supabase setup is missing.' };
       const redirectTo = `${location.origin}${location.pathname}`;
