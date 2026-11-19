@@ -10769,7 +10769,7 @@
         renderSignIn();
         syncRepository?.sendPasswordReset?.(email).then((result) => {
           authError = result?.error || '';
-          authMessage = result?.ok ? 'Password reset email sent.' : '';
+          authMessage = result?.ok ? 'Password reset email sent.' : (result?.notice || '');
           renderSignIn();
         });
         return;

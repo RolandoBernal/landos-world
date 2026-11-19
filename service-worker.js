@@ -49,6 +49,7 @@ const PRECACHE_URLS = [
   './js/daily-chief-briefing.js',
   './js/lee-lees-tracker-config.js',
   './js/lee-lees-tracker-sync.js',
+  './js/vendor/supabase-js.esm.js',
   './js/lee-lee-pre-meal-timer.js',
   './js/lee-lee-dexcom-sensor.js',
   './js/lee-lee-deadline-alerts.js',

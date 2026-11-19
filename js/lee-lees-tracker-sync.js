@@ -1,6 +1,6 @@
 (() => {
   const CONFIG_GLOBAL = 'LEE_LEE_TRACKER_SUPABASE_CONFIG';
-  const SUPABASE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  const SUPABASE_MODULE_URL = './vendor/supabase-js.esm.js';
 
   function isUsableSession(session, now = Date.now()) {
     return Boolean(session?.user?.id) && Number.isFinite(session.expires_at)
@@ -140,7 +140,7 @@
   async function loadSupabaseFactory() {
     if (globalThis.supabase?.createClient) return globalThis.supabase.createClient;
     if (globalThis.createClient) return globalThis.createClient;
-    const module = await import(SUPABASE_CDN_URL);
+    const module = await import(SUPABASE_MODULE_URL);
     return module.createClient;
   }
 
@@ -201,6 +201,10 @@
 
   function isLocalDeviceDevelopment() {
     return globalThis.LandoWorldBuildMetadata?.environment === 'local-device';
+  }
+
+  function isNativeApp() {
+    return Boolean(globalThis.Capacitor?.isNativePlatform?.());
   }
 
   function isAuthenticationPreview() {
@@ -1668,6 +1672,7 @@
     async function sendPasswordReset(email) {
       if (isAuthenticationPreview()) return { error: 'Password reset is not available in authentication preview.' };
       if (isLocalDeviceDevelopment()) return { error: 'Password reset is disabled in local-device development.' };
+      if (isNativeApp()) return { notice: 'Password reset is not available in the app. Open Lando\'s World on the web and choose "Forgot password" to reset it there, then sign in here with your new password.' };
       const client = await ensureClient();
       if (!client) return { error: 'Supabase setup is missing.' };
       const redirectTo = `${location.origin}${location.pathname}`;

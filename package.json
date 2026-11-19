@@ -15,9 +15,12 @@
     "test:llt:sensor-metadata-db": "LLT_LOCAL_SENSOR_DB_TEST=1 node --test tests/llt-sensor-metadata-database.test.js"
   },
   "dependencies": {
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
     "openai": "^5.11.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
     "@playwright/test": "^1.62.1"
   }
 }

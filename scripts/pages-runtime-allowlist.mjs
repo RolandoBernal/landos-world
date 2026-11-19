@@ -43,6 +43,8 @@ export const PAGES_RUNTIME_FILES = [
 
   'js/lee-lees-tracker-config.js',
   'js/lee-lees-tracker-sync.js',
+  'js/vendor/supabase-js.esm.js',
+  'js/vendor/supabase-js.LICENSE.txt',
   'js/maintenance-total-v2.js',
   'js/pwa-manager.js',
   'js/road-bike-checklist.js',
