@@ -1,6 +1,9 @@
 (() => {
   const root = document.documentElement;
   const standalone = matchMedia('(display-mode: standalone)');
+  // The native shell is an installed app too, but WKWebView reports neither
+  // display-mode: standalone nor navigator.standalone — detect it directly.
+  const nativeApp = Boolean(globalThis.Capacitor?.isNativePlatform?.());
   // Presentation adapters only; the existing router continues to own navigation.
   const apps = new Map([
     ['', 'home'], ['/', 'home'], ['/settings', 'settings'],
@@ -11,10 +14,12 @@
     ['/violet-dineros', 'lwvd'],
   ]);
   function update() {
-    const installed = standalone.matches || navigator.standalone === true;
+    const installed = nativeApp || standalone.matches || navigator.standalone === true;
     const app = apps.get(location.hash.slice(1)) || '';
     if (installed && app) root.dataset.statusApp = app;
     else delete root.dataset.statusApp;
+    if (nativeApp) root.dataset.nativeApp = 'true';
+    else delete root.dataset.nativeApp;
   }
   addEventListener('hashchange', update);
   addEventListener('pageshow', update);
