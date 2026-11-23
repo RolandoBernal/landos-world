@@ -60,6 +60,59 @@
     return write(STORAGE_KEY, timer);
   }
 
+  // Native mirror (Capacitor shell only): keep one local notification in
+  // step with the timer so expiry still reaches the user when the phone is
+  // locked or the app is backgrounded. In the PWA/browser there is no
+  // Capacitor bridge, so every call below is a no-op. Convenience reminder
+  // only — a notification failure must never break the timer.
+  const NOTIFICATION_ID = 7331;
+
+  function nativeNotifications() {
+    try {
+      if (!window.Capacitor?.isNativePlatform?.()) return null;
+      return window.Capacitor.Plugins?.LocalNotifications || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function cancelNativeNotification(plugin) {
+    try {
+      const pending = plugin.cancel({ notifications: [{ id: NOTIFICATION_ID }] });
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    } catch (_error) { /* ignore */ }
+  }
+
+  function syncNativeNotification(timer) {
+    const plugin = nativeNotifications();
+    if (!plugin) return;
+    if (!timer || timer.status !== 'active') {
+      cancelNativeNotification(plugin);
+      return;
+    }
+    (async () => {
+      try {
+        let permission = await plugin.checkPermissions();
+        if (permission.display !== 'granted') {
+          if (permission.display === 'denied') return;
+          permission = await plugin.requestPermissions();
+          if (permission.display !== 'granted') return;
+        }
+        const copy = timer.purpose === 'low-glucose-recheck'
+          ? { title: 'Recheck Glucose', body: 'The 15-minute reminder has finished.' }
+          : { title: 'Pre-Meal Timer', body: 'Ready to eat.' };
+        await plugin.schedule({
+          notifications: [{
+            id: NOTIFICATION_ID,
+            title: copy.title,
+            body: copy.body,
+            schedule: { at: new Date(timer.endsAt), allowWhileIdle: true },
+          }],
+        });
+      } catch (_error) { /* convenience reminder only */ }
+    })();
+  }
+
   function normalize(now = Date.now()) {
     const timer = getTimer();
     if (!timer || timer.status !== 'active' || timer.endsAt > now) return timer;
@@ -91,19 +144,25 @@
         administeredInsulinUnits: sourceEntry.administeredInsulinUnits,
       } : null,
     };
-    return persist(timer) ? timer : null;
+    if (!persist(timer)) return null;
+    syncNativeNotification(timer);
+    return timer;
   }
 
   function stop() {
     const timer = getTimer();
     if (!timer) return null;
     const stopped = { ...timer, status: 'stopped', stoppedAt: new Date().toISOString() };
-    return persist(stopped) ? stopped : null;
+    if (!persist(stopped)) return null;
+    syncNativeNotification(stopped);
+    return stopped;
   }
 
   function dismiss() {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      const plugin = nativeNotifications();
+      if (plugin) cancelNativeNotification(plugin);
       return true;
     } catch (_error) {
       return false;
@@ -115,7 +174,9 @@
     if (!timer || timer.status !== 'active') return timer;
     const nextEndsAt = Math.max(Date.now() + 1000, timer.endsAt + Number(delta || 0) * 60 * 1000);
     const adjusted = { ...timer, endsAt: nextEndsAt };
-    return persist(adjusted) ? adjusted : timer;
+    if (!persist(adjusted)) return timer;
+    syncNativeNotification(adjusted);
+    return adjusted;
   }
 
   window.LeeLeePreMealTimer = Object.freeze({
